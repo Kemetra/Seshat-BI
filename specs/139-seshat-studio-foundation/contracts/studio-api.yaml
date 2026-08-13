@@ -369,7 +369,15 @@ components:
     BootstrapState:
       type: object
       additionalProperties: false
-      required: [workspace, navigation, capabilities, authentication_mode]
+      required:
+        [
+          workspace,
+          navigation,
+          capabilities,
+          authentication_mode,
+          agent_provider,
+          agent_provider_detail,
+        ]
       properties:
         workspace:
           $ref: "#/components/schemas/WorkspaceSnapshot"
@@ -378,6 +386,22 @@ components:
           items:
             type: string
             enum: [command_room]
+        agent_provider:
+          type: string
+          enum: [fake, codex]
+          description: >-
+            WHICH agent implementation is answering turns. A separate axis from
+            `authentication_mode`, which reports how a bridge AUTHENTICATES and
+            reads `subscription` whether Codex or the deterministic bridge is
+            driving. Without this an operator cannot tell that a fallback
+            happened, and would read deterministic text as a real reply.
+        agent_provider_detail:
+          type: string
+          description: >-
+            Why that provider is the one running, in words an operator can act
+            on: the CLI was not found, the reported version is outside the
+            tested range, or Codex is driving. Always present, including on the
+            plain `fake` default, so a silent fallback is impossible.
         authentication_mode:
           type: string
           description: >-

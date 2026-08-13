@@ -298,11 +298,41 @@ def test_shutdown_closes_an_in_flight_turn(tmp_path: Path) -> None:
     child outliving the tool that spawned it is the lifecycle contract's failure,
     not merely untidy.
     """
+    import threading
+    import time
+
     from fastapi.testclient import TestClient
 
     from seshat.studio.app import create_app
 
+    closed = threading.Event()
+
+    class _ObservableBridge:
+        """Records that its generator's `finally` actually ran."""
+
+        def describe(self) -> dict[str, object]:
+            return {"bridge": "fake", "provider": "fake", "deterministic": True}
+
+        def run_turn(self, *, prompt: str, turn_id: str, requested_mode: str):
+            from seshat.studio.bridge import _event
+
+            try:
+                yield _event("turn_started", {"prompt_echo": prompt}, turn_id, 1)
+                # Yields a bounded stream, so the reader is never wedged mid-`next()`.
+                # A reader BLOCKED on a stalled provider is a known open limitation
+                # (recorded on #618): `close()` waits for it, so a hung child is
+                # reaped by the OS at exit rather than by this handler.
+                for _ in range(50):
+                    yield _event("agent_message", {"text": "..."}, turn_id, 2)
+            finally:
+                # Slow enough that only an AWAITED shutdown can observe it. Without
+                # the delay the daemon thread wins the race anyway and the assertion
+                # below passes whether or not the lifespan waits -- proving nothing.
+                time.sleep(1.0)
+                closed.set()
+
     app, token = create_app(_workspace(tmp_path), port=9999)
+    app.state.bridge = _ObservableBridge()
     with TestClient(
         app,
         base_url="http://127.0.0.1:9999",
@@ -326,9 +356,23 @@ def test_shutdown_closes_an_in_flight_turn(tmp_path: Path) -> None:
             == 202
         )
         assert app.state.pending_turns, "the turn should be parked and in flight"
+        # Advance it so the generator is genuinely RUNNING. `close()` on a
+        # not-yet-started generator does not run its `finally` -- there is no frame
+        # to unwind -- so a turn that was only parked would let this test pass while
+        # proving nothing about cleanup.
+        client.get(f"/api/v1/agent/threads/{thread_id}/events")
 
     # Leaving the context manager runs the app's shutdown handler.
     assert not app.state.pending_turns, "a live turn survived shutdown"
+    # And the cleanup must have COMPLETED, not merely been started: `_finish_turn`
+    # hands its work to a daemon thread, so a lifespan that only initiated it could
+    # let the interpreter exit before `close()` ever reached the provider.
+    # NO wait: shutdown must already have completed the cleanup by the time the
+    # context manager returns. `wait()` here would re-introduce the race the delay
+    # above exists to expose.
+    assert closed.is_set(), (
+        "shutdown returned before the provider generator was actually closed"
+    )
 
 
 def test_a_failing_version_probe_is_not_trusted(tmp_path: Path) -> None:

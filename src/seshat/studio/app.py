@@ -27,9 +27,11 @@ import subprocess
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import replace
+from functools import partial
 from pathlib import Path
 from typing import Any
 
+import anyio.to_thread
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
@@ -51,6 +53,11 @@ from .bridge_selection import select_bridge
 #: none". A default of `None` would make the missing-CLI branch untestable without
 #: uninstalling Codex from the machine running the tests.
 _PROBE_CODEX = object()
+
+#: How long shutdown waits for one turn's provider teardown. Bounded so a wedged
+#: child cannot hold the process open forever; the thread is a daemon, so anything
+#: still running past this dies with the interpreter rather than blocking exit.
+_SHUTDOWN_JOIN_SECONDS = 10.0
 
 #: Every route lives under this prefix, matching the contract's server URL.
 API_PREFIX = "/api/v1"
@@ -409,8 +416,18 @@ def create_app(
         deprecates. Iterated over a COPY because `_finish_turn` mutates the dict.
         """
         yield
-        for thread_id, pending in list(running.state.pending_turns.items()):
-            agent_routes._finish_turn(running, thread_id, pending)
+        # AWAITED, not merely started: `_finish_turn` hands its cleanup to a daemon
+        # thread, so a lifespan that only initiated the work could let the
+        # interpreter exit before `close()` ever reached `CodexSession.close()` --
+        # leaving the app-server alive, which is the exact leak this handler exists
+        # to prevent. Joined off the loop so a slow teardown cannot block shutdown.
+        cleanups = [
+            thread
+            for thread_id, pending in list(running.state.pending_turns.items())
+            if (thread := agent_routes._finish_turn(running, thread_id, pending))
+        ]
+        for thread in cleanups:
+            await anyio.to_thread.run_sync(partial(thread.join, _SHUTDOWN_JOIN_SECONDS))
 
     app = FastAPI(
         title="Seshat Studio",

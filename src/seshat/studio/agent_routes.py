@@ -611,7 +611,9 @@ def _reap_abandoned_turns(app: FastAPI) -> None:
         _finish_turn(app, thread_id, pending)
 
 
-def _finish_turn(app: FastAPI, thread_id: str, pending: _PendingTurn) -> None:
+def _finish_turn(
+    app: FastAPI, thread_id: str, pending: _PendingTurn
+) -> threading.Thread | None:
     """Drop the pending turn and close its generator.
 
     Closing runs the generator's own `finally`, which is what terminates a real
@@ -627,7 +629,7 @@ def _finish_turn(app: FastAPI, thread_id: str, pending: _PendingTurn) -> None:
         del app.state.pending_turns[thread_id]
     close = getattr(pending.events, "close", None)
     if close is None:
-        return
+        return None
 
     reader = pending.reader
 
@@ -660,7 +662,13 @@ def _finish_turn(app: FastAPI, thread_id: str, pending: _PendingTurn) -> None:
     # A thread rather than `to_thread.run_sync`, because this runs from both the async
     # pump and the SYNC interrupt route; the caller does not wait either way, since
     # nothing downstream depends on the child being gone.
-    threading.Thread(target=shut_down, daemon=True).start()
+    # RETURNED so a caller that must not outlive the cleanup -- application
+    # shutdown -- can join it. Request paths deliberately do not: nothing they do
+    # next depends on the child being gone, and waiting would put a process
+    # teardown on the response path.
+    shutdown_thread = threading.Thread(target=shut_down, daemon=True)
+    shutdown_thread.start()
+    return shutdown_thread
 
 
 def _fail_turn(thread: Any, turn_id: str, category: str, detail: str) -> None:

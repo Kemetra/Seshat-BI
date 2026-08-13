@@ -39,6 +39,7 @@ from seshat.studio.codex_process import (
     redact_provider_stderr,
 )
 from seshat.studio.codex_protocol import (
+    CodexFrameError,
     CodexProtocolReader,
     NormalizationContext,
     normalize_notification,
@@ -444,16 +445,42 @@ class CodexBridge:
         initialized = False
         requested = False
         for frame in session.frames():
-            if not initialized and frame.get("id") == _INITIALIZE_ID:
-                # Negotiation is complete: only NOW may a thread be requested.
-                self._start_thread(session)
-                initialized = True
+            if not initialized:
+                initialized = self._negotiated(session, frame)
             if not requested:
-                thread_id = _thread_id_from(frame)
-                if thread_id is not None:
-                    self._start_turn(session, thread_id, prompt)
-                    requested = True
+                requested = self._requested(session, frame, prompt)
             yield frame
+
+    def _negotiated(self, session: CodexSession, frame: dict[str, Any]) -> bool:
+        """True once `initialize` has been ANSWERED and the thread requested.
+
+        The contract requires `initialize -> response -> initialized` before any
+        thread request, so this is what releases the rest of the handshake. A frame
+        that is not our reply leaves the state unchanged.
+        """
+        if frame.get("id") != _INITIALIZE_ID:
+            return False
+        if "error" in frame:
+            # The provider REFUSED to negotiate. Proceeding would open a thread on a
+            # session that explicitly rejected initialization, and the turn would
+            # fail later with a generic error instead of the incompatibility the
+            # provider actually reported.
+            raise CodexFrameError(
+                "the provider refused to initialize; the adapter is incompatible "
+                "with this build"
+            )
+        self._start_thread(session)
+        return True
+
+    def _requested(
+        self, session: CodexSession, frame: dict[str, Any], prompt: str
+    ) -> bool:
+        """True once the turn has been requested on the provider's own thread id."""
+        thread_id = _thread_id_from(frame)
+        if thread_id is None:
+            return False
+        self._start_turn(session, thread_id, prompt)
+        return True
 
     def _start_turn(self, session: CodexSession, thread_id: str, prompt: str) -> None:
         """Ask for the turn itself, on the thread the provider just minted."""
