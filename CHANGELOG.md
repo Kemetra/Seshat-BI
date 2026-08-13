@@ -83,11 +83,30 @@ explicitly identifies a public release event.
   add `--repo <root> --table <table>` to every invocation of those four verbs.** A
   script that worked against 0.8.2 fails with an argparse error until it does.
   Under `docs/operations/versioning-policy.md` this is the **MAJOR** row ("a flag
-  is removed or renamed, an exit-code meaning changes"), and it is why this
-  release is **1.0.0** rather than a minor bump -- a named owner decision recorded
-  in `docs/releases/v1.0.md`. Found by external review on PR #622, not by the
-  automated gates: every gate passed the earlier, incorrect claim that no
-  existing verb's flag contract had changed.
+  is removed or renamed, an exit-code meaning changes"). Found by external review
+  on PR #622, not by the automated gates: every gate passed the earlier,
+  incorrect claim that no existing verb's flag contract had changed.
+- **BREAKING -- `seshat pbi-mcp doctor` now exits `2` where v0.8.2 exited `0`.**
+  At `v0.8.2` `_run_doctor` ended `return 2 if rec.blocked else 0`; on HEAD
+  (`src/seshat/cli/commands/pbi_mcp.py:146`) it is
+  `return 2 if rec.blocked or rec.missing_prerequisites else 0`, and
+  `tests/unit/test_pbi_mcp_cli.py` records the flip (an existing
+  `assert code == 0` becomes `assert code == 2`). So the same repository state
+  that returned `0` on a published 0.8.2 install now returns `2`. **Any
+  automation treating this advisory command's zero exit as success breaks -- with
+  no involvement from the four PBIR verbs above.** The `--json` payload also
+  gains six fields (`target`, `target_semantic_model_ready`, `dashboard_ready`,
+  `dashboard_ready_tables`, `dashboard_design_approval`,
+  `official_report_skills`). **Migration:** treat `2` as "prerequisites
+  unresolved," not a hard failure, and read the JSON status fields rather than
+  the process exit code. Also found by external review on #622.
+
+  Together these two are why this release is **1.0.0** rather than a minor bump
+  -- a named owner decision recorded in `docs/releases/v1.0.md`. Every changed
+  return-code line under `src/seshat/cli/` and `src/seshat/*.py` was then diffed:
+  exactly one existing exit-code contract moved (the `doctor` pair), with the
+  other changed returns all in new code paths (`spec-status`, and an additive
+  `--harness` flag on `integrations`).
 - **The Spec Kit template fork removed and status governance externalized**
   (spec 151; #600) -- one less vendored fork to drift.
 - **The capability oracle split into three layered modules** (#598).
