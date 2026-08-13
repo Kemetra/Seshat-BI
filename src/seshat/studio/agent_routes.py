@@ -28,7 +28,10 @@ module only.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import queue
+import threading
 import time
 import uuid
 from collections.abc import Iterator
@@ -233,13 +236,17 @@ async def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any
     # Parked for the poll loop to advance. Not a background task: one created inside
     # a request dies with that request's event loop (verified under `TestClient`), so
     # the turn would silently stop after its first frame.
-    app.state.pending_turns[thread_id] = (
-        app.state.bridge.run_turn(
+    _reap_abandoned_turns(app)
+    app.state.pending_turns[thread_id] = _PendingTurn(
+        events=app.state.bridge.run_turn(
             prompt=request.prompt,
             turn_id=request.turn_id,
             requested_mode=request.requested_mode,
         ),
-        request,
+        request=request,
+        pumping=asyncio.Lock(),
+        last_touched=time.monotonic(),
+        results=queue.Queue(),
     )
     return {"turn_id": turn_id}
 
@@ -260,7 +267,7 @@ def _interrupt_turn(app: FastAPI, thread_id: str, turn_id: str) -> Response:
     # too, or a real provider's child process outlives the turn that spawned it.
     pending = app.state.pending_turns.get(thread_id)
     if pending is not None:
-        _finish_turn(app, thread_id, pending[0])
+        _finish_turn(app, thread_id, pending)
     return Response(status_code=204)
 
 
@@ -359,9 +366,19 @@ def register_agent_routes(app: FastAPI) -> None:
 #: RuntimeError from the worker, obscuring an ordinary end-of-turn.
 _DRAINED = object()
 
+#: Returned when the pump's slice expired before the provider produced anything. The
+#: generator keeps running on its worker; the next poll picks it up.
+_STILL_WAITING = object()
+
 #: Event types that END a turn. Local rather than imported from `events` to keep this
 #: module's pump readable; the store owns the authoritative transition.
 _TERMINAL_EVENTS: frozenset[str] = frozenset({"turn_completed", "turn_failed"})
+
+#: How long a parked turn may go unpolled before it is reaped. The pump only runs on a
+#: poll, so a browser that closes mid-reply would otherwise leave its generator parked
+#: forever -- holding a live `CodexSession` and its child process past the tab that
+#: started it.
+ABANDONED_TURN_SECONDS = 120.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -376,6 +393,30 @@ class TurnRequest:
     prompt: str
     turn_id: str
     requested_mode: str
+
+
+@dataclass(slots=True)
+class _PendingTurn:
+    """One in-flight turn: its generator, its request, and who is advancing it.
+
+    The lock is per TURN rather than global: two threads may legitimately pump at
+    once, but the same generator must never be advanced twice concurrently. Python
+    raises `ValueError: generator already executing`, which the pump's own handler
+    would then record as `provider_error` -- killing a healthy turn because a second
+    tab happened to poll.
+    """
+
+    events: Any
+    request: TurnRequest
+    pumping: asyncio.Lock
+    last_touched: float
+    #: The thread advancing the generator right now, if any. A read the pump gave up
+    #: waiting for is still running INSIDE the generator, so a second `next()` would
+    #: raise "generator already executing"; the next poll waits on the same reader.
+    reader: Any = None
+    #: Where that reader posts its one result. A queue rather than a future because
+    #: nothing tied to an event loop survives the request that created it.
+    results: Any = None
 
 
 #: How long one `/events` poll may spend advancing a live turn before it serves the
@@ -408,58 +449,150 @@ async def _pump_turn(app: FastAPI, thread_id: str, thread: Any) -> None:
     pending = app.state.pending_turns.get(thread_id)
     if pending is None:
         return
-    events, request = pending
-    deadline = time.monotonic() + TURN_PUMP_SECONDS
+    pending.last_touched = time.monotonic()
+    if pending.pumping.locked():
+        # Another poll is already inside `next()` on this generator -- a second tab,
+        # or a reconnect overlapping the previous poll. Advancing it concurrently
+        # raises "generator already executing", which the handler below would convert
+        # into `provider_error` and kill a healthy turn. This poll serves what is
+        # already buffered; the other one is making progress.
+        return
+
+    request = pending.request
+    async with pending.pumping:
+        deadline = time.monotonic() + TURN_PUMP_SECONDS
+        try:
+            while time.monotonic() < deadline:
+                produced = await _next_event(pending, deadline)
+                if produced is _STILL_WAITING:
+                    return  # provider is slow: serve the buffer, resume next poll
+                if produced is _DRAINED:
+                    # A stream that ends with NO terminal is a failure, not a quiet
+                    # success: `turn_started` is already recorded, so returning here
+                    # would leave `_active_turn` set with no generator left to advance
+                    # it, refusing every later turn with 409. This is the case the
+                    # synchronous route used to report as 503.
+                    _fail_turn(
+                        thread,
+                        request.turn_id,
+                        "provider_error",
+                        "the provider produced no events for this turn",
+                    )
+                    _finish_turn(app, thread_id, pending)
+                    return
+                if produced.type == "turn_started":
+                    # The route already opened this turn, synchronously, so the caller
+                    # could be told 409 in the RESPONSE rather than only in the stream.
+                    # Every bridge also yields its own opening envelope; recording it
+                    # again raises `TurnAlreadyActive` against our own event.
+                    continue
+                if (
+                    request.requested_mode == "read_only"
+                    and produced.type in WRITE_INTENT_TYPES
+                ):
+                    # The read_only refusal, recorded rather than raised: the response
+                    # has already gone, so a 502 has nowhere to land -- and ending the
+                    # turn is what releases `_active_turn`.
+                    _fail_turn(
+                        thread,
+                        request.turn_id,
+                        "read_only_violation",
+                        f"the bridge emitted {produced.type!r} during a read_only turn",
+                    )
+                    _finish_turn(app, thread_id, pending)
+                    return
+                thread.append(produced.type, produced.payload, turn_id=produced.turn_id)
+                if produced.type in _TERMINAL_EVENTS:
+                    _finish_turn(app, thread_id, pending)
+                    return
+        except Exception as error:  # a dead turn must still END
+            _fail_turn(
+                thread,
+                request.turn_id,
+                "provider_error",
+                f"the turn failed: {type(error).__name__}",
+            )
+            _finish_turn(app, thread_id, pending)
+
+
+async def _next_event(pending: _PendingTurn, deadline: float) -> Any:
+    """One generator advance, bounded by what remains of the pump's budget.
+
+    `CodexSession.frames()` blocks for up to 30 seconds waiting on a stalled provider.
+    Unbounded, the pump would hold the poll for that long -- withholding even the
+    `turn_started` already sitting in the buffer, so the browser could not render the
+    Stop control for the very turn the analyst wants to stop.
+
+    `_STILL_WAITING` means "nothing yet, serve the buffer": the generator keeps
+    running on its worker and the next poll collects the result. `abandon_on_cancel`
+    lets this coroutine move on while that thread finishes its read, rather than
+    blocking on it.
+    """
+    if pending.reader is None:
+        # A plain daemon thread with a queue, NOT a task or future. Anything bound to
+        # an event loop dies when that loop does, and under `TestClient` the loop ends
+        # with each request -- the same trap that ruled out `asyncio.create_task`.
+        # A thread survives across polls, so the generator is advanced exactly once
+        # and never re-entered while a read is outstanding.
+        pending.reader = _start_reader(pending)
+
+    remaining = max(0.0, deadline - time.monotonic())
     try:
-        while time.monotonic() < deadline:
-            produced = await anyio.to_thread.run_sync(partial(next, events, _DRAINED))
-            if produced is _DRAINED:
-                _finish_turn(app, thread_id, events)
-                return
-            if produced.type == "turn_started":
-                # The route already opened this turn, synchronously, so the caller
-                # could be told 409 in the RESPONSE rather than only in the stream.
-                # Every bridge also yields its own opening envelope; recording it
-                # again raises `TurnAlreadyActive` against our own event.
-                continue
-            if (
-                request.requested_mode == "read_only"
-                and produced.type in WRITE_INTENT_TYPES
-            ):
-                # The read_only refusal, recorded rather than raised: the response has
-                # already gone, so a 502 has nowhere to land -- and ending the turn is
-                # what releases `_active_turn`.
-                _fail_turn(
-                    thread,
-                    request.turn_id,
-                    "read_only_violation",
-                    f"the bridge emitted {produced.type!r} during a read_only turn",
-                )
-                _finish_turn(app, thread_id, events)
-                return
-            thread.append(produced.type, produced.payload, turn_id=produced.turn_id)
-            if produced.type in _TERMINAL_EVENTS:
-                _finish_turn(app, thread_id, events)
-                return
-    except Exception as error:  # a dead turn must still END
-        _fail_turn(
-            thread,
-            request.turn_id,
-            "provider_error",
-            f"the turn failed: {type(error).__name__}",
+        produced = await anyio.to_thread.run_sync(
+            partial(pending.results.get, True, remaining)
         )
-        _finish_turn(app, thread_id, events)
+    except queue.Empty:
+        return _STILL_WAITING  # still reading; this same reader continues
+
+    pending.reader = None
+    if isinstance(produced, BaseException):
+        raise produced
+    return produced
 
 
-def _finish_turn(app: FastAPI, thread_id: str, events: Any) -> None:
+def _start_reader(pending: _PendingTurn) -> threading.Thread:
+    """Advance the generator once, on a thread, and post the result to the queue."""
+
+    def read() -> None:
+        try:
+            pending.results.put(next(pending.events, _DRAINED))
+        except BaseException as error:  # surfaced to the pump, never swallowed
+            pending.results.put(error)
+
+    thread = threading.Thread(target=read, daemon=True)
+    thread.start()
+    return thread
+
+
+def _reap_abandoned_turns(app: FastAPI) -> None:
+    """Close turns nobody is polling any more.
+
+    The pump only runs on a poll, so a browser that closes mid-reply leaves its
+    generator parked with nothing to advance or close it -- holding a live
+    `CodexSession` and its child process. Swept when a new turn is started, which is
+    the only moment this dictionary can grow.
+    """
+    cutoff = time.monotonic() - ABANDONED_TURN_SECONDS
+    for thread_id, pending in list(app.state.pending_turns.items()):
+        if pending.last_touched < cutoff and not pending.pumping.locked():
+            _finish_turn(app, thread_id, pending)
+
+
+def _finish_turn(app: FastAPI, thread_id: str, pending: _PendingTurn) -> None:
     """Drop the pending turn and close its generator.
 
     Closing runs the generator's own `finally`, which is what terminates a real
     provider's child process -- so a turn that ends any way at all, including an
     interrupt, must reach here or the process leaks.
+
+    The slot is cleared only if it STILL HOLDS the turn being finished. An interrupt
+    followed immediately by a new turn installs a replacement; a late terminal from
+    the old generator would otherwise pop the new one, leaving a turn that is active
+    in `ThreadEvents` but can never advance -- every later turn stuck at 409.
     """
-    app.state.pending_turns.pop(thread_id, None)
-    close = getattr(events, "close", None)
+    if app.state.pending_turns.get(thread_id) is pending:
+        del app.state.pending_turns[thread_id]
+    close = getattr(pending.events, "close", None)
     if close is not None:
         try:
             close()

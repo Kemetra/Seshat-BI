@@ -144,14 +144,22 @@ class _FakeApp:
     def __init__(self, bridge, thread_id: str, request) -> None:
         self.state = type("S", (), {})()
         self.state.bridge = bridge
+        import asyncio
+        import queue
+
+        from seshat.studio.agent_routes import _PendingTurn
+
         self.state.pending_turns = {
-            thread_id: (
-                bridge.run_turn(
+            thread_id: _PendingTurn(
+                events=bridge.run_turn(
                     prompt=request.prompt,
                     turn_id=request.turn_id,
                     requested_mode=request.requested_mode,
                 ),
-                request,
+                request=request,
+                pumping=asyncio.Lock(),
+                last_touched=0.0,
+                results=queue.Queue(),
             )
         }
 
