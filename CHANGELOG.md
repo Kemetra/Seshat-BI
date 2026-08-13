@@ -27,6 +27,8 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+## [1.0.0] -- 2026-08-13
+
 ### Added
 - **Seshat Studio Phases 2-4 -- an INCOMPLETE PREVIEW behind the optional
   `studio` extra** (spec 139; #606, #607, #608, #609, #610, #611). Lands the
