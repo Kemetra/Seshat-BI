@@ -37,6 +37,7 @@ from fastapi.responses import JSONResponse
 
 from . import (
     agent_routes,
+    approvals,
     bridge,
     bridge_selection,
     codex_bridge,
@@ -117,7 +118,7 @@ def _bootstrap_capabilities() -> dict[str, Any]:
     """What this build can do. `business_decision_recording` is const false (FR-022)."""
     return {
         "agent_turns": False,
-        "technical_approvals": False,
+        "technical_approvals": True,
         "business_decision_recording": False,
     }
 
@@ -510,6 +511,10 @@ def create_app(
     #: absolute filesystem paths to the browser, including out-of-root paths that
     #: expose the operator's home directory layout.
     app.state.threads = events.ThreadStore(workspace_root=launch.workspace_root)
+    #: Approvals awaiting an analyst decision, each decidable exactly once. Held on
+    #: app state rather than per-thread because the relay route is addressed by
+    #: approval id, and a decision must be refusable even after its turn has ended.
+    app.state.pending_approvals = approvals.PendingApprovals()
     app.state.bridge = (
         codex_bridge.CodexBridge(
             codex_process.CodexLaunchPlan.for_workspace(

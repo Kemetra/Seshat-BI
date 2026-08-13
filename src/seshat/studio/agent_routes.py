@@ -44,6 +44,7 @@ import anyio.to_thread
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from seshat.studio.approvals import StaleApproval
 from seshat.studio.bridge import validate_turn_request
 from seshat.studio.events import ReplayExpired, TurnAlreadyActive
 
@@ -286,6 +287,69 @@ def _interrupt_turn(app: FastAPI, thread_id: str, turn_id: str) -> Response:
     return Response(status_code=204)
 
 
+#: The contract's `decision` enum for a technical approval response. Anything else --
+#: including a missing key -- is refused rather than coerced, because the only value
+#: worth guessing would be the one that grants permission.
+_ALLOW_DECISION = "allow_once"
+_DENY_DECISION = "deny"
+
+
+def _decide_approval(
+    app: FastAPI, thread_id: str, approval_id: str, body: dict[str, Any]
+) -> Response:
+    """Relay one analyst decision to the bridge.
+
+    The browser sends a decision and nothing else -- no tool runs here, no artifact is
+    written (FR-020). Every refusal path returns a Problem rather than a silent no-op,
+    because an approval that appears to succeed and does nothing is worse than one that
+    visibly fails.
+
+    **Two refusal codes, because they mean different things to a client.** A `403`
+    says the allow itself was impermissible -- readiness forbids the scope, or the
+    authority was never Studio's to grant. A `409` says the request was addressed to an
+    approval that is not awaiting a decision: unknown, or already decided. Collapsing
+    them would tell an analyst "try again later" when the honest answer is "never".
+    """
+    if not app.state.threads.has_thread(thread_id):
+        return _unknown_thread()
+    decision = body.get("decision")
+    if decision not in {_ALLOW_DECISION, _DENY_DECISION}:
+        return _problem(
+            422,
+            "Unrecognized approval decision",
+            f"decision must be {_ALLOW_DECISION!r} or {_DENY_DECISION!r}, "
+            f"not {decision!r}",
+            "Re-send the decision using one of the two documented values.",
+        )
+    envelope = app.state.pending_approvals.envelope(approval_id)
+    if (
+        decision == _ALLOW_DECISION
+        and envelope is not None
+        and not envelope.allow_permitted
+    ):
+        return _problem(
+            403,
+            "That approval may not be allowed here",
+            "; ".join(envelope.forbidden_reasons)
+            or f"authority is {envelope.authority}",
+            "A named-human ruling or a closed readiness gate cannot be cleared from "
+            "Studio; resolve it at its own seam.",
+        )
+    try:
+        app.state.pending_approvals.decide(
+            approval_id, allow=decision == _ALLOW_DECISION
+        )
+    except StaleApproval as refused:
+        return _problem(
+            409,
+            "That approval is not awaiting your decision",
+            str(refused),
+            "Re-read the current approval request; a decision already recorded "
+            "cannot be changed here.",
+        )
+    return Response(status_code=204)
+
+
 async def _stream_events(app: FastAPI, thread_id: str, request: Request) -> Response:
     """Replay what is retained, then end the response.
 
@@ -370,6 +434,15 @@ def register_agent_routes(app: FastAPI) -> None:
     )
     async def interrupt_turn(thread_id: str, turn_id: str) -> Response:
         return _interrupt_turn(app, thread_id, turn_id)
+
+    @app.post(
+        f"{API_PREFIX}/agent/threads/{{thread_id}}/approvals/{{approval_id}}",
+        status_code=204,
+    )
+    async def decide_approval(
+        thread_id: str, approval_id: str, body: dict[str, Any]
+    ) -> Response:
+        return _decide_approval(app, thread_id, approval_id, body)
 
     @app.get(f"{API_PREFIX}/agent/threads/{{thread_id}}/events")
     async def stream_events(thread_id: str, request: Request) -> Response:

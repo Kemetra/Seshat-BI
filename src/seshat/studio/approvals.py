@@ -137,6 +137,14 @@ class PendingApprovals:
     def register(self, envelope: ApprovalEnvelope) -> None:
         self._live[envelope.approval_id] = envelope
 
+    def envelope(self, approval_id: str) -> ApprovalEnvelope | None:
+        """The live envelope, or None if it is unknown or already decided.
+
+        Read-only: lets a caller distinguish "impermissible" (403) from "not awaiting a
+        decision" (409) without consuming the id to find out.
+        """
+        return self._live.get(approval_id)
+
     def decide(self, approval_id: str, allow: bool) -> str:
         if approval_id in self._decided:
             raise StaleApproval(
