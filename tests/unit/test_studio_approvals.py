@@ -177,6 +177,63 @@ def test_a_deny_is_recorded_and_also_burns_the_id():
         ledger.decide("turn-1-approval-1", allow=False)
 
 
+def test_a_decision_under_the_wrong_thread_is_refused():
+    from seshat.studio.approvals import PendingApprovals, StaleApproval
+
+    ledger = PendingApprovals()
+    ledger.register(normalize_approval(TECHNICAL_EVENT, [], thread_id="thread-a"))
+    with pytest.raises(StaleApproval):
+        ledger.decide("turn-1-approval-1", allow=True, thread_id="thread-b")
+    # Still live: a mismatched attempt must not consume the approval.
+    assert (
+        ledger.decide("turn-1-approval-1", allow=True, thread_id="thread-a")
+        == "allowed"
+    )
+
+
+def test_abandoning_a_thread_drops_only_its_own_approvals():
+    from seshat.studio.approvals import PendingApprovals, StaleApproval
+
+    ledger = PendingApprovals()
+    ledger.register(normalize_approval(TECHNICAL_EVENT, [], thread_id="thread-a"))
+    ledger.register(
+        normalize_approval(
+            {**TECHNICAL_EVENT, "approval_id": "other"}, [], thread_id="thread-b"
+        )
+    )
+    assert ledger.abandon_thread("thread-a") == 1
+    with pytest.raises(StaleApproval):
+        ledger.decide("turn-1-approval-1", allow=True, thread_id="thread-a")
+    # thread-b's approval is untouched.
+    assert ledger.decide("other", allow=True, thread_id="thread-b") == "allowed"
+
+
+def test_the_live_ledger_stays_bounded():
+    from seshat.studio import approvals
+
+    ledger = approvals.PendingApprovals()
+    for index in range(approvals._LIVE_RETENTION + 25):
+        ledger.register(
+            normalize_approval({**TECHNICAL_EVENT, "approval_id": f"a-{index}"}, [])
+        )
+    assert len(ledger._live) <= approvals._LIVE_RETENTION
+    # The most recent survives; the oldest is what went.
+    newest = f"a-{approvals._LIVE_RETENTION + 24}"
+    assert ledger.envelope(newest) is not None
+    assert ledger.envelope("a-0") is None
+
+
+def test_the_decided_ledger_stays_bounded():
+    from seshat.studio import approvals
+
+    ledger = approvals.PendingApprovals()
+    for index in range(approvals._DECIDED_RETENTION + 25):
+        event = {**TECHNICAL_EVENT, "approval_id": f"a-{index}"}
+        ledger.register(normalize_approval(event, []))
+        ledger.decide(f"a-{index}", allow=False)
+    assert len(ledger._decided) <= approvals._DECIDED_RETENTION
+
+
 def test_a_never_allowable_envelope_cannot_be_allowed_through_the_ledger():
     from seshat.studio.approvals import PendingApprovals, StaleApproval
 

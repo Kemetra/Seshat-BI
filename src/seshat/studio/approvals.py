@@ -45,6 +45,15 @@ NAMED_HUMAN = "named_human"
 #: empty string, which renders as a blank panel the analyst cannot interpret.
 _UNKNOWN = "unknown"
 
+#: How many decided approval ids stay remembered. Bounded because FR-035 forbids a
+#: database, so this dict IS the store; large enough that a browser retrying a decision
+#: still reads "already decided" rather than the weaker "unknown approval".
+_DECIDED_RETENTION = 512
+
+#: How many UNDECIDED approvals stay decidable at once. An approval legitimately
+#: outlives its turn (see `register`), so nothing else would ever evict these.
+_LIVE_RETENTION = 256
+
 
 @dataclass(frozen=True)
 class ApprovalEnvelope:
@@ -62,10 +71,17 @@ class ApprovalEnvelope:
     reason: str
     scope: str
     risk: str
+    #: The thread this approval was raised on. The contract addresses the relay
+    #: thread-scoped, so a decision arriving under a DIFFERENT thread's URL is a
+    #: mismatch to refuse rather than an id to look up globally.
+    thread_id: str | None = None
 
 
 def normalize_approval(
-    event: dict[str, Any], forbidden_scope: Sequence[str]
+    event: dict[str, Any],
+    forbidden_scope: Sequence[str],
+    *,
+    thread_id: str | None = None,
 ) -> ApprovalEnvelope:
     """Turn a provider `approval_required` payload into a decision envelope.
 
@@ -86,6 +102,7 @@ def normalize_approval(
         reason=str(event.get("reason", _UNKNOWN)),
         scope=str(event.get("scope", _UNKNOWN)),
         risk=str(event.get("risk", _UNKNOWN)),
+        thread_id=thread_id,
     )
 
 
@@ -135,7 +152,18 @@ class PendingApprovals:
         self._decided: dict[str, str] = {}
 
     def register(self, envelope: ApprovalEnvelope) -> None:
+        """Make one approval decidable, evicting the oldest if the ledger is full.
+
+        Bounded by COUNT rather than by turn lifetime: Phase 4 streams an
+        `approval_required` as inert activity beside a `turn_completed` in the same
+        turn, so an approval outliving its turn is the normal case, not a leak. Memory
+        is the only store FR-035 allows, so something must cap it -- and evicting the
+        OLDEST keeps the approval an analyst is most likely looking at right now.
+        """
         self._live[envelope.approval_id] = envelope
+        while len(self._live) > _LIVE_RETENTION:
+            oldest = next(iter(self._live))
+            del self._live[oldest]
 
     def envelope(self, approval_id: str) -> ApprovalEnvelope | None:
         """The live envelope, or None if it is unknown or already decided.
@@ -145,7 +173,16 @@ class PendingApprovals:
         """
         return self._live.get(approval_id)
 
-    def decide(self, approval_id: str, allow: bool) -> str:
+    def decide(
+        self, approval_id: str, allow: bool, *, thread_id: str | None = None
+    ) -> str:
+        """Record one decision, or raise `StaleApproval`.
+
+        `thread_id`, when given, must match the thread the approval was raised on. The
+        contract addresses this relay thread-scoped, so without the check an approval
+        registered on thread A would be decidable through thread B's URL -- the id is
+        the capability, and an unscoped capability is a wider one than intended.
+        """
         if approval_id in self._decided:
             raise StaleApproval(
                 f"approval {approval_id!r} was already decided "
@@ -154,6 +191,14 @@ class PendingApprovals:
         envelope = self._live.get(approval_id)
         if envelope is None:
             raise StaleApproval(f"approval {approval_id!r} is not awaiting a decision")
+        if (
+            thread_id is not None
+            and envelope.thread_id is not None
+            and thread_id != envelope.thread_id
+        ):
+            raise StaleApproval(
+                f"approval {approval_id!r} was not raised on thread {thread_id!r}"
+            )
         if allow and not envelope.allow_permitted:
             raise StaleApproval(
                 f"approval {approval_id!r} may not be allowed here: "
@@ -162,4 +207,33 @@ class PendingApprovals:
         outcome = "allowed" if allow else "denied"
         self._decided[approval_id] = outcome
         del self._live[approval_id]
+        self._evict_if_needed()
         return outcome
+
+    def abandon_thread(self, thread_id: str) -> int:
+        """Drop every live approval raised on a thread that is over.
+
+        Called when a turn finishes, fails, or is reaped. Without this, an approval
+        whose turn no longer exists stays decidable and an allow returns 204 for work
+        nothing will ever run -- and `_live` grows for the process lifetime, which
+        FR-035 (no database) makes a real bound rather than a theoretical one.
+        """
+        doomed = [
+            approval_id
+            for approval_id, envelope in self._live.items()
+            if envelope.thread_id == thread_id
+        ]
+        for approval_id in doomed:
+            del self._live[approval_id]
+        return len(doomed)
+
+    def _evict_if_needed(self) -> None:
+        """Keep the decided-id ledger bounded, oldest first.
+
+        The ids must be remembered long enough to tell "already decided" from
+        "unknown" -- collapsing those two would let a replay read as a fresh request.
+        Bounded because memory is the only store available.
+        """
+        while len(self._decided) > _DECIDED_RETENTION:
+            oldest = next(iter(self._decided))
+            del self._decided[oldest]

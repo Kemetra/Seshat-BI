@@ -341,7 +341,7 @@ def _decide_approval(
         )
     try:
         app.state.pending_approvals.decide(
-            approval_id, allow=decision == _ALLOW_DECISION
+            approval_id, allow=decision == _ALLOW_DECISION, thread_id=thread_id
         )
     except StaleApproval as refused:
         return _problem(
@@ -531,7 +531,9 @@ def _selected_table(thread: Any) -> str | None:
     return None
 
 
-def _register_approval(app: FastAPI, thread: Any, produced: Any) -> None:
+def _register_approval(
+    app: FastAPI, thread_id: str, thread: Any, produced: Any
+) -> None:
     """Make one streamed approval decidable, and only as far as readiness allows.
 
     Called BEFORE the event is appended, so the id the browser reads from the stream is
@@ -548,7 +550,7 @@ def _register_approval(app: FastAPI, thread: Any, produced: Any) -> None:
         app.state.launch.workspace_root, _selected_table(thread)
     )
     app.state.pending_approvals.register(
-        normalize_approval(dict(produced.payload), forbidden)
+        normalize_approval(dict(produced.payload), forbidden, thread_id=thread_id)
     )
 
 
@@ -629,7 +631,7 @@ async def _pump_turn(app: FastAPI, thread_id: str, thread: Any) -> None:
                     _finish_turn(app, thread_id, pending)
                     return
                 if produced.type == "approval_required":
-                    _register_approval(app, thread, produced)
+                    _register_approval(app, thread_id, thread, produced)
                 thread.append(produced.type, produced.payload, turn_id=produced.turn_id)
                 if produced.type in _TERMINAL_EVENTS:
                     _finish_turn(app, thread_id, pending)
@@ -741,6 +743,14 @@ def _finish_turn(
     """
     if app.state.pending_turns.get(thread_id) is pending:
         del app.state.pending_turns[thread_id]
+        # NOT abandoning this thread's approvals here, deliberately. It looks like the
+        # right place -- a finished turn cannot honour an allow -- but Phase 4 streams
+        # `approval_required` as INERT ACTIVITY beside a `turn_completed` in the same
+        # turn (`bridge.FakeAgentBridge.run_turn`), so "the turn ended" and "an
+        # approval is still pending" legitimately coexist. Dropping them here made a
+        # just-streamed approval undecidable the instant it appeared. The ledger is
+        # bounded by COUNT instead; `abandon_thread` stays available for a future
+        # paused-turn model, where a turn really does own its approvals.
     close = getattr(pending.events, "close", None)
     if close is None:
         return None

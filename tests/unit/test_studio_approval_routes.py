@@ -114,12 +114,31 @@ def test_the_only_approval_route_is_the_technical_relay(tmp_path: Path):
     assert [p for p in paths if "approval" in p.lower()] == [APPROVAL_PATH]
 
 
-def test_business_decision_recording_stays_false_while_technical_turns_true():
+def test_no_capability_is_advertised_that_this_build_cannot_deliver():
+    """`technical_approvals` stays False until a bridge seam DELIVERS the decision.
+
+    The relay accepts a decision and burns its id, but no `AgentBridge` method sends
+    it to a provider, so a real Codex turn would wait forever on the JSON-RPC response
+    its `requestApproval` server request expects. Flipping this flag on the strength of
+    an accepted-and-recorded decision would advertise a round trip that does not close.
+    """
     from seshat.studio.app import _bootstrap_capabilities
 
     capabilities = _bootstrap_capabilities()
-    assert capabilities["technical_approvals"] is True
+    assert capabilities["technical_approvals"] is False
     assert capabilities["business_decision_recording"] is False
+
+
+def test_the_bridge_protocol_has_no_respond_seam_yet():
+    """Pins WHY the capability is False, so flipping it fails here first.
+
+    When a respond seam lands, this test breaks -- and that break is the reminder to
+    re-examine the capability flag in the same change, rather than discovering months
+    later that the flag and the protocol disagree.
+    """
+    from seshat.studio.bridge import AgentBridge
+
+    assert not hasattr(AgentBridge, "respond_to_approval")
 
 
 # --------------------------------------------------------------------------- #
@@ -194,6 +213,54 @@ def test_a_deny_is_accepted_and_also_burns_the_id(tmp_path: Path):
     )
 
 
+def test_a_real_readiness_gate_blocks_an_allow_end_to_end(tmp_path: Path):
+    """The REAL chain, no monkeypatch: agent_next -> forbidden_reasons -> 403.
+
+    Every other route test opens its thread with `selected_table_id: None`, which hits
+    `forbidden_scope_for`'s no-table refusal -- a different branch. This one names a
+    table so `build_table_next_document` actually runs, and asserts the sentence the
+    readiness gate itself produced reaches the analyst.
+    """
+    client, app = _client(tmp_path)
+    created = client.post(
+        f"{API}/agent/threads", json={"selected_table_id": "retail_store_sales"}
+    )
+    assert created.status_code == 201, created.text
+    thread_id = created.json()["thread_id"]
+
+    from seshat.studio.agent_routes import _register_approval, _selected_table
+
+    thread = app.state.threads.thread(thread_id)
+    assert _selected_table(thread) == "retail_store_sales"
+
+    class _Produced:
+        payload = {**TECHNICAL_EVENT}
+
+    _register_approval(app, thread_id, thread, _Produced())
+    envelope = app.state.pending_approvals.envelope("turn-1-approval-1")
+    assert envelope is not None
+    # A fresh workspace has every gate closed, so the real document forbids plenty.
+    assert envelope.forbidden_reasons, "the real readiness gate forbade nothing"
+    assert envelope.allow_permitted is False
+
+    refused = _decide(client, thread_id, "turn-1-approval-1", allow=True)
+    assert refused.status_code == 403, refused.text
+    assert "Mapping Ready" in refused.text or "silver" in refused.text.lower()
+
+
+def test_an_approval_is_not_decidable_through_another_threads_url(tmp_path: Path):
+    """The id is the capability, so it must not be usable from any thread that asks."""
+    client, app = _client(tmp_path)
+    owner = _thread(client)
+    intruder = _thread(client)
+    app.state.pending_approvals.register(
+        normalize_approval(TECHNICAL_EVENT, [], thread_id=owner)
+    )
+    assert _decide(client, intruder, "turn-1-approval-1", allow=True).status_code == 409
+    # Still live for its own thread: the refusal must not have consumed it.
+    assert _decide(client, owner, "turn-1-approval-1", allow=True).status_code == 204
+
+
 def test_an_unknown_thread_is_refused(tmp_path: Path):
     client, app = _client(tmp_path)
     app.state.pending_approvals.register(normalize_approval(TECHNICAL_EVENT, []))
@@ -239,8 +306,12 @@ def test_an_emitted_approval_is_registered_so_the_relay_can_find_it(tmp_path: Pa
         ]
         if approval_ids:
             break
-    if not approval_ids:
-        pytest.skip("this bridge emitted no approval_required for that prompt")
+    # An ASSERTION, not a skip: FakeAgentBridge is deterministic, so "no approval was
+    # emitted" is a real failure. A skip here would stop enforcing while still looking
+    # green -- the same trap that hid T023's uncertified state.
+    assert approval_ids, (
+        "the fake bridge emitted no approval_required for a change prompt"
+    )
 
     # The positive form: the id the browser saw is the id the ledger knows.
     assert app.state.pending_approvals.envelope(approval_ids[0]) is not None
