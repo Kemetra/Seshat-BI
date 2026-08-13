@@ -75,6 +75,15 @@ class ApprovalEnvelope:
     #: thread-scoped, so a decision arriving under a DIFFERENT thread's URL is a
     #: mismatch to refuse rather than an id to look up globally.
     thread_id: str | None = None
+    #: The JSON-RPC `id` of the provider's `requestApproval` server request, when one
+    #: is waiting. The provider correlates the response by THIS value and blocks until
+    #: it arrives, so an envelope that drops it can be decided but never answered.
+    #:
+    #: `None` is a legitimate state, not a defect: `FakeAgentBridge` streams
+    #: `approval_required` with no provider request beneath it, and Phase 4's inert
+    #: activity events are exactly that. Delivery reports "nothing to answer" for those
+    #: rather than inventing an id.
+    request_id: object | None = None
 
 
 def normalize_approval(
@@ -82,12 +91,17 @@ def normalize_approval(
     forbidden_scope: Sequence[str],
     *,
     thread_id: str | None = None,
+    request_id: object | None = None,
 ) -> ApprovalEnvelope:
     """Turn a provider `approval_required` payload into a decision envelope.
 
     `allow_permitted` is True only when BOTH hold: the authority is technical, and
     readiness forbids nothing. Two independent reasons to refuse, evaluated before any
     control is exposed (FR-018).
+
+    `request_id` is the provider's JSON-RPC correlation id, passed IN for the same
+    reason `forbidden_scope` is: it belongs to the transport, and taking it as a
+    parameter keeps this module free of any protocol import.
     """
     raw_authority = event.get("required_authority")
     authority = TECHNICAL if raw_authority == TECHNICAL else NAMED_HUMAN
@@ -103,6 +117,7 @@ def normalize_approval(
         scope=str(event.get("scope", _UNKNOWN)),
         risk=str(event.get("risk", _UNKNOWN)),
         thread_id=thread_id,
+        request_id=request_id,
     )
 
 
