@@ -53,6 +53,22 @@ __all__ = ["CodexBridge", "CodexSession"]
 #: Sentinel pushed onto the frame queue when the reader thread sees EOF.
 _EOF = object()
 
+#: How long to wait on a provider that owes us a frame and is saying nothing. This is
+#: the wedged-child bound: it must stay short enough that a dead session surfaces as a
+#: failure rather than a hang.
+IDLE_TIMEOUT_SECONDS = 30.0
+
+#: How long to wait once the provider is BLOCKED on an approval. Longer because the
+#: thing being waited on is a person reading a panel and deciding, which is not a
+#: fault condition. Still BOUNDED, deliberately: an approval nobody ever decides must
+#: end the turn rather than pin a reader thread for the process lifetime -- that is
+#: the difference between widening this window and deleting it.
+#:
+#: Five minutes is a judgement call, not a derived number: long enough to read a
+#: command and its reason and decide, short enough that an abandoned tab frees its
+#: thread within one coffee break.
+APPROVAL_TIMEOUT_SECONDS = 300.0
+
 #: Request ids for the three calls one turn makes. Fixed rather than generated: a
 #: session drives exactly one turn, so a counter would add state without removing a
 #: collision, and a constant makes the reply that carries the thread id greppable.
@@ -186,10 +202,32 @@ class CodexSession:
         finally:
             self._stderr_done.set()
 
-    def frames(self, timeout: float = 30.0) -> Iterator[dict[str, Any]]:
-        """Yield parsed frames until the child closes stdout."""
+    def frames(
+        self,
+        timeout: float = IDLE_TIMEOUT_SECONDS,
+        *,
+        patience: Callable[[], float] | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        """Yield parsed frames until the child closes stdout.
+
+        The wait is bounded so a wedged child cannot pin this reader thread forever.
+        But not every silence means the same thing: a provider BLOCKED on
+        `requestApproval` is behaving correctly while a human reads the panel, and
+        killing that turn on the stalled-provider budget blamed the provider for a
+        person thinking.
+
+        `patience` is a callable, consulted BEFORE EACH WAIT rather than once, because
+        the answer changes mid-turn -- an approval can be raised at any point, and a
+        budget captured at call time could never widen to accommodate it. Callers that
+        do not care pass nothing and keep the flat `timeout`.
+
+        The reply the analyst's decision writes to stdin makes the child proceed, and
+        its next frame lands here on its own -- so nothing needs to notify this loop
+        that a decision arrived. It simply stops waiting.
+        """
         while True:
-            item = self._frames.get(timeout=timeout)
+            budget = patience() if patience is not None else timeout
+            item = self._frames.get(timeout=budget)
             if item is _EOF:
                 return
             if isinstance(item, Exception):
@@ -332,9 +370,19 @@ class CodexBridge:
     """
 
     def __init__(
-        self, plan: CodexLaunchPlan, *, propose_plan: CodexLaunchPlan | None = None
+        self,
+        plan: CodexLaunchPlan,
+        *,
+        propose_plan: CodexLaunchPlan | None = None,
+        idle_timeout: float = IDLE_TIMEOUT_SECONDS,
+        approval_timeout: float = APPROVAL_TIMEOUT_SECONDS,
     ) -> None:
         self._plan = plan
+        #: Injectable so the discrimination between the two silences is testable in
+        #: fractions of a second. A test that genuinely waited 30s would be too slow
+        #: to run and would prove nothing extra.
+        self.idle_timeout = idle_timeout
+        self.approval_timeout = approval_timeout
         #: Optional second plan used only for `propose_changes`. A real Codex child
         #: decides for itself whether a turn touches files, so production passes one
         #: plan and leaves this None; the scripted child replays a FIXED script, so a
@@ -352,9 +400,66 @@ class CodexBridge:
         #: closure that already knows its thread. Default is a no-op so every existing
         #: caller, and `FakeAgentBridge`, are unaffected.
         self.on_session: Callable[[Any], None] = lambda _session: None
+        #: JSON-RPC ids of approval requests this turn raised that are still
+        #: undecided. A SET rather than a flag because a turn can raise several before
+        #: any is answered (the committed `approvals` capture raises three), and a
+        #: flag cleared by the second would have withdrawn the patience the first
+        #: still needs. Emptied at the top of every `run_turn`: a leftover id from a
+        #: previous turn would grant a wedged provider a budget it must not get.
+        self._undecided_approvals: set[object] = set()
 
     def describe(self) -> dict[str, Any]:
         return {"bridge": "codex", "provider": "codex", "deterministic": False}
+
+    def _settle_approval(self, frame: dict[str, Any]) -> None:
+        """Drop an approval from the undecided set once the provider says it resolved.
+
+        Keyed on `serverRequest/resolved`'s `requestId` rather than on "any frame
+        arrived": a turn can raise several approvals at once, and the provider keeps
+        emitting other notifications while they are outstanding. Clearing on any frame
+        withdrew the patience the FIRST approval still needed the moment a second one
+        appeared -- which is exactly how the committed three-approval capture behaves.
+        """
+        if frame.get("method") != "serverRequest/resolved":
+            return
+        params = frame.get("params")
+        if isinstance(params, dict):
+            self._undecided_approvals.discard(params.get("requestId"))
+
+    def _failure_payload(self, error: BaseException) -> dict[str, Any]:
+        """Name the failure by WHAT was being waited on, not by the exception type.
+
+        A timeout while the provider is blocked on an approval is not a provider
+        fault -- it is an approval nobody decided in time, and FR-024 requires the two
+        to be distinct states with their own recovery actions. Reporting the paused
+        case as `provider_error` sent an analyst to check a perfectly healthy CLI.
+
+        The detail carries the exception TYPE and never its text, in both branches:
+        provider messages can contain paths or tokens, and this payload is retained.
+        """
+        if self._undecided_approvals and isinstance(error, queue.Empty):
+            return {
+                "category": "approval_not_decided",
+                "detail": (
+                    "the turn ended because its approval request was not decided in "
+                    f"time ({self.approval_timeout:.0f}s); the agent was waiting, not "
+                    "broken"
+                ),
+            }
+        return {
+            "category": "provider_error",
+            "detail": f"the provider session failed: {type(error).__name__}",
+        }
+
+    def _budget(self) -> float:
+        """Seconds to wait for the next frame, given why we are waiting.
+
+        Read fresh before every wait: an approval can be raised at any point in a
+        turn, so a budget fixed at the start could never widen to accommodate one.
+        """
+        if self._undecided_approvals:
+            return self.approval_timeout
+        return self.idle_timeout
 
     def _plan_for(self, requested_mode: str) -> CodexLaunchPlan:
         if requested_mode == "propose_changes" and self._propose_plan is not None:
@@ -437,6 +542,9 @@ class CodexBridge:
             # relay's job, driven by the analyst's decision on a later HTTP request.
             approval = normalize_approval_request(frame, context=context)
             if approval is not None:
+                # The provider is now BLOCKED on a human. Widen the wait before the
+                # next read, or the analyst's reading time reads as a dead provider.
+                self._undecided_approvals.add(frame.get("id"))
                 yield approval
                 continue
             for event_type, payload in normalize_notification(frame, context=context):
@@ -463,7 +571,8 @@ class CodexBridge:
         """
         initialized = False
         requested = False
-        for frame in session.frames():
+        for frame in session.frames(patience=self._budget):
+            self._settle_approval(frame)
             if not initialized:
                 initialized = self._negotiated(session, frame)
             if not requested:
@@ -521,6 +630,7 @@ class CodexBridge:
     ) -> Iterator[StudioEvent]:
         cleaned = validate_turn_request(prompt, requested_mode)
         sequence = 0
+        self._undecided_approvals.clear()
 
         def emit(event_type: str, payload: dict[str, Any]) -> StudioEvent:
             nonlocal sequence
@@ -563,13 +673,7 @@ class CodexBridge:
             # The detail is the exception TYPE, never its text: provider messages can
             # carry paths or tokens, and this payload is retained.
             saw_terminal = True
-            yield emit(
-                "turn_failed",
-                {
-                    "category": "provider_error",
-                    "detail": (f"the provider session failed: {type(error).__name__}"),
-                },
-            )
+            yield emit("turn_failed", self._failure_payload(error))
         finally:
             self.on_session(None)
             session.close()
