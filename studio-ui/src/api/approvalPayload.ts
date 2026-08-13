@@ -86,11 +86,19 @@ function sentences(raw: unknown): string[] {
 /**
  * Whether an allow control may be RENDERED for this approval (FR-021).
  *
- * Both conditions, restated on the client rather than inferred from one flag. The server
- * is the authority and refuses with a 403 regardless -- but a control that appears and
- * then fails is precisely what FR-021 forbids, and reading `allowPermitted` alone would
- * let a future server bug that sets it on a `named_human` item put an Allow button in
- * front of a governance ruling.
+ * The AUTHORITY condition is restated here rather than inferred from `allowPermitted`
+ * alone: a future server bug that set the flag on a `named_human` item would otherwise
+ * put an Allow button in front of a governance ruling.
+ *
+ * The readiness condition is NOT restated -- it cannot be, because `forbidden_reasons`
+ * and `allow_permitted` are derived from each other on the server
+ * (`approvals.py`: `allow_permitted = authority is technical and not reasons`), so the
+ * client has no independent view of it. `allowPermitted` IS the readiness verdict, not
+ * a second opinion about it. Both flags are overwritten from the envelope in
+ * `_wire_payload`, so a provider cannot supply a contradictory pair.
+ *
+ * The server remains the authority and refuses with a 403 regardless. This function
+ * exists so the control is never OFFERED, which is what FR-021 actually asks.
  */
 export function mayAllow(approval: Approval): boolean {
   return approval.technical && approval.allowPermitted;

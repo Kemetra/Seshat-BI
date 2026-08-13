@@ -252,7 +252,11 @@ function EventRow({ event, threadId }: { event: StudioEvent; threadId: string })
     if (approval !== undefined) {
       return (
         <li className={className}>
-          <ApprovalPanel approval={approval} threadId={threadId} />
+          <ApprovalPanel
+            approval={approval}
+            threadId={threadId}
+            domKey={event.sequence}
+          />
         </li>
       );
     }

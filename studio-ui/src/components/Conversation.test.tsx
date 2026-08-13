@@ -275,6 +275,38 @@ describe("Conversation", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("offers the allow control for a PERMITTED technical approval, end to end", async () => {
+    // The allow path's only integration coverage. An adversarial review found that
+    // forcing `mayAllow` to `return false` left every Conversation test green, because
+    // the sole approval fixture here was `named_human` -- so deleting the Allow button
+    // from the app's reachable path would have been caught only in isolation.
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit(
+      "approval_required",
+      event({
+        type: "approval_required",
+        payload: {
+          approval_id: "a2",
+          required_authority: "technical",
+          action: "run_command",
+          target: "pytest -q",
+          scope: "read_only",
+          risk: "low",
+          allow_permitted: true,
+          forbidden_reasons: [],
+        },
+      }),
+      "1",
+    );
+
+    expect(
+      await screen.findByRole("button", { name: /allow once/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("pytest -q")).toBeInTheDocument();
+  });
+
   it("keeps a LATE approval inert, with no control at all", async () => {
     // `ignored_for_state` means the turn already ended, so every decision would be
     // refused as stale. Controls that cannot succeed are the same defect the original

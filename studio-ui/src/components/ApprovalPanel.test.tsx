@@ -56,7 +56,7 @@ function renderPanel(payload: Record<string, unknown> = {}) {
   if (approval === undefined) {
     throw new Error("fixture produced no approval");
   }
-  return render(<ApprovalPanel approval={approval} threadId="t1" />);
+  return render(<ApprovalPanel approval={approval} threadId="t1" domKey={1} />);
 }
 
 /** A `respondToToolApproval` that succeeds, and records what it was called with. */
@@ -251,11 +251,37 @@ describe("ApprovalPanel", () => {
   // FR-031 -- accessibility                                               //
   // --------------------------------------------------------------------- //
 
-  it("announces itself as a status region with an accessible name", () => {
-    renderPanel();
+  it("announces itself as a status region named by its own heading", () => {
+    // Named by the HEADING specifically, not by whatever text happens to be inside.
+    // An earlier version matched `/asking permission|mapping change/i`, an OR across two
+    // different naming sources -- it could not distinguish the heading naming the region
+    // from scope text doing it, so a broken `aria-labelledby` would still have passed.
+    renderPanel({ question: "Run the mapping verification?" });
 
-    const region = screen.getByRole("status");
-    expect(region).toHaveAccessibleName(/asking permission|mapping change/i);
+    expect(screen.getByRole("status")).toHaveAccessibleName(
+      "Run the mapping verification?",
+    );
+  });
+
+  it("gives two panels distinct heading ids even when the approval id repeats", () => {
+    // A provider may re-request the same `itemId`. Two panels sharing a heading id make
+    // `aria-labelledby` resolve to the FIRST match, so the second approval would be
+    // announced with the first one's heading -- a screen reader would be told the wrong
+    // thing is being permitted. `domKey` is the server-assigned sequence, unique per
+    // event, which is the property a DOM id needs.
+    const approval = approvalFromEvent(approvalEvent({}));
+    if (approval === undefined) {
+      throw new Error("fixture produced no approval");
+    }
+    render(
+      <>
+        <ApprovalPanel approval={approval} threadId="t1" domKey={1} />
+        <ApprovalPanel approval={approval} threadId="t1" domKey={2} />
+      </>,
+    );
+
+    const [first, second] = screen.getAllByRole("heading");
+    expect(first?.id).not.toEqual(second?.id);
   });
 
   it("carries high risk in text, not by colour alone", () => {

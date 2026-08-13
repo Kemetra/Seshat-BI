@@ -56,9 +56,19 @@ const FAILURE_RECOVERY: Record<number, string> = {
 interface ApprovalPanelProps {
   approval: Approval;
   threadId: string;
+  /**
+   * The event sequence this panel was rendered from, used only to build a unique DOM id.
+   *
+   * NOT the approval id: a provider may re-request the same `itemId`, and two panels
+   * sharing a heading id make `aria-labelledby` resolve to the FIRST match -- so the
+   * second approval would be announced to a screen reader with the first one's heading.
+   * The sequence is server-assigned and unique per event, which is exactly the property
+   * a DOM id needs.
+   */
+  domKey: string | number;
 }
 
-export function ApprovalPanel({ approval, threadId }: ApprovalPanelProps) {
+export function ApprovalPanel({ approval, threadId, domKey }: ApprovalPanelProps) {
   const [decided, setDecided] = useState<ApprovalDecision | null>(null);
   const [failure, setFailure] = useState<{ text: string; recovery: string | null } | null>(
     null,
@@ -87,9 +97,9 @@ export function ApprovalPanel({ approval, threadId }: ApprovalPanelProps) {
       // uses `status` for a state that needs attention. An approval is a pause, not a
       // fault -- and a paused turn waiting on a person is the NORMAL case here.
       role="status"
-      aria-labelledby={`approval-heading-${approval.approvalId}`}
+      aria-labelledby={`approval-heading-${domKey}`}
     >
-      <h3 className="approval__heading" id={`approval-heading-${approval.approvalId}`}>
+      <h3 className="approval__heading" id={`approval-heading-${domKey}`}>
         {heading}
       </h3>
 
