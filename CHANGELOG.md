@@ -41,6 +41,12 @@ explicitly identifies a public release event.
   diagnostic naming both install lanes rather than an `ImportError` traceback
   (FR-006). Studio grants no approval, moves no readiness stage, and emits no
   confidence score. A further release follows when Studio completes.
+  **The published wheel also carries no Studio frontend** -- `release.yml` builds
+  the wheel without running `scripts/build_studio_frontend.py`, so a wheel built
+  the way the release job builds it has 0 `studio/static` entries while the
+  `seshat-studio` console script ships. It fails closed with a named diagnostic
+  rather than serving a blank page, but `seshat-studio` is not usable from PyPI
+  in this release. Tracked as issue #623.
 - **A new `seshat-studio` console script** (spec 139, FR-002), deliberately
   outside the `seshat`/`retail` dispatch chain -- it adds no subcommand to an
   existing verb and changes no existing verb's behavior.
