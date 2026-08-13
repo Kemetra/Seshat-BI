@@ -570,9 +570,13 @@ async def _pump_turn(app: FastAPI, thread_id: str, thread: Any) -> None:
                     )
                     _finish_turn(app, thread_id, pending)
                     return
+                payload = produced.payload
                 if produced.type == "approval_required":
-                    register_approval(app, thread_id, thread, produced)
-                thread.append(produced.type, produced.payload, turn_id=produced.turn_id)
+                    # The REGISTERED payload, not the provider's: registration is what
+                    # computes the readiness verdict the panel needs, and what strips
+                    # the transport correlation id the browser must not receive.
+                    payload = register_approval(app, thread_id, thread, produced)
+                thread.append(produced.type, payload, turn_id=produced.turn_id)
                 if produced.type in _TERMINAL_EVENTS:
                     _finish_turn(app, thread_id, pending)
                     return

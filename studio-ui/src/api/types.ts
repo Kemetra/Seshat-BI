@@ -84,13 +84,9 @@ export interface WorkspaceSnapshot {
 export interface BootstrapState {
   workspace: WorkspaceSnapshot;
   navigation: "command_room"[];
-  authentication_mode: "subscription" | "operator_configured_alternate";
-  /** WHICH agent answers turns. `authentication_mode` cannot say this: it reads
-   *  `subscription` whether Codex or the deterministic bridge is driving. */
   agent_provider: "fake" | "codex";
-  /** Why that provider is running, in words an operator can act on. Always
-   *  present, so a fallback can never be silent. */
   agent_provider_detail: string;
+  authentication_mode: "subscription" | "operator_configured_alternate";
   capabilities: {
     agent_turns: boolean;
     technical_approvals: boolean;

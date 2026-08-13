@@ -50,6 +50,18 @@ __all__ = [
 ALLOW_DECISION = "allow_once"
 DENY_DECISION = "deny"
 
+#: The provider's JSON-RPC correlation id. Kept for the ledger, which must answer the
+#: request the provider blocks on, and stripped from the STREAMED payload: the analyst
+#: cannot act on it and no panel should render it.
+#:
+#: Scoped to the event stream on purpose, because one other path still names it:
+#: `_undeliverable` interpolates the id into its 502 `detail`, where it is diagnostic
+#: for a failure whose entire meaning is "one specific waiting request was never
+#: answered". That predates this constant and is left alone rather than silently
+#: widened into a claim it does not keep -- an integer correlation id is not a
+#: credential, and the alternative is a 502 that cannot say what went unanswered.
+PROVIDER_REQUEST_ID = "provider_request_id"
+
 
 def selected_table(thread: Any) -> str | None:
     """The table this thread was opened against, read back from its own opening event.
@@ -65,8 +77,10 @@ def selected_table(thread: Any) -> str | None:
     return None
 
 
-def register_approval(app: FastAPI, thread_id: str, thread: Any, produced: Any) -> None:
-    """Make one streamed approval decidable, and only as far as readiness allows.
+def register_approval(
+    app: FastAPI, thread_id: str, thread: Any, produced: Any
+) -> dict[str, Any]:
+    """Make one streamed approval decidable, and return what the BROWSER may see.
 
     Called BEFORE the event is appended, so the id the browser reads from the stream is
     already known to the ledger -- otherwise the panel renders an approval that every
@@ -77,22 +91,45 @@ def register_approval(app: FastAPI, thread_id: str, thread: Any, produced: Any) 
     prepared summary, and registering it is what lets the relay answer 403 with the real
     reason instead of a bare "unknown approval". `normalize_approval` has already made
     it unallowable, so registration grants nothing.
+
+    **The returned payload is the wire payload, and it is not the provider's.** The
+    caller used to append `produced.payload` directly, which had two consequences:
+    the readiness verdict computed here never reached the browser, so a panel could
+    honour FR-021 only by offering an allow control and retracting it on a 403; and
+    `provider_request_id` -- a JSON-RPC correlation id belonging to the transport --
+    was published to the analyst because ONE dict was handed to both the ledger and
+    the event log. Deriving the wire payload here fixes both at the single point that
+    already knows the verdict, with no second readiness lookup.
     """
     forbidden = forbidden_scope_for(
         app.state.launch.workspace_root, selected_table(thread)
     )
     payload = dict(produced.payload)
-    app.state.pending_approvals.register(
-        normalize_approval(
-            payload,
-            forbidden,
-            thread_id=thread_id,
-            # Present only when a provider request is actually blocked on this approval.
-            # The fake bridge omits it, and `deliver_decision` reads its absence as
-            # "nothing to answer" rather than as an error.
-            request_id=payload.get("provider_request_id"),
-        )
+    envelope = normalize_approval(
+        payload,
+        forbidden,
+        thread_id=thread_id,
+        # Present only when a provider request is actually blocked on this approval.
+        # The fake bridge omits it, and `deliver_decision` reads its absence as
+        # "nothing to answer" rather than as an error.
+        request_id=payload.get("provider_request_id"),
     )
+    app.state.pending_approvals.register(envelope)
+    return _wire_payload(payload, envelope)
+
+
+def _wire_payload(payload: dict[str, Any], envelope: Any) -> dict[str, Any]:
+    """The approval as the browser receives it: verdict added, transport removed.
+
+    A new dict rather than an edit: `produced.payload` belongs to the bridge, and
+    mutating it would leak the verdict backwards into the object the provider owns.
+
+    `forbidden_reasons` becomes a list because a tuple is not JSON.
+    """
+    wire = {key: value for key, value in payload.items() if key != PROVIDER_REQUEST_ID}
+    wire["allow_permitted"] = envelope.allow_permitted
+    wire["forbidden_reasons"] = list(envelope.forbidden_reasons)
+    return wire
 
 
 @dataclass(frozen=True)
