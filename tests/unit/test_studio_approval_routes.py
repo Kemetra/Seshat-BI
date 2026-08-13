@@ -228,15 +228,15 @@ def test_a_real_readiness_gate_blocks_an_allow_end_to_end(tmp_path: Path):
     assert created.status_code == 201, created.text
     thread_id = created.json()["thread_id"]
 
-    from seshat.studio.agent_routes import _register_approval, _selected_table
+    from seshat.studio.approval_routes import register_approval, selected_table
 
     thread = app.state.threads.thread(thread_id)
-    assert _selected_table(thread) == "retail_store_sales"
+    assert selected_table(thread) == "retail_store_sales"
 
     class _Produced:
         payload = {**TECHNICAL_EVENT}
 
-    _register_approval(app, thread_id, thread, _Produced())
+    register_approval(app, thread_id, thread, _Produced())
     envelope = app.state.pending_approvals.envelope("turn-1-approval-1")
     assert envelope is not None
     # A fresh workspace has every gate closed, so the real document forbids plenty.
