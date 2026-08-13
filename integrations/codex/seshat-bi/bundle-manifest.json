@@ -14,7 +14,7 @@
       "destination": "LICENSE",
       "output_sha256": "194d39809c3f1f3f33523fdc5523f501c4ee055985e496f6490672595b612ead",
       "source": "LICENSE",
-      "source_id": "kb-218",
+      "source_id": "kb-219",
       "source_sha256": "194d39809c3f1f3f33523fdc5523f501c4ee055985e496f6490672595b612ead",
       "transform": "copy-normalized-v1"
     },
@@ -32,7 +32,7 @@
       "destination": "contracts/knowledge/knowledge-layer-handoff.yaml",
       "output_sha256": "33be937ed8171bebaedb14730f4eac0dc7a9600369587a792f3cd262adf10638",
       "source": "contracts/knowledge/knowledge-layer-handoff.yaml",
-      "source_id": "kb-219",
+      "source_id": "kb-220",
       "source_sha256": "33be937ed8171bebaedb14730f4eac0dc7a9600369587a792f3cd262adf10638",
       "transform": "copy-normalized-v1"
     },
@@ -41,7 +41,7 @@
       "destination": "design/grids/16x9-grid.yaml",
       "output_sha256": "2490696e92eec516e39d696cb7913665dc7cce975b114b7018df1fc8b2705ef1",
       "source": "design/grids/16x9-grid.yaml",
-      "source_id": "kb-220",
+      "source_id": "kb-221",
       "source_sha256": "2490696e92eec516e39d696cb7913665dc7cce975b114b7018df1fc8b2705ef1",
       "transform": "copy-normalized-v1"
     },
@@ -2100,10 +2100,19 @@
     {
       "classification": "generated_wrapper",
       "destination": "skills/seshat-bi/SKILL.md",
-      "output_sha256": "ad5dc8b756c81e23cb0fed36497dc82160dbf666e2079e3f4ebd41ccf6238c9b",
+      "output_sha256": "686e9dd5fb4877f5bde480425efe2e59608a2992a86971cd6282d23cdb40f57a",
       "source": "distribution/bundle-templates/shared/skills/seshat-bi/SKILL.md",
       "source_id": "router",
-      "source_sha256": "ad5dc8b756c81e23cb0fed36497dc82160dbf666e2079e3f4ebd41ccf6238c9b",
+      "source_sha256": "686e9dd5fb4877f5bde480425efe2e59608a2992a86971cd6282d23cdb40f57a",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "skills/seshat-studio/SKILL.md",
+      "output_sha256": "ad79165eaa1fbb3a62724e275e82768c0de46cf83afe6596dbfd8e1f25c96a68",
+      "source": ".claude/skills/seshat-studio/SKILL.md",
+      "source_id": "kb-217",
+      "source_sha256": "ad79165eaa1fbb3a62724e275e82768c0de46cf83afe6596dbfd8e1f25c96a68",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2111,7 +2120,7 @@
       "destination": "skills/source-mapping/SKILL.md",
       "output_sha256": "a2ae8dcf5ccbd2c74e5f1bb1bd5ab98f84f8d934cd381e11142bf0399c5b9085",
       "source": ".claude/skills/source-mapping/SKILL.md",
-      "source_id": "kb-217",
+      "source_id": "kb-218",
       "source_sha256": "a2ae8dcf5ccbd2c74e5f1bb1bd5ab98f84f8d934cd381e11142bf0399c5b9085",
       "transform": "copy-normalized-v1"
     },
@@ -2120,7 +2129,7 @@
       "destination": "templates/dashboard-page-blueprint.yaml",
       "output_sha256": "760b1f7abfcbe73fdf536e279c07c68d36bc0cbee313a5b4bcb1cdc9219709d9",
       "source": "templates/dashboard-page-blueprint.yaml",
-      "source_id": "kb-221",
+      "source_id": "kb-222",
       "source_sha256": "760b1f7abfcbe73fdf536e279c07c68d36bc0cbee313a5b4bcb1cdc9219709d9",
       "transform": "copy-normalized-v1"
     },
@@ -2129,7 +2138,7 @@
       "destination": "templates/handoff/bi-handoff-pack.md",
       "output_sha256": "bc421e832d45325ef8227d9b853011aad018ac594bf098c44725a9b543013225",
       "source": "templates/handoff/bi-handoff-pack.md",
-      "source_id": "kb-222",
+      "source_id": "kb-223",
       "source_sha256": "bc421e832d45325ef8227d9b853011aad018ac594bf098c44725a9b543013225",
       "transform": "copy-normalized-v1"
     },
@@ -2138,7 +2147,7 @@
       "destination": "templates/handoff/handoff-review-checklist.md",
       "output_sha256": "8092f25978679621ef8c063308983e52d74f4624fd3dce329b62d0cda6fb2e5d",
       "source": "templates/handoff/handoff-review-checklist.md",
-      "source_id": "kb-223",
+      "source_id": "kb-224",
       "source_sha256": "8092f25978679621ef8c063308983e52d74f4624fd3dce329b62d0cda6fb2e5d",
       "transform": "copy-normalized-v1"
     },
@@ -2147,7 +2156,7 @@
       "destination": "templates/kpi-sufficiency-card.md",
       "output_sha256": "f478545a65714ab3844b8086136b377f1f56c6eabcb390f29ffd9b72b23ee0ac",
       "source": "templates/kpi-sufficiency-card.md",
-      "source_id": "kb-224",
+      "source_id": "kb-225",
       "source_sha256": "f478545a65714ab3844b8086136b377f1f56c6eabcb390f29ffd9b72b23ee0ac",
       "transform": "copy-normalized-v1"
     },
@@ -2156,7 +2165,7 @@
       "destination": "templates/metric-contract.yaml",
       "output_sha256": "d87086b74f4f7ff7d4982c0db3b36b92c76ecf3d1a0116542cabba3cbdc66558",
       "source": "templates/metric-contract.yaml",
-      "source_id": "kb-225",
+      "source_id": "kb-226",
       "source_sha256": "d87086b74f4f7ff7d4982c0db3b36b92c76ecf3d1a0116542cabba3cbdc66558",
       "transform": "copy-normalized-v1"
     },
@@ -2165,7 +2174,7 @@
       "destination": "templates/report-composition.yaml",
       "output_sha256": "86643e3f9e8269dd63fbc8cff924774e72fecd8a7dd9dafe0d7a2c912aa770d2",
       "source": "templates/report-composition.yaml",
-      "source_id": "kb-226",
+      "source_id": "kb-227",
       "source_sha256": "86643e3f9e8269dd63fbc8cff924774e72fecd8a7dd9dafe0d7a2c912aa770d2",
       "transform": "copy-normalized-v1"
     },
@@ -2174,16 +2183,16 @@
       "destination": "templates/visual-spec.yaml",
       "output_sha256": "639dcc28f13496ad9f2b22a5c52360ca835928afc0e63268d97b8c119c79d834",
       "source": "templates/visual-spec.yaml",
-      "source_id": "kb-227",
+      "source_id": "kb-228",
       "source_sha256": "639dcc28f13496ad9f2b22a5c52360ca835928afc0e63268d97b8c119c79d834",
       "transform": "copy-normalized-v1"
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "b10d8f90521d4400772e8837276137baa91c778abcccf988168098b16a6dc109",
+  "manifest_digest": "17808c71340e8c3ab16990f8532cf835247e4e1b0d0c24ca84b41d02cc727561",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "ccb51a52dbe9bb562950666b4f6c40750b526113",
+  "source_revision": "e069e46d2714723cda40bc7d851f058aeebd9b76",
   "target": "codex",
   "version": "1.0.0"
 }
