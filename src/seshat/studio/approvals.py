@@ -33,6 +33,7 @@ __all__ = [
     "StaleApproval",
     "forbidden_scope_for",
     "normalize_approval",
+    "prepared_summary",
 ]
 
 #: Studio may expose an allow control for this authority.
@@ -145,6 +146,46 @@ def forbidden_scope_for(repo_root: Path | str, table: str | None) -> tuple[str, 
     return tuple(document.get("forbidden_scope", ()))
 
 
+def prepared_summary(envelope: ApprovalEnvelope) -> dict[str, Any]:
+    """One envelope as the contract's `PreparedDecisionSummary` (T027).
+
+    `additionalProperties: false` with five required fields, so exactly those five --
+    an extra key is a contract violation, not a bonus.
+
+    **The question is BUILT, not read.** Real Codex sends no `question`; only the fake
+    bridge does. Reading `question` would produce a summary that reads correctly in
+    tests and blanks on the path that ships, so the sentence is composed from `action`
+    and `target`, which the real producer always sends.
+
+    `affected_scope` carries the readiness sentences when there are any and the declared
+    scope otherwise -- never an empty list beside a real restriction, because an empty
+    `affected_scope` reads as "this touches nothing".
+    """
+    scope = list(envelope.forbidden_reasons) or [envelope.scope]
+    return {
+        "decision_id": envelope.approval_id,
+        "question": _prepared_question(envelope),
+        "required_authority": envelope.authority,
+        "affected_scope": scope,
+        "status": "prepared",
+    }
+
+
+def _prepared_question(envelope: ApprovalEnvelope) -> str:
+    """What the named human is being asked, in words that name the actual target."""
+    action = _ACTION_PHRASES.get(envelope.action, envelope.action)
+    return f"{action}: {envelope.target}?"
+
+
+#: Provider action ids as a human sentence opener. A CLOSED lookup: an unrecognised
+#: action falls back to the id itself rather than to invented prose, because a summary
+#: that describes the wrong act is worse than one that reads awkwardly.
+_ACTION_PHRASES: dict[str, str] = {
+    "apply_change": "Apply the proposed change to",
+    "run_command": "Run",
+}
+
+
 class StaleApproval(Exception):
     """The decision does not correspond to a live, allowable approval request."""
 
@@ -251,6 +292,27 @@ class PendingApprovals:
                 f"approval {envelope.approval_id!r} may not be allowed here: "
                 + "; ".join(envelope.forbidden_reasons or (envelope.authority,))
             )
+
+    def prepared_for_named_human(self) -> tuple[ApprovalEnvelope, ...]:
+        """Every LIVE approval a named human still owes a ruling on (FR-022, T027).
+
+        `named_human` items are registered deliberately -- `register_approval` says
+        so -- precisely to be *visible* as prepared summaries. Until this reader
+        existed they were registered and then discarded at the boundary, so
+        `/decisions` returned a hardcoded empty list while the contract promised a
+        `PreparedDecisionSummary`.
+
+        LIVE only. `status` is `const: prepared` in the contract, so a decided approval
+        cannot honestly appear here -- and `decide` removes it from `_live`, so this
+        needs no separate filter. Technical approvals are excluded because they are
+        Studio's own to decide: listing one as a pending human obligation would
+        misreport the authority boundary in the direction FR-022 exists to prevent.
+        """
+        return tuple(
+            envelope
+            for envelope in self._live.values()
+            if envelope.authority == NAMED_HUMAN
+        )
 
     def abandon_thread(self, thread_id: str) -> int:
         """Drop every live approval raised on a thread that is over.
