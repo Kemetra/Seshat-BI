@@ -24,6 +24,8 @@ even looked at, so an attacker cannot learn whether a session exists.
 from __future__ import annotations
 
 import subprocess
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -348,6 +350,13 @@ def _probe_codex(configured_provider: str) -> tuple[str | None, str | None]:
         )
     except (OSError, subprocess.SubprocessError):
         return executable, None
+    if completed.returncode != 0:
+        # A nonzero exit means the probe FAILED, whatever it printed. A broken shim or
+        # half-installed CLI can write a supported-looking version to stdout and then
+        # report an error; parsing it anyway would select the live bridge on the
+        # strength of output from a command that did not succeed, deferring the real
+        # failure to the analyst's first turn.
+        return executable, None
     reported = completed.stdout.strip().split()
     return executable, (reported[-1] if reported else None)
 
@@ -386,8 +395,29 @@ def create_app(
         executable = None if codex_version is None else "codex"
     token = session.generate_bootstrap_token()
 
+    @asynccontextmanager
+    async def _lifespan(running: FastAPI) -> AsyncIterator[None]:
+        """End every in-flight turn when Studio stops.
+
+        Without this, stopping Studio during a live turn left the provider's child
+        running: the pump only advances on a poll, so nothing would ever reach the
+        generator's `finally` -- the very thing that terminates `codex app-server`.
+        An orphaned process outliving the tool that spawned it is the bridge
+        lifecycle contract's failure, not merely untidy.
+
+        A lifespan handler rather than `on_event("shutdown")`, which FastAPI
+        deprecates. Iterated over a COPY because `_finish_turn` mutates the dict.
+        """
+        yield
+        for thread_id, pending in list(running.state.pending_turns.items()):
+            agent_routes._finish_turn(running, thread_id, pending)
+
     app = FastAPI(
-        title="Seshat Studio", docs_url=None, redoc_url=None, openapi_url=None
+        title="Seshat Studio",
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+        lifespan=_lifespan,
     )
     app.state.launch = launch
     app.state.sessions = session.SessionStore(token)
@@ -479,4 +509,5 @@ def create_app(
     # shadow every `/api/v1/*` path.
     _register_frontend(app)
     _install_security_middleware(app)
+
     return app, token

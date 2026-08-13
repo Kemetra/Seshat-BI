@@ -288,3 +288,73 @@ def test_the_fallback_detail_says_turns_are_refused(tmp_path: Path) -> None:
 
         assert "refused" in detail, detail
         assert "deterministic bridge is answering" not in detail, detail
+
+
+def test_shutdown_closes_an_in_flight_turn(tmp_path: Path) -> None:
+    """P2 (#621 review): stopping Studio must not orphan a provider process.
+
+    The pump only advances on a poll, so a turn live at shutdown would never reach
+    the generator's `finally` -- the thing that terminates `codex app-server`. A
+    child outliving the tool that spawned it is the lifecycle contract's failure,
+    not merely untidy.
+    """
+    from fastapi.testclient import TestClient
+
+    from seshat.studio.app import create_app
+
+    app, token = create_app(_workspace(tmp_path), port=9999)
+    with TestClient(
+        app,
+        base_url="http://127.0.0.1:9999",
+        headers={"Origin": "http://127.0.0.1:9999"},
+    ) as client:
+        assert (
+            client.post("/api/v1/bootstrap", params={"token": token}).status_code == 204
+        )
+        thread_id = client.post(
+            "/api/v1/agent/threads", json={"selected_table_id": None}
+        ).json()["thread_id"]
+        assert (
+            client.post(
+                f"/api/v1/agent/threads/{thread_id}/turns",
+                json={
+                    "prompt": "what is blocking gold?",
+                    "snapshot_revision": "r1",
+                    "requested_mode": "read_only",
+                },
+            ).status_code
+            == 202
+        )
+        assert app.state.pending_turns, "the turn should be parked and in flight"
+
+    # Leaving the context manager runs the app's shutdown handler.
+    assert not app.state.pending_turns, "a live turn survived shutdown"
+
+
+def test_a_failing_version_probe_is_not_trusted(tmp_path: Path) -> None:
+    """P2 (#621 review): a nonzero exit means the probe FAILED, whatever it printed.
+
+    A broken shim can write a supported-looking version to stdout and then report an
+    error. Parsing it anyway selects the live bridge on the strength of output from a
+    command that did not succeed, deferring the real failure to the analyst's first
+    turn.
+    """
+    import subprocess
+
+    from seshat.studio import app as app_module
+
+    def _failing_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args, returncode=1, stdout="codex 0.147.0\n")
+
+    original_run = app_module.subprocess.run
+    original_find = app_module.codex_process.find_codex_executable
+    app_module.subprocess.run = _failing_run  # type: ignore[assignment]
+    app_module.codex_process.find_codex_executable = lambda: "codex"  # type: ignore[assignment]
+    try:
+        executable, version = app_module._probe_codex("codex")
+    finally:
+        app_module.subprocess.run = original_run  # type: ignore[assignment]
+        app_module.codex_process.find_codex_executable = original_find  # type: ignore[assignment]
+
+    assert executable == "codex"
+    assert version is None, "a nonzero probe must not yield a usable version"

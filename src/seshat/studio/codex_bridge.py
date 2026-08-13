@@ -351,7 +351,18 @@ class CodexBridge:
         return self._plan
 
     def _open_thread(self, session: CodexSession) -> None:
-        """Handshake, then ask for a thread. Its id arrives asynchronously."""
+        """Ask to initialize. Nothing else may be sent until its REPLY arrives.
+
+        The contract and the captured probe both require
+        `initialize -> response -> initialized` before any thread request. Sending
+        `initialized` and `thread/start` immediately after the request raced protocol
+        negotiation: against the scripted child it looked fine (it replays regardless
+        of what it is asked), and only a live server can reject a thread request that
+        arrives before negotiation completes.
+
+        `_start_thread` is therefore driven by the reply, in the same pass that
+        already waits for `thread/start`'s reply before sending `turn/start`.
+        """
         session.send(
             {
                 "jsonrpc": "2.0",
@@ -360,6 +371,9 @@ class CodexBridge:
                 "params": {"clientInfo": {"name": "seshat-studio", "version": "1"}},
             }
         )
+
+    def _start_thread(self, session: CodexSession) -> None:
+        """Confirm negotiation, then ask for a thread."""
         session.send({"jsonrpc": "2.0", "method": "initialized"})
         session.send(
             {
@@ -427,8 +441,13 @@ class CodexBridge:
         `thr_fixture`, so the id appears in the stream whether or not the bridge
         learned it. Only a live server, minting its own, forces the correlation.
         """
+        initialized = False
         requested = False
         for frame in session.frames():
+            if not initialized and frame.get("id") == _INITIALIZE_ID:
+                # Negotiation is complete: only NOW may a thread be requested.
+                self._start_thread(session)
+                initialized = True
             if not requested:
                 thread_id = _thread_id_from(frame)
                 if thread_id is not None:
