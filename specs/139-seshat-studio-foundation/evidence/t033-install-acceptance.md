@@ -16,6 +16,10 @@ exactly the half that already worked: the sdist is the path #641 had broken.
 `seshat/studio/static` members (`index.html`, `index-C5rU9Cr2.js`,
 `index-wG-qF5IE.css`):
 
+> The asset filenames are content hashes, recorded as measured on 2026-08-14. Any edit to
+> the frontend or its tokens changes them by design — T032 did exactly that shortly after.
+> Nothing pins these literals; the counts, sizes, and status codes are the claim.
+
 | Artifact | Size | Frontend members |
 |---|---|---|
 | `seshat_bi-1.0.0-py3-none-any.whl` | 1,568,861 B | 3 |

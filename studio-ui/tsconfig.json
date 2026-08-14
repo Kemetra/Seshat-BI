@@ -5,7 +5,12 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
-    "types": ["vitest/globals", "@testing-library/jest-dom"],
+    // `node` is here for `vitest.config.ts` ONLY, which reads tokens.css off disk to
+    // inline it for the contrast audit -- a config file already runs on Node. Application
+    // and test code must stay browser-shaped: `src/` importing `node:*` would break the
+    // FR-005 promise that end users need no Node runtime, and that direction is pinned by
+    // `test_studio_frontend_build.py` plus the wheel-content tests rather than by types.
+    "types": ["vitest/globals", "@testing-library/jest-dom", "node"],
 
     "strict": true,
     "noUncheckedIndexedAccess": true,
