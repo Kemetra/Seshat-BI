@@ -61,10 +61,13 @@ def test_the_studio_extra_carries_fastapi_and_uvicorn() -> None:
 def test_the_dev_extra_declares_the_studio_test_client_transport() -> None:
     """A clean documented dev install must be able to RUN Studio's HTTP tests.
 
-    Starlette's ``testclient`` imports ``httpx`` -- its own missing-dependency message
-    is ``pip install httpx`` -- and FastAPI's ``TestClient`` inherits that. Here httpx
-    arrives only transitively, so a clean resolve can legally omit it and the Studio
-    suite then fails the moment a test constructs ``TestClient``.
+    FastAPI's ``TestClient`` needs an httpx transport, and here it arrives only
+    transitively -- so a clean resolve can legally omit it and the Studio suite then
+    fails the moment a test constructs one.
+
+    ``httpx`` is the name that satisfies BOTH Starlette lines that ``fastapi>=0.115``
+    can resolve: <=0.52 imports ``httpx`` only, while 1.6+ prefers ``httpx2`` and
+    falls back to ``httpx``.
 
     Asserting on the dependency NAME alone would pass for any string, including a
     wrong distribution -- that is exactly how ``httpx2`` (a real but unrelated PyPI
