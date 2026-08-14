@@ -6,8 +6,21 @@
  * by an icon glyph and a text label as well as colour, because FR-031 requires
  * non-colour status communication for WCAG 2.2 AA.
  *
- * Contrast: every `--status-*-fg` is chosen against `--surface` at 4.5:1 or better, and
- * the palette is defined once here so a contrast audit has a single place to check.
+ * Contrast: the palette is defined once here so a contrast audit has a single place to
+ * check, and that audit is now EXECUTABLE rather than by eye -- `contrast.test.ts`
+ * recomputes every rendering pair from these hex values on each run. It checks each
+ * `--status-*-fg` against BOTH `--surface` and its own `--status-*-bg`, because the
+ * tinted panel is what actually renders and the pair against `--surface` alone was the
+ * narrower claim. Body and muted text are checked against all three surfaces at 4.5:1
+ * (WCAG 1.4.3), and `--focus-ring` at 3:1 (WCAG 1.4.11). Every pair currently clears its
+ * threshold with margin; the lowest is 5.50:1, for the focus ring on a raised panel.
+ *
+ * `--border` is deliberately NOT in that audit: it is decorative separation, and every
+ * place it appears is a neutral default that a `--status-*` colour overrides once status
+ * exists (see `AgentHealth.css`, `TableJourney.css`). It carries no information, so WCAG
+ * 1.4.11 does not apply -- status meaning travels through the overriding colour plus a
+ * glyph and a text label.
+ *
  * Light and dark are both explicit -- a token defined only inside a media query
  * borrows whatever the host paints when the query does not match.
  */

@@ -593,12 +593,69 @@ projection, endpoints, frontend, journey, and health.
   approval tests with `critical image-alt`, so the checker is live rather than
   decorative.
 
-  Why the box is open, in two parts:
+  Why the box was open, in two parts:
   - **jsdom does not paint**, so axe reports `color-contrast` as `incomplete`, never
     as a pass. Contrast is unverified by automation here.
   - **Keyboard, focus, reduced-motion, and responsive layout are untested.** T032
     names browser acceptance over the RUNNING app; this is a component-level audit of
     the structural rules jsdom can decide. It is a floor, not the measurement.
+
+  **Narrowed 2026-08-14 — two of those four are now closed; the box STAYS OPEN.** The
+  frontend suite went 133 -> **147 passed** (10 files), and CI runs it: `ci.yml` calls
+  `scripts/build_studio_frontend.py`, which runs `npm test -- --run` before building and
+  fails the job on a non-zero exit, so these are enforced rather than local-only.
+
+  *Contrast — closed, by a different mechanism than axe's.* `contrast.test.ts` (6)
+  recomputes WCAG 2.x relative luminance for every pair that actually renders, from the
+  hex values in `tokens.css`. This does not replace axe's `color-contrast` rule and is not
+  a substitute for paint: what it decides is whether the declared palette is *capable* of
+  meeting AA, which a browser pass would confirm but never discover earlier. Each
+  `--status-*-fg` is checked against BOTH `--surface` and its own `--status-*-bg` — the
+  tinted panel is what renders, and the previous claim against `--surface` alone was the
+  narrower one. Body and muted text against all three surfaces at 4.5:1, `--focus-ring` at
+  3:1. **Every pair clears its threshold**; the lowest is 5.50:1 (focus ring on a raised
+  panel), so the by-eye audit the tokens claimed was correct — it just could not fail.
+  The comment now states what is checked and that it is executable.
+
+  `--border` is deliberately excluded and the reason is recorded rather than assumed: at
+  1.58:1 it would fail a naive 3:1 sweep, but every use is a neutral default that a
+  `--status-*` colour overrides once status exists (`AgentHealth.css`,
+  `TableJourney.css`). It carries no information, so WCAG 1.4.11 does not reach it.
+  Reporting it as a violation would have been a false finding.
+
+  *Keyboard and focus — closed.* `keyboard.test.tsx` (8) drives real input through the
+  composer and both approval branches with `user-event`: tab ORDER (not merely
+  focusability, which is what misses a stray positive tabindex), typing, `{Enter}` and
+  Space activation, draft survival across focus loss, label association, focus containment
+  inside the approval panel, and the absence of the stop control when there is no live
+  turn. All controls are native elements, which is the property under test — a
+  `<div onClick>` would be invisible to every assertion.
+
+  Falsified three ways, since an assertion that has never fired proves nothing: breaking
+  one `--status-*-fg` fails ONLY the light-scheme threshold test and names both pairs with
+  exact ratios; a typo in `htmlFor` fails the three composer tests and no others; adding
+  `tabIndex={1}` to Send fails the reading-order test specifically. Each was reverted.
+
+  **Why the box is still open.** Two of T032's seven items remain, and neither is
+  decidable without a rendering engine:
+  - **Reduced motion and responsive layout** need real CSS media-query evaluation.
+    `tokens.css` declares a `prefers-reduced-motion` block, and jsdom evaluates no media
+    query, so asserting it here would test the assertion rather than the behaviour.
+  - **Focus-ring VISIBILITY.** `contrast.test.ts` proves the ring colour can meet 1.4.11
+    and `:focus-visible` is never removed, but whether it is drawn needs paint.
+
+  Also unchanged: axe's own `color-contrast` stays `incomplete` here, and "axe **browser**
+  acceptance over the RUNNING app" is browser work by definition. That residue belongs
+  with T036, which is owner-gated. Checking this box on a jsdom run would claim a browser
+  pass nobody performed.
+
+  One incidental change to the toolchain, recorded because it is not obvious:
+  `vitest.config.ts` now inlines `tokens.css` via `define`. Both in-test routes were tried
+  and rejected on evidence — `?raw` resolves to an EMPTY string under the suite's
+  `css: false` (measured: length 0, which would have scored a palette of zero tokens), and
+  `node:fs` in a test does not typecheck because tsconfig ships no `@types/node` by
+  design. `@types/node` was added for `vitest.config.ts` ONLY, which already runs on Node;
+  `src/` stays browser-shaped, and the palette still has one source of truth on disk.
 - [x] **T033** Build sdist/wheel and test clean base and Studio-extra installs with no
   Node runtime and no remote asset fetch. [SC-008]
 
@@ -749,7 +806,7 @@ projection, endpoints, frontend, journey, and health.
   | SC-004 seven agent health states | met | `AgentHealth` suite |
   | SC-005 approval paused until allow/deny, decide-once | met | 50 approval tests + `test_studio_approval_pause` |
   | SC-006 refused requests disclose nothing | met | `test_studio_boundary_corpus` (7), falsified by planting a `workspace_root` leak |
-  | SC-007 no critical/serious a11y violations | **PARTIAL** | axe over 5 states; jsdom cannot decide contrast, and keyboard/focus/reduced-motion/responsive need the running app (T032) |
+  | SC-007 no critical/serious a11y violations | **PARTIAL** | axe over 5 states (0 critical/serious); contrast now computed from the tokens and keyboard/focus driven with real input, 2026-08-14 — 147 frontend tests, CI-enforced via `build_studio_frontend.py`. Reduced motion, responsive layout, focus-ring visibility, and axe over the RUNNING app still need a rendering engine (T032 note; browser work sits with T036) |
   | SC-008 wheel opens Studio with Python + browser only | **met for the server; browser render is T036** | T033 closed 2026-08-14: 4/4 install legs (wheel+sdist × base+`[studio]`) against the REAL launcher with Node stripped from PATH; every asset 200 from loopback, zero non-loopback requests; falsified by deleting `static/`. `evidence/t033-install-acceptance.md`. Driving an actual browser remains T036 |
   | SC-009 existing gates stay green | met | T035 above: stack is +19 passing / one fewer failure than `main` |
   | SC-010 external subscription acceptance | **OWNER-GATED** | needs T036 |
