@@ -17,6 +17,7 @@ is the precedent for that shape (its ``mcp`` error-path test), and its
 
 from __future__ import annotations
 
+import importlib
 import re
 import tomllib
 from pathlib import Path
@@ -55,6 +56,56 @@ def test_the_studio_extra_carries_fastapi_and_uvicorn() -> None:
 
     assert "fastapi" in specs
     assert "uvicorn" in specs
+
+
+def test_the_dev_extra_declares_the_studio_test_client_transport() -> None:
+    """A clean documented dev install must be able to RUN Studio's HTTP tests.
+
+    FastAPI's ``TestClient`` needs an httpx transport, and here it arrives only
+    transitively -- so a clean resolve can legally omit it and the Studio suite then
+    fails the moment a test constructs one.
+
+    ``httpx`` is the name that satisfies BOTH Starlette lines that ``fastapi>=0.115``
+    can resolve: <=0.52 imports ``httpx`` only, while 1.6+ prefers ``httpx2`` and
+    falls back to ``httpx``.
+
+    Asserting on the dependency NAME alone would pass for any string, including a
+    wrong distribution -- that is exactly how ``httpx2`` (a real but unrelated PyPI
+    package Starlette never imports) passed a green guard. So this pins the name and
+    then proves the name resolves to something actually importable.
+
+    Deliberately NOT gated on ``fastapi``: CI's unit lane installs only ``.[dev]``
+    (ci.yml), and ``fastapi`` lives in the ``studio`` extra. An
+    ``importorskip("fastapi")`` here would skip in the one lane this contract exists
+    to protect, which is no stronger than the text-grep it replaced. ``httpx`` is a
+    ``dev`` dependency, so importing it is unconditional and the assertion always
+    runs.
+
+    It stays in ``dev`` rather than ``studio`` because production serves through
+    Uvicorn and never imports the test client.
+    """
+
+    specs = _pyproject()["project"]["optional-dependencies"]["dev"]
+
+    names = {
+        re.split(r"[<>=!~; \[]", spec, maxsplit=1)[0].lower().replace("-", "_")
+        for spec in specs
+    }
+
+    assert "httpx" in names, (
+        "the dev extra omits httpx, so a clean install may resolve without the "
+        "transport Starlette's TestClient imports"
+    )
+
+    # The declared name must resolve to a real module exposing the transport base
+    # class Starlette's TestClient subclasses. `httpx2` satisfied the name check and
+    # would fail here.
+    httpx = importlib.import_module("httpx")
+
+    assert hasattr(httpx, "BaseTransport"), (
+        "the declared dev transport does not expose httpx.BaseTransport, which "
+        "Starlette's _TestClientTransport subclasses"
+    )
 
 
 def test_the_base_install_declares_no_web_dependency() -> None:
