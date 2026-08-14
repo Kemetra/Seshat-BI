@@ -318,11 +318,47 @@ projection, endpoints, frontend, journey, and health.
 - [x] **T022** Implement context construction for read-only and propose-change modes;
   include current allowed/forbidden scope and never include credentials. [FR-017,
   FR-018, FR-026]
-- [ ] **T023** Run the bridge contract suite against fake and production adapters;
+- [x] **T023** Run the bridge contract suite against fake and production adapters;
   accept every failure state without *automatic* API-key fallback. (Wording aligned
   with FR-013 as amended 2026-08-04: the prohibition is on a silent or automatic
   switch to a billed path, not on the explicitly operator-configured alternate mode
   of T023a.) [SC-003, SC-004]
+
+  **T023 closed 2026-08-14.** Full record: `evidence/t023-bridge-contract.md`.
+  **68 passed** across `test_studio_agent_bridge` (24), `test_studio_bridge_selection` (30),
+  and `test_studio_bridge_startup` (14) — collected cases, not `def test_` lines, since the
+  contract functions each run twice (once per adapter) and the selection walk expands over
+  its grid.
+
+  *Both adapters, not two classes sharing method names.* The production entry is the real
+  `CodexBridge` spawning an actual child against recorded fixtures, appended to the shared
+  factory list precisely so it "inherits every property the fake is held to". No signed-in
+  CLI is needed: the scripted child replays fixtures, so process launch, protocol framing,
+  normalization, and health transitions all execute. Fixture provenance is not
+  self-certified either — `test_codex_fixture_provenance` (6 passed, 1 skipped) validates
+  them against the schema the installed CLI generates about ITSELF, and skips explicitly
+  rather than passing vacuously where no CLI exists. That one skip is exactly that case.
+
+  *No automatic API-key fallback, proven by walking the whole table.* `select_bridge` is
+  parametrized over `ALL_HEALTH_STATES` — all seven of SC-004's — **crossed with
+  `credential_present` both False and True**. The second axis carries the proof: FR-013
+  forbids an *automatic* switch, so absence is only demonstrable by presenting a usable
+  credential during every failure state and showing the answer does not move. A grid run
+  only at `credential_present=False` would pass while the fail-open existed, because
+  nothing would be available to fall back to. The implementation agrees structurally —
+  `select_bridge` takes `health_state` and immediately `del`s it, documenting that the
+  parameter exists so "the test suite can walk the whole failure table asserting the answer
+  never moves."
+
+  Falsified rather than assumed: injecting the exact prohibited behaviour (degrade to the
+  billed path when health is unhealthy and a credential is present) failed **42 of 68**,
+  including the seven-state walk and the purity test. A single failure would have been the
+  worrying result — it would mean one assertion carried the whole prohibition. Reverted.
+
+  **Not claimed:** SC-003's streamed turn is proven here for ordering and framing against
+  the scripted child, NOT for a real subscription sign-in producing a visible final result.
+  That, and the two `test_studio_codex_real` tests that need an installed CLI, are T036's
+  territory — owner-gated.
 - [x] **T023a** Implement the alternate API-key/access-token `AgentBridge` as an
   explicitly operator-configured mode at the existing provider-neutral seam. Assert
   it is never selected by inference, by degradation, or as a response to any bridge
@@ -802,8 +838,8 @@ projection, endpoints, frontend, journey, and health.
   |---|---|---|
   | SC-001 first-time analyst, authenticated Codex | **OWNER-GATED** | needs T036 |
   | SC-002 every stage/evidence/blocker projected | met | `test_studio_projection_*`, fixture parity |
-  | SC-003 ordered streamed turn | **OWNER-GATED** for the real provider | fake path green; `test_studio_codex_real` cannot run here (no Codex binary) |
-  | SC-004 seven agent health states | met | `AgentHealth` suite |
+  | SC-003 ordered streamed turn | **OWNER-GATED** for the real provider | fake path green; T023 (2026-08-14) also runs the contract suite over the real `CodexBridge` against a scripted child, so ordering and framing hold on the production code path; `test_studio_codex_real` still cannot run here (no Codex binary) |
+  | SC-004 seven agent health states | met | `AgentHealth` suite; T023 additionally walks `ALL_HEALTH_STATES` × `credential_present` both ways in `test_studio_bridge_selection`, which is what pins FR-013's no-automatic-fallback (42/68 fail when the fail-open is injected) |
   | SC-005 approval paused until allow/deny, decide-once | met | 50 approval tests + `test_studio_approval_pause` |
   | SC-006 refused requests disclose nothing | met | `test_studio_boundary_corpus` (7), falsified by planting a `workspace_root` leak |
   | SC-007 no critical/serious a11y violations | **PARTIAL** | axe over 5 states (0 critical/serious); contrast now computed from the tokens and keyboard/focus driven with real input, 2026-08-14 — 147 frontend tests, CI-enforced via `build_studio_frontend.py`. Reduced motion, responsive layout, focus-ring visibility, and axe over the RUNNING app still need a rendering engine (T032 note; browser work sits with T036) |
