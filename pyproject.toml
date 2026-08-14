@@ -249,6 +249,13 @@ artifacts = ["src/seshat/studio/static/**"]
 "templates/handoff/handoff-review-checklist.md" = "seshat/design_templates/handoff/handoff-review-checklist.md"
 
 [tool.hatch.build.targets.sdist]
+# The Studio frontend bundle is GENERATED and gitignored, and hatchling honours VCS
+# ignore rules when collecting the sdist's `include` exactly as it does the wheel's
+# `packages` -- so `"/src"` alone dropped it and the wheel rebuilt FROM this sdist
+# served no UI (issue #641). `artifacts` is PER-TARGET, not build-wide: the wheel key
+# above does not cover this one. Parity is pinned by
+# `test_the_wheel_and_sdist_targets_agree_on_artifacts`.
+artifacts = ["src/seshat/studio/static/**"]
 include = [
     "/src",
     "/mappings/demo_sample_orders",
