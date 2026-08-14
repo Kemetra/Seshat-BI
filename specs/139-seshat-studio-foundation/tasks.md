@@ -599,27 +599,76 @@ projection, endpoints, frontend, journey, and health.
   - **Keyboard, focus, reduced-motion, and responsive layout are untested.** T032
     names browser acceptance over the RUNNING app; this is a component-level audit of
     the structural rules jsdom can decide. It is a floor, not the measurement.
-- [ ] **T033** Build sdist/wheel and test clean base and Studio-extra installs with no
+- [x] **T033** Build sdist/wheel and test clean base and Studio-extra installs with no
   Node runtime and no remote asset fetch. [SC-008]
 
-  **Partial 2026-08-13 — the RELEASE path is fixed; the box stays open.** Issue #623
-  found the published wheel shipping the `seshat-studio` console script with no UI:
-  `release.yml` went from installing validators straight to `python -m build`, with
-  no frontend build step, and `src/seshat/studio/static/` is gitignored generated
-  output. `pyproject.toml`'s `artifacts` re-include had nothing to collect.
+  **T033 closed 2026-08-14.** Full record:
+  `evidence/t033-install-acceptance.md`. The packaging half that blocked it is issue
+  #641, fixed by #642: `artifacts` is PER-TARGET, so the key added for #623 fixed the
+  wheel and left the **sdist** shipping no frontend at all. T033 says "sdist/wheel", so
+  the matrix runs twice — verifying only the wheel would have asserted exactly the half
+  that already worked.
 
-  Fixed by adding the build step AFTER "Verify source identity" (that step asserts a
-  clean tree). Proven at the artifact level rather than by reading YAML: a real
-  `python -m build --wheel` now yields a wheel containing
-  `seshat/studio/static/index.html` plus both hashed assets, confirmed by opening the
-  zip. `tests/unit/test_studio_frontend_build.py` — **10 passed**, where the same
-  tests SKIPPED before the assets existed, which is precisely why CI stayed green
+  **4/4 legs pass** on Python 3.13.14, each in a fresh venv, with Node **removed from
+  `PATH`** (the box has v24.14.0 installed, so an unstripped run would leave the "no
+  Node runtime" clause untested):
+
+  | Leg | Artifact | Install | Outcome |
+  |---|---|---|---|
+  | 1 | wheel | base | exit 2, named diagnostic |
+  | 2 | wheel | `[studio]` | UI served |
+  | 3 | sdist | base | exit 2, named diagnostic |
+  | 4 | sdist | `[studio]` | UI served |
+
+  Measured against the REAL process, not `TestClient` and not `--no-serve`. #608 is why
+  the first is unacceptable (34 green tests while every real request 403'd, because
+  `TestClient` built its `base_url` from the app's own state), and `--no-serve` stops
+  before binding by design, so it can never show a UI is *served*. Studio assigns its
+  port via port 0 (FR-003) and guards on the port actually bound, so the port and
+  single-use token are parsed from the launcher's own banner, then exchanged at
+  `POST /api/v1/bootstrap` exactly as a browser does. Both artifacts then serve
+  byte-identical assets: `/` 200 `text/html`, JS 211,678 B, CSS 6,940 B, **zero**
+  non-loopback requests.
+
+  The clean-base legs assert `fastapi`/`uvicorn`/`starlette` are really absent BEFORE
+  launching — otherwise a stray transitive dependency could make the diagnostic path
+  unreachable and the leg would prove nothing. That makes them a different test from
+  the existing unit test, which monkeypatches `__import__`.
+
+  **"No remote asset fetch" is resolved, not just grepped.** Every referenced asset is
+  answered 200 by loopback, which is the substantive proof. A textual scan of the
+  219,285-byte corpus does report two hosts, and both are recorded rather than filtered
+  because neither is a fetch: `www.w3.org` is the XML namespace URI handed to
+  `createElementNS` (a DOM identifier, never dereferenced) and `react.dev` is React's
+  minified-error helper concatenating a docs URL for a console message. A scan alone
+  would FALSE-POSITIVE on SC-008; resolution alone would miss a genuinely remote
+  reference, so both run.
+
+  Falsified rather than assumed: deleting the installed `static/` directory makes the
+  launcher exit 2 with a named "frontend assets are missing" diagnostic — never a blank
+  page — which is what the pre-#641 sdist install would have done. The path in that
+  message is redacted, so FR-026 holds on the failure path too.
+
+  **Not covered:** SC-008 says "Python and a browser only". This proves every byte the
+  browser needs is served locally; it does not drive a real browser and render the page.
+  That is T036 (owner-gated), the same boundary T032's note draws for the jsdom audit.
+
+  **Prior history, kept because it is the reason the box stayed open so long.**
+  *Partial 2026-08-13 — the RELEASE path.* Issue #623 found the published wheel shipping
+  the `seshat-studio` console script with no UI: `release.yml` went from installing
+  validators straight to `python -m build`, with no frontend build step, and
+  `src/seshat/studio/static/` is gitignored generated output, so `pyproject.toml`'s
+  `artifacts` re-include had nothing to collect. Fixed by adding the build step AFTER
+  "Verify source identity" (that step asserts a clean tree), and proven at the artifact
+  level rather than by reading YAML: a real `python -m build --wheel` yielded a wheel
+  containing `seshat/studio/static/index.html` plus both hashed assets, confirmed by
+  opening the zip. `tests/unit/test_studio_frontend_build.py` — **10 passed**, where the
+  same tests SKIPPED before the assets existed, which is precisely why CI stayed green
   over a broken release.
 
-  Still unverified, and why the box is open: SC-008's "clean base and Studio-extra
-  installs with no Node runtime" has not been exercised. That needs a fresh
-  interpreter installing the built wheel two ways and launching, which is a
-  packaging-acceptance run rather than a workflow edit.
+  That fix was necessary and not sufficient: it made the frontend *built* and collected
+  into the WHEEL, and the sdist target was never revisited (#641). Both halves are now
+  closed and the acceptance run above exercises all four install legs.
 - [x] **T034** Run security-boundary negative tests and verify response/log/event
   corpus contains no injected secret, token, absolute path, or workspace content.
   [SC-006]
@@ -701,7 +750,7 @@ projection, endpoints, frontend, journey, and health.
   | SC-005 approval paused until allow/deny, decide-once | met | 50 approval tests + `test_studio_approval_pause` |
   | SC-006 refused requests disclose nothing | met | `test_studio_boundary_corpus` (7), falsified by planting a `workspace_root` leak |
   | SC-007 no critical/serious a11y violations | **PARTIAL** | axe over 5 states; jsdom cannot decide contrast, and keyboard/focus/reduced-motion/responsive need the running app (T032) |
-  | SC-008 wheel opens Studio with Python + browser only | **PARTIAL** | wheel now CONTAINS the built UI (#636, verified by opening the zip); clean-base and Studio-extra installs unexercised (T033) |
+  | SC-008 wheel opens Studio with Python + browser only | **met for the server; browser render is T036** | T033 closed 2026-08-14: 4/4 install legs (wheel+sdist × base+`[studio]`) against the REAL launcher with Node stripped from PATH; every asset 200 from loopback, zero non-loopback requests; falsified by deleting `static/`. `evidence/t033-install-acceptance.md`. Driving an actual browser remains T036 |
   | SC-009 existing gates stay green | met | T035 above: stack is +19 passing / one fewer failure than `main` |
   | SC-010 external subscription acceptance | **OWNER-GATED** | needs T036 |
 
