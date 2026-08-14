@@ -23,6 +23,13 @@ from pathlib import Path
 
 import pytest
 
+#: CI's unit lane is `pytest -m unit` (ci.yml), and this file carried NO marker -- so
+#: every guard in it, including the FR-002/005/006 packaging contracts, was deselected
+#: in both CI lanes and ran only under a bare local `pytest`. That is how #641 reached
+#: main past a file whose whole purpose is pinning what ships. Same convention as
+#: `test_studio_turn_context.py`.
+pytestmark = pytest.mark.unit
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -336,6 +343,64 @@ def test_missing_static_assets_are_a_named_diagnostic() -> None:
     assert problem is not None
     assert "studio" in problem.lower()
     assert "build" in problem.lower()
+
+
+def test_the_wheel_and_sdist_targets_agree_on_artifacts() -> None:
+    """FR-005 -- a gitignored generated path needs `artifacts` on BOTH targets (#641).
+
+    `artifacts` reads like a build-wide setting and is PER-TARGET. Hatchling honours
+    VCS-ignore rules when collecting the wheel's `packages` AND the sdist's `include`,
+    so a gitignored generated directory needs re-including twice. Declaring it on the
+    wheel alone shipped a correct wheel and an sdist with no frontend, and the wheel
+    rebuilt FROM that sdist served no UI -- which is what PyPI publishes for
+    `--no-binary` and downstream rebuilds.
+
+    Asserted as PARITY rather than as "the sdist contains this one path", so the guard
+    closes the class: any future generated asset added to one target must be added to
+    the other. `test_pack_schema_packaging` and `test_design_scaffold` already pin the
+    sibling invariant for the force-include/include pair; this covers the `artifacts`
+    mechanism those two do not reach, which is precisely how #641 got through.
+    """
+    targets = _pyproject()["tool"]["hatch"]["build"]["targets"]
+
+    wheel_artifacts = set(targets["wheel"].get("artifacts", []))
+    sdist_artifacts = set(targets["sdist"].get("artifacts", []))
+
+    assert wheel_artifacts == sdist_artifacts, (
+        "the wheel and sdist targets disagree on `artifacts`, so a gitignored "
+        "generated path ships in one and not the other. Only in the wheel: "
+        f"{sorted(wheel_artifacts - sdist_artifacts)}; only in the sdist: "
+        f"{sorted(sdist_artifacts - wheel_artifacts)}"
+    )
+
+
+def test_the_studio_frontend_is_re_included_past_its_gitignore() -> None:
+    """The instance behind the parity guard above: this path IS gitignored (#641).
+
+    Parity alone would be satisfied by both targets omitting the frontend, which is
+    the exact bug in a symmetric disguise. This pins the other half -- that the
+    generated bundle really is re-included -- so the pair cannot be defeated by
+    deleting a key from both places.
+
+    Read from `.gitignore` rather than hardcoded: if the bundle were ever tracked,
+    `artifacts` would become unnecessary and this test should stop demanding it.
+    """
+    from seshat.studio import assets
+
+    static_relative = assets.packaged_static_directory().relative_to(_REPO_ROOT)
+    posix = static_relative.as_posix()
+
+    ignored = f"{posix}/" in (_REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
+    if not ignored:  # pragma: no cover -- only if the bundle becomes tracked
+        pytest.skip(f"{posix} is no longer gitignored; `artifacts` is not needed")
+
+    targets = _pyproject()["tool"]["hatch"]["build"]["targets"]
+    for name in ("wheel", "sdist"):
+        artifacts = targets[name].get("artifacts", [])
+        assert any(entry.startswith(posix) for entry in artifacts), (
+            f"{posix} is gitignored but the {name} target does not re-include it via "
+            f"`artifacts` ({artifacts}), so hatchling drops the prebuilt frontend"
+        )
 
 
 def test_every_wheel_force_include_source_exists() -> None:
