@@ -1,0 +1,31 @@
+{
+  "integration": "speckit-extensions",
+  "version": "0.8.10",
+  "vendored_in": "1eb0c98e6b7dc9033871c9bae46ca080ac39a45c",
+  "source": "github/spec-kit",
+  "note": "Locally authored. Upstream's installer does not write this file, so it survives a re-vendor only because scripts/pin_speckit_extensions.py regenerates it. Hashes are of the git blob, not the working tree.",
+  "files": {
+    ".specify/extensions.yml": "87ad9c3f6ecf5790ff378fae08d7b7d9859edbf149817a0cfdd8ea723f535dda",
+    ".specify/extensions/.registry": "3e37a872ec6a50f474519693bfb64b68528df4416d04120af1ddd2c9707e441b",
+    ".specify/extensions/git/README.md": "38c0140b7804028cf0d212a29b930c9183f4eec7dcaf3ebc4af080653e290924",
+    ".specify/extensions/git/commands/speckit.git.commit.md": "445ed4cd43c8e685de294b68c841b8f15e082f7033f74b042feddd59edf7779c",
+    ".specify/extensions/git/commands/speckit.git.feature.md": "8e5788984c7423ecf9cbb984cca8043c2f35f28987c955f6a999154fe8d4059a",
+    ".specify/extensions/git/commands/speckit.git.initialize.md": "07bf0e1a9fc251482774141be5a903cbeb018f90cb66b2d29a5fff7f0bd3ecb7",
+    ".specify/extensions/git/commands/speckit.git.remote.md": "00397aff45bf00d3111b4f162e4220fd5a9020e72e4afe9179859c21bcd8aac3",
+    ".specify/extensions/git/commands/speckit.git.validate.md": "d8f8e5ecc52e819749f355b6dd1ad8400e9b1dfe03882a12c0d2369530f1f083",
+    ".specify/extensions/git/config-template.yml": "d07938ce94303be1c8afac77d4b0ea84654f811490850e744f8ee3021b59f8e3",
+    ".specify/extensions/git/extension.yml": "9731aa8143a72fbebfdb440f155038ab42642517c2b2bdbbf67c8fdbe076ed79",
+    ".specify/extensions/git/git-config.yml": "f58ec8170cd70f111b9ddb34b122c1c9321e8a00c7bd8ebdafb272490cddd85f",
+    ".specify/extensions/git/scripts/bash/auto-commit.sh": "e12ff0e010c8891bbe7445950ea00a49ef7e0b387b050e382fed57bd09d0c8bc",
+    ".specify/extensions/git/scripts/bash/create-new-feature.sh": "373ff6e1a232bbf383b29d7994eea90f0113931583dcd6496289885136e24182",
+    ".specify/extensions/git/scripts/bash/git-common.sh": "5d2451b6c4ceee67e0f1b524e1ef1e4114cc08ccb173b5c2908fb031c540d7e5",
+    ".specify/extensions/git/scripts/bash/initialize-repo.sh": "34624e18854106bb793b0baeff9f6e8e4e9da39aa4ea443195fd745d3bdb8b6d",
+    ".specify/extensions/git/scripts/powershell/auto-commit.ps1": "d74d67ffab73485c3ba208a6389fe9a325c0bb8d90d31f5d490555e11910e7f9",
+    ".specify/extensions/git/scripts/powershell/create-new-feature.ps1": "e04167c21ca0e1ad77f065553ee07107ff0475f205fa7417e352094315f95e5f",
+    ".specify/extensions/git/scripts/powershell/git-common.ps1": "ebb2bf88d6504ff648176cf8c9c739aa24b8d3fe17d57bcc44d4dc854b51bfee",
+    ".specify/extensions/git/scripts/powershell/initialize-repo.ps1": "bb2660d4bdf35e8202db9eb78ab0b4ba226ddf35e08f101ab26f247fb0f39f65",
+    ".specify/integration.json": "046ae76bbc95dc8aabc0e611d77746c2f8958599ffb6d991dd50a2d9a9e133d7",
+    ".specify/workflows/speckit/workflow.yml": "30862b06e500cf482819b8b8db31de86a9d621633110692598e806ba0407b3d1",
+    ".specify/workflows/workflow-registry.json": "374c1609c88f12dd7a5846d655acb78483cb296612df970ec2d1b8ac001cf835"
+  }
+}
