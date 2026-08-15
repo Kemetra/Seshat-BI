@@ -208,10 +208,13 @@
 > [`evidence/release-state-ledger.md`](evidence/release-state-ledger.md) (RM-00B, 2026-08-15).**
 >
 > **Unchecked here does NOT mean unpublished.** `v1.0.0` is live on PyPI, npm (scoped
-> and alias), and GitHub Releases; a clean-venv public install was re-verified on
-> 2026-08-15. Of T073–T091, thirteen are `completed-with-evidence`, one is
-> `not-applicable`, and the five remaining are a single **deliberately deferred** owner
-> decision about public catalog submission — not five units of unfinished work.
+> and alias), and GitHub Releases; a clean-venv Python install was re-verified on
+> 2026-08-15. Of T073–T091: **10** are `completed-with-evidence` (4 of those inferred
+> from successful publication rather than from a read record), **1** is
+> `partially-verified` (T090 — only its Python leg was re-run), **1** is
+> `not-applicable`, and **7** are `still-open` — five being a single **deliberately
+> deferred** catalog decision, and two (T077, T080) being repository-availability
+> approvals the release-acceptance checklist still records as "not approved".
 >
 > These actions are irreversible: tags are immutable and PyPI rejects re-uploading an
 > existing filename. Re-running them would be a duplicate publication attempt, not a
