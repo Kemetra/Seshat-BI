@@ -366,3 +366,49 @@ def test_running_command_room_has_no_horizontal_viewport_overflow(
 
     assert layout["document"] <= layout["viewport"], layout["offenders"]
     assert layout["main"] <= layout["viewport"]
+
+
+def test_an_unbreakable_workspace_name_still_wraps(tmp_path: Path) -> None:
+    """A long name in the `<h1>` must WRAP, not widen the document past the viewport.
+
+    The parametrised test above only caught this by accident: pytest's `tmp_path`
+    embeds the test name, and Studio renders the workspace DIRECTORY as its heading
+    (`App.tsx`, `identity.display_name`), so the document measured 542px at a 320px
+    viewport. That coupling makes the failure depend on how long the test's own name
+    is -- rename the test and the bug hides. This pins the cause directly with a name
+    containing no space, hyphen, or underscore, which is the only shape that cannot
+    break at a normal soft-wrap opportunity.
+
+    The value is a real one: a repository directory is user-controlled, unbounded, and
+    routinely lacks break opportunities (`ezabydemoanalyticswarehouse`).
+    """
+
+    workspace = tmp_path / ("w" * 90)
+    workspace.mkdir()
+    write_blocked_table(workspace)
+    assert EDGE.is_file(), "the Windows release gate requires an installed Edge browser"
+
+    with _running_studio(workspace) as url, playwright.sync_playwright() as runtime:
+        browser = runtime.chromium.launch(executable_path=str(EDGE), headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 320, "height": 568})
+            _open(page, url)
+            layout = page.evaluate(
+                """() => {
+                    const heading = document.querySelector("h1");
+                    return {
+                        viewport: window.innerWidth,
+                        document: document.documentElement.scrollWidth,
+                        headingWidth: heading.getBoundingClientRect().width,
+                        headingScroll: heading.scrollWidth,
+                        overflowWrap: getComputedStyle(heading).overflowWrap,
+                    };
+                }"""
+            )
+        finally:
+            browser.close()
+
+    # The heading must not itself overflow, and it must not drag the document with it.
+    assert layout["document"] <= layout["viewport"], layout
+    assert layout["headingScroll"] <= layout["viewport"], layout
+    assert layout["headingWidth"] <= layout["viewport"], layout
