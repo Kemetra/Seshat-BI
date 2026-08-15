@@ -97,6 +97,18 @@ body {
   background: var(--surface);
   color: var(--text);
   line-height: 1.5;
+  /* FR-031 responsive layout. Studio renders values it does not control the width of:
+     the workspace DIRECTORY name in the `<h1>`, repository-relative evidence paths,
+     and blocker prose. None is guaranteed to contain a space, hyphen, or any other
+     soft-wrap opportunity, and without this a single long token widened the whole
+     document to 2296px inside a 320px viewport rather than wrapping.
+
+     `overflow-wrap` is deliberately the whole fix, and it is set HERE rather than on
+     `h1`: it only breaks a word that has no legal break point, so ordinary prose
+     still wraps between words and stays readable. `word-break: break-all` was
+     rejected -- it breaks every word mid-token, including text that would have
+     wrapped correctly on its own. */
+  overflow-wrap: break-word;
 }
 
 /* A visible focus ring is a WCAG 2.2 AA requirement, so it is never removed -- only

@@ -267,7 +267,10 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install report environment
-        run: pip install -e ".[dev,report,report-pdf]"
+        # `studio` (fastapi/uvicorn) is needed because the Studio accessibility suite
+        # below launches the REAL server as a subprocess; `report-pdf` already supplies
+        # the playwright that `tests/browser` imports.
+        run: pip install -e ".[dev,report,report-pdf,studio]"
       - name: Install chromium
         run: python -m playwright install --with-deps chromium
       - name: Cross-surface invariants
@@ -284,6 +287,38 @@ jobs:
           echo "$output"
           if echo "$output" | grep -qi "skipped"; then
             echo "::error::the real-browser test skipped in the job that installs the browser"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: studio-ui/package-lock.json
+
+      - name: Build the Studio frontend
+        # The launcher fail-closes when `static/` is absent, so without this every
+        # browser test below dies on "Studio frontend assets are missing" rather than
+        # on anything it is meant to measure. This also fetches `axe-core`, which the
+        # axe tests read from `node_modules`.
+        run: python scripts/build_studio_frontend.py
+
+      - name: Studio accessibility acceptance (SC-007)
+        # T032's browser legs. Until now this file was SELECTED by the `integration`
+        # marker sweep and then skipped on every runner -- the `integration` job
+        # installs `.[dev]`, which has no playwright, so `importorskip` swallowed the
+        # whole suite. Every SC-007 assertion was green without ever running, which is
+        # the same "unmarked file is deselected by every lane" defect the file's own
+        # header records for #641.
+        #
+        # The skip-guard below is what keeps that from silently returning: a skip in
+        # the one job that installs a browser is a failure, not a pass.
+        run: |
+          set -euo pipefail
+          output=$(pytest tests/browser/test_studio_accessibility.py -q -rs --no-header)
+          echo "$output"
+          if echo "$output" | grep -qi "skipped"; then
+            echo "::error::the Studio accessibility suite skipped in the job that installs the browser"
             exit 1
           fi
 
@@ -392,6 +427,7 @@ jobs:
           pytest -m "integration and not live_db and not statistics"
           --ignore=tests/integration/test_report_surfaces_agree.py
           --ignore=tests/integration/test_report_pdf_chromium.py
+          --ignore=tests/browser/test_studio_accessibility.py
 
   friendly-pr-summary:
     # Presentation-only opt-in. Keeping it in its own job confines PR write
