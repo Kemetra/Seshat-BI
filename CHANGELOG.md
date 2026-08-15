@@ -27,6 +27,59 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+## [1.1.0] -- 2026-08-15
+
+### Fixed
+- **The published distribution now carries the Studio frontend, so
+  `seshat-studio` is usable from an index install** (#636, #641, #642; issue
+  #623). `release.yml` and `ci.yml` both run
+  `scripts/build_studio_frontend.py` before packaging, and the assets ride in
+  **both** the wheel and the sdist. This is the headline reason the release
+  exists: the v1.0.0 wheel shipped **0** `studio/static` entries, so an
+  installed `seshat-studio` fail-closed with "Studio frontend assets are
+  missing." The fix merged about 11 hours after the `v1.0.0` tag and therefore
+  reached no published artifact -- 1.1.0 is the first release that carries it.
+  Verified by building both artifacts and counting entries, not by reading the
+  workflow: wheel and sdist each carry 3 `studio/static` entries including
+  `index.html`.
+- **`agent_turns` is derived from what the build can actually do** (#638),
+  rather than advertised statically. `tests/unit/test_studio_capability_
+  truthfulness.py` pins it in both directions -- advertised when a turn can
+  run, withheld when the provider is unusable.
+- **A turn paused on an approval outlives the stalled-provider timeout**
+  (#630), and the approval delivery seam is reachable in production rather
+  than from tests only (#628).
+
+### Added
+- **Studio closes a technical approval round trip** (spec 139 Phase 6; #625,
+  #626, #632, #633). A technical approval can now be registered, decided
+  exactly once with replays refused, relayed to the provider, and returned to
+  the browser with the readiness verdict attached.
+  **The authority boundary is unchanged and deliberate:** this is the
+  *technical* approval lane only. Named-human authority is split from it
+  (T025), readiness forbidden scope is read fail-closed (T025), and Studio
+  still grants **no** business approval, moves no readiness stage, and emits no
+  confidence score. Approval of a readiness stage remains a human edit to
+  `readiness-status.yaml`.
+- **`seshat-studio` ships as a consumer skill** (T028-T031; #634).
+- **Studio lists the business decisions a named human still owes** (T027;
+  #635) -- a read-only ledger, not an approval surface.
+
+### Docs
+- Seshat Studio is classified in the authority taxonomy as a Product Module
+  (#627); Core remains functional without it.
+- Phase 6 re-verified against the merges that closed it (#631), the T035
+  regression measurement and SC evidence map recorded (#639), T033 closed on a
+  four-leg install acceptance run (#643), and T023 closed on the bridge
+  contract suite over both adapters (#645).
+- Spec 125's owner-only tasks reconciled against actual public state (#648).
+
+### Changed
+- The Studio accessibility suite now runs in CI and gates, with three flakes
+  unstuck and unbreakable workspace names wrapped (T032; #644, #646, #647).
+  T032 itself remains open by the owner's read.
+- The vendored Spec Kit extensions framework is pinned (#603, #649).
+
 ## [1.0.0] -- 2026-08-13
 
 ### Added
