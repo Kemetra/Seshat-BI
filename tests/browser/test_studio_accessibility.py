@@ -37,9 +37,35 @@ playwright = pytest.importorskip(
 )
 
 ROOT = Path(__file__).resolve().parents[2]
+#: Local convenience only. Playwright's OWN Chromium is preferred, because a hardcoded
+#: Windows path is unrunnable on the Linux runner -- and a suite that cannot run on CI
+#: is verified nowhere. Kept as a fallback so a developer who has Edge but has not run
+#: `playwright install` still gets the suite.
 EDGE = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
 AXE = ROOT / "studio-ui" / "node_modules" / "axe-core" / "axe.min.js"
 LAUNCH_URL = re.compile(r"http://127\.0\.0\.1:\d+/\?token=[A-Za-z0-9_-]+")
+
+
+def _launch_browser(runtime):  # type: ignore[no-untyped-def]
+    """Launch Playwright's Chromium, falling back to a locally installed Edge.
+
+    This deliberately RAISES rather than skipping when neither is available. A skip
+    here would be the failure mode this seam exists to prevent: the suite was already
+    selected by CI's `integration` marker sweep and silently skipped for want of a
+    browser, so every SC-007 assertion was green without ever running. Failing loudly
+    keeps "did not run" distinguishable from "passed".
+    """
+
+    try:
+        return runtime.chromium.launch(headless=True)
+    except playwright.Error as bundled_error:
+        if not EDGE.is_file():
+            raise AssertionError(
+                "no browser available: Playwright's Chromium is not installed "
+                "(`python -m playwright install chromium`) and no local Edge was "
+                f"found at {EDGE}"
+            ) from bundled_error
+        return runtime.chromium.launch(executable_path=str(EDGE), headless=True)
 
 
 @contextmanager
@@ -49,6 +75,19 @@ def _running_studio(workspace: Path) -> Iterator[str]:
     environment = os.environ.copy()
     environment.pop("OPENAI_API_KEY", None)
     environment.pop("CODEX_API_KEY", None)
+    # Pin the subprocess to THIS tree. `python -m seshat.studio` with `cwd=ROOT` does
+    # NOT prefer the source: a non-editable `seshat` in site-packages is a real
+    # directory and wins, so the suite silently exercised whatever happened to be pip
+    # installed. Here that was a 1.0.0 wheel built without the frontend step, whose
+    # launcher fail-closes with "Studio frontend assets are missing" -- so the browser
+    # tests failed while the tree they were meant to verify was perfectly healthy.
+    # That coupling also produced the apparent flake: which tests failed depended on
+    # ambient install state, not on anything in the repository.
+    source = str(ROOT / "src")
+    existing = environment.get("PYTHONPATH")
+    environment["PYTHONPATH"] = (
+        source if not existing else source + os.pathsep + existing
+    )
     process = subprocess.Popen(  # noqa: S603 - fixed interpreter/module argv
         [
             sys.executable,
@@ -105,17 +144,47 @@ def _running_studio(workspace: Path) -> Iterator[str]:
 
 
 def _open(page, url: str) -> None:  # type: ignore[no-untyped-def]
-    """Navigate without sleeping; retry only while the bound server starts accepting."""
+    """Navigate without sleeping; retry only while the bound server starts accepting.
 
+    `wait_until` is deliberately NOT `networkidle`. `Conversation.tsx` opens an
+    `EventSource` on mount, and that endpoint CLOSES after replaying, so the browser's
+    native reconnect re-opens it every `SSE_RETRY_MILLISECONDS` for as long as the page
+    is up (see the "NO `onerror` reconnect handler" note there). The page therefore
+    never reaches 500ms of network silence by design, and `networkidle` could only
+    succeed when a retry happened to land inside a reconnect gap.
+
+    That is what the "flake" was. It presented as contention -- a different test failing
+    on each full run, all passing in isolation -- but the tell is the wall clock: a
+    passing run took ~44s and a failing one ~124s, which is the 50-iteration retry loop
+    burning its full budget. `domcontentloaded` is what the assertions actually need,
+    since every one of them waits on a specific element afterwards.
+    """
+
+    # 10, not 50. Every wait below is condition-based, so the old budget was
+    # compensating for the `networkidle` thrash that is now gone -- and at 5s per wait
+    # it would let a genuinely dead server burn ~750s per test, blowing the
+    # `report-surfaces` job's 35-minute timeout and reporting nothing instead of the
+    # error raised below.
     last_error: Exception | None = None
-    for _ in range(50):
+    for _ in range(10):
         try:
-            page.goto(url, wait_until="networkidle", timeout=1_000)
-            page.get_by_role("heading", level=1).wait_for(timeout=1_000)
+            page.goto(url, wait_until="domcontentloaded", timeout=5_000)
+            page.get_by_role("heading", level=1).wait_for(timeout=5_000)
+            # The `<h1>` alone is NOT enough to start asserting. It is rendered by the
+            # first React commit, while the interactive controls arrive with the
+            # workspace fetch that follows. Pressing Tab in that window focuses BODY
+            # and the keyboard test fails on a real app that is merely not ready --
+            # the trap `networkidle` used to hide by waiting far too long instead.
+            # Waiting for a focusable control is the actual precondition.
+            page.locator("button, textarea, summary, a[href]").first.wait_for(
+                timeout=5_000
+            )
             return
         except playwright.Error as error:
             last_error = error
-    raise AssertionError("Studio never became reachable") from last_error
+    raise AssertionError(
+        f"Studio never became reachable at {url}: {last_error}"
+    ) from last_error
 
 
 def _serious_axe_violations(
@@ -155,10 +224,8 @@ def test_running_command_room_draws_visible_keyboard_focus(tmp_path: Path) -> No
     """A removed/transparent `:focus-visible` outline must fail in a painted browser."""
 
     write_blocked_table(tmp_path)
-    assert EDGE.is_file(), "the Windows release gate requires an installed Edge browser"
-
     with _running_studio(tmp_path) as url, playwright.sync_playwright() as runtime:
-        browser = runtime.chromium.launch(executable_path=str(EDGE), headless=True)
+        browser = _launch_browser(runtime)
         try:
             page = browser.new_page(viewport={"width": 1280, "height": 800})
             _open(page, url)
@@ -200,10 +267,8 @@ def test_running_critical_states_have_no_serious_axe_violations(
     """Removing a name, landmark, contrast pair, or semantic role must fail here."""
 
     build_workspace(tmp_path)
-    assert EDGE.is_file(), "the Windows release gate requires an installed Edge browser"
-
     with _running_studio(tmp_path) as url, playwright.sync_playwright() as runtime:
-        browser = runtime.chromium.launch(executable_path=str(EDGE), headless=True)
+        browser = _launch_browser(runtime)
         try:
             page = browser.new_page(viewport={"width": 1280, "height": 800})
             remote_requests: list[str] = []
@@ -231,10 +296,8 @@ def test_running_approval_state_has_no_serious_axe_violations(tmp_path: Path) ->
     """The distinct live-approval DOM must pass axe, not only the quiet composer."""
 
     write_blocked_table(tmp_path)
-    assert EDGE.is_file(), "the Windows release gate requires an installed Edge browser"
-
     with _running_studio(tmp_path) as url, playwright.sync_playwright() as runtime:
-        browser = runtime.chromium.launch(executable_path=str(EDGE), headless=True)
+        browser = _launch_browser(runtime)
         try:
             page = browser.new_page(viewport={"width": 1280, "height": 800})
             _open(page, url)
@@ -281,10 +344,8 @@ def test_reduced_motion_media_query_disables_page_motion(tmp_path: Path) -> None
     """Deleting the real media query must leave measurable non-zero motion here."""
 
     write_blocked_table(tmp_path)
-    assert EDGE.is_file(), "the Windows release gate requires an installed Edge browser"
-
     with _running_studio(tmp_path) as url, playwright.sync_playwright() as runtime:
-        browser = runtime.chromium.launch(executable_path=str(EDGE), headless=True)
+        browser = _launch_browser(runtime)
         try:
             page = browser.new_page(
                 viewport={"width": 1280, "height": 800}, reduced_motion="reduce"
@@ -321,10 +382,8 @@ def test_running_command_room_has_no_horizontal_viewport_overflow(
     """Fixed-width content or an unwrapped technical value must fail a real layout."""
 
     write_blocked_table(tmp_path)
-    assert EDGE.is_file(), "the Windows release gate requires an installed Edge browser"
-
     with _running_studio(tmp_path) as url, playwright.sync_playwright() as runtime:
-        browser = runtime.chromium.launch(executable_path=str(EDGE), headless=True)
+        browser = _launch_browser(runtime)
         try:
             page = browser.new_page(viewport={"width": width, "height": height})
             _open(page, url)
@@ -386,10 +445,8 @@ def test_an_unbreakable_workspace_name_still_wraps(tmp_path: Path) -> None:
     workspace = tmp_path / ("w" * 90)
     workspace.mkdir()
     write_blocked_table(workspace)
-    assert EDGE.is_file(), "the Windows release gate requires an installed Edge browser"
-
     with _running_studio(workspace) as url, playwright.sync_playwright() as runtime:
-        browser = runtime.chromium.launch(executable_path=str(EDGE), headless=True)
+        browser = _launch_browser(runtime)
         try:
             page = browser.new_page(viewport={"width": 320, "height": 568})
             _open(page, url)
