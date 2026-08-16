@@ -36,11 +36,11 @@ __all__ = [
     "deliver_decision",
 ]
 
-#: The provider's vocabulary, taken from the captured app-server exchange. Studio's own
+#: The provider's vocabulary from the generated 0.147.0 response schemas. Studio's
 #: HTTP edge speaks `allow_once`/`deny`; translating here rather than sharing one
 #: spelling keeps a change to either side from silently corrupting the other.
-APPROVED = "approved"
-DENIED = "denied"
+APPROVED = "accept"
+DENIED = "decline"
 
 
 class FrameSink(Protocol):

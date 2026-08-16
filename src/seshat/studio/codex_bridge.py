@@ -48,7 +48,7 @@ from seshat.studio.codex_protocol import (
 from seshat.studio.events import StudioEvent
 from seshat.studio.projection import AgentHealth
 
-__all__ = ["CodexBridge", "CodexSession"]
+__all__ = ["CodexBridge", "CodexSession", "probe_codex_account"]
 
 #: Sentinel pushed onto the frame queue when the reader thread sees EOF.
 _EOF = object()
@@ -361,6 +361,59 @@ class CodexSession:
             thread.join(timeout=_remaining(deadline))
 
 
+def probe_codex_account(
+    plan: CodexLaunchPlan, *, timeout: float = IDLE_TIMEOUT_SECONDS
+) -> bool | None:
+    """Return signed-in state from a live app-server account read.
+
+    ``True`` means Codex returned a non-null account, ``False`` means it answered
+    successfully with no account, and ``None`` means the probe itself failed. Keeping
+    failure distinct prevents a crashed or incompatible child from being reported as
+    merely signed out.
+
+    No account fields leave this function. Studio needs only the categorical presence
+    fact and must never receive or retain the provider's credential or identity.
+    """
+    session = CodexSession(plan)
+    try:
+        session.start()
+        session.send(
+            {
+                "jsonrpc": "2.0",
+                "id": _INITIALIZE_ID,
+                "method": "initialize",
+                "params": {"clientInfo": {"name": "seshat-studio", "version": "1"}},
+            }
+        )
+        account_requested = False
+        for frame in session.frames(timeout=timeout):
+            if frame.get("id") == _INITIALIZE_ID and not account_requested:
+                if "result" not in frame:
+                    return None
+                session.send({"jsonrpc": "2.0", "method": "initialized"})
+                session.send(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": _THREAD_START_ID,
+                        "method": "account/read",
+                        "params": {"refreshToken": False},
+                    }
+                )
+                account_requested = True
+                continue
+            if frame.get("id") != _THREAD_START_ID:
+                continue
+            result = frame.get("result")
+            if not isinstance(result, dict):
+                return None
+            return result.get("account") is not None
+    except (OSError, queue.Empty, CodexFrameError):
+        return None
+    finally:
+        session.close()
+    return None
+
+
 class CodexBridge:
     """`AgentBridge` over a live Codex app-server.
 
@@ -502,7 +555,12 @@ class CodexBridge:
                     # different workspace than the child runs in would let it read and
                     # propose in one tree while redaction is configured for another.
                     "cwd": str(session.plan.cwd),
-                    "approvalPolicy": "on-request",
+                    # Stable (non-experimental) policy that asks before commands the
+                    # provider does not classify as trusted. Live 0.147 acceptance
+                    # proved `on-request` could complete a denied write attempt
+                    # without emitting any request for Studio to decide, while this
+                    # policy produced the documented command-approval round trip.
+                    "approvalPolicy": "untrusted",
                     # Studio never authorises provider-side writes: the approval
                     # surface is T024-T027 and `_pump_turn` refuses write intent
                     # under `read_only`. A sandbox that could write would make the

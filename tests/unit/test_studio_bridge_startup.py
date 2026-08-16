@@ -242,29 +242,27 @@ def test_the_fake_default_still_projects_disabled(tmp_path: Path) -> None:
     assert health["state"] == "disabled", health
 
 
-def test_a_supported_cli_is_not_claimed_to_be_signed_in(tmp_path: Path) -> None:
-    """P1 (#621 review): startup runs `--version` and nothing else.
+def test_a_live_signed_in_probe_projects_healthy(tmp_path: Path) -> None:
+    """A successful account probe must reach the interface the browser reads.
 
-    It never starts the app-server and never calls `account/read`, so sign-in state
-    is genuinely unknown. Reporting `signed_in=True` claimed "Codex is signed in and
-    responding" on the strength of a version string -- a signed-out CLI would read
-    healthy and the analyst would discover otherwise only when a turn failed.
-
-    `signed_out` is the honest answer AND the more useful one: it names a recovery
-    action, where a false `ready` names none. A live handshake probe at boot is
-    #618's work.
+    Hardcoding `signed_in=False` made a real ChatGPT-backed turn complete while the
+    Command Room still told the analyst to sign in. Supplying the observed account
+    fact here catches that stale startup claim without touching a credential.
     """
     from seshat.studio.app import create_app
 
     app, token = create_app(
-        _workspace(tmp_path), port=9999, agent_provider="codex", codex_version="0.147.0"
+        _workspace(tmp_path),
+        port=9999,
+        agent_provider="codex",
+        codex_version="0.147.0",
+        codex_signed_in=True,
     )
 
     health = _authenticated(app, token).get("/api/v1/workspace").json()["agent_health"]
 
-    assert health["state"] != "healthy", health
-    assert health["state"] == "signed_out", health
-    assert health["recovery_action"], "a non-ready state must name a recovery action"
+    assert health["state"] == "healthy", health
+    assert health["recovery_action"] == ""
 
 
 def test_the_fallback_detail_says_turns_are_refused(tmp_path: Path) -> None:

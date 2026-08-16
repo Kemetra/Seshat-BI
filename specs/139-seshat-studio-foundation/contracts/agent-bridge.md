@@ -146,7 +146,7 @@ committed wholesale.
 | initialize | `initialize`, then `initialized` | identify `seshat_studio`; do not opt into experimental API |
 | health | `account/read`, `account/rateLimits/read` | distinguish signed out and quota-limited without reading auth storage |
 | login | `account/login/start` with `type: chatgpt` | open returned `authUrl`; never send `apiKey` or `chatgptAuthTokens` variants |
-| start thread | `thread/start` | pin `cwd`; use `approvalPolicy: on-request` and `sandbox: read-only` initially |
+| start thread | `thread/start` | pin `cwd`; use stable `approvalPolicy: untrusted` and `sandbox: read-only` initially so technical commands require approval without enabling the experimental granular API |
 | start read-only turn | `turn/start` | send `sandboxPolicy: {type: readOnly, networkAccess: false}` |
 | interrupt | `turn/interrupt` | require both provider thread and active turn ids |
 | visible streaming | `turn/*`, `item/started`, `item/completed`, `item/agentMessage/delta`, `turn/plan/updated` | normalize only the public subset |

@@ -117,7 +117,7 @@ def test_an_allowed_decision_reaches_the_registered_session(tmp_path: Path):
     assert session.sent[0] == {
         "jsonrpc": "2.0",
         "id": 20,
-        "result": {"decision": "approved"},
+        "result": {"decision": "accept"},
     }
 
 
@@ -128,7 +128,7 @@ def test_a_denied_decision_also_reaches_the_session(tmp_path: Path):
     assert _decide(client, thread_id, "turn-1-approval-1", allow=False).status_code == (
         204
     )
-    assert session.sent[0]["result"]["decision"] == "denied"
+    assert session.sent[0]["result"]["decision"] == "decline"
 
 
 def test_the_reply_goes_only_to_the_thread_that_raised_it(tmp_path: Path):

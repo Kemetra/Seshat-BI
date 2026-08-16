@@ -134,7 +134,7 @@ def test_an_allowed_decision_is_written_to_the_provider_keyed_to_its_request_id(
     reply = session.sent[0]
     assert reply["jsonrpc"] == "2.0"
     assert reply["id"] == 20, "the reply must be keyed to the request it answers"
-    assert reply["result"]["decision"] == "approved"
+    assert reply["result"]["decision"] == "accept"
     assert "error" not in reply
 
 
@@ -156,19 +156,19 @@ def test_a_denied_decision_is_also_written_rather_than_dropped():
 
     assert len(session.sent) == 1
     assert session.sent[0]["id"] == 21
-    assert session.sent[0]["result"]["decision"] == "denied"
+    assert session.sent[0]["result"]["decision"] == "decline"
 
 
-def test_the_reply_decision_values_match_the_captured_protocol_vocabulary():
-    """`approved`/`denied` are the provider's words, not Studio's internal ones.
+def test_the_reply_decision_values_match_the_generated_protocol_vocabulary():
+    """`accept`/`decline` are the provider's words, not Studio's internal ones.
 
     Studio's own vocabulary is `allow_once`/`deny` at the HTTP edge. Sending those
     across the wire would be a plausible-looking frame the provider cannot read.
     """
     from seshat.studio.approval_delivery import APPROVED, DENIED
 
-    assert APPROVED == "approved"
-    assert DENIED == "denied"
+    assert APPROVED == "accept"
+    assert DENIED == "decline"
 
 
 def test_an_envelope_with_no_request_id_delivers_nothing_and_says_so():
@@ -295,4 +295,4 @@ def test_a_named_human_approval_may_still_be_DENIED_to_unblock_the_provider():
         request_id=22,
     )
     assert deliver_decision(session, envelope, allow=False) is True
-    assert session.sent[0]["result"]["decision"] == "denied"
+    assert session.sent[0]["result"]["decision"] == "decline"

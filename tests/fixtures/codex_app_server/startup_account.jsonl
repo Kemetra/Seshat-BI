@@ -1,0 +1,2 @@
+{"jsonrpc":"2.0","id":1,"result":{"userAgent":{"name":"codex","version":"0.147.0"}}}
+{"jsonrpc":"2.0","id":2,"result":{"requiresOpenaiAuth":true,"account":{"type":"chatgpt","email":"user@example.invalid","planType":"plus"}}}

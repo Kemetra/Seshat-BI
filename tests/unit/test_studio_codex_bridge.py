@@ -330,6 +330,11 @@ def test_the_bridge_asks_the_provider_for_a_turn(tmp_path: Path) -> None:
     ], "the provider was not asked for a turn in the order the protocol requires"
 
     turn_start = sent[-1]
+    thread_start = sent[-2]
+    assert thread_start["params"]["approvalPolicy"] == "untrusted", (
+        "the stable provider policy must surface untrusted commands for Studio's "
+        "approval panel; on-request did not emit a request in live acceptance"
+    )
     assert turn_start["params"]["input"] == [
         {"type": "text", "text": "Summarise the readiness spine"}
     ], "the validated prompt never reached the provider"

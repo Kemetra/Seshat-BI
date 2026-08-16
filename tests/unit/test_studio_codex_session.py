@@ -89,6 +89,21 @@ def _plan(tmp_path: Path, fixture: str, *extra: str) -> CodexLaunchPlan:
     )
 
 
+def test_startup_account_probe_reports_a_real_chatgpt_session(tmp_path: Path) -> None:
+    """Removing the app-server account read must make signed-in health fail closed.
+
+    The scripted child is the external boundary: it emits the same initialize and
+    account/read replies as the real provider over OS pipes. The assertion is on the
+    user-visible fact the probe derives, not on whether a mock was called.
+    """
+    from seshat.studio import codex_bridge
+
+    probe = getattr(codex_bridge, "probe_codex_account", None)
+    assert probe is not None, "the startup path has no live account probe"
+
+    assert probe(_plan(tmp_path, "startup_account"), timeout=5.0) is True
+
+
 def test_a_session_reads_every_frame_then_sees_eof(tmp_path: Path) -> None:
     from seshat.studio.codex_bridge import CodexSession
 

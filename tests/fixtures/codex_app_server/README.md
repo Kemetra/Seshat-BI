@@ -74,6 +74,7 @@ provider's shape, not this field, as authoritative.
 | File | Covers |
 |---|---|
 | `handshake.jsonl` | `initialize` → response → `initialized` |
+| `startup_account.jsonl` | minimal signed-in `account/read` reply used by the startup health probe |
 | `account.jsonl` | `account/read`, `account/rateLimits/read`, signed-out, quota-limited |
 | `login.jsonl` | managed ChatGPT `account/login/start`, completion notification, `account/logout` |
 | `thread_turn.jsonl` | `thread/start`, `turn/start`, visible message deltas, plan, tool items, `turn/completed` |
@@ -83,6 +84,11 @@ provider's shape, not this field, as authoritative.
 | `malformed.jsonl` | invalid JSON, missing `jsonrpc`, unknown id, wrong-typed id, null params |
 | `stderr_secrets.txt` | provider stderr containing secret-shaped values (negative fixture) |
 | `quota.jsonl` | rate-limit exhaustion + reset detail |
+
+The `thread/start` frame uses stable `approvalPolicy: untrusted`. Live Codex 0.147.0
+acceptance demonstrated that it emits the technical approval required by Foundation;
+the granular alternative requires the experimental API capability that Studio does not
+enable. Approval responses use the generated-schema values `accept` and `decline`.
 
 `.jsonl` = one JSON-RPC frame per line, the same newline-delimited framing the
 app-server uses on stdio.

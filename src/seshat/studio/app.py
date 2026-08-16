@@ -29,7 +29,7 @@ from contextlib import asynccontextmanager
 from dataclasses import replace
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import anyio.to_thread
 from fastapi import FastAPI, Request, Response
@@ -412,12 +412,46 @@ def _probe_codex(configured_provider: str) -> tuple[str | None, str | None]:
     return executable, (reported[-1] if reported else None)
 
 
+def _probe_supported_codex_account(
+    workspace_root: Path, executable: str | None, version: str | None
+) -> bool | None:
+    """Return the live account state only when the installed CLI is supported."""
+    if executable is None or not codex_process.is_tested_version(version):
+        return False
+    return codex_bridge.probe_codex_account(
+        codex_process.CodexLaunchPlan.for_workspace(
+            workspace_root, executable=executable
+        )
+    )
+
+
+def _resolve_codex_startup(
+    launch: config.LaunchConfiguration,
+    codex_version: str | None | object,
+    codex_signed_in: bool | None | object,
+) -> tuple[str | None, str | None, bool | None]:
+    """Resolve the executable, version, and account facts used at startup."""
+    if codex_version is not _PROBE_CODEX:
+        executable = None if codex_version is None else "codex"
+        signed_in = False if codex_signed_in is _PROBE_CODEX else codex_signed_in
+        return executable, codex_version, cast("bool | None", signed_in)
+
+    executable, detected_version = _probe_codex(launch.agent_provider)
+    if codex_signed_in is not _PROBE_CODEX:
+        return executable, detected_version, cast("bool | None", codex_signed_in)
+    signed_in = _probe_supported_codex_account(
+        launch.workspace_root, executable, detected_version
+    )
+    return executable, detected_version, signed_in
+
+
 def create_app(
     workspace: Path | str,
     *,
     port: int,
     agent_provider: str = "fake",
     codex_version: str | None = _PROBE_CODEX,
+    codex_signed_in: bool | None | object = _PROBE_CODEX,
 ) -> tuple[FastAPI, str]:
     """Build the app for one pinned workspace, returning it with its bootstrap token.
 
@@ -436,14 +470,12 @@ def create_app(
         config.LaunchConfiguration.for_workspace(workspace).with_bound_port(port),
         agent_provider=agent_provider,
     )
-    #: `codex_version` is an injection seam for tests, which must exercise the
-    #: untested-range and missing-CLI branches without depending on what happens to
-    #: be installed on the machine running them. The sentinel keeps "probe the real
-    #: CLI" distinguishable from an explicit `None` meaning "there is none".
-    if codex_version is _PROBE_CODEX:
-        executable, codex_version = _probe_codex(launch.agent_provider)
-    else:
-        executable = None if codex_version is None else "codex"
+    #: These values are injection seams for tests, which must exercise unsupported,
+    #: missing, signed-out, and crashed branches without depending on the local CLI.
+    #: The sentinel distinguishes a real startup probe from an explicit observation.
+    executable, codex_version, codex_signed_in = _resolve_codex_startup(
+        launch, codex_version, codex_signed_in
+    )
     token = session.generate_bootstrap_token()
 
     @asynccontextmanager
@@ -517,22 +549,15 @@ def create_app(
     #: The health the INTERFACE renders. Derived from the same probe the selection
     #: used, so the two can never disagree: an operator seeing `ready` while the fake
     #: answers is the misreport this whole seam exists to prevent.
-    #: `signed_in=False` because startup ran `codex --version` and NOTHING else: it
-    #: never started the app-server and never called `account/read`, so sign-in state
-    #: is genuinely unknown here. Reporting `True` claimed "Codex is signed in and
-    #: responding" on the strength of a version string -- a signed-out CLI would read
-    #: healthy, and the analyst would learn otherwise only when a turn failed
-    #: generically. The contract requires the probe to distinguish `signed_out`, and
-    #: an unproven claim is worse than a conservative one: `signed_out` names a real
-    #: recovery action, while a false `ready` names none.
-    #:
-    #: A live handshake probe at boot is the right answer and is #618's, not this
-    #: PR's -- it means spawning the app-server before the first turn.
+    #: Account state comes only from the live app-server probe above. A version string
+    #: never proves sign-in, and a probe failure is kept distinct from a successful
+    #: signed-out response so a crashed provider cannot masquerade as a login issue.
     app.state.agent_health = codex_process.classify_health(
         codex_process.ProbeObservations(
             executable_found=executable is not None,
             version=codex_version,
-            signed_in=False,
+            signed_in=codex_signed_in is True,
+            saw_eof=codex_signed_in is None,
             disabled=launch.agent_provider == "fake",
         )
     )
