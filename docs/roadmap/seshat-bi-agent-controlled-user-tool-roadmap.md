@@ -1,9 +1,15 @@
 ## Seshat BI — Agent-Controlled User Tool Roadmap
 
-**Status:** **Draft / Proposed — direction ratified, delivery in progress.** The core
+**Status:** **Draft / Proposed — direction ratified; M1–M7 and M9–M11 delivered, M8
+PARTIAL, M12 open.** The core
 product-direction fork (A-vs-B, see the ✅ callout below) was **ratified B by Ahmed
-Shaaban (owner) 2026-07-07**. M1/M2 are built; M3/M11 and M4/M6/M7/M9/M10 are specced
-(the latter under B). This remains a forward-looking roadmap, NOT part of the delivered
+Shaaban (owner) 2026-07-07**. **M1–M7 and M9–M11 are delivered** — seven of them carry
+an explicit spec-level `BUILT` status (specs 107–113), while M1/M2 and M5 rest on
+shipped-artifact evidence rather than a ratified acceptance record; the reconciliation
+table below states the basis per row. **Two milestones remain open: M8 is PARTIAL**
+(the advisory `seshat doctor` ships, but none of its four deliverables does — see the
+table), and **M12 (Power BI execution adapter)**, which is blocked on ADR 0018
+ratification, not on readiness. This remains a forward-looking roadmap, NOT part of the delivered
 ledger: individual milestones still land through the normal spec → build → gate path,
 and net-new runtime / CI pieces are spec-and-held for review rather than auto-built
 (Principle V — `never_self_grant_approval`; the agent records owner-directed rulings,
@@ -26,6 +32,45 @@ never self-grants). The authoritative delivered ledger remains
 > read those milestones as *"add a CLI-verb wrapper / packaging story over an
 > existing skill"*, NOT as net-new capability. Verify each milestone against
 > `shipped-ideas.yaml` + `.claude/skills/` before speccing it.
+
+> **Reconciliation note (2026-08-16 — milestones vs shipped tree).** This roadmap's
+> milestone statuses had drifted behind the tree. Verified against primary sources,
+> not prose:
+>
+> | Milestone | State | Evidence |
+> |---|---|---|
+> | M0 direction lock | ratified | Option B, owner 2026-07-07 (callout below) |
+> | M1 brand CLI / M2 install | delivered | `seshat` console script in `pyproject.toml` (alongside `retail`); `seshat init`; `docs/install/{user,developer,agent}-install.md`. No spec-level Status line and no `status-claims.yaml` entry backs either. NOTE: spec 119, which owns M2's pipx-installable first-success path, reads `**Status**: implemented` but has **0 of 31 tasks** checked -- do not cite it as acceptance |
+> | M3 user workspace | BUILT | spec 107 `**Status**: **BUILT.**` |
+> | M4 agent control protocol | BUILT | spec 109; `schemas/agent-status.schema.json`; `seshat status --format json` |
+> | M5 first-hour experience | delivered | two governed `built` claims in `docs/quality/status-claims.yaml` (`first-hour-compass-worked-example-store-sales`, `...-doc-...`); the shipped skill + `docs/tools/first-hour-compass.md`. Its four acceptance criteria are about demo BEHAVIOUR and were not re-run for this note |
+> | M6 source onboarding | BUILT (docs-only under B) | spec 110 `**Status**: **BUILT**` |
+> | M7 mapping review UX | BUILT (docs-only under B) | spec 111 `**Status**: **BUILT**` |
+> | M8 workspace doctor | **PARTIAL -- do not treat as done** | The advisory command ships (`seshat doctor`, exit 0; `--strict` exists; default stays advisory), but **none of M8's four deliverables does**. Measured 2026-08-16: `seshat doctor --format json` exits 2 (`parser.py` accepts only `--repo`/`--strict`), and `doctor.py::format_digest` emits a flat severity list -- no JSON, no grouping, no repair hints, no agent-safe stop instructions. Its "output includes next safe action" criterion is unmet: the digest ends by pointing at `seshat check`, not at a next action. The pre-existing advisory verb is NOT delivery of this milestone |
+> | M9 evidence pack | BUILT (docs-only under B) | spec 112 `**Status**: **BUILT**` |
+> | M10 BI delivery layer | BUILT (docs-only under B) | spec 113 `**Status**: **BUILT**` |
+> | M11 distribution maturity | BUILT | spec 108 `**Status**: **BUILT.**` |
+> | **M12 Power BI execution** | **OPEN — owner-gated** | see the corrected constraint in M12 |
+>
+> Two consequences worth stating plainly, because both were traps for the next agent:
+>
+> - **§7's "Recommended Execution Order" and §10's "Immediate Next Action" were
+>   stale.** They instructed the reader to add the `seshat` CLI alias and then spec
+>   user-workspace-init — both shipped in July 2026. Corrected in place; see those
+>   sections.
+> - **M12's stated gate had already opened.** It cited hard rule #6 (no execution
+>   before semantic-model readiness). `mappings/retail_store_sales/readiness-status.yaml`
+>   records **all seven stages `pass`**, `semantic_model_ready` included, with
+>   `publish_ready` re-approved 2026-07-05. The live blocker is now ADR 0018.
+> - **M8 is PARTIAL, and an earlier draft of this note wrongly marked it delivered.**
+>   The advisory `seshat doctor` predates the milestone; none of M8's four deliverables
+>   (JSON output, grouping, repair hints, agent-safe stop instructions) ships, and
+>   `--format json` exits 2. Caught in review of the reconciliation PR itself, which is
+>   why the row now says what was measured rather than what the verb's existence
+>   suggested.
+>
+> **Not covered by this roadmap:** the Studio program (specs 139–152) postdates it
+> and is tracked in `specs/`, not here. See the Studio section added below.
 
 > **✅ RATIFIED: Option B (skill-driven packaging) — Ahmed Shaaban (owner) 2026-07-07.**
 > The product-direction fork below (does *"installable, agent-controlled tool"* mean
@@ -895,6 +940,22 @@ Any CI/release automation changes should be explicitly approved.
 
 ### Current Constraint
 
+> **Corrected 2026-08-16.** The constraint below is the ORIGINAL framing and its
+> readiness precondition has since been met. Hard rule #6 gates execution on
+> semantic-model readiness; `mappings/retail_store_sales/readiness-status.yaml` now
+> records **all seven stages `pass`** (`semantic_model_ready` included, with
+> `publish_ready` re-approved 2026-07-05 by the data owner). That table's own
+> `next_action` states the only remaining step is the live publish via F016.
+>
+> **The live blocker is different and owner-gated.** F016's read-only foundation
+> already shipped — slice 1 (PR #464: adapter contract + docs) and slices 2–4
+> (PR #467: `seshat pbi-mcp doctor|generate-config|preflight`). Slices 5–6 are
+> blocked on **ADR 0018 (`docs/decisions/0018-unpark-f016-power-bi-mcp-execution-adapter.md`),
+> which is `Proposed -- NOT ratified`**, plus three further open owner decisions
+> tracked in issue #469 (vendored vs `npx` runtime default; slice-6 scope timing;
+> F032 owner + supported version range). An agent must never self-grant that
+> ratification.
+
 Roadmap hard rule #6 says there is no Power BI execution before semantic-model readiness; F016 is execution-only, last, and cannot define metrics, mappings, semantic logic, or dashboard design. 
 
 ### Future Direction
@@ -927,6 +988,13 @@ Gated execution adapter.
 ---
 
 # 7. Recommended Execution Order
+
+> **HISTORICAL — do not execute (reconciled 2026-08-16).** Every slice below was
+> delivered in July 2026. They are kept as the record of the order the work was
+> planned in, NOT as instructions. Slice 1 (direction doc) shipped as this file;
+> slice 2 (`seshat` CLI alias) shipped in `pyproject.toml`; slice 3 (user-workspace
+> spec) shipped as spec 107, now `**Status**: **BUILT.**`. Re-running any of them
+> would duplicate shipped work. For what is actually open, see §10.
 
 ## Slice 1 — Product Direction Doc
 
@@ -1220,38 +1288,78 @@ Seshat BI
 
 # 10. Immediate Next Action
 
-The next best action is **not code**.
+> **Rewritten 2026-08-16.** The previous text here instructed the reader to write the
+> direction doc, add the `seshat` CLI alias, then spec user-workspace-init. All three
+> shipped in July 2026, so following it would have duplicated delivered work. The
+> superseded text is preserved in git history.
 
-The next best action is to create the docs-only direction slice:
+**On this roadmap, two milestones remain: M8 (workspace doctor) is PARTIAL and IS
+agent-buildable; M12 (Power BI execution adapter) is owner-gated.**
 
-```text
-docs: define Seshat BI user-tool direction
-```
+**M8 — the agent-buildable one.** The advisory `seshat doctor` ships, but none of M8's
+four deliverables does: JSON output (`--format json` exits 2 today), human-readable
+grouping, non-mutating repair hints, and agent-safe stop instructions. Its "output
+includes next safe action" criterion is also unmet. Anyone picking this up should spec
+it normally rather than reading the existing verb as delivery.
 
-With this file:
-
-```text
-docs/roadmap/seshat-bi-agent-controlled-user-tool-roadmap.md
-```
-
-and optionally:
-
-```text
-docs/product/seshat-bi-product-direction.md
-```
-
-After that, the first implementation slice should be:
+**M12 — the owner-gated one.** The next action there is an owner decision, not code:
 
 ```text
-feat: add seshat CLI alias
+ratify ADR 0018 (docs/decisions/0018-unpark-f016-power-bi-mcp-execution-adapter.md)
 ```
 
-Then:
+It is currently `Proposed -- NOT ratified`. Ratifying it unblocks F016 slices 5–6
+(approval-gated mutations, then the optional query-only remote server). Issue #469
+carries three further open owner decisions alongside it: vendored vs `npx` runtime
+default, whether slice 6 is in scope now or after slice 5 proves out, and the F032
+owner + supported version range. **An agent must never self-grant that ratification**
+(Principle V — `never_self_grant_approval`).
 
-```text
-spec: user workspace initialization
-```
+Beyond M8 above, further agent-buildable work lives in `specs/` rather than on this
+roadmap — see the Studio section below, and `specs/139-seshat-studio-foundation/tasks.md`
+for the current open items.
 
-This keeps the work professional, reviewable, and aligned with the repo’s existing governance.
+---
+
+# 11. Beyond This Roadmap — the Studio Program (specs 139–152)
+
+**Added 2026-08-16 during reconciliation.** This roadmap was authored 2026-07-07 and
+predates the Studio program entirely; before this note, `docs/roadmap/` did not mention
+it. The program is tracked in `specs/`, which stays authoritative — this section exists
+so a reader of the roadmap knows it is there.
+
+| Spec | State |
+|---|---|
+| 139 seshat-studio-foundation | **35 done, 3 open** (T032 + owner-gated T036/T037) |
+| 140 studio-governed-workbench | `spec.md` only — **gated** on 139 acceptance |
+| 141 studio-operations-client-review | `spec.md` only — **gated** on 139 + 140 |
+| 142 capability-ownership-fields | 32 done, 0 open |
+| 143 official-first-graph | 17 done, 0 open |
+| 144 integration-control-plane | 15 done, 0 open |
+| 145 powerbi-ownership-routing | 8 done, 0 open |
+| 146 dbt-official-delegation | 7 done, 0 open |
+| 147 dagster-official-delegation | 8 done, 0 open |
+| 148 official-skill-discovery | 8 done, 0 open |
+| 150 dbt-evidence-consumer | 15 done, 0 open |
+| 151 speckit-fork-removal | 22 done, 0 open |
+| 152 self-protecting-architecture | 16 done, 0 open |
+
+(There is no spec 149 — the range 139–152 is not contiguous.)
+
+"0 open" above means **zero unchecked tasks**, not "ratified". Specs 142–148, 150 and
+151 each carry a `ratify-ledger.md`; **152 does not**. Read the counts as task state,
+not as an acceptance record.
+
+**Specs 140 and 141 are `spec.md`-only for a reason, and it is not neglect.** Each
+states its own gate: 140 requires "specification and ratification ... after spec 139 is
+accepted"; 141 depends on 139 *and* 140 being accepted. Spec 139's **T037 is that
+acceptance**, and T037 is explicitly the claim that "cannot be checked by the agent that
+built the work". So the two remaining Studio tiers are gated behind an owner decision,
+exactly like M12 above.
+
+> **Do not read 140/141's missing `tasks.md` as unplanned work.** The same shape means
+> something different elsewhere in `specs/`: 110–113 are also `spec.md`-only, but each
+> carries `**Status**: **BUILT**` because Option B delivered them as docs-only. Always
+> read the spec's own Status line before concluding a spec stalled.
 
 ---
