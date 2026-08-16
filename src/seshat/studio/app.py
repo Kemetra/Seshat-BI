@@ -29,7 +29,7 @@ from contextlib import asynccontextmanager
 from dataclasses import replace
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import anyio.to_thread
 from fastapi import FastAPI, Request, Response
@@ -412,6 +412,39 @@ def _probe_codex(configured_provider: str) -> tuple[str | None, str | None]:
     return executable, (reported[-1] if reported else None)
 
 
+def _probe_supported_codex_account(
+    workspace_root: Path, executable: str | None, version: str | None
+) -> bool | None:
+    """Return the live account state only when the installed CLI is supported."""
+    if executable is None or not codex_process.is_tested_version(version):
+        return False
+    return codex_bridge.probe_codex_account(
+        codex_process.CodexLaunchPlan.for_workspace(
+            workspace_root, executable=executable
+        )
+    )
+
+
+def _resolve_codex_startup(
+    launch: config.LaunchConfiguration,
+    codex_version: str | None | object,
+    codex_signed_in: bool | None | object,
+) -> tuple[str | None, str | None, bool | None]:
+    """Resolve the executable, version, and account facts used at startup."""
+    if codex_version is not _PROBE_CODEX:
+        executable = None if codex_version is None else "codex"
+        signed_in = False if codex_signed_in is _PROBE_CODEX else codex_signed_in
+        return executable, codex_version, cast("bool | None", signed_in)
+
+    executable, detected_version = _probe_codex(launch.agent_provider)
+    if codex_signed_in is not _PROBE_CODEX:
+        return executable, detected_version, cast("bool | None", codex_signed_in)
+    signed_in = _probe_supported_codex_account(
+        launch.workspace_root, executable, detected_version
+    )
+    return executable, detected_version, signed_in
+
+
 def create_app(
     workspace: Path | str,
     *,
@@ -437,28 +470,12 @@ def create_app(
         config.LaunchConfiguration.for_workspace(workspace).with_bound_port(port),
         agent_provider=agent_provider,
     )
-    #: `codex_version` is an injection seam for tests, which must exercise the
-    #: untested-range and missing-CLI branches without depending on what happens to
-    #: be installed on the machine running them. The sentinel keeps "probe the real
-    #: CLI" distinguishable from an explicit `None` meaning "there is none".
-    if codex_version is _PROBE_CODEX:
-        executable, codex_version = _probe_codex(launch.agent_provider)
-        if (
-            codex_signed_in is _PROBE_CODEX
-            and executable is not None
-            and codex_process.is_tested_version(codex_version)
-        ):
-            codex_signed_in = codex_bridge.probe_codex_account(
-                codex_process.CodexLaunchPlan.for_workspace(
-                    launch.workspace_root, executable=executable
-                )
-            )
-    else:
-        executable = None if codex_version is None else "codex"
-    if codex_signed_in is _PROBE_CODEX:
-        # An explicitly injected version is a test/embedding seam, not evidence of
-        # account state. Callers that know the probe result inject it explicitly.
-        codex_signed_in = False
+    #: These values are injection seams for tests, which must exercise unsupported,
+    #: missing, signed-out, and crashed branches without depending on the local CLI.
+    #: The sentinel distinguishes a real startup probe from an explicit observation.
+    executable, codex_version, codex_signed_in = _resolve_codex_startup(
+        launch, codex_version, codex_signed_in
+    )
     token = session.generate_bootstrap_token()
 
     @asynccontextmanager
