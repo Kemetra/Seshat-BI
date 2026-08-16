@@ -1,5 +1,28 @@
 # Seshat BI -- Roadmap
 
+> **Scope note (2026-08-16).** This file is the **delivered ledger** for the
+> **F-numbered** sequence: what shipped, with commit refs. It is deliberately
+> backward-looking. Two things it does NOT cover, so a reader does not mistake its
+> silence for absence:
+>
+> - **Forward product direction** lives in
+>   `docs/roadmap/seshat-bi-agent-controlled-user-tool-roadmap.md` (milestones M0-M12,
+>   Option B ratified 2026-07-07). M1-M7 and M9-M11 are delivered -- seven carry an
+>   explicit spec-level BUILT status; M1/M2 and M5 rest on shipped-artifact evidence
+>   only, which that file's table states per row. TWO milestones remain open: M8 is
+>   PARTIAL (the advisory `seshat doctor` ships, but none of its four deliverables
+>   does -- and it is agent-buildable), and M12 is owner-gated on ADR 0018.
+> - **The Studio program (specs 139-152)** is tracked in `specs/`, on a different
+>   numbering axis, and is not F-numbered at all. As of 2026-08-16 spec 139 has 3 open
+>   tasks: T032 is narrowed, but its remainder (reduced motion, responsive layout,
+>   focus-ring visibility) needs the browser work that sits with owner-gated T036, and
+>   T036/T037 are owner-gated outright. Specs 140/141 are gated behind 139's
+>   acceptance; 142-148 and 150-152 have zero open tasks (there is no spec 149). See
+>   section 11 of the milestone roadmap for the table.
+>
+> The F016 row in the 2026-06-26 closure section below carries a dated correction: its
+> readiness gate has since opened, and the block moved to ADR 0018.
+
 - **Status:** Delivered ledger + a partly-shipped companion tier. As of 2026-06-25 the
   entire originally-spec'd sequence (F005-F015, incl. F011A) is **SHIPPED** to
   `main`; **F016 (the Power BI execution adapter -- official Power BI MCP /
@@ -48,6 +71,14 @@ for any deferred/gated item).
 
 - **F016 (Power BI execution adapter)** -- gated by hard rule #6 (not startable
   before Semantic Model Ready is `pass`); execution-only; deliberately last.
+  > **Superseded 2026-08-16 (the gate moved, the block did not).** As written above
+  > this was accurate on 2026-06-26. Since then Semantic Model Ready reached `pass`
+  > (`mappings/retail_store_sales/readiness-status.yaml` -- all seven stages pass,
+  > `publish_ready` re-approved 2026-07-05), so hard rule #6 no longer blocks F016,
+  > and the read-only foundation SHIPPED: slice 1 (PR #464) and slices 2-4
+  > (PR #467, `seshat pbi-mcp doctor|generate-config|preflight`). Slices 5-6 are now
+  > blocked on **ADR 0018 being `Proposed -- NOT ratified`** plus three further open
+  > owner decisions (issue #469). Still owner-gated, for a different reason.
 - **F034 built page** -- a human builds the approved design in Power BI Desktop and
   commits the PBIR; the agent's procedure + trace + review are ready, and the gate
   already permits the build.
