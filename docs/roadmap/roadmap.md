@@ -13,12 +13,16 @@
 >   PARTIAL (the advisory `seshat doctor` ships, but none of its four deliverables
 >   does -- and it is agent-buildable), and M12 is owner-gated on ADR 0018.
 > - **The Studio program (specs 139-152)** is tracked in `specs/`, on a different
->   numbering axis, and is not F-numbered at all. As of 2026-08-16 spec 139 has 3 open
->   tasks: T032 is narrowed, but its remainder (reduced motion, responsive layout,
->   focus-ring visibility) needs the browser work that sits with owner-gated T036, and
->   T036/T037 are owner-gated outright. Specs 140/141 are gated behind 139's
->   acceptance; 142-148 and 150-152 have zero open tasks (there is no spec 149). See
->   section 11 of the milestone roadmap for the table.
+>   numbering axis, and is not F-numbered at all. **Spec 139 closed 2026-08-16
+>   (38/38 tasks, PR #652).** Its last three tasks landed together: T036's external
+>   signed-in Codex acceptance (Codex 0.147.0 through managed ChatGPT sign-in) also
+>   supplied the running-browser evidence that closed T032's remainder (installed Edge:
+>   zero serious/critical axe findings, visible focus ring, 390px responsive layout,
+>   reduced motion), and the owner then approved T037 plus the scoped T034 redaction
+>   ruling. **Spec 140 is therefore unblocked** and now awaits specification +
+>   owner ratification; 141 stays gated behind 140. Specs 142-148 and 150-152 have
+>   zero open tasks (there is no spec 149). See section 11 of the milestone roadmap
+>   for the table.
 >
 > The F016 row in the 2026-06-26 closure section below carries a dated correction: its
 > readiness gate has since opened, and the block moved to ADR 0018.

@@ -1316,8 +1316,8 @@ owner + supported version range. **An agent must never self-grant that ratificat
 (Principle V — `never_self_grant_approval`).
 
 Beyond M8 above, further agent-buildable work lives in `specs/` rather than on this
-roadmap — see the Studio section below, and `specs/139-seshat-studio-foundation/tasks.md`
-for the current open items.
+roadmap — see the Studio section below. Spec 139 closed at 38/38 on 2026-08-16, so the
+next Studio work is **specifying spec 140**, not finishing 139.
 
 ---
 
@@ -1330,9 +1330,9 @@ so a reader of the roadmap knows it is there.
 
 | Spec | State |
 |---|---|
-| 139 seshat-studio-foundation | **35 done, 3 open** (T032 + owner-gated T036/T037) |
-| 140 studio-governed-workbench | `spec.md` only — **gated** on 139 acceptance |
-| 141 studio-operations-client-review | `spec.md` only — **gated** on 139 + 140 |
+| 139 seshat-studio-foundation | **38 done, 0 open** — closed 2026-08-16 (PR #652) |
+| 140 studio-governed-workbench | `spec.md` only — **unblocked 2026-08-16**; awaits specification + owner ratification |
+| 141 studio-operations-client-review | `spec.md` only — **gated** on 140 |
 | 142 capability-ownership-fields | 32 done, 0 open |
 | 143 official-first-graph | 17 done, 0 open |
 | 144 integration-control-plane | 15 done, 0 open |
@@ -1354,8 +1354,15 @@ not as an acceptance record.
 states its own gate: 140 requires "specification and ratification ... after spec 139 is
 accepted"; 141 depends on 139 *and* 140 being accepted. Spec 139's **T037 is that
 acceptance**, and T037 is explicitly the claim that "cannot be checked by the agent that
-built the work". So the two remaining Studio tiers are gated behind an owner decision,
-exactly like M12 above.
+built the work".
+
+**That acceptance happened on 2026-08-16.** The owner approved T037 (with the scoped
+T034 redaction ruling) after T036's external signed-in Codex run and the running-browser
+evidence it produced, closing spec 139 at 38/38. **Spec 140's gate is therefore open**:
+its next step is specification + owner ratification, which is ordinary spec work, not a
+blocked wait. **141 remains gated on 140.** Only one of the two remaining Studio tiers
+is still waiting on a prior acceptance — unlike M12, which is blocked on an unratified
+ADR and is not startable at all.
 
 > **Do not read 140/141's missing `tasks.md` as unplanned work.** The same shape means
 > something different elsewhere in `specs/`: 110–113 are also `spec.md`-only, but each
