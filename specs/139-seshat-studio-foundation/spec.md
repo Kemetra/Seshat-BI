@@ -4,9 +4,9 @@
 
 **Created**: 2026-08-03
 
-**Status**: ratified -- Ahmed Shaaban (owner), 2026-08-03; activation pending the single-plan fence
+**Status**: implemented -- all 38 tasks complete; accepted by Ahmed Shaaban, 2026-08-16
 
-**Status history**: draft
+**Status history**: ratified -- Ahmed Shaaban (owner), 2026-08-03; activated 2026-08-10
 
 <!-- The owner explicitly ratified this exact specification, plan, contracts,
      and task list on 2026-08-03. Ratification does not activate implementation:

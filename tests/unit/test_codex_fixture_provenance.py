@@ -34,6 +34,7 @@ FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "codex_app_serv
 #: Frames Studio sends or receives on the happy path. Each must parse as JSON-RPC.
 WELL_FORMED_FILES = (
     "handshake.jsonl",
+    "startup_account.jsonl",
     "account.jsonl",
     "login.jsonl",
     "thread_turn.jsonl",

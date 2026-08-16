@@ -3,11 +3,9 @@
 **Input**: [spec.md](./spec.md), [plan.md](./plan.md), [research.md](./research.md),
 [data-model.md](./data-model.md), and [contracts](./contracts/).
 
-**Status**: ratified and ACTIVE for implementation as of 2026-08-10. Phase 1
-(governance preconditions) and Phase 2 (package and security skeleton) are closed, and
-Phase 3 is underway: T009/T010 (the deterministic projection) are done; **T011 (typed
-endpoints) is next** and carries the deferred half of Phase 2 plus three items from the
-Phase 3 review — see its entry.
+**Status**: implemented as of 2026-08-16. All 38 tasks are complete, including the
+external Codex/browser acceptance and Ahmed Shaaban's named-human Foundation review.
+The sole active Spec Kit fence has been retired to its no-active-plan state.
 
 Four contract defects were found and fixed before T010 was written, because a truthful
 projection could not have validated against the shipped contract: `StageState.status`
@@ -613,7 +611,7 @@ projection, endpoints, frontend, journey, and health.
 
 ## Phase 8 - Accessibility, Packaging, and Acceptance
 
-- [ ] **T032** Run keyboard, focus, contrast, reduced-motion, non-color status,
+- [x] **T032** Run keyboard, focus, contrast, reduced-motion, non-color status,
   responsive layout, and axe browser acceptance over all critical states; fix every
   critical or serious finding. [FR-031, SC-007]
 
@@ -692,6 +690,14 @@ projection, endpoints, frontend, journey, and health.
   `node:fs` in a test does not typecheck because tsconfig ships no `@types/node` by
   design. `@types/node` was added for `vitest.config.ts` ONLY, which already runs on Node;
   `src/` stays browser-shaped, and the palette still has one source of truth on disk.
+
+  **Closed 2026-08-16 through T036's running-browser acceptance.** Installed Edge
+  rendered the loopback Studio app. Browser axe reported zero serious or critical
+  findings; the composer showed a computed 2 px focus outline; the document had no
+  horizontal overflow at 390 x 844; and emulated `prefers-reduced-motion: reduce`
+  reduced all computed animation and transition durations to at most 0.01 ms. This
+  supplies the rendering-engine evidence deliberately deferred above. Full redacted
+  evidence is in `evidence/t036-external-codex-acceptance.md`.
 - [x] **T033** Build sdist/wheel and test clean base and Studio-extra installs with no
   Node runtime and no remote asset fetch. [SC-008]
 
@@ -824,28 +830,35 @@ projection, endpoints, frontend, journey, and health.
     names a human recomputation and is not a Studio finding).
   - `seshat semantic-check` — **0 findings**.
   - `seshat kit-lint` — no projection drift.
-- [ ] **T036** Run external signed-in Codex acceptance and record versioned,
+- [x] **T036** Run external signed-in Codex acceptance and record versioned,
   redacted subscription evidence with no API credential. [SC-001, SC-003, SC-010]
-- [ ] **T037** Map SC-001 through SC-010 to fresh evidence, review every FR and edge
+
+  **Closed 2026-08-16.** Codex 0.147.0, authenticated through the managed ChatGPT
+  subscription with no `OPENAI_API_KEY`, reported healthy in Studio. A real read-only
+  turn completed in order; a second real turn emitted a command approval, Studio denied
+  it once, Codex completed, the marker remained absent, and the tracked workspace was
+  unchanged. Installed Edge also rendered the loopback app; axe, focus, mobile, and
+  reduced-motion checks passed. Redacted evidence: `evidence/t036-external-codex-acceptance.md`.
+- [x] **T037** Map SC-001 through SC-010 to fresh evidence, review every FR and edge
   case, and request independent code review before claiming Foundation complete.
 
-  **Mapped 2026-08-13/14; the box stays OPEN because two criteria are unmet and one
-  is owner-gated.** T037 is the claim that Foundation is complete, so it cannot be
-  checked by the agent that built the work — and three rows below are honestly
-  incomplete regardless.
+  **Closed 2026-08-16 by named human Ahmed Shaaban.** All success-criteria rows have
+  fresh evidence. After the external Codex and running-browser acceptance closed T036,
+  Ahmed explicitly approved T037 and the scoped T034 redaction ruling in the Codex
+  session. The agent did not self-grant this approval.
 
   | SC | Status | Evidence |
   |---|---|---|
-  | SC-001 first-time analyst, authenticated Codex | **OWNER-GATED** | needs T036 |
+  | SC-001 first-time analyst, authenticated Codex | met | T036: real Codex 0.147.0 through managed ChatGPT sign-in, healthy before/after |
   | SC-002 every stage/evidence/blocker projected | met | `test_studio_projection_*`, fixture parity |
-  | SC-003 ordered streamed turn | **OWNER-GATED** for the real provider | fake path green; T023 (2026-08-14) also runs the contract suite over the real `CodexBridge` against a scripted child, so ordering and framing hold on the production code path; `test_studio_codex_real` still cannot run here (no Codex binary) |
+  | SC-003 ordered streamed turn | met | T036 real-provider event sequence plus scripted bridge contract suite |
   | SC-004 seven agent health states | met | `AgentHealth` suite; T023 additionally walks `ALL_HEALTH_STATES` × `credential_present` both ways in `test_studio_bridge_selection`, which is what pins FR-013's no-automatic-fallback (42/68 fail when the fail-open is injected) |
   | SC-005 approval paused until allow/deny, decide-once | met | 50 approval tests + `test_studio_approval_pause` |
   | SC-006 refused requests disclose nothing | met | `test_studio_boundary_corpus` (7), falsified by planting a `workspace_root` leak |
-  | SC-007 no critical/serious a11y violations | **PARTIAL** | axe over 5 states (0 critical/serious); contrast now computed from the tokens and keyboard/focus driven with real input, 2026-08-14 — 147 frontend tests, CI-enforced via `build_studio_frontend.py`. Reduced motion, responsive layout, focus-ring visibility, and axe over the RUNNING app still need a rendering engine (T032 note; browser work sits with T036) |
-  | SC-008 wheel opens Studio with Python + browser only | **met for the server; browser render is T036** | T033 closed 2026-08-14: 4/4 install legs (wheel+sdist × base+`[studio]`) against the REAL launcher with Node stripped from PATH; every asset 200 from loopback, zero non-loopback requests; falsified by deleting `static/`. `evidence/t033-install-acceptance.md`. Driving an actual browser remains T036 |
+  | SC-007 no critical/serious a11y violations | met | 147 frontend tests plus T036 running-Edge acceptance: 0 serious/critical axe findings, visible focus ring, 390 px responsive layout, reduced motion |
+  | SC-008 wheel opens Studio with Python + browser only | met | T033 4/4 install legs with Node stripped plus T036 installed-Edge render of the loopback app |
   | SC-009 existing gates stay green | met | T035 above: stack is +19 passing / one fewer failure than `main` |
-  | SC-010 external subscription acceptance | **OWNER-GATED** | needs T036 |
+  | SC-010 external subscription acceptance | met | T036: managed ChatGPT subscription, no API key inherited, real turn and denied approval completed |
 
   **FR sweep — the ones this session touched or changed:** FR-005 (#636), FR-018/019/
   020/021 (#632, #633), FR-022 (#635), FR-026 (#637 corpus + the redaction-scope
@@ -859,9 +872,9 @@ projection, endpoints, frontend, journey, and health.
   end-of-Foundation review this task asks for, which belongs to a named human who did
   not build the work.
 
-  **What a human must do to close T037**: run T036, decide the two PARTIAL rows
-  (accept as-is or require the browser/packaging passes), and review the scoped
-  redaction ruling recorded under T034.
+  **Named-human closure:** Ahmed Shaaban approved the completed Foundation review and
+  scoped T034 redaction ruling on 2026-08-16. T036 and the former browser/packaging
+  partials were already closed before this approval was recorded.
 
 ## Dependencies
 

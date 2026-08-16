@@ -418,6 +418,7 @@ def create_app(
     port: int,
     agent_provider: str = "fake",
     codex_version: str | None = _PROBE_CODEX,
+    codex_signed_in: bool | None | object = _PROBE_CODEX,
 ) -> tuple[FastAPI, str]:
     """Build the app for one pinned workspace, returning it with its bootstrap token.
 
@@ -442,8 +443,22 @@ def create_app(
     #: CLI" distinguishable from an explicit `None` meaning "there is none".
     if codex_version is _PROBE_CODEX:
         executable, codex_version = _probe_codex(launch.agent_provider)
+        if (
+            codex_signed_in is _PROBE_CODEX
+            and executable is not None
+            and codex_process.is_tested_version(codex_version)
+        ):
+            codex_signed_in = codex_bridge.probe_codex_account(
+                codex_process.CodexLaunchPlan.for_workspace(
+                    launch.workspace_root, executable=executable
+                )
+            )
     else:
         executable = None if codex_version is None else "codex"
+    if codex_signed_in is _PROBE_CODEX:
+        # An explicitly injected version is a test/embedding seam, not evidence of
+        # account state. Callers that know the probe result inject it explicitly.
+        codex_signed_in = False
     token = session.generate_bootstrap_token()
 
     @asynccontextmanager
@@ -517,22 +532,15 @@ def create_app(
     #: The health the INTERFACE renders. Derived from the same probe the selection
     #: used, so the two can never disagree: an operator seeing `ready` while the fake
     #: answers is the misreport this whole seam exists to prevent.
-    #: `signed_in=False` because startup ran `codex --version` and NOTHING else: it
-    #: never started the app-server and never called `account/read`, so sign-in state
-    #: is genuinely unknown here. Reporting `True` claimed "Codex is signed in and
-    #: responding" on the strength of a version string -- a signed-out CLI would read
-    #: healthy, and the analyst would learn otherwise only when a turn failed
-    #: generically. The contract requires the probe to distinguish `signed_out`, and
-    #: an unproven claim is worse than a conservative one: `signed_out` names a real
-    #: recovery action, while a false `ready` names none.
-    #:
-    #: A live handshake probe at boot is the right answer and is #618's, not this
-    #: PR's -- it means spawning the app-server before the first turn.
+    #: Account state comes only from the live app-server probe above. A version string
+    #: never proves sign-in, and a probe failure is kept distinct from a successful
+    #: signed-out response so a crashed provider cannot masquerade as a login issue.
     app.state.agent_health = codex_process.classify_health(
         codex_process.ProbeObservations(
             executable_found=executable is not None,
             version=codex_version,
-            signed_in=False,
+            signed_in=codex_signed_in is True,
+            saw_eof=codex_signed_in is None,
             disabled=launch.agent_provider == "fake",
         )
     )
