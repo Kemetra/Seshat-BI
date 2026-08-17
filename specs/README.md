@@ -58,9 +58,17 @@ are append-only historical records of task lists as they were written, and most 
 described features already shipped. Nobody goes back to tick the boxes once work lands,
 so the checkbox state drifts from reality and stays stale indefinitely.
 
-There is no command that answers "did this spec's work land". Check it by hand: read the
-spec's own Deliverables / non-goals, then confirm each named artifact exists on disk. Two
-surfaces are NOT that check, and reaching for either gives a false answer:
+There is no command that answers "did this spec's work land". Check it by hand, and note
+that existence is the WEAKEST form of the check: read the spec's own Deliverables,
+non-goals, and success/acceptance criteria, then verify EVERY deliverable and EVERY
+criterion -- not just that some files are present. A spec's criteria routinely demand
+behaviour a path cannot show; `020-readiness-viewer/spec.md:352-360` (SC-001/SC-002)
+additionally requires valid frontmatter, ASCII with no BOM, harness registration, generic
+content, `retail check` still exit 0, and a green suite. Treating "the file is there" as
+"the work landed" reproduces the very false-positive this section warns about. The lists
+below are a starting index, not a completed audit.
+
+Two surfaces are NOT that check, and reaching for either gives a false answer:
 
 - `seshat spec-status <spec.md>` only validates the grammar of the spec's `**Status**:`
   line (`src/seshat/spec_status_policy.py::validate_spec_file`); it never looks for the
@@ -75,19 +83,22 @@ surfaces are NOT that check, and reaching for either gives a false answer:
   as a linter or an adapter shipped. For per-table data work, `seshat next` /
   `seshat status` remain the authority.
 
-Verified examples, checked against each spec's own named deliverables rather than
-against unrelated CLI surface -- note that 020 lists "any new `retail check` rule,
-Python module, or CLI verb" among its NON-goals (`020-readiness-viewer/spec.md:440`), so
-a responding `seshat` verb would prove nothing about it either way:
+Examples, indexed against each spec's own named deliverables rather than against
+unrelated CLI surface -- note that 020 lists "any new `retail check` rule, Python module,
+or CLI verb" among its NON-goals (`020-readiness-viewer/spec.md:440`), so a responding
+`seshat` verb would prove nothing about it either way. Each spec's artifacts are present,
+which is why the unchecked boxes are not a backlog; per the paragraph above, presence is
+not a full acceptance audit:
 
-- `specs/020-readiness-viewer/tasks.md` -- 24 unchecked, yet `templates/readiness-view.md`,
-  `docs/tools/readiness-viewer.md`, and `.claude/skills/readiness-viewer/SKILL.md` all exist.
-- `specs/021-approval-console/tasks.md` -- 27 unchecked, yet `templates/approval-request.md`,
-  `templates/approval-decision.md`, `docs/tools/approval-console.md`, and
-  `.claude/skills/approval-console/SKILL.md` all exist.
-- `specs/022-evidence-pack-generator/tasks.md` -- 27 unchecked, yet
-  `templates/evidence-pack-index.md`, `docs/tools/evidence-pack-generator.md`, and
-  `.claude/skills/evidence-pack-generator/SKILL.md` all exist.
+- `specs/020-readiness-viewer/tasks.md` -- 24 unchecked; `templates/readiness-view.md`,
+  `docs/tools/readiness-viewer.md`, `.claude/skills/readiness-viewer/SKILL.md`.
+- `specs/021-approval-console/tasks.md` -- 27 unchecked; `templates/approval-request.md`,
+  `templates/approval-decision.md`, `docs/tools/approval-console.md`,
+  `.claude/skills/approval-console/SKILL.md`.
+- `specs/022-evidence-pack-generator/tasks.md` -- 27 unchecked;
+  `templates/evidence-pack-index.md`, `templates/evidence-pack-summary.md`,
+  `docs/tools/evidence-pack-generator.md`,
+  `.claude/skills/evidence-pack-generator/SKILL.md`.
 
 `specs/139-seshat-studio-foundation/` is the documented exception, not part of this
 stale class: its tasks.md ledger was actively curated, every box carries a written
