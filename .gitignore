@@ -166,4 +166,9 @@ src/seshat/studio/static/
 # freshness gate (spec 136); `orchestration/dagster` uses `uv pip install` only as an
 # INSTALLER, not a uv-managed lockfile workflow. Tracking a lock nothing validates would
 # rot silently and misrepresent a known-good environment.
-uv.lock
+#
+# Anchored with a leading slash: this ignores ONLY the root file. `orchestration/
+# dagster` is a second Python project with its own pyproject that Dependabot
+# watches; if it ever adopts a real uv lockfile workflow, an unanchored pattern
+# would swallow its lock silently.
+/uv.lock
