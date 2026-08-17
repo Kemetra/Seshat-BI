@@ -58,14 +58,22 @@ are append-only historical records of task lists as they were written, and most 
 described features already shipped. Nobody goes back to tick the boxes once work lands,
 so the checkbox state drifts from reality and stays stale indefinitely.
 
-To judge whether one spec's work landed, inspect that spec: `seshat spec-status
-<path-to-spec.md>` is the purpose-built surface, and the decisive check is whether the
-spec's own named deliverables exist on disk. Do NOT reach for `readiness-status.yaml`
-here. `CLAUDE.md` scopes it to a different question -- *"What readiness stage am I
-serving? State lives in `readiness-status.yaml` (per TABLE, recomputed)"* -- which is
-per-table DATA readiness, and it cannot say whether a tool feature such as a linter or
-an adapter shipped. For per-table data work, `seshat next` / `seshat status` remain the
-authority.
+There is no command that answers "did this spec's work land". Check it by hand: read the
+spec's own Deliverables / non-goals, then confirm each named artifact exists on disk. Two
+surfaces are NOT that check, and reaching for either gives a false answer:
+
+- `seshat spec-status <spec.md>` only validates the grammar of the spec's `**Status**:`
+  line (`src/seshat/spec_status_policy.py::validate_spec_file`); it never looks for the
+  work or the artifacts. It exits 1 on all three examples below: each declares the legacy
+  value `Shipped`, which is outside the closed four-value vocabulary ADR 0019 ratified
+  (`draft`, `ratified`, `implemented`, `superseded`), and `020-`/`022-` additionally put
+  that status on the same line as `Created`. A non-zero exit there is a status-line
+  grammar complaint and says nothing about whether the feature shipped.
+- `readiness-status.yaml` answers a different question. `CLAUDE.md` scopes it to *"What
+  readiness stage am I serving? State lives in `readiness-status.yaml` (per TABLE,
+  recomputed)"* -- per-table DATA readiness, which cannot say whether a tool feature such
+  as a linter or an adapter shipped. For per-table data work, `seshat next` /
+  `seshat status` remain the authority.
 
 Verified examples, checked against each spec's own named deliverables rather than
 against unrelated CLI surface -- note that 020 lists "any new `retail check` rule,
