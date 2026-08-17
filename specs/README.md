@@ -41,3 +41,68 @@ exists. Confirmed example:
 
 Takeaway: bare "spec NNN" references cannot be trusted. Always resolve a spec by its
 full slug directory or by the commit / PR that shipped it.
+
+## 4. Unchecked `- [ ]` boxes in most tasks.md files are historical, not a backlog
+
+As measured 2026-08-17 by `grep -lE '^- \[ \]' specs/*/tasks.md`, 93 spec dirs contain
+at least one unchecked checkbox in their `tasks.md`. The set is those 93 specific
+directories -- it is NOT a date or number range, so do not read it as "everything before
+spec N". Several dirs interleaved among them (`132-`, `134-`, `135-`, `136-`, `138-`)
+have zero unchecked boxes, the highest with a gap happens to be `137-` only incidentally,
+and per section 1 the bare numbers here are not reliable references anyway: 8 of the 93
+are the duplicate-numbered pairs section 2 warns about (both `044-`, both `067-`, both
+`087-`, both `088-`). Re-run the grep rather than trusting a remembered boundary.
+
+Read naively, 93 dirs looks like a large open backlog. It is not: these
+are append-only historical records of task lists as they were written, and most of the
+described features already shipped. Nobody goes back to tick the boxes once work lands,
+so the checkbox state drifts from reality and stays stale indefinitely.
+
+There is no command that answers "did this spec's work land". Check it by hand, and note
+that existence is the WEAKEST form of the check: read the spec's own Deliverables,
+non-goals, and success/acceptance criteria, then verify EVERY deliverable and EVERY
+criterion -- not just that some files are present. A spec's criteria routinely demand
+behaviour a path cannot show; `020-readiness-viewer/spec.md:352-360` (SC-001/SC-002)
+additionally requires valid frontmatter, ASCII with no BOM, harness registration, generic
+content, `retail check` still exit 0, and a green suite. Treating "the file is there" as
+"the work landed" reproduces the very false-positive this section warns about. The lists
+below are a starting index, not a completed audit.
+
+Two surfaces are NOT that check, and reaching for either gives a false answer:
+
+- `seshat spec-status <spec.md>` only validates the grammar of the spec's `**Status**:`
+  line (`src/seshat/spec_status_policy.py::validate_spec_file`); it never looks for the
+  work or the artifacts. It exits 1 on all three examples below: each declares the legacy
+  value `Shipped`, which is outside the closed four-value vocabulary ADR 0019 ratified
+  (`draft`, `ratified`, `implemented`, `superseded`), and `020-`/`022-` additionally put
+  that status on the same line as `Created`. A non-zero exit there is a status-line
+  grammar complaint and says nothing about whether the feature shipped.
+- `readiness-status.yaml` answers a different question. `CLAUDE.md` scopes it to *"What
+  readiness stage am I serving? State lives in `readiness-status.yaml` (per TABLE,
+  recomputed)"* -- per-table DATA readiness, which cannot say whether a tool feature such
+  as a linter or an adapter shipped. For per-table data work, `seshat next` /
+  `seshat status` remain the authority.
+
+Examples, indexed against each spec's own named deliverables rather than against
+unrelated CLI surface -- note that 020 lists "any new `retail check` rule, Python module,
+or CLI verb" among its NON-goals (`020-readiness-viewer/spec.md:440`), so a responding
+`seshat` verb would prove nothing about it either way. Each spec's artifacts are present,
+which is why the unchecked boxes are not a backlog; per the paragraph above, presence is
+not a full acceptance audit:
+
+- `specs/020-readiness-viewer/tasks.md` -- 24 unchecked; `templates/readiness-view.md`,
+  `docs/tools/readiness-viewer.md`, `.claude/skills/readiness-viewer/SKILL.md`.
+- `specs/021-approval-console/tasks.md` -- 27 unchecked; `templates/approval-request.md`,
+  `templates/approval-decision.md`, `docs/tools/approval-console.md`,
+  `.claude/skills/approval-console/SKILL.md`.
+- `specs/022-evidence-pack-generator/tasks.md` -- 27 unchecked;
+  `templates/evidence-pack-index.md`, `templates/evidence-pack-summary.md`,
+  `docs/tools/evidence-pack-generator.md`,
+  `.claude/skills/evidence-pack-generator/SKILL.md`.
+
+`specs/139-seshat-studio-foundation/` is the documented exception, not part of this
+stale class: its tasks.md ledger was actively curated, every box carries a written
+rationale, and it closed 38/38 with named-human approval by Ahmed Shaaban on
+2026-08-16. Do not lump `139-` in with the checkbox noise described above, and do not
+treat an unticked box elsewhere as evidence of missing work on its own. Ticking those 93
+dirs' boxes retroactively is an owner call, not done here.
