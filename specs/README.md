@@ -41,3 +41,35 @@ exists. Confirmed example:
 
 Takeaway: bare "spec NNN" references cannot be trusted. Always resolve a spec by its
 full slug directory or by the commit / PR that shipped it.
+
+## 4. Unchecked `- [ ]` boxes in pre-139 tasks.md files are historical, not a backlog
+
+As measured 2026-08-17 by `grep -lE '^- \[ \]' specs/*/tasks.md`, 93 spec dirs contain
+at least one unchecked checkbox in their `tasks.md`, and the highest-numbered dir in
+that list is 137. Read naively, this looks like a large open backlog. It is not: these
+are append-only historical records of task lists as they were written, and most of the
+described features already shipped. Nobody goes back to tick the boxes once work lands,
+so the checkbox state drifts from reality and stays stale indefinitely.
+
+The authoritative state for what is actually outstanding is `readiness-status.yaml`
+(recomputed per table), surfaced via `seshat next` / `seshat status` -- see
+`CLAUDE.md`. A genuine open-work signal looks like `seshat next` returning
+`terminal_pass` with named open owner-approval requests attached, not an unticked box
+in a two-year-old tasks.md.
+
+Verified examples: `specs/020-readiness-viewer/tasks.md` has 24 unchecked boxes, yet
+`seshat --help` lists the `dashboard`, `watch`, `pack`, `approvals`, and `evidence-pack`
+verbs it describes, all responding to `--help` with real usage. `specs/021-approval-console/tasks.md`
+has 27 unchecked boxes, yet `seshat approvals --help` responds with real usage, backed
+by `src/seshat/approval_inbox.py` and `src/seshat/approval_requests.py`, with
+`tests/unit/test_approval_inbox.py` and `tests/unit/test_approval_requests.py` passing.
+`specs/022-evidence-pack-generator/tasks.md` has 27 unchecked boxes, yet `seshat
+evidence-pack --help` responds with real usage, backed by `src/seshat/evidence_pack.py`,
+with `tests/unit/test_evidence_pack.py` passing.
+
+`specs/139-seshat-studio-foundation/` is the documented exception, not part of this
+stale class: its tasks.md ledger was actively curated, every box carries a written
+rationale, and it closed 38/38 with named-human approval by Ahmed Shaaban on
+2026-08-16. Do not lump 139 in with the pre-139 checkbox noise, and do not treat an
+unticked box elsewhere as evidence of missing work on its own. Ticking the pre-139
+boxes retroactively is an owner call, not done here.
