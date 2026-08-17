@@ -55,7 +55,7 @@ The authoritative state for what is actually outstanding is `readiness-status.ya
 (recomputed per table), surfaced via `seshat next` / `seshat status` -- see
 `CLAUDE.md`. A genuine open-work signal looks like `seshat next` returning
 `terminal_pass` with named open owner-approval requests attached, not an unticked box
-in a two-year-old tasks.md.
+in a tasks.md nobody has revisited since the feature landed.
 
 Verified examples: `specs/020-readiness-viewer/tasks.md` has 24 unchecked boxes, yet
 `seshat --help` lists the `dashboard`, `watch`, `pack`, `approvals`, and `evidence-pack`
