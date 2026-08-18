@@ -81,8 +81,14 @@ for any deferred/gated item).
   > `publish_ready` re-approved 2026-07-05), so hard rule #6 no longer blocks F016,
   > and the read-only foundation SHIPPED: slice 1 (PR #464) and slices 2-4
   > (PR #467, `seshat pbi-mcp doctor|generate-config|preflight`). Slices 5-6 are now
-  > blocked on **ADR 0018 being `Proposed -- NOT ratified`** plus three further open
-  > owner decisions (issue #469). Still owner-gated, for a different reason.
+  > unblocked at the ADR level: **ADR 0018 was RATIFIED by the owner on 2026-08-18**,
+  > so its terms of entry are BINDING and the park is lifted. Slice 5 still needs its
+  > own spec (ADR decision 1: the spec is authored AFTER ratification) and is NOT
+  > built; slice 6 remains gated on ADR decision 7. Of the three further "open owner
+  > decisions" in issue #469, `npx`-vs-vendored was already settled by ADR 0018 itself
+  > (vendoring is a rejected alternative) and the F032 row is externally blocked (both
+  > Microsoft servers are public preview with no release to pin), leaving slice-6
+  > timing as the only one genuinely open.
 - **F034 built page** -- a human builds the approved design in Power BI Desktop and
   commits the PBIR; the agent's procedure + trace + review are ready, and the gate
   already permits the build.

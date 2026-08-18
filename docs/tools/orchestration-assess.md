@@ -71,9 +71,9 @@ it never asserts that the customer must adopt.
   reports missing `dbt_project.yml` / `selectors.yml`.
 - dagster: `seshat dagster init` then `seshat dagster doctor`.
 - Power BI MCP: `seshat pbi-mcp doctor`, then `pbi-mcp generate-config` and
-  `pbi-mcp preflight`. **The read-only family only.** ADR 0018 is `Proposed` and
-  NOT ratified, so F016 execution stays parked -- this command never advertises a
-  state-changing mode, because that would advise a capability the governing ADR
-  has not authorized.
+  `pbi-mcp preflight`. **The read-only family only.** ADR 0018 is RATIFIED
+  (2026-08-18), but ratification armed the TERMS, not a build: slice 5 still needs
+  its own spec, so no write path exists -- this command never advertises a
+  state-changing mode, because that would advise a capability that is not built.
 
 The command prints these as guidance. It never runs them.
