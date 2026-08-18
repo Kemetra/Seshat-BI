@@ -74,6 +74,8 @@ refusal every time; plus the fail-closed unreadable-state case.
 - [ ] T010 [P] [US2] Write failing test `test_unreadable_state_refuses` — readiness state absent, malformed, and unreadable are three separate cases; each must refuse (FR-005). An unreadable gate is NEVER a passing gate
 - [ ] T011 [P] [US2] Write failing test `test_approval_must_name_target_whole_token` — TWO cases: an approval naming `sales_model` must **refuse** target `sales_model_v2` (prefix case), and must **clear** target `sales_model` (exact-token case). This is the data-model rule that stops a loosely-worded note widening its own scope (FR-006)
 - [ ] T012 [P] [US2] Write failing test `test_target_not_allowlisted_refuses` and `test_target_allowlisted_but_absent_on_disk_refuses` — the second must refuse as an undefined artifact, never invent it (FR-007, FR-011)
+- [ ] T012a [P] [US2] Write failing test `test_operation_must_bind_to_an_approved_definition` — THREE cases, all refusals: an `operation_id` that resolves to nothing; one that resolves to a definition approved for a *different* target; and one whose live content hash no longer matches the approved hash. **This is the fail-open Codex found on PR #656**: a caller holding a valid target-naming approval could otherwise substitute an unrelated mutation and clear every precondition (FR-011a, FR-011b, FR-011c)
+- [ ] T012b [US2] Implement `ApprovedDefinition` resolution + hash verification in `gate.py`, feeding the `operation_binds` field of `GateVerdict`; `cleared` requires it. Resolve, never accept: `--operation` is an identifier looked up in the committed approved set, never free-form mutation text
 - [ ] T013 [P] [US2] Write failing test `test_dirty_tree_without_declared_backup_refuses` (FR-008)
 - [ ] T014 [P] [US2] Write failing test `test_refusal_is_never_a_warning` — assert the refusal type has no warning-level representation; a `GateVerdict` with non-empty `blockers` is always blocking (FR-009)
 
@@ -157,8 +159,9 @@ The existing vocabulary is **closed** and lazily imported. Both constraints are 
 - [ ] T041 [P] Write failing test `test_no_escape_hatch_flag_registered` — assert no `--force`, `--yes`, or `--skip-*` flag exists on either leg; pin the parser's actual accepted arguments (behavior), not the absence of a constant
 - [ ] T042 [P] Write failing test `test_refusal_leaves_artifact_byte_identical` — on exit `1`, the target file is unchanged
 - [ ] T043 [P] Write failing test `test_lazy_import_boundary_holds` — importing the root CLI must NOT import `seshat.pbi_mcp_adapter`
+- [ ] T043a [P] Write failing test `test_plan_write_and_apply_take_the_same_precondition_inputs` — assert both legs accept `--target`, `--operation` and `--backup-declared`. Without parity, `plan-write` reports a backed-up dirty tree as blocked while `apply` accepts it, so the recommended preflight is unusable on the explicitly supported path (Codex review, PR #656)
 - [ ] T044 [P] Write failing test `test_emitted_commands_are_executed` — actually RUN the emitted commands; string-shape assertions go green while the command is broken
-- [ ] T045 Add the `plan-write` leg to `src/seshat/cli/parser_pbi_mcp.py` (dry run: evaluates everything, mutates nothing, writes no evidence) and register it in the closed list
+- [ ] T045 Add the `plan-write` leg to `src/seshat/cli/parser_pbi_mcp.py` (dry run: evaluates everything, mutates nothing, writes no evidence) with `--target`, `--operation`, `--backup-declared`, `--json`, and register it in the closed list
 - [ ] T046 Add the `apply` leg to `src/seshat/cli/parser_pbi_mcp.py` with `--target`, `--operation`, `--backup-declared`, `--json`
 - [ ] T047 **Update the `pbi-mcp` group help text** — it currently claims "F016 stays parked -- no mutation path exists here", which becomes FALSE the moment a write leg registers. A help string that misdescribes the tool's authority is a governance defect, not cosmetic
 - [ ] T048 Update the closed-vocabulary sync test deliberately to include the two new legs (never regex-sweep it — see the repo's bulk-checkbox lesson)
@@ -171,7 +174,7 @@ The existing vocabulary is **closed** and lazily imported. Both constraints are 
 - [ ] T050 [P] Author `.claude/skills/pbi-mcp-write-adapter/SKILL.md` following the dbt/dagster adapter skill precedent — the agent-facing surface; must state that it never self-grants the approval
 - [ ] T051 [P] Update `docs/integrations/pbi-mcp-adapter.md` to document the write path and its four preconditions
 - [ ] T052 [P] Update the F016 row in `docs/roadmap/roadmap.md` from "NOT BUILT" once this ships — **and not before**; the five `parked_on: F016` edges in `docs/quality/parked-on.yaml` must be reconciled in the same change
-- [ ] T053 Reconcile the vendoring language in `templates/pbi-mcp-adapter-contract.md` — it still says "the **vendored** ... binary (`tools/powerbi-modeling-mcp/`)", which contradicts ADR 0018's rejection of vendoring (research R6). **Owner-facing**: this template binds other features, so confirm scope before editing
+- [ ] T053 Reconcile the remaining **vendoring** language in `templates/pbi-mcp-adapter-contract.md` and the live `VENDORED_RUNTIME_DIR` constant at `pbi_mcp/detect.py:49`, both contradicting ADR 0018's rejection of vendoring (research R6). **Owner-facing**: the constant is consumed by the shipped read-only family, so retiring it changes slices 1-4 behavior. (The contract's *park* status, spec pointer and fail-closed text were already reconciled -- Codex review on PR #656.)
 
 ---
 
@@ -219,7 +222,9 @@ are sequential, and T045–T049 all touch the CLI parser/handler pair.
 
 ## Task count
 
-**59 tasks** — Setup 3, Foundational 5, US2 11, US1 11, US3 6, US4 3, CLI 10, Docs 4, Polish 6.
+**62 tasks** — Setup 3, Foundational 5, US2 13, US1 11, US3 6, US4 3, CLI 11, Docs 4, Polish 6.
+
+IDs T012a/T012b/T043a were inserted from the PR #656 Codex review; surrounding IDs are deliberately NOT renumbered so existing cross-references stay valid.
 
 ### Success-criteria traceability
 

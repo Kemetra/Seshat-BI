@@ -15,7 +15,8 @@ An intent to mutate one declared target. Inert until every precondition clears.
 |---|---|---|
 | `target_id` | `str` | The declared artifact identity being mutated. |
 | `mode` | `Literal["readonly", "readwrite"]` | **Defaults to `readonly`.** Never reaches `readwrite` by omission (FR-001, FR-003). |
-| `operation` | `str` | The already-approved operation to execute. Never authored here (FR-011). |
+| `operation_id` | `str` | An **identifier** resolved against the committed approved definition set — never free-form mutation text (FR-011a). |
+| `resolved_definition` | `ApprovedDefinition \| None` | The looked-up definition. `None` → refusal as undefined; never synthesized (FR-011). |
 | `backup_declared` | `bool` | Whether the operator explicitly declared a backup (feeds git safety). |
 
 **Validation rules**
@@ -70,6 +71,7 @@ The four write preconditions, evaluated together. **Fail-closed.**
 | `stage_readable` | `bool` | `False` when state is absent, malformed, or unreadable. |
 | `approval` | `Approval \| None` | The named-human `publish_ready` row (read verbatim). |
 | `approval_names_target` | `bool` | Whether that row's note names **this** target. |
+| `operation_binds` | `bool` | Whether `operation_id` resolved to an `ApprovedDefinition` for this target **and** its hash matches (FR-011a/b). Target-naming alone is insufficient. |
 | `target_allowlisted` | `bool` | Target is in the declared allowlist. |
 | `git_safe` | `bool` | Clean tree, or a declared backup. |
 | `blockers` | `tuple[str, ...]` | Typed blocker identifiers, one per unmet precondition. |
@@ -77,7 +79,7 @@ The four write preconditions, evaluated together. **Fail-closed.**
 **Validation rules**
 
 - `cleared` is `True` **only** when all of: `stage_readable and stage_pass and approval is not
-  None and approval_names_target and target_allowlisted and git_safe`.
+  None and approval_names_target and operation_binds and target_allowlisted and git_safe`.
 - `stage_readable is False` → refusal. An unreadable gate is **never** a passing gate (FR-005).
 - Every unmet precondition contributes a **distinct** blocker, so a refusal names the specific
   missing authority rather than a generic failure (FR-009).
@@ -94,6 +96,30 @@ target only when the note contains the target's declared identity as a **whole t
 Rationale: a bare `in` check would let a loosely-worded note silently widen its own scope,
 which is precisely the self-granted authority Principle V forbids. Two tests pin this: the
 prefix case must refuse, and the exact-token case must clear.
+
+---
+
+## ApprovedDefinition
+
+The committed, signed-off change the adapter may execute. Read-only to this feature.
+
+| Field | Type | Notes |
+|---|---|---|
+| `operation_id` | `str` | The identifier callers pass as `--operation`. |
+| `target_id` | `str` | Which target this definition applies to. |
+| `content_hash` | `str` | Hash of the definition content **as approved**. |
+
+**Validation rules**
+
+- An `operation_id` that resolves to no definition is a refusal (FR-011a) — never synthesized.
+- The live definition's hash MUST equal `content_hash`; a mismatch means it changed after
+  sign-off and is a refusal, not a warning (FR-011b).
+- A definition whose `target_id` differs from the requested target does not authorize the
+  request, even when both are individually approved.
+
+**Why this entity exists**: an approval naming a target authorizes a *specific* change, not any
+change to that target (FR-011c). Without this binding, target-naming alone would have been the
+whole authorization — a caller with one valid approval could substitute an unrelated mutation.
 
 ---
 

@@ -207,6 +207,14 @@ assert preflight reports a blocker rather than proceeding.
 - **FR-011**: The adapter MUST execute only an already-approved definition. It MUST NOT
   define metrics, mappings, semantic logic, or dashboard design, and MUST NOT invent a
   definition that is absent.
+- **FR-011a**: The requested operation MUST be **resolved from** the committed approved
+  definition set for the target, never accepted as free-form input. An operation identifier
+  that does not resolve is a refusal.
+- **FR-011b**: The resolved definition MUST be verified against the content the approval
+  covers (a content hash recorded at approval time). A mismatch — the definition changed after
+  sign-off — is a refusal, not a warning.
+- **FR-011c**: An approval naming a target MUST NOT authorize an arbitrary mutation of that
+  target. Target-naming and operation-binding are two distinct checks, and both are required.
 - **FR-012**: The adapter MUST consume the vendor runtime as an external, unforked dependency
   and MUST NOT vendor it into the distributed package.
 

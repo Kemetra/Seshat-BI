@@ -56,7 +56,12 @@ seshat pbi-mcp plan-write --target <target-id> [--json]
 | Argument | Required | Meaning |
 |---|---|---|
 | `--target` | yes | The declared target identity to evaluate. |
+| `--operation` | yes | The operation identifier to resolve — evaluated, never executed. |
+| `--backup-declared` | no | Same meaning as on `apply`. **Required for parity**: without it, `plan-write` would report a backed-up dirty tree as blocked while `apply` accepts it, making the recommended preflight unusable on the explicitly supported backed-up path. |
 | `--json` | no | Machine-readable verdict for CI consumption. |
+
+Both legs MUST take the **same** precondition inputs. A dry run that cannot express a state the
+real run accepts is not a dry run — it is a second, stricter gate that disagrees with the first.
 
 **Behavior**
 
@@ -86,7 +91,32 @@ seshat pbi-mcp apply --target <target-id> --operation <op> \
 | Argument | Required | Meaning |
 |---|---|---|
 | `--target` | yes | The declared, allowlisted target. |
-| `--operation` | yes | The already-approved operation. Never authored by this leg. |
+| `--operation` | yes | **A reference to a committed approved definition — never free-form mutation text.** See the binding rule below. |
+
+### The operation-binding rule (closes a real fail-open)
+
+`--operation` MUST resolve to a committed, approved definition. It is **not** trusted input.
+
+An earlier draft of this contract described the value as "the already-approved operation",
+which described intent without enforcing it: a caller holding a valid target-naming
+`publish_ready` approval for `sales_model` could have passed *any* mutation string and cleared
+every precondition. Approval-for-a-target is not approval-for-an-arbitrary-change, and FR-011
+("execute only an already-approved definition") cannot be satisfied by a naming convention.
+
+The adapter MUST therefore:
+
+1. **Resolve, not accept.** Treat `--operation` as an *identifier* that is looked up in the
+   committed approved definition set for that target. A value that does not resolve is a
+   refusal (exit `1`), reported as an undefined operation.
+2. **Verify integrity.** Compare the resolved definition against the content the approval
+   covers — a content hash recorded at approval time. A mismatch means the definition changed
+   after sign-off and is a refusal, not a warning.
+3. **Never synthesize.** If no approved definition exists for the target, refuse. The adapter
+   never constructs, infers, or completes a definition (FR-011).
+
+**Consequence for the gate**: the four preconditions become five checks in practice — the
+approval must name the target *and* the requested operation must bind to a definition that
+approval covers. Naming the target alone authorizes nothing specific.
 | `--backup-declared` | no | Operator's explicit attestation that a backup exists (satisfies the git-safety precondition when the tree is not clean). |
 | `--json` | no | Machine-readable result. |
 
