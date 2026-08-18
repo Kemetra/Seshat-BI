@@ -188,6 +188,47 @@ def _transport_verdict(relevant: list[dict]) -> str:
     return CONFIG_WRITE_MODE
 
 
+class BypassFlagRefused(ValueError):
+    """A confirmation-bypass flag was present -- the run is refused.
+
+    Raised, not returned. :func:`classify_mcp_config` and
+    :func:`classify_invocation_argv` return advisory *strings*, which each caller
+    then decides what to do with; that is right for the read-only advisory family
+    (a preflight wants to report the state, not abort), but it means the
+    prohibition is only as strong as each consumer's remembering to compare. For
+    the mutation path that is not a chokepoint -- a new callsite inherits nothing.
+    So the write path calls :func:`refuse_if_bypass_flag`, which cannot be
+    ignored, following the ``refuse_if_secret_shaped`` idiom in ``scan.py``.
+    """
+
+
+def refuse_if_bypass_flag(
+    argv: Sequence[str] = (),
+    *,
+    config_state: str | None = None,
+    context: str = "pbi-mcp write",
+) -> None:
+    """Raise unless neither the invocation nor the config requests a bypass.
+
+    Evaluated before ANY runtime invocation, in EVERY mode including read-only
+    and including in tests (FR-002). Returns None on success so it can only be
+    used as a guard -- there is no verdict to accidentally ignore.
+
+    Both inputs are checked because the flag can arrive either way, and the
+    verdict comes from the one shared matcher rather than a second copy.
+    """
+    if config_state == CONFIG_FORBIDDEN_FLAG:
+        raise BypassFlagRefused(
+            f"{context}: refused -- the machine-local MCP config carries "
+            f"{_FORBIDDEN_FLAG}; remove it before any write is attempted"
+        )
+    if classify_invocation_argv(argv) == CONFIG_FORBIDDEN_FLAG:
+        raise BypassFlagRefused(
+            f"{context}: refused -- the invocation carries {_FORBIDDEN_FLAG}. "
+            "This flag is prohibited in every mode, including read-only."
+        )
+
+
 def classify_invocation_argv(argv: Sequence[str]) -> str:
     """Classify one INVOCATION's argv through the same flag matcher as config.
 

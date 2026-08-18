@@ -151,3 +151,75 @@ def test_argv_classifier_reuses_the_shipped_flag_constants() -> None:
         assert detect.classify_invocation_argv([write_flag]) == (
             detect.CONFIG_WRITE_MODE
         )
+
+
+# --------------------------------------------------------------------------
+# H3 -- the guard RAISES, so a callsite cannot inherit nothing
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        pytest.param(["--skipconfirmation"], id="bare"),
+        pytest.param(["--skipconfirmation=true"], id="value-form"),
+        pytest.param(["--SkipConfirmation"], id="mixed-case"),
+        pytest.param(["update_measure", "--skipconfirmation"], id="trailing"),
+    ],
+)
+def test_refuse_if_bypass_flag_raises_on_argv(argv: list[str]) -> None:
+    """The write path's guard cannot be ignored -- it raises, not returns.
+
+    ``classify_*`` returns an advisory string each consumer must remember to
+    compare; that is not a chokepoint. This is.
+    """
+    with pytest.raises(detect.BypassFlagRefused):
+        detect.refuse_if_bypass_flag(argv)
+
+
+def test_refuse_if_bypass_flag_raises_on_config_state() -> None:
+    """The flag is refused however it arrives -- config as well as argv."""
+    with pytest.raises(detect.BypassFlagRefused):
+        detect.refuse_if_bypass_flag([], config_state=detect.CONFIG_FORBIDDEN_FLAG)
+
+
+def test_refuse_if_bypass_flag_passes_a_clean_invocation() -> None:
+    """The positive control: a clean run must not be blocked.
+
+    Without this, a guard that raised unconditionally would pass every refusal
+    test above while making the feature unusable.
+    """
+    assert (
+        detect.refuse_if_bypass_flag([], config_state=detect.CONFIG_READ_ONLY) is None
+    )
+    assert detect.refuse_if_bypass_flag(["--readonly"]) is None
+    assert detect.refuse_if_bypass_flag(["update_measure", "--target", "x"]) is None
+
+
+def test_the_guard_is_what_refuses_not_incidental_behavior(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Load-bearing proof: neuter ONLY the matcher and the refusal disappears.
+
+    Replaces T007's import-coverage idea, which would go green on a module that
+    imports ``detect`` and ignores its return value -- an import proves an import.
+    """
+    argv = ["--skipconfirmation"]
+    with pytest.raises(detect.BypassFlagRefused):
+        detect.refuse_if_bypass_flag(argv)
+
+    monkeypatch.setattr(
+        detect, "classify_invocation_argv", lambda _argv: detect.CONFIG_READ_ONLY
+    )
+    # With the matcher neutered the guard no longer fires -- proving the matcher,
+    # not something incidental, is what produced the refusal above.
+    assert detect.refuse_if_bypass_flag(argv) is None
+
+
+def test_the_guard_returns_none_so_there_is_no_verdict_to_ignore() -> None:
+    """A guard that returned a truthy verdict could be called and discarded.
+
+    Pins the CAPABILITY: success is indistinguishable from "not checked" only if
+    the guard returns something. It returns None and raises instead.
+    """
+    assert detect.refuse_if_bypass_flag([]) is None
