@@ -34,6 +34,8 @@ pytestmark = pytest.mark.unit
 
 TARGET = "sales_model"
 OTHER_TARGET = "returns_model"
+#: An operation id the committed allowlist approves for TARGET.
+OPERATION = "update_measure"
 #: A shape-valid owner: a named decider WITH an authority class. A bare name is
 #: rejected by ``approval_is_shape_valid`` (issue #487), which is why the earlier
 #: draft's ``owner: Ahmed Shaaban`` was itself wrong.
@@ -70,7 +72,11 @@ def _allowlist_yaml(targets: tuple[str, ...] = (TARGET,)) -> str:
     if not targets:
         return "targets: []\n"
     rows = "".join(
-        f"  - target_id: {name}\n    path: models/{name}.tmdl\n" for name in targets
+        f"  - target_id: {name}\n"
+        f"    path: models/{name}.tmdl\n"
+        "    operations:\n"
+        f"      - {OPERATION}\n"
+        for name in targets
     )
     return f"targets:\n{rows}"
 
@@ -146,8 +152,7 @@ def _evaluate(repo: Path, **kwargs: object) -> gate.GateVerdict:
     params: dict[str, object] = {
         "repo_root": repo,
         "target_id": TARGET,
-        "operation_binds": True,
-        "backup_declared": False,
+        "operation_id": OPERATION,
         "tree_clean": True,
     }
     params.update(kwargs)
@@ -283,7 +288,7 @@ def _repo_for_case(tmp_path: Path, label: str) -> tuple[Path, dict[str, object]]
         repo = _build_repo(
             tmp_path, readiness=_readiness_yaml(), allowlist=_allowlist_yaml()
         )
-        return repo, {"operation_binds": False}
+        return repo, {"operation_id": ""}
     if label == "target_not_allowlisted":
         repo = _build_repo(
             tmp_path,
@@ -303,7 +308,7 @@ def _repo_for_case(tmp_path: Path, label: str) -> tuple[Path, dict[str, object]]
         repo = _build_repo(
             tmp_path, readiness=_readiness_yaml(), allowlist=_allowlist_yaml()
         )
-        return repo, {"tree_clean": False, "backup_declared": False}
+        return repo, {"tree_clean": False, "backup_ref": None}
     raise AssertionError(f"unhandled case {label!r}")
 
 
@@ -363,7 +368,7 @@ def test_each_unmet_precondition_contributes_a_distinct_blocker(
         allowlist=_allowlist_yaml(targets=()),
         artifacts=(),
     )
-    verdict = _evaluate(repo, operation_binds=False, tree_clean=False)
+    verdict = _evaluate(repo, operation_id="", tree_clean=False)
     assert not verdict.cleared
     assert len(set(verdict.blockers)) >= 4, verdict.blockers
 
@@ -573,7 +578,18 @@ def test_evaluate_exposes_no_way_for_a_caller_to_widen_the_allowlist() -> None:
     import inspect
 
     params = set(inspect.signature(gate.evaluate).parameters)
-    forbidden = {"allow", "allowlist", "target_allowlist", "allowed_targets", "allows"}
+    forbidden = {
+        "allow",
+        "allowlist",
+        "target_allowlist",
+        "allowed_targets",
+        "allows",
+        # Asserted-permission parameters: a caller that can pass these can lie.
+        "operation_binds",
+        "backup_declared",
+        "approval_ok",
+        "stage_pass",
+    }
     leaked = params & forbidden
     assert not leaked, (
         f"gate.evaluate must not accept a caller-supplied allowlist; found {leaked}"
@@ -627,15 +643,15 @@ def test_unbound_operation_refuses_even_with_a_valid_target_approval(
     This is the fail-open a caller holding one valid approval would otherwise
     exploit by substituting an unrelated operation.
     """
-    verdict = _evaluate(committed_repo, operation_binds=False)
+    verdict = _evaluate(committed_repo, operation_id="")
     assert not verdict.cleared
     assert verdict.approval_names_target, "the approval itself is valid"
     assert gate.BLOCKER_OPERATION_UNBOUND in verdict.blockers
 
 
-def test_operation_binding_defaults_to_unbound(committed_repo: Path) -> None:
-    """Omitting the resolution step refuses; it never clears by omission."""
-    verdict = gate.evaluate(committed_repo, TARGET)
+def test_omitting_the_operation_refuses(committed_repo: Path) -> None:
+    """No operation id means nothing resolved; it never clears by omission."""
+    verdict = gate.evaluate(committed_repo, TARGET, tree_clean=True)
     assert not verdict.cleared
     assert gate.BLOCKER_OPERATION_UNBOUND in verdict.blockers
 
@@ -646,7 +662,7 @@ def test_operation_binding_defaults_to_unbound(committed_repo: Path) -> None:
 
 
 def test_dirty_tree_without_declared_backup_refuses(committed_repo: Path) -> None:
-    verdict = _evaluate(committed_repo, tree_clean=False, backup_declared=False)
+    verdict = _evaluate(committed_repo, tree_clean=False, backup_ref=None)
     assert not verdict.cleared
     assert gate.BLOCKER_GIT_UNSAFE in verdict.blockers
 
@@ -656,13 +672,13 @@ def test_dirty_tree_with_declared_backup_clears(committed_repo: Path) -> None:
 
     Its absence would refuse every dirty tree, which the spec does not require.
     """
-    verdict = _evaluate(committed_repo, tree_clean=False, backup_declared=True)
+    verdict = _evaluate(committed_repo, tree_clean=False, backup_ref="HEAD")
     assert verdict.git_safe
     assert verdict.cleared
 
 
 def test_clean_tree_clears_without_a_backup(committed_repo: Path) -> None:
-    assert _evaluate(committed_repo, tree_clean=True, backup_declared=False).git_safe
+    assert _evaluate(committed_repo, tree_clean=True, backup_ref=None).git_safe
 
 
 # --------------------------------------------------------------------------
@@ -711,7 +727,7 @@ def test_every_blocker_id_has_readable_detail() -> None:
         for name, value in vars(gate).items()
         if name.startswith("BLOCKER_") and isinstance(value, str)
     ]
-    assert len(ids) == 9
+    assert len(ids) == 12
     for blocker in ids:
         assert gate.BLOCKER_DETAIL.get(blocker), blocker
         assert blocker.startswith("PBIMCP-GATE-")
@@ -756,3 +772,155 @@ def test_committed_state_guard_is_what_produces_the_refusal(
         "fails the refusal above came from something other than the guard, and "
         "the guard is not actually protecting anything"
     )
+
+
+# --------------------------------------------------------------------------
+# Advisor findings 1-4: every precondition is DERIVED, never asserted
+# --------------------------------------------------------------------------
+
+
+def test_operation_must_resolve_against_the_committed_allowlist(
+    tmp_path: Path,
+) -> None:
+    """An unlisted operation id refuses, even for a fully approved target.
+
+    FR-011a: the operation is *resolved from* the committed set, never accepted
+    as free-form input. An earlier draft took ``operation_binds: bool`` from the
+    caller -- which is a request, not a gate.
+    """
+    repo = _build_repo(
+        tmp_path, readiness=_readiness_yaml(), allowlist=_allowlist_yaml()
+    )
+    verdict = _evaluate(repo, operation_id="drop_all_tables")
+    assert not verdict.cleared
+    assert not verdict.operation_binds
+    assert gate.BLOCKER_OPERATION_UNBOUND in verdict.blockers
+
+
+def test_operation_approved_for_another_target_does_not_authorize_this_one(
+    tmp_path: Path,
+) -> None:
+    """FR-011c: an operation approved elsewhere is not approved here.
+
+    ``other_only`` is listed for OTHER_TARGET, so requesting it against TARGET
+    must refuse even though both targets are allowlisted.
+    """
+    allowlist = (
+        "targets:\n"
+        f"  - target_id: {TARGET}\n    path: models/{TARGET}.tmdl\n"
+        f"    operations:\n      - {OPERATION}\n"
+        f"  - target_id: {OTHER_TARGET}\n    path: models/{OTHER_TARGET}.tmdl\n"
+        "    operations:\n      - other_only\n"
+    )
+    repo = _build_repo(
+        tmp_path,
+        readiness=_readiness_yaml(),
+        allowlist=allowlist,
+        artifacts=(TARGET, OTHER_TARGET),
+    )
+    verdict = _evaluate(repo, operation_id="other_only")
+    assert not verdict.cleared
+    assert gate.BLOCKER_OPERATION_UNBOUND in verdict.blockers
+
+
+def test_target_with_no_approved_operations_refuses_every_operation(
+    tmp_path: Path,
+) -> None:
+    """An allowlist entry omitting ``operations`` permits nothing.
+
+    A missing key must not read as "all operations allowed" -- that would make
+    the safest-looking entry the most permissive.
+    """
+    allowlist = f"targets:\n  - target_id: {TARGET}\n    path: models/{TARGET}.tmdl\n"
+    repo = _build_repo(tmp_path, readiness=_readiness_yaml(), allowlist=allowlist)
+    verdict = _evaluate(repo, operation_id=OPERATION)
+    assert not verdict.cleared
+    assert gate.BLOCKER_OPERATION_UNBOUND in verdict.blockers
+
+
+def test_unprobed_git_state_refuses(committed_repo: Path) -> None:
+    """``tree_clean=None`` means never probed, and refuses.
+
+    A ``True`` default would let a caller that forgot to probe git clear the
+    git-safety leg by omission -- a fail-open default next to a fail-closed one.
+    """
+    verdict = gate.evaluate(committed_repo, TARGET, OPERATION)
+    assert not verdict.cleared
+    assert not verdict.git_safe
+    assert gate.BLOCKER_GIT_UNPROBED in verdict.blockers
+
+
+def test_unresolvable_backup_ref_refuses(committed_repo: Path) -> None:
+    """A backup must be VERIFIED, not attested.
+
+    The operator names a ref; if it does not resolve, the precondition fails.
+    A boolean ``--backup-declared`` let the requesting party satisfy the
+    precondition protecting the request.
+    """
+    verdict = _evaluate(
+        committed_repo, tree_clean=False, backup_ref="refs/tags/no-such-backup"
+    )
+    assert not verdict.cleared
+    assert not verdict.git_safe
+    assert gate.BLOCKER_BACKUP_UNRESOLVABLE in verdict.blockers
+
+
+def test_resolvable_backup_ref_clears(committed_repo: Path) -> None:
+    """The positive control: a real ref does satisfy the leg."""
+    verdict = _evaluate(committed_repo, tree_clean=False, backup_ref="HEAD")
+    assert verdict.git_safe
+    assert verdict.cleared
+
+
+def test_backup_ref_guard_is_load_bearing(
+    committed_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Disable ONLY the ref check; the bogus ref then clears.
+
+    Proves the refusal above comes from the verification rather than from
+    something incidental.
+    """
+    bogus = "refs/tags/no-such-backup"
+    assert not _evaluate(committed_repo, tree_clean=False, backup_ref=bogus).cleared
+    monkeypatch.setattr(gate, "_ref_resolves", lambda root, ref: True)
+    assert _evaluate(committed_repo, tree_clean=False, backup_ref=bogus).cleared
+
+
+def test_uncommitted_allowlist_names_its_own_blocker(tmp_path: Path) -> None:
+    """An uncommitted allowlist is reported DISTINCTLY from not-allowlisted.
+
+    Collapsing both into ``TARGET_NOT_ALLOWLISTED`` would tell an operator to
+    add a target they already added -- FR-009 requires the specific cause.
+    """
+    repo = _init_repo(tmp_path)
+    _write(repo, f"mappings/{TARGET}/readiness-status.yaml", _readiness_yaml())
+    _write(repo, f"models/{TARGET}.tmdl", "// m\n")
+    _write(repo, "README.md", "x\n")
+    _commit_all(repo)
+    # Add the allowlist AFTER the commit: present in the worktree, not in HEAD.
+    _write(repo, gate.TARGET_ALLOWLIST_RELPATH, _allowlist_yaml())
+    verdict = _evaluate(repo)
+    assert not verdict.cleared
+    assert gate.BLOCKER_ALLOWLIST_UNCOMMITTED in verdict.blockers
+
+
+def test_git_state_probe_failure_is_not_a_pass(committed_repo: Path) -> None:
+    """A git failure while verifying a backup ref must refuse, not clear.
+
+    ``dagster_adapter/evidence._is_workspace_dirty`` returns False (clean) on an
+    exception; this asserts the opposite posture here.
+    """
+
+    def _boom(repo_root: Path, *args: str) -> None:
+        raise OSError("git unavailable")
+
+    import seshat.pbi_mcp_adapter.gate as gate_module
+
+    original = gate_module.run_git
+    try:
+        gate_module.run_git = _boom  # type: ignore[assignment]
+        verdict = _evaluate(committed_repo, tree_clean=False, backup_ref="HEAD")
+    finally:
+        gate_module.run_git = original  # type: ignore[assignment]
+    assert not verdict.cleared
+    assert gate.BLOCKER_BACKUP_UNRESOLVABLE in verdict.blockers

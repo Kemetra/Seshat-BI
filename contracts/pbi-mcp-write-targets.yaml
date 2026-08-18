@@ -22,10 +22,26 @@
 #   targets:
 #     - target_id: <declared identity used as --target>
 #       path: <repo-relative path to the artifact>
+#       operations:                      # the closed set approved for THIS target
+#         - <operation_id used as --operation>
 #
 # `target_id` is matched as a WHOLE TOKEN against the approval note, so an entry
 # named `sales_model` is not authorized by an approval naming `sales_model_v2`
 # (or vice versa). Keep ids distinct under that rule.
+#
+# `operations` is how FR-011a/FR-011c are enforced: the requested `--operation` is
+# RESOLVED against this set rather than accepted as free-form input, and an
+# operation listed under one target does not authorize another. An entry that
+# OMITS `operations` permits nothing -- a missing key must never read as
+# "all operations allowed", or the safest-looking entry would be the most
+# permissive one.
+#
+# What this file does NOT carry: a content hash of the approved definition.
+# Verifying a definition against the hash recorded AT SIGN-OFF (FR-011b) needs a
+# producer written by a named human at approval time, and this feature is
+# forbidden to write approvals. That check is externally blocked, tracked in
+# spec.md, and deferred to a companion spec -- it is deliberately absent rather
+# than stubbed permissively.
 #
 # An empty list is a valid, maximally-safe state: it refuses every write. That is
 # the intended resting state until an owner declares a real target.

@@ -29,7 +29,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from seshat.gitstate import committed_text, is_tracked_and_clean
+from seshat.gitstate import committed_text, is_tracked_and_clean, run_git
 from seshat.rules.readiness_status import approval_is_shape_valid
 
 # The committed target allowlist. A FIXED path, deliberately not a parameter:
@@ -52,6 +52,9 @@ BLOCKER_OPERATION_UNBOUND = "PBIMCP-GATE-06"
 BLOCKER_TARGET_NOT_ALLOWLISTED = "PBIMCP-GATE-07"
 BLOCKER_TARGET_ABSENT = "PBIMCP-GATE-08"
 BLOCKER_GIT_UNSAFE = "PBIMCP-GATE-09"
+BLOCKER_ALLOWLIST_UNCOMMITTED = "PBIMCP-GATE-10"
+BLOCKER_GIT_UNPROBED = "PBIMCP-GATE-11"
+BLOCKER_BACKUP_UNRESOLVABLE = "PBIMCP-GATE-12"
 
 #: Human-readable detail per blocker id. Categorical text only -- never a score.
 BLOCKER_DETAIL: dict[str, str] = {
@@ -77,6 +80,17 @@ BLOCKER_DETAIL: dict[str, str] = {
     ),
     BLOCKER_TARGET_ABSENT: "target is allowlisted but its artifact is absent on disk",
     BLOCKER_GIT_UNSAFE: "working tree is dirty and no backup was declared",
+    BLOCKER_ALLOWLIST_UNCOMMITTED: (
+        f"{TARGET_ALLOWLIST_RELPATH} is untracked or differs from HEAD; an "
+        "uncommitted allowlist widening never entered review"
+    ),
+    BLOCKER_GIT_UNPROBED: (
+        "git working state was never probed; the caller must supply a probe "
+        "result rather than let the precondition pass by omission"
+    ),
+    BLOCKER_BACKUP_UNRESOLVABLE: (
+        "the declared backup ref does not resolve in this repository"
+    ),
 }
 
 
@@ -142,6 +156,26 @@ class GateVerdict:
 
 def _readiness_relpath(target_id: str) -> str:
     return f"mappings/{target_id}/readiness-status.yaml"
+
+
+def _ref_resolves(repo_root: Path, ref: str) -> bool:
+    """Whether ``ref`` names something that actually exists in this repository.
+
+    Fails CLOSED: an empty ref, a git failure, or any exception reads as
+    unresolvable. Uses the hardened :func:`seshat.gitstate.run_git`, so this is
+    read-only and never touches the ref it verifies.
+
+    The point is that a backup is *verified*, not attested. A boolean
+    ``--backup-declared`` would let the party requesting the mutation satisfy the
+    precondition protecting it -- the same defect as a caller-supplied allowlist.
+    """
+    if not ref:
+        return False
+    try:
+        probe = run_git(Path(repo_root), "rev-parse", "--verify", "--quiet", ref)
+    except (OSError, RuntimeError):
+        return False
+    return probe.returncode == 0
 
 
 def _load_committed_yaml(repo_root: Path, relpath: str) -> tuple[dict | None, bool]:
@@ -217,12 +251,32 @@ def note_names_target(note: str, target_id: str) -> bool:
     return re.search(pattern, note) is not None
 
 
-def read_allowlist(repo_root: Path) -> tuple[dict[str, str], bool]:
-    """The COMMITTED target allowlist as ``{target_id: relative_path}``.
+@dataclass(frozen=True)
+class AllowlistEntry:
+    """One committed, reviewed write target and the operations approved for it."""
 
-    Returns ``({}, False)`` when the allowlist is absent, uncommitted, or
-    unparseable -- so an uncommitted widening is invisible to the gate and a
-    missing allowlist refuses everything rather than permitting everything.
+    target_id: str
+    path: str
+    operations: tuple[str, ...]
+
+    def permits(self, operation_id: str) -> bool:
+        """Whether ``operation_id`` is one of this target's approved operations.
+
+        Exact membership, never a prefix or substring: the operation set is a
+        closed vocabulary, so an unlisted identifier is a refusal.
+        """
+        return operation_id in self.operations
+
+
+def read_allowlist(repo_root: Path) -> tuple[dict[str, AllowlistEntry], bool]:
+    """The COMMITTED target allowlist, keyed by ``target_id``.
+
+    Returns ``({}, committed)``. ``committed`` is False when the file is absent,
+    untracked, or differs from HEAD -- so an uncommitted widening is invisible to
+    the gate, and a missing allowlist refuses everything rather than permitting
+    everything. The two failures are reported through DISTINCT blockers, because
+    "not allowlisted" and "your allowlist edit was never committed" are different
+    problems with different fixes (FR-009).
     """
     data, committed = _load_committed_yaml(repo_root, TARGET_ALLOWLIST_RELPATH)
     if data is None:
@@ -230,37 +284,60 @@ def read_allowlist(repo_root: Path) -> tuple[dict[str, str], bool]:
     entries = data.get("targets")
     if not isinstance(entries, list):
         return {}, committed
-    resolved: dict[str, str] = {}
+    resolved: dict[str, AllowlistEntry] = {}
     for entry in entries:
         if not isinstance(entry, dict):
             continue
         target_id = entry.get("target_id")
         path = entry.get("path")
-        if isinstance(target_id, str) and isinstance(path, str):
-            resolved[target_id] = path
+        if not isinstance(target_id, str) or not isinstance(path, str):
+            continue
+        raw_operations = entry.get("operations")
+        operations = (
+            tuple(str(op) for op in raw_operations)
+            if isinstance(raw_operations, list)
+            else ()
+        )
+        resolved[target_id] = AllowlistEntry(
+            target_id=target_id, path=path, operations=operations
+        )
     return resolved, committed
 
 
 def evaluate(
     repo_root: Path,
     target_id: str,
+    operation_id: str = "",
     *,
-    operation_binds: bool = False,
-    backup_declared: bool = False,
-    tree_clean: bool = True,
+    tree_clean: bool | None = None,
+    backup_ref: str | None = None,
 ) -> GateVerdict:
     """Evaluate every write precondition for ``target_id``. Fail-closed.
 
-    ``operation_binds`` is supplied by the caller's operation-resolution step
-    (FR-011a/FR-011c) and defaults to ``False``: an unbound operation refuses,
-    so forgetting to resolve one cannot clear the gate by omission.
+    Every precondition is **derived**, never accepted as a caller assertion. That
+    is the whole design: a parameter a caller can set to ``True`` is not a gate,
+    it is a request. So there is no ``operation_binds``, no ``backup_declared``,
+    and no caller-supplied allowlist -- the earlier drafts of all three were the
+    same defect as the worktree read, and "the already-approved X" arriving as
+    free-form input is a fail-open (ask: checked against *what*?).
 
-    ``tree_clean`` and ``backup_declared`` are passed in rather than probed here
-    so the git-safety leg stays independently testable; the production caller
-    sources ``tree_clean`` from :mod:`seshat.gitstate`, which fails closed on a
-    git error. ``dagster_adapter/evidence._is_workspace_dirty`` must NOT be used
-    -- it returns ``False`` (clean) on an exception, turning a git failure into a
+    ``operation_id`` is **resolved** against the committed allowlist entry for
+    this target (FR-011a), and that entry's own ``target_id`` must match the
+    requested one (FR-011c). An empty or unlisted identifier refuses. Only the
+    approval-time content hash (FR-011b) remains out of scope -- externally
+    blocked for want of a producer this spec may not build.
+
+    ``tree_clean`` has **no default**: ``None`` means "never probed" and refuses.
+    A ``True`` default would let a caller that forgot to probe git pass the
+    git-safety leg by omission. Callers source it from :mod:`seshat.gitstate`,
+    which fails closed on a git error;
+    ``dagster_adapter/evidence._is_workspace_dirty`` must NOT be used -- it
+    returns ``False`` (clean) on an exception, turning a git failure into a
     cleared precondition.
+
+    ``backup_ref`` is a git ref, not a boolean attestation. It must actually
+    resolve in this repository (``git rev-parse --verify``), so the operator
+    cannot satisfy the precondition by asserting a backup exists.
     """
     root = Path(repo_root)
     blockers: list[str] = []
@@ -284,22 +361,44 @@ def evaluate(
     if approval is not None and not names_target:
         blockers.append(BLOCKER_APPROVAL_TARGET)
 
-    if not operation_binds:
-        blockers.append(BLOCKER_OPERATION_UNBOUND)
+    allowlist, allowlist_committed = read_allowlist(root)
+    if not allowlist_committed:
+        blockers.append(BLOCKER_ALLOWLIST_UNCOMMITTED)
 
-    allowlist, _ = read_allowlist(root)
-    allowlisted = target_id in allowlist
+    entry = allowlist.get(target_id)
+    allowlisted = entry is not None
     target_exists = False
-    if not allowlisted:
+    if entry is None:
         blockers.append(BLOCKER_TARGET_NOT_ALLOWLISTED)
     else:
-        target_exists = (root / allowlist[target_id]).is_file()
+        target_exists = (root / entry.path).is_file()
         if not target_exists:
             blockers.append(BLOCKER_TARGET_ABSENT)
 
-    git_safe = bool(tree_clean or backup_declared)
-    if not git_safe:
+    # Operation binding is RESOLVED, not asserted: the identifier must appear in
+    # the committed entry's approved set, and that entry must be for this target.
+    operation_binds = (
+        entry is not None
+        and bool(operation_id)
+        and entry.target_id == target_id
+        and entry.permits(operation_id)
+    )
+    if not operation_binds:
+        blockers.append(BLOCKER_OPERATION_UNBOUND)
+
+    if tree_clean is None:
+        git_safe = False
+        blockers.append(BLOCKER_GIT_UNPROBED)
+    elif tree_clean:
+        git_safe = True
+    elif backup_ref is None:
+        git_safe = False
         blockers.append(BLOCKER_GIT_UNSAFE)
+    elif _ref_resolves(root, backup_ref):
+        git_safe = True
+    else:
+        git_safe = False
+        blockers.append(BLOCKER_BACKUP_UNRESOLVABLE)
 
     return GateVerdict(
         target_id=target_id,
