@@ -17,6 +17,7 @@ asserted: a caller who can hand in a cleared verdict is a caller who can lie.
 
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -120,19 +121,26 @@ class WriteReport:
         return self.exit_code == EXIT_OK
 
 
-def _finalize(
+def _terminate(
     repo_root: Path,
     *,
+    exit_code: int,
+    outcome: str,
     target_id: str,
     operation_id: str,
     timestamp: str,
-    outcome: str,
-    mutation_attempted: bool,
-    blockers: tuple[str, ...],
-    rollback_guidance: tuple[str, ...] = (),
     mode: str,
     tool: str,
-) -> Path:
+    mutation_attempted: bool,
+    blockers: tuple[str, ...] = (),
+    rollback_guidance: tuple[str, ...] = (),
+) -> WriteReport:
+    """Write the terminal evidence record and return the matching report.
+
+    One helper for both, so the report and the record cannot disagree -- an
+    earlier version substituted a fallback blocker into the record only, and exit
+    3 became reachable with an empty report blocker list.
+    """
     record = evidence.RunEvidence(
         tool=tool,
         mode=mode,
@@ -144,7 +152,15 @@ def _finalize(
         blockers=blockers,
         rollback_guidance=rollback_guidance,
     )
-    return evidence.finalize(repo_root, record)
+    path = evidence.finalize(repo_root, record)
+    return WriteReport(
+        exit_code=exit_code,
+        outcome=outcome,
+        blockers=blockers,
+        rollback_guidance=rollback_guidance,
+        evidence_path=path,
+        mutation_attempted=mutation_attempted,
+    )
 
 
 def apply_write(
@@ -164,24 +180,32 @@ def apply_write(
 ) -> WriteReport:
     """Run the governed write pipeline for one target.
 
+    Sequence, and it is not negotiable:
+    bypass guard -> gate -> drift -> [intent record] -> execute -> effect check
+    -> validate -> evidence.
+
     ``dry_run`` is the ``plan-write`` leg: it evaluates every precondition and
-    mutates nothing. It still emits an evidence record -- a ``deferred`` one --
-    so "every run produces exactly one record" stays literally true and an
-    operator cannot probe the gate repeatedly without a trace.
+    mutates nothing. It still emits a ``deferred`` evidence record, so "every run
+    produces exactly one record" stays literally true and an operator cannot probe
+    the gate repeatedly without a trace.
     """
     root = Path(repo_root)
     mode = "readonly" if dry_run else "readwrite"
+    terminal = functools.partial(
+        _terminate,
+        root,
+        target_id=target_id,
+        operation_id=operation_id,
+        timestamp=timestamp,
+        mode=mode,
+    )
 
     # 1. The standing prohibition, before anything else, in every mode. Raises.
     refuse_if_bypass_flag(argv, config_state=config_state, context="pbi-mcp apply")
 
-    # 2. The four (now nine) preconditions, all derived here.
+    # 2. Every precondition, all derived inside the gate.
     verdict = gate.evaluate(
-        root,
-        target_id,
-        operation_id,
-        tree_clean=tree_clean,
-        backup_ref=backup_ref,
+        root, target_id, operation_id, tree_clean=tree_clean, backup_ref=backup_ref
     )
 
     # 2b. Vendor preview drift. Gated on DRIFT rather than version compatibility:
@@ -193,53 +217,28 @@ def apply_write(
         drift_blockers = capability_profile.blockers
 
     if not verdict.cleared or drift_blockers:
-        combined = (*verdict.blockers, *drift_blockers)
-        path = _finalize(
-            root,
-            target_id=target_id,
-            operation_id=operation_id,
-            timestamp=timestamp,
-            outcome="blocked",
-            mutation_attempted=False,
-            blockers=combined,
-            mode=mode,
-            tool="none",
-        )
-        return WriteReport(
+        return terminal(
             exit_code=EXIT_REFUSED,
             outcome="blocked",
-            blockers=combined,
-            rollback_guidance=(),
-            evidence_path=path,
+            tool="none",
             mutation_attempted=False,
+            blockers=(*verdict.blockers, *drift_blockers),
         )
 
     allowlist, _ = gate.read_allowlist(root)
     entry = allowlist[target_id]
+    guidance = validation.rollback_guidance_for(entry.path, backup_ref)
 
     if dry_run:
         # Everything cleared, but plan-write mutates nothing by contract.
-        path = _finalize(
-            root,
-            target_id=target_id,
-            operation_id=operation_id,
-            timestamp=timestamp,
-            outcome="deferred",
-            mutation_attempted=False,
-            blockers=(),
-            mode=mode,
-            tool="none",
-        )
-        return WriteReport(
+        return terminal(
             exit_code=EXIT_OK,
             outcome="deferred",
-            blockers=(),
-            rollback_guidance=(),
-            evidence_path=path,
+            tool="none",
             mutation_attempted=False,
         )
 
-    # 3. Intent BEFORE the mutation, so a crash still leaves a trace (M4).
+    # 3. Intent BEFORE the mutation, so a crash still leaves a trace.
     evidence.write_intent(
         root,
         tool=runner.VENDOR_PACKAGE,
@@ -250,118 +249,55 @@ def apply_write(
     )
 
     # 4. Execute, with a before/after snapshot so a claim of success can be
-    # checked against what actually changed.
+    # checked against what actually changed. The target path and operation come
+    # from the VERDICT -- there is no parameter by which to substitute another.
     before = _snapshot(root)
-    result = runner.invoke(
-        verdict,
-        repo_root=root,
-        read_only=False,
-        runner=mcp_runner,
-    )
-
-    guidance = validation.rollback_guidance_for(entry.path, backup_ref)
+    result = runner.invoke(verdict, repo_root=root, read_only=False, runner=mcp_runner)
 
     if not result.succeeded:
-        # A stalled or crashed runtime may have left the artifact half-written,
-        # so this is indeterminate rather than a clean failure.
+        # A stalled or crashed runtime may have left the artifact half-written, so
+        # this is indeterminate rather than a clean failure.
         indeterminate = result.mutation_attempted
-        # Computed ONCE: passing result.blockers to the report while substituting
-        # a fallback into the evidence made the two disagree, and exit 3 was
-        # reachable with an empty blocker list.
-        reported_blockers = result.blockers or (runner.BLOCKER_RUNTIME_UNEXPLAINED,)
-        path = _finalize(
-            root,
-            target_id=target_id,
-            operation_id=operation_id,
-            timestamp=timestamp,
-            outcome="blocked" if indeterminate else "failed",
-            mutation_attempted=result.mutation_attempted,
-            blockers=reported_blockers,
-            rollback_guidance=guidance,
-            mode=mode,
-            tool=runner.VENDOR_PACKAGE,
-        )
-        return WriteReport(
+        return terminal(
             exit_code=EXIT_INDETERMINATE if indeterminate else EXIT_REFUSED,
             outcome="blocked" if indeterminate else "failed",
-            blockers=reported_blockers,
-            rollback_guidance=guidance,
-            evidence_path=path,
+            tool=runner.VENDOR_PACKAGE,
             mutation_attempted=result.mutation_attempted,
+            blockers=result.blockers or (runner.BLOCKER_RUNTIME_UNEXPLAINED,),
+            rollback_guidance=guidance,
         )
 
     # 4b. Did the run do what it was authorized to do? A no-op and an
     # out-of-scope mutation both previously reported `materialized`.
     effect_blockers = _effect_blockers(before, _snapshot(root), entry.path)
     if effect_blockers:
-        path = _finalize(
-            root,
-            target_id=target_id,
-            operation_id=operation_id,
-            timestamp=timestamp,
-            outcome="failed",
-            mutation_attempted=True,
-            blockers=effect_blockers,
-            rollback_guidance=guidance,
-            mode=mode,
-            tool=runner.VENDOR_PACKAGE,
-        )
-        return WriteReport(
+        return terminal(
             exit_code=EXIT_VALIDATION_FAILED,
             outcome="failed",
+            tool=runner.VENDOR_PACKAGE,
+            mutation_attempted=True,
             blockers=effect_blockers,
             rollback_guidance=guidance,
-            evidence_path=path,
-            mutation_attempted=True,
         )
 
     # 5. Validate. A zero exit from the runtime is not confirmation.
     outcome = validation.validate_semantic_model(
-        root,
-        target_path=entry.path,
-        backup_ref=backup_ref,
-        runner=validator,
+        root, target_path=entry.path, backup_ref=backup_ref, runner=validator
     )
-
     if not outcome.passed:
-        path = _finalize(
-            root,
-            target_id=target_id,
-            operation_id=operation_id,
-            timestamp=timestamp,
-            outcome="failed",
-            mutation_attempted=True,
-            blockers=outcome.blockers,
-            rollback_guidance=outcome.rollback_guidance or guidance,
-            mode=mode,
-            tool=runner.VENDOR_PACKAGE,
-        )
-        return WriteReport(
+        return terminal(
             exit_code=EXIT_VALIDATION_FAILED,
             outcome="failed",
+            tool=runner.VENDOR_PACKAGE,
+            mutation_attempted=True,
             blockers=outcome.blockers,
             rollback_guidance=outcome.rollback_guidance or guidance,
-            evidence_path=path,
-            mutation_attempted=True,
         )
 
     # 6. Materialized: applied AND confirmed by validation.
-    path = _finalize(
-        root,
-        target_id=target_id,
-        operation_id=operation_id,
-        timestamp=timestamp,
-        outcome="materialized",
-        mutation_attempted=True,
-        blockers=(),
-        mode=mode,
-        tool=runner.VENDOR_PACKAGE,
-    )
-    return WriteReport(
+    return terminal(
         exit_code=EXIT_OK,
         outcome="materialized",
-        blockers=(),
-        rollback_guidance=(),
-        evidence_path=path,
+        tool=runner.VENDOR_PACKAGE,
         mutation_attempted=True,
     )

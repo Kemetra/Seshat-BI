@@ -140,27 +140,38 @@ class RunEvidence:
         }
 
 
+def _payload_strings(payload: dict[str, object]) -> list[tuple[str, str]]:
+    """Every string in the record, paired with the field it came from.
+
+    Flattened here so the scan is a single loop rather than a nested walk.
+    """
+    found: list[tuple[str, str]] = []
+    for key, value in payload.items():
+        if isinstance(value, str):
+            found.append((key, value))
+        elif isinstance(value, list):
+            found.extend(
+                (f"{key}[{index}]", item)
+                for index, item in enumerate(value)
+                if isinstance(item, str)
+            )
+    return found
+
+
 def _scan_payload_values(payload: dict[str, object]) -> None:
     """Refuse on any secret-shaped RAW field value, before JSON encoding.
 
     Scanning only the serialized text is a fail-open, measured not theorized:
-    ``json.dumps`` escapes ``\\`` to ``\\\\``, so ``C:\\Users\\ahmed`` becomes
-    ``C:\\\\Users\\\\ahmed`` in the output and the scanner's Windows-user-path
-    pattern no longer matches. The secret is present and invisible.
+    JSON encoding doubles each backslash, so a Windows user path arrives in the
+    output with doubled separators and the scanner's user-path pattern no longer
+    matches. The secret is present and invisible.
 
     So each value is scanned in its raw form first. The rendered text is scanned
     too (defense in depth) -- it catches anything that only becomes
     secret-shaped once fields are concatenated.
     """
-    for key, value in payload.items():
-        if isinstance(value, str):
-            refuse_if_secret_shaped(value, context=f"{ARTIFACT_RELPATH}:{key}")
-        elif isinstance(value, list):
-            for index, item in enumerate(value):
-                if isinstance(item, str):
-                    refuse_if_secret_shaped(
-                        item, context=f"{ARTIFACT_RELPATH}:{key}[{index}]"
-                    )
+    for field_name, text in _payload_strings(payload):
+        refuse_if_secret_shaped(text, context=f"{ARTIFACT_RELPATH}:{field_name}")
 
 
 def render(record: RunEvidence) -> str:

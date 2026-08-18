@@ -119,26 +119,31 @@ def test_apply_leg_is_registered() -> None:
 # --------------------------------------------------------------------------
 
 
+def _subparser_choices(parser: object) -> dict[str, object]:
+    """The subcommand map under the ``pbi-mcp`` group, or an empty map."""
+    for action in getattr(parser, "_actions", []):
+        choices = getattr(action, "choices", None)
+        if isinstance(choices, dict) and "pbi-mcp" in choices:
+            family = choices["pbi-mcp"]
+            for sub_action in getattr(family, "_actions", []):
+                sub_choices = getattr(sub_action, "choices", None)
+                if isinstance(sub_choices, dict):
+                    return sub_choices
+    return {}
+
+
 def _accepted_options(leg: str) -> set[str]:
+    """Every option string the named write leg actually accepts."""
     from seshat.cli import _build_parser
 
-    parser = _build_parser("seshat")
-    # Walk to the pbi-mcp subparser for this leg.
-    for action in parser._actions:
-        if not isinstance(action, type(parser._subparsers._group_actions[0])):  # type: ignore[union-attr]
-            continue
-        family = action.choices.get("pbi-mcp")
-        if family is None:
-            continue
-        for sub_action in family._actions:
-            choices = getattr(sub_action, "choices", None)
-            if isinstance(choices, dict) and leg in choices:
-                return {
-                    option
-                    for entry in choices[leg]._actions
-                    for option in entry.option_strings
-                }
-    raise AssertionError(f"leg {leg!r} not found")
+    legs = _subparser_choices(_build_parser("seshat"))
+    if leg not in legs:
+        raise AssertionError(f"leg {leg!r} not found")
+    return {
+        option
+        for entry in legs[leg]._actions  # type: ignore[attr-defined]
+        for option in entry.option_strings
+    }
 
 
 def test_plan_write_and_apply_take_the_same_precondition_inputs() -> None:

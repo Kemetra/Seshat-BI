@@ -69,17 +69,25 @@ class ValidationOutcome:
     rollback_guidance: tuple[str, ...]
     blockers: tuple[str, ...]
 
+    @property
+    def _failure_lacks_guidance(self) -> bool:
+        """A failure the operator cannot undo is not an actionable result."""
+        return bool(self.failed) and not self.rollback_guidance
+
+    @property
+    def _silence_without_a_read(self) -> bool:
+        """No findings AND nothing examined -- silence, not a pass."""
+        return not self.failed and not self.artifacts_examined and not self.blockers
+
     def __post_init__(self) -> None:
-        if self.failed and not self.rollback_guidance:
+        if self._failure_lacks_guidance:
             raise ValidationInvalid(
-                "a failed validation must carry rollback guidance -- a failure "
-                "the operator cannot undo is not an actionable result (FR-014)"
+                "a failed validation must carry rollback guidance (FR-014)"
             )
-        if not self.failed and not self.artifacts_examined and not self.blockers:
+        if self._silence_without_a_read:
             raise ValidationInvalid(
                 "an outcome with no findings AND no artifacts examined must carry "
-                f"the {BLOCKER_READ_NOTHING} blocker: nothing was verified, so "
-                "this is not a pass"
+                f"the {BLOCKER_READ_NOTHING} blocker: nothing was verified"
             )
 
     @property

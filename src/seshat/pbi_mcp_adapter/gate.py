@@ -391,45 +391,25 @@ def read_allowlist(repo_root: Path) -> tuple[dict[str, AllowlistEntry], bool]:
     return resolved, committed
 
 
-def evaluate(
-    repo_root: Path,
-    target_id: str,
-    operation_id: str = "",
-    *,
-    tree_clean: bool | None = None,
-    backup_ref: str | None = None,
-) -> GateVerdict:
-    """Evaluate every write precondition for ``target_id``. Fail-closed.
+@dataclass(frozen=True)
+class _ReadinessFacts:
+    """What the COMMITTED readiness record says. One cohesive read."""
 
-    Every precondition is **derived**, never accepted as a caller assertion. That
-    is the whole design: a parameter a caller can set to ``True`` is not a gate,
-    it is a request. So there is no ``operation_binds``, no ``backup_declared``,
-    and no caller-supplied allowlist -- the earlier drafts of all three were the
-    same defect as the worktree read, and "the already-approved X" arriving as
-    free-form input is a fail-open (ask: checked against *what*?).
+    stage_readable: bool
+    state_committed: bool
+    stage_pass: bool
+    approval: Approval | None
+    names_target: bool
+    names_operation: bool
+    blockers: tuple[str, ...]
 
-    ``operation_id`` is **resolved** against the committed allowlist entry for
-    this target (FR-011a), and that entry's own ``target_id`` must match the
-    requested one (FR-011c). An empty or unlisted identifier refuses. Only the
-    approval-time content hash (FR-011b) remains out of scope -- externally
-    blocked for want of a producer this spec may not build.
 
-    ``tree_clean`` has **no default**: ``None`` means "never probed" and refuses.
-    A ``True`` default would let a caller that forgot to probe git pass the
-    git-safety leg by omission. Callers source it from :mod:`seshat.gitstate`,
-    which fails closed on a git error;
-    ``dagster_adapter/evidence._is_workspace_dirty`` must NOT be used -- it
-    returns ``False`` (clean) on an exception, turning a git failure into a
-    cleared precondition.
-
-    ``backup_ref`` is a git ref, not a boolean attestation. It must actually
-    resolve in this repository (``git rev-parse --verify``), so the operator
-    cannot satisfy the precondition by asserting a backup exists.
-    """
-    root = Path(repo_root)
+def _read_readiness_facts(
+    repo_root: Path, target_id: str, operation_id: str
+) -> _ReadinessFacts:
+    """Read the stage and approval preconditions from HEAD. Fail-closed."""
     blockers: list[str] = []
-
-    data, committed = _load_committed_yaml(root, _readiness_relpath(target_id))
+    data, committed = _load_committed_yaml(repo_root, _readiness_relpath(target_id))
     stage_readable = data is not None
     if not committed:
         blockers.append(BLOCKER_STATE_UNCOMMITTED)
@@ -450,10 +430,8 @@ def evaluate(
 
     # The named human must approve the OPERATION, not merely the target. Without
     # this, one approval reading "approved for sales_model" authorizes every
-    # operation the allowlist lists for that target, indefinitely -- and
-    # "approved" would mean "committed to a YAML file", not "a human ruled on
-    # this change". FR-011c requires both checks; this is the second one, and it
-    # needs no external producer (unlike FR-011b's content hash).
+    # operation the allowlist lists for that target, indefinitely -- "approved"
+    # would mean "committed to a YAML file", not "a human ruled on this change".
     names_operation = (
         approval is not None
         and bool(operation_id)
@@ -462,17 +440,43 @@ def evaluate(
     if approval is not None and not names_operation:
         blockers.append(BLOCKER_APPROVAL_OPERATION)
 
-    allowlist, allowlist_committed = read_allowlist(root)
+    return _ReadinessFacts(
+        stage_readable=stage_readable,
+        state_committed=committed,
+        stage_pass=stage_pass,
+        approval=approval,
+        names_target=names_target,
+        names_operation=names_operation,
+        blockers=tuple(blockers),
+    )
+
+
+@dataclass(frozen=True)
+class _TargetFacts:
+    """What the COMMITTED allowlist authorizes for this target and operation."""
+
+    entry: AllowlistEntry | None
+    allowlisted: bool
+    target_exists: bool
+    operation_binds: bool
+    blockers: tuple[str, ...]
+
+
+def _resolve_target_facts(
+    repo_root: Path, target_id: str, operation_id: str
+) -> _TargetFacts:
+    """Resolve the target and operation against the committed allowlist."""
+    blockers: list[str] = []
+    allowlist, allowlist_committed = read_allowlist(repo_root)
     if not allowlist_committed:
         blockers.append(BLOCKER_ALLOWLIST_UNCOMMITTED)
 
     entry = allowlist.get(target_id)
-    allowlisted = entry is not None
     target_exists = False
     if entry is None:
         blockers.append(BLOCKER_TARGET_NOT_ALLOWLISTED)
     else:
-        contained = _contained_target(root, entry.path)
+        contained = _contained_target(repo_root, entry.path)
         if contained is None:
             # Checked BEFORE existence: an escaping path must be refused for
             # escaping, not incidentally because the file happened to be absent.
@@ -484,10 +488,8 @@ def evaluate(
 
     # Operation binding is RESOLVED, not asserted: the identifier must appear in
     # the committed entry's approved set, and that entry must be for this target.
-    # Operation binding is RESOLVED, not asserted: the identifier must appear in
-    # the committed entry's approved set, and that entry must be for this target.
-    # `bool(operation_id)` ALONE is a fail-open -- any non-empty string would
-    # clear -- and reverting to it silently undoes FR-011a and FR-011c.
+    # A bare truthiness check on operation_id ALONE is a fail-open -- any
+    # non-empty string would clear -- and reverting to it undoes FR-011a/FR-011c.
     operation_binds = (
         entry is not None
         and bool(operation_id)
@@ -497,39 +499,102 @@ def evaluate(
     if not operation_binds:
         blockers.append(BLOCKER_OPERATION_UNBOUND)
 
+    return _TargetFacts(
+        entry=entry,
+        allowlisted=entry is not None,
+        target_exists=target_exists,
+        operation_binds=operation_binds,
+        blockers=tuple(blockers),
+    )
+
+
+def _git_safety(
+    repo_root: Path,
+    *,
+    tree_clean: bool | None,
+    backup_ref: str | None,
+    target_path: str | None,
+) -> tuple[bool, tuple[str, ...]]:
+    """Whether it is safe to mutate, and why not when it is not.
+
+    ``tree_clean is None`` means never probed, which refuses: a permissive
+    default would clear this leg by omission.
+    """
     if tree_clean is None:
-        git_safe = False
-        blockers.append(BLOCKER_GIT_UNPROBED)
-    elif tree_clean:
-        git_safe = True
-    elif backup_ref is None:
-        git_safe = False
-        blockers.append(BLOCKER_GIT_UNSAFE)
-    elif not _ref_resolves(root, backup_ref):
-        git_safe = False
-        blockers.append(BLOCKER_BACKUP_UNRESOLVABLE)
-    elif entry is not None and not _ref_holds_target(root, backup_ref, entry.path):
-        # Resolution is not custody: `--backup-ref HEAD` on a dirty tree resolves
-        # but backs up nothing, and its rollback would destroy the very work it
-        # claimed to protect.
-        git_safe = False
-        blockers.append(BLOCKER_BACKUP_MISSES_TARGET)
-    else:
-        git_safe = True
+        return False, (BLOCKER_GIT_UNPROBED,)
+    if tree_clean:
+        return True, ()
+    if backup_ref is None:
+        return False, (BLOCKER_GIT_UNSAFE,)
+    if not _ref_resolves(repo_root, backup_ref):
+        return False, (BLOCKER_BACKUP_UNRESOLVABLE,)
+    if target_path is not None and not _ref_holds_target(
+        repo_root, backup_ref, target_path
+    ):
+        # Resolution is not custody: a backup ref that merely resolves can hold
+        # none of the target's current bytes, and its rollback would then destroy
+        # the very work it claimed to protect.
+        return False, (BLOCKER_BACKUP_MISSES_TARGET,)
+    return True, ()
+
+
+def evaluate(
+    repo_root: Path,
+    target_id: str,
+    operation_id: str = "",
+    *,
+    tree_clean: bool | None = None,
+    backup_ref: str | None = None,
+) -> GateVerdict:
+    """Evaluate every write precondition for ``target_id``. Fail-closed.
+
+    Every precondition is **derived**, never accepted as a caller assertion. That
+    is the whole design: a parameter a caller can set to ``True`` is not a gate,
+    it is a request. So there is no ``operation_binds``, no ``backup_declared``,
+    and no caller-supplied allowlist -- the earlier drafts of all three were the
+    same defect as the worktree read, and "the already-approved X" arriving as
+    free-form input is a fail-open (ask: checked against *what*?).
+
+    ``operation_id`` is **resolved** against the committed allowlist entry for
+    this target (FR-011a), and that entry's own ``target_id`` must match the
+    requested one (FR-011c). Only the approval-time content hash (FR-011b) is out
+    of scope -- externally blocked for want of a producer this spec may not build.
+
+    ``tree_clean`` has **no default**: ``None`` means "never probed" and refuses.
+    Callers source it from :mod:`seshat.gitstate`, which fails closed on a git
+    error; ``dagster_adapter/evidence._is_workspace_dirty`` must NOT be used -- it
+    returns ``False`` (clean) on an exception, turning a git failure into a
+    cleared precondition.
+
+    ``backup_ref`` is a git ref, not a boolean attestation, and must hold the
+    target's current content -- see :func:`_ref_holds_target`.
+    """
+    root = Path(repo_root)
+    readiness = _read_readiness_facts(root, target_id, operation_id)
+    target = _resolve_target_facts(root, target_id, operation_id)
+    authorized_path = (
+        target.entry.path if target.entry is not None and target.target_exists else None
+    )
+    git_safe, git_blockers = _git_safety(
+        root,
+        tree_clean=tree_clean,
+        backup_ref=backup_ref,
+        target_path=target.entry.path if target.entry is not None else None,
+    )
 
     return GateVerdict(
         target_id=target_id,
         authorized_operation=operation_id,
-        authorized_path=(entry.path if entry is not None and target_exists else None),
-        stage_readable=stage_readable,
-        state_committed=committed,
-        stage_pass=stage_pass,
-        approval=approval,
-        approval_names_target=names_target,
-        approval_names_operation=names_operation,
-        operation_binds=operation_binds,
-        target_allowlisted=allowlisted,
-        target_exists=target_exists,
+        authorized_path=authorized_path,
+        stage_readable=readiness.stage_readable,
+        state_committed=readiness.state_committed,
+        stage_pass=readiness.stage_pass,
+        approval=readiness.approval,
+        approval_names_target=readiness.names_target,
+        approval_names_operation=readiness.names_operation,
+        operation_binds=target.operation_binds,
+        target_allowlisted=target.allowlisted,
+        target_exists=target.target_exists,
         git_safe=git_safe,
-        blockers=tuple(blockers),
+        blockers=(*readiness.blockers, *target.blockers, *git_blockers),
     )
