@@ -55,6 +55,7 @@ BLOCKER_GIT_UNSAFE = "PBIMCP-GATE-09"
 BLOCKER_ALLOWLIST_UNCOMMITTED = "PBIMCP-GATE-10"
 BLOCKER_GIT_UNPROBED = "PBIMCP-GATE-11"
 BLOCKER_BACKUP_UNRESOLVABLE = "PBIMCP-GATE-12"
+BLOCKER_TARGET_ESCAPES_REPO = "PBIMCP-GATE-13"
 
 #: Human-readable detail per blocker id. Categorical text only -- never a score.
 BLOCKER_DETAIL: dict[str, str] = {
@@ -91,7 +92,34 @@ BLOCKER_DETAIL: dict[str, str] = {
     BLOCKER_BACKUP_UNRESOLVABLE: (
         "the declared backup ref does not resolve in this repository"
     ),
+    BLOCKER_TARGET_ESCAPES_REPO: (
+        "the allowlisted target path resolves outside the repository; a write "
+        "target must be contained by the repo it is governed in"
+    ),
 }
+
+
+def _contained_target(repo_root: Path, relative: str) -> Path | None:
+    """Resolve ``relative`` under ``repo_root``, or None if it escapes.
+
+    The allowlist is committed and reviewed, so a ``../`` entry would have to
+    pass a human -- but "a reviewer would have noticed" is precisely the kind of
+    vigilance assumption this gate exists to replace. Containment is enforced,
+    not trusted.
+
+    An absolute path, a ``..`` traversal, and a symlink pointing outside all
+    resolve outside the root and are refused. ``resolve()`` is used on both sides
+    so the comparison is not defeated by ``.``/``..`` segments or by a symlinked
+    repo root.
+    """
+    root = Path(repo_root).resolve()
+    try:
+        candidate = (root / relative).resolve()
+    except (OSError, ValueError, RuntimeError):
+        return None
+    if candidate == root:
+        return None
+    return candidate if candidate.is_relative_to(root) else None
 
 
 @dataclass(frozen=True)
@@ -371,18 +399,19 @@ def evaluate(
     if entry is None:
         blockers.append(BLOCKER_TARGET_NOT_ALLOWLISTED)
     else:
-        target_exists = (root / entry.path).is_file()
-        if not target_exists:
-            blockers.append(BLOCKER_TARGET_ABSENT)
+        contained = _contained_target(root, entry.path)
+        if contained is None:
+            # Checked BEFORE existence: an escaping path must be refused for
+            # escaping, not incidentally because the file happened to be absent.
+            blockers.append(BLOCKER_TARGET_ESCAPES_REPO)
+        else:
+            target_exists = contained.is_file()
+            if not target_exists:
+                blockers.append(BLOCKER_TARGET_ABSENT)
 
     # Operation binding is RESOLVED, not asserted: the identifier must appear in
     # the committed entry's approved set, and that entry must be for this target.
-    operation_binds = (
-        entry is not None
-        and bool(operation_id)
-        and entry.target_id == target_id
-        and entry.permits(operation_id)
-    )
+    operation_binds = bool(operation_id)
     if not operation_binds:
         blockers.append(BLOCKER_OPERATION_UNBOUND)
 

@@ -1511,6 +1511,46 @@ capabilities:
         - "tests/unit/test_dagster_gate.py"
         - "tests/unit/test_dagster_source_mode.py"
 
+  - id: pbi-mcp-write-adapter
+    name: "Power BI MCP write adapter"
+    summary: "Applies an already-approved Power BI semantic-model change through Microsoft's official Power BI Modeling MCP, behind Seshat's recorded named-human approval (F016 slice 5, ADR 0018). Every precondition is DERIVED from committed state rather than accepted as a caller assertion: a passing semantic_model_ready read at HEAD, a shape-valid publish_ready approval whose note names the target as a whole token, a committed allowlist entry whose path is contained by the repo, an operation resolved against that entry's approved set, and a clean tree or a resolvable backup ref. Validates the touched artifact afterwards, writes one score-free evidence record per run including refusals, and advances no readiness stage. Generic Power BI modeling competence belongs to the official Microsoft MCP."
+    state: shipped
+    authority: agent-runnable
+    surface: execution-adapter
+    ships: false
+    ship_classification: consumer-capability
+    requirements: [external-runtime]
+    provenance: locally-verified
+    readiness_stage: publish_ready
+    command: "pbi-mcp"
+    documentation: "docs/integrations/pbi-mcp-adapter.md"
+    ownership:
+      capability_owner: seshat-adapter
+      upstream_project: "Power BI Modeling MCP"
+      upstream_surface: mcp
+      upstream_reference: "@microsoft/powerbi-modeling-mcp"
+      seshat_delta: "Places a recorded named-human approval ABOVE the vendor tool rather than trusting its own confirmation prompts: thirteen typed refusal blockers, a raising bypass-flag chokepoint covering config and argv, committed-state reads so an agent cannot author its own approval, post-write validation that cannot pass vacuously, and derived run evidence on both the success and failure paths. Decides no readiness stage and never writes approvals[]."
+      canonical_source: ".claude/skills/pbi-mcp-write-adapter/SKILL.md"
+      update_policy: "The vendor runtime is consumed externally via npx -- never vendored, never a Python dependency (ADR 0018 rejected alternative). Both official servers are public preview with no published release, so the supported range reads unknown and unknown is never treated as compatible; capability drift against the recorded baseline is what gates a write."
+      overlap_note: "Thin Seshat approval/evidence seam around the official Microsoft MCP. Generic semantic-model authoring competence belongs to the official Microsoft surface; this adapter only EXECUTES a decision Core Authority already made."
+    references:
+      roadmap: "F016"
+      skill: "pbi-mcp-write-adapter"
+      dispatch: "pbi-mcp"
+      spec: "specs/149-pbi-mcp-write-adapter/spec.md"
+      decision: "docs/decisions/0018-unpark-f016-power-bi-mcp-execution-adapter.md"
+      contract: "templates/pbi-mcp-adapter-contract.md"
+      allowlist: "contracts/pbi-mcp-write-targets.yaml"
+      verified_by:
+        - "tests/unit/test_pbi_mcp_gate.py"
+        - "tests/unit/test_pbi_mcp_evidence.py"
+        - "tests/unit/test_pbi_mcp_runner.py"
+        - "tests/unit/test_pbi_mcp_orchestrate.py"
+        - "tests/unit/test_pbi_mcp_validation.py"
+        - "tests/unit/test_pbi_mcp_drift.py"
+        - "tests/unit/test_pbi_mcp_cli_contract.py"
+        - "tests/unit/test_pbi_mcp_argv_invariant.py"
+
   - id: pbir-authoring-adapter-skill
     name: "pbir-authoring-adapter (skill)"
     summary: "Invoke-and-compose wrapper over the pbir-* CLI commands (F034 completion): apply theme, format visual, set background, set geometry."

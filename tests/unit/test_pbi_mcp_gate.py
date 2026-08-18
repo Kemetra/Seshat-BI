@@ -727,7 +727,7 @@ def test_every_blocker_id_has_readable_detail() -> None:
         for name, value in vars(gate).items()
         if name.startswith("BLOCKER_") and isinstance(value, str)
     ]
-    assert len(ids) == 12
+    assert len(ids) == 13
     for blocker in ids:
         assert gate.BLOCKER_DETAIL.get(blocker), blocker
         assert blocker.startswith("PBIMCP-GATE-")
@@ -924,3 +924,92 @@ def test_git_state_probe_failure_is_not_a_pass(committed_repo: Path) -> None:
         gate_module.run_git = original  # type: ignore[assignment]
     assert not verdict.cleared
     assert gate.BLOCKER_BACKUP_UNRESOLVABLE in verdict.blockers
+
+
+# --------------------------------------------------------------------------
+# Containment: an allowlisted path must not escape the repository
+# --------------------------------------------------------------------------
+
+
+def _repo_with_escaping_path(tmp_path: Path, path_value: str) -> Path:
+    """A committed allowlist whose entry points outside the repo."""
+    outside = tmp_path / "outside.tmdl"
+    outside.write_text("// outside the repo\n", encoding="utf-8")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    _write(repo, f"mappings/{TARGET}/readiness-status.yaml", _readiness_yaml())
+    _write(
+        repo,
+        gate.TARGET_ALLOWLIST_RELPATH,
+        f"targets:\n  - target_id: {TARGET}\n"
+        f"    path: {path_value.replace('{OUT}', outside.as_posix())}\n"
+        f"    operations:\n      - {OPERATION}\n",
+    )
+    _write(repo, f"models/{TARGET}.tmdl", "// inside\n")
+    _write(repo, "README.md", "fixture\n")
+    _commit_all(repo)
+    return repo
+
+
+@pytest.mark.parametrize(
+    "path_value",
+    [
+        pytest.param("../outside.tmdl", id="parent-traversal"),
+        pytest.param("models/../../outside.tmdl", id="traversal-via-subdir"),
+        pytest.param("{OUT}", id="absolute-path"),
+    ],
+)
+def test_allowlisted_path_escaping_the_repo_refuses(
+    tmp_path: Path, path_value: str
+) -> None:
+    """A write target must be contained by the repo it is governed in.
+
+    The allowlist is committed and reviewed, so an escaping entry would have to
+    pass a human -- but "a reviewer would have noticed" is exactly the vigilance
+    assumption this gate replaces. Found by attacking the gate after it was
+    written: the escape CLEARED every precondition, because containment was
+    trusted rather than enforced.
+    """
+    repo = _repo_with_escaping_path(tmp_path, path_value)
+    verdict = _evaluate(repo)
+    assert not verdict.cleared
+    assert gate.BLOCKER_TARGET_ESCAPES_REPO in verdict.blockers
+
+
+def test_escape_is_refused_for_escaping_not_for_being_absent(
+    tmp_path: Path,
+) -> None:
+    """The blocker must name the real cause.
+
+    An escaping path that happens not to exist would otherwise be refused as
+    TARGET_ABSENT, telling the operator to create the file -- which is the wrong
+    fix and hides the containment breach.
+    """
+    repo = _repo_with_escaping_path(tmp_path, "../outside.tmdl")
+    (tmp_path / "outside.tmdl").unlink()
+    verdict = _evaluate(repo)
+    assert gate.BLOCKER_TARGET_ESCAPES_REPO in verdict.blockers
+    assert gate.BLOCKER_TARGET_ABSENT not in verdict.blockers
+
+
+def test_a_contained_path_still_clears(committed_repo: Path) -> None:
+    """The positive control: containment must not refuse legitimate targets."""
+    assert _evaluate(committed_repo).cleared
+
+
+def test_the_repo_root_itself_is_not_a_valid_target(tmp_path: Path) -> None:
+    """``path: .`` resolves to the root, which is not a writable artifact."""
+    repo = _init_repo(tmp_path)
+    _write(repo, f"mappings/{TARGET}/readiness-status.yaml", _readiness_yaml())
+    _write(
+        repo,
+        gate.TARGET_ALLOWLIST_RELPATH,
+        f"targets:\n  - target_id: {TARGET}\n    path: .\n"
+        f"    operations:\n      - {OPERATION}\n",
+    )
+    _write(repo, "README.md", "fixture\n")
+    _commit_all(repo)
+    verdict = _evaluate(repo)
+    assert not verdict.cleared
+    assert gate.BLOCKER_TARGET_ESCAPES_REPO in verdict.blockers
