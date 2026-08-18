@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import shutil
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -116,8 +116,23 @@ def _carries_forbidden_flag(per_server_args: list[list[str]]) -> bool:
     return any(_FORBIDDEN_FLAG in arg for args in per_server_args for arg in args)
 
 
+def _is_write_flag(arg: str) -> bool:
+    """Whether one argument requests write mode.
+
+    Matches the bare flag and its ``=value`` form. The value form matters
+    because an exact membership test reads ``--readwrite=true`` as *not* write
+    mode -- harmless while nothing could be invoked in write mode (slices 2-4),
+    a fail-open once slice 5 makes it reachable.
+
+    The split is on ``=`` rather than a substring test so that a longer flag
+    which merely starts with the same letters (``--readwrite-dry-run``) is not
+    swept up as a write request.
+    """
+    return arg.split("=", 1)[0] in _WRITE_FLAGS
+
+
 def _requests_write_mode(per_server_args: list[list[str]]) -> bool:
-    return any(arg in _WRITE_FLAGS for args in per_server_args for arg in args)
+    return any(_is_write_flag(arg) for args in per_server_args for arg in args)
 
 
 def _all_read_only(per_server_args: list[list[str]]) -> bool:
@@ -171,6 +186,30 @@ def _transport_verdict(relevant: list[dict]) -> str:
     if _all_read_only([_server_args(entry) for entry in local]):
         return CONFIG_READ_ONLY
     return CONFIG_WRITE_MODE
+
+
+def classify_invocation_argv(argv: Sequence[str]) -> str:
+    """Classify one INVOCATION's argv through the same flag matcher as config.
+
+    Spec 149 (F016 slice 5). Until write mode became reachable, the only place a
+    bypass flag could appear was the machine-local ``.mcp.json``, so
+    :func:`classify_mcp_config` was the whole story. An invocation can now carry
+    the flag too, and it must be judged by the SAME rule -- hence this delegates
+    to :func:`_flag_verdict` rather than owning a second matcher. One rule, one
+    enforcement path.
+
+    Args are lowercased first, mirroring what :func:`_server_args` does for the
+    config path; without it an argv-only case bypass (``--SkipConfirmation``)
+    would exist that the config path does not have.
+
+    Returns ``CONFIG_FORBIDDEN_FLAG``, ``CONFIG_WRITE_MODE``, or
+    ``CONFIG_READ_ONLY``. Read-only is the resting state: an invocation naming no
+    mode resolves to read-only, so write mode is never reached by omission
+    (FR-001).
+    """
+    lowered = [str(arg).lower() for arg in argv]
+    forced = _flag_verdict([lowered])
+    return forced if forced is not None else CONFIG_READ_ONLY
 
 
 def classify_mcp_config(path: Path) -> str:
