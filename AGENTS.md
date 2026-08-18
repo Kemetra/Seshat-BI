@@ -84,7 +84,11 @@ wiring -- the authoring sibling of `retail-govern`, which interprets rule findin
 - Roadmap: `docs/roadmap/roadmap.md`. Architecture: `docs/architecture/`.
 - Repo rules (secrets, PBIP, Windows): `CLAUDE.md`.
 <!-- SPECKIT START -->
-No active Spec Kit implementation plan.
+Active plan: `specs/149-pbi-mcp-write-adapter/plan.md` (F016 slice 5 — the approval-gated
+Power BI MCP write adapter, authorized by ADR 0018, ratified 2026-08-18). Spec, plan,
+research, data model, CLI contract and quickstart are authored; **no implementation code
+exists yet**. Read `research.md` before writing any of it — R4 and R5 correct two natural
+but wrong assumptions about `gitutil.run_subprocess` and `redaction_core`.
 <!-- SPECKIT END -->
 <!-- SESHAT-KIT START -->
 **Seshat BI kit router** (v0.2.0) -- generated from `.seshat/kit-source.yaml`; do not edit here.
