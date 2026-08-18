@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-18
 
-**Status**: Draft
+**Status**: Ratified (Ahmed Shaaban, 2026-08-18)
 
 **Input**: User description: "Slice 5 of F016: the approval-gated Power BI MCP write adapter, authorized by ADR 0018 (RATIFIED by Ahmed Shaaban 2026-08-18). Pipeline: write operations -> approval gate -> target allowlist -> git safety -> Microsoft MCP execution -> post-write validation -> rollback/evidence."
 
