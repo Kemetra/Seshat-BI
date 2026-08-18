@@ -20,7 +20,7 @@ rather than taken on trust. Results of that verification are recorded inline bel
 | U1 | Underspecification | HIGH | FR-013, `tasks.md` T035 | FR-013 requires value validation "where an expected value exists and a data leg is available", and T035 says otherwise emit `deferred`. But no artifact defines how "a data leg is available" is *detected*. Given the repo's degrade-without-reporting fail-open history, an undetectable condition silently becomes permanent `deferred`. | Specify the availability probe in T035, and assert in test that `deferred` is **reported** as a typed outcome, never a silent skip. |
 | U2 | Underspecification | MEDIUM | Edge Cases ("Two writes concurrently"), FR-008 | The spec says a second concurrent write "must not interleave" and that git-safety is "re-evaluated per invocation, not cached" — but re-evaluation is not mutual exclusion. Two processes can both observe a clean tree and both proceed. No task tests concurrency. | Either add a locking task, or narrow the spec's claim to what per-invocation re-evaluation actually guarantees. Currently the spec promises more than the design delivers. |
 | A1 | Ambiguity | MEDIUM | FR-016, `tasks.md` T024 | "fixed authority label" is never given its literal value in any artifact. A test asserting "a fixed label" passes for any constant string. | Pin the exact label string in `data-model.md` so T021's score-free proof and T024 bind to one value. |
-| I2 | Inconsistency | LOW | `plan.md` "Correction" section, `tasks.md` Phase 2 | Both cite `pbi_mcp/detect.py:51` for `_FORBIDDEN_FLAG`. Verified actual location: **line 49** (`_FORBIDDEN_FLAG`), line 50 (`_WRITE_FLAGS`). Symbols and both write-flag spellings confirmed exactly as described; only the line number drifted. | Cosmetic. Prefer symbol names over line numbers in prose, since edits invalidate the latter. |
+| ~~I2~~ | **WITHDRAWN** | n/a | `plan.md` "Correction" section | **This finding was WRONG and is withdrawn.** It claimed the plan's `detect.py:51` citation had drifted to line 49. Re-verified with `grep -n`: `_FORBIDDEN_FLAG` IS at line 51 and `_WRITE_FLAGS` at line 52 — the plan and `data-model.md` were correct. The error came from reading line numbers out of a `sed` window offset. Caught by the independent review in `plan-review.md` (LOW-2). | None. Recorded rather than deleted, because a withdrawn finding is evidence about how this analysis was produced: it verified symbol *existence* well and symbol *location* badly. |
 | O1 | Ordering | LOW | `tasks.md` T052, T053 | T052 requires reconciling five `parked_on: F016` edges "once this ships — and not before"; T053 is marked owner-gated. Both sit in Phase 8, ahead of the Phase 9 gate set, so the roadmap flip precedes final verification. | Move T052 after Phase 9, or state that it lands in the same commit as the passing gate set. |
 
 **No finding contradicts a constitution MUST.** Principles I, II, V, VI, VIII and IX are
@@ -84,7 +84,7 @@ repo-lesson guard (T044 emitted-commands, T048 closed-vocabulary, T058 three pro
 - Requirement coverage: **26/26 have at least one task (100%)**; one (FR-011b) has a task but
   no buildable substrate — counted as covered-but-blocked, not covered
 - CRITICAL issues: **1** (C1)
-- HIGH: 2 (I1, U1) - MEDIUM: 2 (U2, A1) - LOW: 2 (I2, O1)
+- HIGH: 2 (I1, U1) - MEDIUM: 2 (U2, A1) - LOW: 1 (O1); I2 withdrawn as incorrect
 - Constitution violations: **0**
 - Duplications: 0
 
@@ -113,3 +113,29 @@ already internalize repo-specific defect lessons — no absence-assertions, no v
 branches, derive-then-replace redaction, emitted-commands-must-run, non-circular fixtures,
 and an explicit cancellation of a second enforcement path. C1 is a genuine gap, not a
 symptom of carelessness.
+
+---
+
+## Superseded by the independent review
+
+An independent adversarial review (`plan-review.md`, verdict **REVISE**) found **nine issues
+this analysis missed**, four of them CRITICAL, and correctly withdrew one of its findings (I2).
+
+The structural lesson, recorded because it generalizes: **this analysis verified that symbols
+EXIST; it did not verify how they BEHAVE.** That is the same defect class as the
+absence-assertion trap the plan itself warns against. Concretely:
+
+- It confirmed `dagster_adapter/gate.py` exists and is the right pattern to mirror, but never
+  checked *which files* its `is_tracked_and_clean` call actually guards — it guards
+  `unresolved-questions.md`, never `readiness-status.yaml`, so mirroring it reproduces a
+  fail-open where the agent can author its own approval (review CRITICAL-1).
+- It marked FR-007 "Yes | T012, T017" on the strength of tasks existing, without checking that
+  the allowlist arrives from caller argv (`--allow`), making it as unbuildable as FR-011b
+  (review CRITICAL-3).
+- It accepted FR-013's "the `seshat check` R-family" without checking that family's corpus,
+  which is report-layer only (`.Report/definition.pbir`) and contains no TMDL semantic model —
+  the artifact class this feature mutates (review CRITICAL-2).
+
+Read `plan-review.md` as the authoritative pre-implementation gate. This document remains
+useful for its requirement traceability and its verified-claims table, both of which the
+review independently confirmed.
