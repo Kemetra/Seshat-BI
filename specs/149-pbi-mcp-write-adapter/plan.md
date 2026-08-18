@@ -207,8 +207,10 @@ bitten by, called out so `/speckit-tasks` inherits them:
 
 Ordering, each step green before the next:
 
-1. **`invariants.py` + its test** — the bypass-flag chokepoint. First because it is the one
-   rule with no exceptions, and everything else runs behind it.
+1. **Extend `pbi_mcp/detect.py` + its tests** — the bypass-flag chokepoint **already exists**
+   there (`_FORBIDDEN_FLAG`, `_WRITE_FLAGS` covering both `--readwrite` and `--read-write`).
+   Add argv inspection to that one matcher; do NOT create a second module or constant. First
+   because it is the one rule with no exceptions, and everything else runs behind it.
 2. **`gate.py` + tests** — the four preconditions, parameterized hold-three-break-one, plus
    the fail-closed-on-unreadable case. Prove refusal before building anything that can write.
 3. **`target.py`, `git_safety.py`** — the two preconditions with their own resolution logic.
@@ -246,7 +248,7 @@ Plus three feature-specific proofs:
 | Risk | Mitigation |
 |---|---|
 | Vendor preview drift silently changes flag or capability names | Drift is a preflight blocker (FR-019); the supported range stays `unknown` and `unknown` is never compatible. |
-| A future callsite invokes the runtime without the gate | `invariants.py` + `gate.py` are the only entry path; a test asserts the runner refuses when called with an uncleared gate object. |
+| A future callsite invokes the runtime without the gate | `pbi_mcp/detect.py` (bypass flag) + `pbi_mcp_adapter/gate.py` (the four preconditions) are the only entry path; a test asserts the runner refuses when called with an uncleared gate object, and another asserts every write-capable path resolves its flag verdict through `detect.py`. |
 | Evidence starts looking like approval | FR-018 plus an explicit before/after stage comparison in the evidence tests. |
 | Partial write after a mid-run process death | Treated as `failed` with rollback guidance and an evidence record; never reported as success. |
 | The stubbed runtime diverges from the real server | The stub is built from the real preflight artifact shape (`.seshat/powerbi-mcp-preflight.json`), not hand-invented — avoids a circular fixture that proves only itself. |

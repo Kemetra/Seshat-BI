@@ -70,7 +70,7 @@ refusal every time; plus the fail-closed unreadable-state case.
 
 ### Tests first
 
-- [ ] T009 [P] [US2] Write failing test `tests/unit/test_pbi_mcp_gate.py::test_hold_three_break_one` — parameterized across all four preconditions; assert refusal in each case AND that the reported blocker names the specific missing item; assert the total refusal **count** equals the parameter count so a never-taken branch is visible (FR-009)
+- [ ] T009 [P] [US2] Write failing test `tests/unit/test_pbi_mcp_gate.py::test_hold_three_break_one` — parameterized across the four preconditions **named explicitly**: (a) `semantic_model_ready = pass` for the target scope, read via the committed gate-reader pattern (FR-004 — ADR decision 2(a); do NOT leave this one implicit in a generic "all four" phrase, or it can be dropped while the test still passes with four other cases), (b) the named-human `publish_ready` approval, (c) target allowlisted, (d) git clean-or-declared-backup. Assert refusal in each case AND that the reported blocker names the specific missing item; assert the total refusal **count** equals four so a never-taken branch is visible (FR-004, FR-009)
 - [ ] T010 [P] [US2] Write failing test `test_unreadable_state_refuses` — readiness state absent, malformed, and unreadable are three separate cases; each must refuse (FR-005). An unreadable gate is NEVER a passing gate
 - [ ] T011 [P] [US2] Write failing test `test_approval_must_name_target_whole_token` — TWO cases: an approval naming `sales_model` must **refuse** target `sales_model_v2` (prefix case), and must **clear** target `sales_model` (exact-token case). This is the data-model rule that stops a loosely-worded note widening its own scope (FR-006)
 - [ ] T012 [P] [US2] Write failing test `test_target_not_allowlisted_refuses` and `test_target_allowlisted_but_absent_on_disk_refuses` — the second must refuse as an undefined artifact, never invent it (FR-007, FR-011)
@@ -219,7 +219,23 @@ are sequential, and T045–T049 all touch the CLI parser/handler pair.
 
 ## Task count
 
-**58 tasks** — Setup 3, Foundational 4, US2 11, US1 11, US3 6, US4 3, CLI 10, Docs 4, Polish 6.
+**59 tasks** — Setup 3, Foundational 5, US2 11, US1 11, US3 6, US4 3, CLI 10, Docs 4, Polish 6.
+
+### Success-criteria traceability
+
+Every SC maps to a task; the mapping is recorded here rather than inline so the task text stays
+readable:
+
+| SC | Covered by |
+|---|---|
+| SC-001 (governed path works, confirmed by validation) | T029, T030 |
+| SC-002 (100% of missing-precondition writes refused) | T009 (four named cases + refusal count) |
+| SC-003 (zero stages change) | T022, T059 |
+| SC-004 (one score-free record per run) | T020, T021 |
+| SC-005 (bypass flag refused in 100% of modes) | T004, T005 |
+| SC-006 (rollback guidance works) | T031, T036 |
+| SC-007 (read-only family unchanged) | T008, T055 |
+| SC-008 (no sensitive token committed) | T023, T024 |
 
 ## Out of scope (do not add tasks for these)
 

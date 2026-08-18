@@ -26,25 +26,37 @@ An intent to mutate one declared target. Inert until every precondition clears.
 
 ---
 
-## InvariantVerdict
+## InvariantVerdict *(lives in the EXISTING `pbi_mcp/detect.py`, not a new module)*
 
 The standing prohibition, evaluated **before any invocation, in every mode** (FR-002).
 
-| Field | Type | Notes |
+**This entity is already implemented.** `src/seshat/pbi_mcp/detect.py` holds the matcher and
+its constants, and expresses the verdict through the existing `CONFIG_FORBIDDEN_FLAG` state in
+its returned `DetectedFacts` — consumed by `preflight.py:144` and `recommend.py:108`. Slice 5
+**extends** that one matcher; it does not introduce a parallel type or module.
+
+| Existing element | Where | Role |
 |---|---|---|
-| `ok` | `bool` | `False` when a bypass flag is present anywhere. |
-| `violation` | `str \| None` | Names where the flag was found (config vs. invocation). |
+| `_FORBIDDEN_FLAG = "--skipconfirmation"` | `detect.py:51` | The bypass flag. |
+| `_WRITE_FLAGS = ("--readwrite", "--read-write")` | `detect.py:52` | **Both** spellings; the second is the misspelling this repo once shipped. |
+| `CONFIG_FORBIDDEN_FLAG` | `detect.py:37` | The state a caller reads as "refuse". |
+| `_carries_forbidden_flag()` | `detect.py:115` | The matcher — **config args only** today. |
 
 **Validation rules**
 
-- Any occurrence of the confirmation-bypass flag (`--skipconfirmation`) in the invocation
-  argv **or** in the resolved launcher config is `ok=False` — including read-only mode and
-  including test fixtures.
-- `--readwrite` present as a *default* (rather than an explicit opt-in) is also a violation.
+- Any occurrence of the confirmation-bypass flag (`--skipconfirmation`) in the resolved
+  launcher config **or** in the invocation argv yields the forbidden-flag state — including
+  read-only mode and including test fixtures.
+- Either write-flag spelling (`--readwrite`, `--read-write`) present as a *default* rather than
+  an explicit opt-in is also a violation. A matcher covering only one fails open on a config
+  this repo itself generated.
 
-**Why its own entity**: this is the one rule with no exceptions, so it is checked at a single
-chokepoint (`invariants.py`) that no callsite can skip. Reviewers verify coverage by grepping
-imports rather than auditing branches.
+**What slice 5 adds**: argv inspection. The shipped matcher reads `.mcp.json` config args only,
+because until now nothing could be invoked in write mode. That is the entire gap.
+
+**Why not a new module**: a second enforcement path for one rule splits the trust surface, and
+the weaker path becomes the one a refactor finds — the `no-second-approval-trust-path` defect.
+Reviewers verify coverage by grepping which write-capable paths import `detect.py`.
 
 ---
 
