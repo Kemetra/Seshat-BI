@@ -22,6 +22,19 @@
 #
 # Hand-curated (not auto-generated). v1 scope = the F016 bottleneck cluster only.
 # Generic kit-feature edges only -- no worked-example domain facts.
+#
+# RECONCILED 2026-08-18 (spec 149 / F016 slice 5 BUILT). The five edges below were
+# NOT flipped as a group, because they are parked for two different reasons and a
+# blanket flip would assert something false:
+#   - The three F031-F033 edges were parked on "no consumer yet". Slice 5 IS now that
+#     consumer (a live, publish-capable execution adapter to maintain, pin and
+#     release-manage), so the park no longer holds and those edges are REMOVED. They
+#     are not rewritten as tripwires: `shipped_when_tracked` exists to catch a park
+#     that drifted out of date UNNOTICED, and DF1 correctly errors on an edge that
+#     still asserts a park after its blocker shipped. A resolved park is deleted.
+#   - `pbi-tools-extract-parked-on-f016` is parked on "no `.pbix` target, no installed
+#     toolchain". Slice 5 changes neither, so that edge stands unchanged. Marking it
+#     unblocked would be a false claim about a park slice 5 did not lift.
 
 edges:
   - id: "pbi-tools-extract-parked-on-f016"
@@ -37,24 +50,3 @@ edges:
     doc: "docs/roadmap/roadmap.md"
     anchor: "| L3 new predicate operators | **DEFERRED** -- no consumer |"
     evidence: "docs/superpowers/specs/2026-06-26-l3-new-operators-deferred.md"
-
-  - id: "f031-maintenance-policy-parked-on-f016"
-    blocked: "F031 adapter maintenance policy"
-    parked_on: "F016"
-    doc: "docs/roadmap/roadmap.md"
-    anchor: "**F031-F033 (maintenance automation)** -- no consumer yet"
-    evidence: "specs/025-adapter-maintenance-policy/spec.md"
-
-  - id: "f032-compatibility-matrix-parked-on-f016"
-    blocked: "F032 adapter compatibility matrix"
-    parked_on: "F016"
-    doc: "docs/roadmap/roadmap.md"
-    anchor: "**F031-F033 (maintenance automation)** -- no consumer yet"
-    evidence: "specs/026-adapter-compatibility-matrix/spec.md"
-
-  - id: "f033-release-maturity-parked-on-f016"
-    blocked: "F033 release maturity management"
-    parked_on: "F016"
-    doc: "docs/roadmap/roadmap.md"
-    anchor: "**F031-F033 (maintenance automation)** -- no consumer yet"
-    evidence: "specs/027-release-maturity-management/spec.md"
