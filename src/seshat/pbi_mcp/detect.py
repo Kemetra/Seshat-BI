@@ -9,9 +9,18 @@ contacted; nothing is written.
 The readiness read mirrors the ``seshat.dagster_adapter.gate`` reader style
 (read-only by contract, missing artifacts reported as ``missing``, never
 guessed). It reads the WORKTREE files -- sufficient for a read-only advisory.
-The slice-5 mutation gate (owner-ADR-gated, NOT implemented here) must
-additionally require the committed state via ``gitstate.is_tracked_and_clean``
-per the #334 lesson: an uncommitted gate artifact is never a GO signal.
+
+**Updated 2026-08-18 (spec 149).** The slice-5 mutation gate now EXISTS, in
+``seshat.pbi_mcp_adapter.gate``, and it does require the committed state via
+``gitstate.is_tracked_and_clean`` per the #334 lesson -- an uncommitted gate
+artifact is never a GO signal. The worktree reads below remain correct for the
+read-only advisory family; never reuse them to authorize a mutation.
+
+This module also owns the standing bypass-flag prohibition for BOTH surfaces:
+:func:`classify_mcp_config` (the machine-local ``.mcp.json``) and
+:func:`classify_invocation_argv` (one invocation's argv) return advisory states,
+while :func:`refuse_if_bypass_flag` RAISES and is what the write path calls --
+one rule, one matcher, no verdict a caller can obtain and discard.
 """
 
 from __future__ import annotations

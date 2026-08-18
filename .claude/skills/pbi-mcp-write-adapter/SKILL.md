@@ -148,6 +148,26 @@ A zero exit from the vendor runtime is not confirmation. Validation runs
 
 A validation failure is **blocking with rollback guidance**, never a warning.
 
+## Deliberate non-features (do not "fix" these)
+
+- **No approval expiry.** The gate takes the first shape-valid `publish_ready`
+  approval and checks only that its `at:` date parses. An approval from a year ago
+  still authorizes a write. This is recorded as an open owner decision rather than
+  silently chosen: a staleness bound is a governance policy (how old is too old?),
+  not an implementation detail, and inventing a number would be fabricating the
+  owner's judgment. `rules/readiness_status.py` has a `_check_audit_freshness`
+  notion this gate deliberately does not consume. Raise it with the owner if a
+  bound is wanted; do not add one unasked.
+- **No concurrency lock.** Two simultaneous writes to the same target both
+  re-evaluate the gate and can both proceed; the evidence path is fixed, so the
+  second run overwrites the first's record. The spec's "must not interleave" claim
+  is stronger than what the design delivers. Per-invocation re-evaluation is not
+  mutual exclusion.
+- **The vendor argv is unvalidated against the real binary.** Every runner test
+  injects a fake, so `build_argv`'s flag names are unverified against a live
+  `npx @microsoft/powerbi-modeling-mcp`. Both servers are unreleased previews;
+  capability drift is what guards against the flag names having moved.
+
 ## Known blocked scope
 
 - **FR-011b (approval-time content hash) is EXTERNALLY BLOCKED**, by owner decision
