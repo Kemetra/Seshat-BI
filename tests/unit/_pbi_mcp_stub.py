@@ -62,29 +62,34 @@ def stub_server(
     )
 
 
-def stub_preflight_result(
-    *,
-    status: str = preflight.STATUS_OK,
-    mode: str = "read-only",
-    server: preflight.ServerDescription | None = None,
-    target: str | None = "sales_model",
-    target_allowlisted: bool | None = True,
-    blockers: tuple[preflight.PreflightBlocker, ...] = (),
-    capabilities_verified: bool = True,
-) -> preflight.PreflightResult:
+@dataclass(frozen=True)
+class PreflightSpec:
+    """What a stubbed preflight result should say. Happy path by default."""
+
+    status: str = preflight.STATUS_OK
+    mode: str = "read-only"
+    server: preflight.ServerDescription | None = None
+    target: str | None = "sales_model"
+    target_allowlisted: bool | None = True
+    blockers: tuple[preflight.PreflightBlocker, ...] = ()
+    capabilities_verified: bool = True
+
+
+def stub_preflight_result(**overrides: object) -> preflight.PreflightResult:
     """A real ``PreflightResult`` on the happy path, overridable per test."""
-    resolved_server = stub_server() if server is None else server
+    spec = PreflightSpec(**overrides)  # type: ignore[arg-type]
+    resolved_server = stub_server() if spec.server is None else spec.server
     return preflight.PreflightResult(
-        status=status,
-        mode=mode,
+        status=spec.status,
+        mode=spec.mode,
         server=resolved_server,
         tools_present=resolved_server.tools,
         tools_missing=(),
-        target=target,
-        target_allowlisted=target_allowlisted,
-        blockers=blockers,
+        target=spec.target,
+        target_allowlisted=spec.target_allowlisted,
+        blockers=spec.blockers,
         notes=(),
-        capabilities_verified=capabilities_verified,
+        capabilities_verified=spec.capabilities_verified,
     )
 
 

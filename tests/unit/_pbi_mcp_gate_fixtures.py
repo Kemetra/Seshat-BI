@@ -23,6 +23,7 @@ Two repo-earned bars enforced structurally, not by convention:
 from __future__ import annotations
 
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -39,32 +40,43 @@ OPERATION = "update_measure"
 OWNER = "Ahmed Shaaban (data_owner)"
 
 
-def _readiness_yaml(
-    *,
-    target: str = TARGET,
-    semantic_status: str = "pass",
-    approval_note: str | None = None,
-    approval_stage: str = "publish_ready",
-    owner: str = OWNER,
-    include_approval: bool = True,
-) -> str:
-    note = (
-        f"approved for {target}: {OPERATION}"
-        if approval_note is None
-        else approval_note
-    )
+@dataclass(frozen=True)
+class ReadinessSpec:
+    """The readiness record a fixture should produce.
+
+    Bundled rather than six keyword arguments: the defaults are the happy path,
+    and a test overrides only the field whose precondition it is breaking.
+    """
+
+    target: str = TARGET
+    semantic_status: str = "pass"
+    approval_note: str | None = None
+    approval_stage: str = "publish_ready"
+    owner: str = OWNER
+    include_approval: bool = True
+
+    @property
+    def note(self) -> str:
+        if self.approval_note is not None:
+            return self.approval_note
+        return f"approved for {self.target}: {OPERATION}"
+
+
+def _readiness_yaml(**overrides: object) -> str:
+    """The readiness record as YAML, happy path unless overridden."""
+    spec = ReadinessSpec(**overrides)  # type: ignore[arg-type]
     body = (
         "stages:\n"
-        f"  semantic_model_ready:\n    status: {semantic_status}\n"
+        f"  semantic_model_ready:\n    status: {spec.semantic_status}\n"
         "  publish_ready:\n    status: pass\n"
     )
-    if include_approval:
+    if spec.include_approval:
         body += (
             "approvals:\n"
-            f"  - stage: {approval_stage}\n"
-            f"    owner: {owner!r}\n"
+            f"  - stage: {spec.approval_stage}\n"
+            f"    owner: {spec.owner!r}\n"
             "    at: '2026-08-18'\n"
-            f"    note: {note!r}\n"
+            f"    note: {spec.note!r}\n"
         )
     return body
 

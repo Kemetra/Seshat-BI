@@ -203,15 +203,23 @@ def evidence_path(repo_root: Path) -> Path:
     return Path(repo_root) / ARTIFACT_RELPATH
 
 
-def write_intent(
-    repo_root: Path,
-    *,
-    tool: str,
-    mode: str,
-    target_id: str,
-    operation_id: str,
-    timestamp: str,
-) -> Path:
+@dataclass(frozen=True)
+class RunIdentity:
+    """Who/what/when a run is about -- bundled so callers pass ONE thing.
+
+    Six positional parameters on a writer is the shape that invites a caller to
+    mis-order them; a frozen value object makes the pairing explicit and lets the
+    correctness fix (a public dataclass) also satisfy the argument-count rule.
+    """
+
+    tool: str
+    mode: str
+    target_id: str
+    operation_id: str
+    timestamp: str
+
+
+def write_intent(repo_root: Path, identity: RunIdentity) -> Path:
     """Record the INTENT to mutate, before the mutation runs.
 
     Outcome is ``deferred`` with ``mutation_attempted`` true: if the process dies
@@ -220,11 +228,11 @@ def write_intent(
     trace of who changed it.
     """
     record = RunEvidence(
-        tool=tool,
-        mode=mode,
-        target_id=target_id,
-        operation_id=operation_id,
-        timestamp=timestamp,
+        tool=identity.tool,
+        mode=identity.mode,
+        target_id=identity.target_id,
+        operation_id=identity.operation_id,
+        timestamp=identity.timestamp,
         outcome="deferred",
         mutation_attempted=True,
         blockers=("PBIMCP-EV-01",),

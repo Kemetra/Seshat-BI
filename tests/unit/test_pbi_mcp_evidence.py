@@ -76,11 +76,13 @@ def test_exactly_one_record_per_run(tmp_path: Path) -> None:
     """finalize REPLACES rather than appending -- one record, not a log."""
     evidence.write_intent(
         tmp_path,
-        tool="powerbi-modeling-mcp",
-        mode="readwrite",
-        target_id="sales_model",
-        operation_id="update_measure",
-        timestamp=STAMP,
+        evidence.RunIdentity(
+            tool="powerbi-modeling-mcp",
+            mode="readwrite",
+            target_id="sales_model",
+            operation_id="update_measure",
+            timestamp=STAMP,
+        ),
     )
     evidence.finalize(tmp_path, _record())
     written = list((tmp_path / ".seshat").glob("pbi-mcp-write-evidence*"))
@@ -115,11 +117,13 @@ def test_intent_record_says_a_mutation_was_attempted(tmp_path: Path) -> None:
     """
     path = evidence.write_intent(
         tmp_path,
-        tool="powerbi-modeling-mcp",
-        mode="readwrite",
-        target_id="sales_model",
-        operation_id="update_measure",
-        timestamp=STAMP,
+        evidence.RunIdentity(
+            tool="powerbi-modeling-mcp",
+            mode="readwrite",
+            target_id="sales_model",
+            operation_id="update_measure",
+            timestamp=STAMP,
+        ),
     )
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["mutation_attempted"] is True
@@ -139,11 +143,13 @@ def test_intent_record_exists_before_the_mutation(tmp_path: Path) -> None:
     """
     evidence.write_intent(
         tmp_path,
-        tool="powerbi-modeling-mcp",
-        mode="readwrite",
-        target_id="sales_model",
-        operation_id="update_measure",
-        timestamp=STAMP,
+        evidence.RunIdentity(
+            tool="powerbi-modeling-mcp",
+            mode="readwrite",
+            target_id="sales_model",
+            operation_id="update_measure",
+            timestamp=STAMP,
+        ),
     )
     # No finalize() -- this is the crash.
     payload = json.loads(evidence.evidence_path(tmp_path).read_text("utf-8"))

@@ -404,50 +404,63 @@ class _ReadinessFacts:
     blockers: tuple[str, ...]
 
 
+def _stage_blockers(data: dict | None, committed: bool) -> tuple[bool, tuple[str, ...]]:
+    """Whether the required stage passes, and what blocks it."""
+    blockers: list[str] = []
+    if not committed:
+        blockers.append(BLOCKER_STATE_UNCOMMITTED)
+    if data is None:
+        blockers.append(BLOCKER_STAGE_UNREADABLE)
+        return False, tuple(blockers)
+    stage_pass = _stage_status(data, REQUIRED_STAGE) == "pass"
+    if not stage_pass:
+        blockers.append(BLOCKER_STAGE_NOT_PASS)
+    return stage_pass, tuple(blockers)
+
+
+def _approval_blockers(
+    data: dict | None, target_id: str, operation_id: str
+) -> tuple[Approval | None, bool, bool, tuple[str, ...]]:
+    """The authorizing approval, what it names, and what blocks it.
+
+    Both names must match: a target-naming approval does not authorize every
+    operation on that target (FR-011c).
+    """
+    if data is None:
+        return None, False, False, ()
+    approval = _shape_valid_approval(data, APPROVAL_STAGE)
+    if approval is None:
+        return None, False, False, (BLOCKER_APPROVAL_ABSENT,)
+
+    blockers: list[str] = []
+    names_target = note_names_target(approval.note, target_id)
+    if not names_target:
+        blockers.append(BLOCKER_APPROVAL_TARGET)
+    names_operation = bool(operation_id) and note_names_target(
+        approval.note, operation_id
+    )
+    if not names_operation:
+        blockers.append(BLOCKER_APPROVAL_OPERATION)
+    return approval, names_target, names_operation, tuple(blockers)
+
+
 def _read_readiness_facts(
     repo_root: Path, target_id: str, operation_id: str
 ) -> _ReadinessFacts:
     """Read the stage and approval preconditions from HEAD. Fail-closed."""
-    blockers: list[str] = []
     data, committed = _load_committed_yaml(repo_root, _readiness_relpath(target_id))
-    stage_readable = data is not None
-    if not committed:
-        blockers.append(BLOCKER_STATE_UNCOMMITTED)
-    if not stage_readable:
-        blockers.append(BLOCKER_STAGE_UNREADABLE)
-
-    stage_pass = stage_readable and _stage_status(data or {}, REQUIRED_STAGE) == "pass"
-    if stage_readable and not stage_pass:
-        blockers.append(BLOCKER_STAGE_NOT_PASS)
-
-    approval = _shape_valid_approval(data, APPROVAL_STAGE) if data else None
-    if stage_readable and approval is None:
-        blockers.append(BLOCKER_APPROVAL_ABSENT)
-
-    names_target = approval is not None and note_names_target(approval.note, target_id)
-    if approval is not None and not names_target:
-        blockers.append(BLOCKER_APPROVAL_TARGET)
-
-    # The named human must approve the OPERATION, not merely the target. Without
-    # this, one approval reading "approved for sales_model" authorizes every
-    # operation the allowlist lists for that target, indefinitely -- "approved"
-    # would mean "committed to a YAML file", not "a human ruled on this change".
-    names_operation = (
-        approval is not None
-        and bool(operation_id)
-        and note_names_target(approval.note, operation_id)
+    stage_pass, stage_blockers = _stage_blockers(data, committed)
+    approval, names_target, names_operation, approval_blockers = _approval_blockers(
+        data, target_id, operation_id
     )
-    if approval is not None and not names_operation:
-        blockers.append(BLOCKER_APPROVAL_OPERATION)
-
     return _ReadinessFacts(
-        stage_readable=stage_readable,
+        stage_readable=data is not None,
         state_committed=committed,
         stage_pass=stage_pass,
         approval=approval,
         names_target=names_target,
         names_operation=names_operation,
-        blockers=tuple(blockers),
+        blockers=(*stage_blockers, *approval_blockers),
     )
 
 
@@ -462,49 +475,57 @@ class _TargetFacts:
     blockers: tuple[str, ...]
 
 
-def _resolve_target_facts(
-    repo_root: Path, target_id: str, operation_id: str
-) -> _TargetFacts:
-    """Resolve the target and operation against the committed allowlist."""
-    blockers: list[str] = []
-    allowlist, allowlist_committed = read_allowlist(repo_root)
-    if not allowlist_committed:
-        blockers.append(BLOCKER_ALLOWLIST_UNCOMMITTED)
-
-    entry = allowlist.get(target_id)
-    target_exists = False
+def _path_blockers(
+    repo_root: Path, entry: AllowlistEntry | None
+) -> tuple[bool, tuple[str, ...]]:
+    """Whether the target artifact is present and contained, and what blocks it."""
     if entry is None:
-        blockers.append(BLOCKER_TARGET_NOT_ALLOWLISTED)
-    else:
-        contained = _contained_target(repo_root, entry.path)
-        if contained is None:
-            # Checked BEFORE existence: an escaping path must be refused for
-            # escaping, not incidentally because the file happened to be absent.
-            blockers.append(BLOCKER_TARGET_ESCAPES_REPO)
-        else:
-            target_exists = contained.is_file()
-            if not target_exists:
-                blockers.append(BLOCKER_TARGET_ABSENT)
+        return False, (BLOCKER_TARGET_NOT_ALLOWLISTED,)
+    contained = _contained_target(repo_root, entry.path)
+    if contained is None:
+        # Checked BEFORE existence: an escaping path must be refused for escaping,
+        # not incidentally because the file happened to be absent.
+        return False, (BLOCKER_TARGET_ESCAPES_REPO,)
+    if not contained.is_file():
+        return False, (BLOCKER_TARGET_ABSENT,)
+    return True, ()
 
-    # Operation binding is RESOLVED, not asserted: the identifier must appear in
-    # the committed entry's approved set, and that entry must be for this target.
-    # A bare truthiness check on operation_id ALONE is a fail-open -- any
-    # non-empty string would clear -- and reverting to it undoes FR-011a/FR-011c.
-    operation_binds = (
+
+def _operation_binds(
+    entry: AllowlistEntry | None, target_id: str, operation_id: str
+) -> bool:
+    """Whether the operation RESOLVES against this target's approved set.
+
+    A bare truthiness check on ``operation_id`` alone is a fail-open -- any
+    non-empty string would clear -- and reverting to it undoes FR-011a/FR-011c.
+    """
+    return (
         entry is not None
         and bool(operation_id)
         and entry.target_id == target_id
         and entry.permits(operation_id)
     )
-    if not operation_binds:
-        blockers.append(BLOCKER_OPERATION_UNBOUND)
 
+
+def _resolve_target_facts(
+    repo_root: Path, target_id: str, operation_id: str
+) -> _TargetFacts:
+    """Resolve the target and operation against the committed allowlist."""
+    allowlist, allowlist_committed = read_allowlist(repo_root)
+    entry = allowlist.get(target_id)
+    target_exists, path_blockers = _path_blockers(repo_root, entry)
+    binds = _operation_binds(entry, target_id, operation_id)
+    blockers = (
+        *((BLOCKER_ALLOWLIST_UNCOMMITTED,) if not allowlist_committed else ()),
+        *path_blockers,
+        *((BLOCKER_OPERATION_UNBOUND,) if not binds else ()),
+    )
     return _TargetFacts(
         entry=entry,
         allowlisted=entry is not None,
         target_exists=target_exists,
-        operation_binds=operation_binds,
-        blockers=tuple(blockers),
+        operation_binds=binds,
+        blockers=blockers,
     )
 
 

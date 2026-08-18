@@ -163,6 +163,77 @@ def _terminate(
     )
 
 
+def _execute_and_confirm(
+    root,
+    *,
+    verdict,
+    entry,
+    guidance: tuple[str, ...],
+    backup_ref: str | None,
+    mcp_runner: object,
+    validator: object,
+    terminal,
+) -> WriteReport:
+    """Execute the authorized mutation, then prove it did what it claimed.
+
+    Split out of :func:`apply_write` so the pre-flight gates and the
+    execute/confirm phase read as two things. Every exit here is terminal.
+    """
+    # A before/after snapshot, so a claim of success can be checked against what
+    # actually changed. The target path and operation come from the VERDICT --
+    # there is no parameter by which to substitute another.
+    before = _snapshot(root)
+    result = runner.invoke(verdict, repo_root=root, read_only=False, runner=mcp_runner)
+
+    if not result.succeeded:
+        # A stalled or crashed runtime may have left the artifact half-written, so
+        # this is indeterminate rather than a clean failure.
+        indeterminate = result.mutation_attempted
+        return terminal(
+            exit_code=EXIT_INDETERMINATE if indeterminate else EXIT_REFUSED,
+            outcome="blocked" if indeterminate else "failed",
+            tool=runner.VENDOR_PACKAGE,
+            mutation_attempted=result.mutation_attempted,
+            blockers=result.blockers or (runner.BLOCKER_RUNTIME_UNEXPLAINED,),
+            rollback_guidance=guidance,
+        )
+
+    # Did the run do what it was authorized to do? A no-op and an out-of-scope
+    # mutation both previously reported `materialized`.
+    effect_blockers = _effect_blockers(before, _snapshot(root), entry.path)
+    if effect_blockers:
+        return terminal(
+            exit_code=EXIT_VALIDATION_FAILED,
+            outcome="failed",
+            tool=runner.VENDOR_PACKAGE,
+            mutation_attempted=True,
+            blockers=effect_blockers,
+            rollback_guidance=guidance,
+        )
+
+    # A zero exit from the runtime is not confirmation.
+    outcome = validation.validate_semantic_model(
+        root, target_path=entry.path, backup_ref=backup_ref, runner=validator
+    )
+    if not outcome.passed:
+        return terminal(
+            exit_code=EXIT_VALIDATION_FAILED,
+            outcome="failed",
+            tool=runner.VENDOR_PACKAGE,
+            mutation_attempted=True,
+            blockers=outcome.blockers,
+            rollback_guidance=outcome.rollback_guidance or guidance,
+        )
+
+    # Applied AND confirmed by validation.
+    return terminal(
+        exit_code=EXIT_OK,
+        outcome="materialized",
+        tool=runner.VENDOR_PACKAGE,
+        mutation_attempted=True,
+    )
+
+
 def apply_write(
     repo_root: Path,
     *,
@@ -208,13 +279,14 @@ def apply_write(
         root, target_id, operation_id, tree_clean=tree_clean, backup_ref=backup_ref
     )
 
-    # 2b. Vendor preview drift. Gated on DRIFT rather than version compatibility:
+    # 3. Vendor preview drift. Gated on DRIFT rather than version compatibility:
     # the supported range is permanently `unknown` while both servers are
-    # unreleased previews, so a compatibility gate would block forever. A drifted
-    # runtime may have moved the very flag names the bypass matcher pins.
-    drift_blockers: tuple[str, ...] = ()
-    if not dry_run and capability_profile is not None:
-        drift_blockers = capability_profile.blockers
+    # unreleased previews, so a compatibility gate would block forever.
+    drift_blockers = (
+        capability_profile.blockers
+        if not dry_run and capability_profile is not None
+        else ()
+    )
 
     if not verdict.cleared or drift_blockers:
         return terminal(
@@ -238,66 +310,26 @@ def apply_write(
             mutation_attempted=False,
         )
 
-    # 3. Intent BEFORE the mutation, so a crash still leaves a trace.
+    # 4. Intent BEFORE the mutation, so a crash still leaves a trace.
     evidence.write_intent(
         root,
-        tool=runner.VENDOR_PACKAGE,
-        mode=mode,
-        target_id=target_id,
-        operation_id=operation_id,
-        timestamp=timestamp,
+        evidence.RunIdentity(
+            tool=runner.VENDOR_PACKAGE,
+            mode=mode,
+            target_id=target_id,
+            operation_id=operation_id,
+            timestamp=timestamp,
+        ),
     )
 
-    # 4. Execute, with a before/after snapshot so a claim of success can be
-    # checked against what actually changed. The target path and operation come
-    # from the VERDICT -- there is no parameter by which to substitute another.
-    before = _snapshot(root)
-    result = runner.invoke(verdict, repo_root=root, read_only=False, runner=mcp_runner)
-
-    if not result.succeeded:
-        # A stalled or crashed runtime may have left the artifact half-written, so
-        # this is indeterminate rather than a clean failure.
-        indeterminate = result.mutation_attempted
-        return terminal(
-            exit_code=EXIT_INDETERMINATE if indeterminate else EXIT_REFUSED,
-            outcome="blocked" if indeterminate else "failed",
-            tool=runner.VENDOR_PACKAGE,
-            mutation_attempted=result.mutation_attempted,
-            blockers=result.blockers or (runner.BLOCKER_RUNTIME_UNEXPLAINED,),
-            rollback_guidance=guidance,
-        )
-
-    # 4b. Did the run do what it was authorized to do? A no-op and an
-    # out-of-scope mutation both previously reported `materialized`.
-    effect_blockers = _effect_blockers(before, _snapshot(root), entry.path)
-    if effect_blockers:
-        return terminal(
-            exit_code=EXIT_VALIDATION_FAILED,
-            outcome="failed",
-            tool=runner.VENDOR_PACKAGE,
-            mutation_attempted=True,
-            blockers=effect_blockers,
-            rollback_guidance=guidance,
-        )
-
-    # 5. Validate. A zero exit from the runtime is not confirmation.
-    outcome = validation.validate_semantic_model(
-        root, target_path=entry.path, backup_ref=backup_ref, runner=validator
-    )
-    if not outcome.passed:
-        return terminal(
-            exit_code=EXIT_VALIDATION_FAILED,
-            outcome="failed",
-            tool=runner.VENDOR_PACKAGE,
-            mutation_attempted=True,
-            blockers=outcome.blockers,
-            rollback_guidance=outcome.rollback_guidance or guidance,
-        )
-
-    # 6. Materialized: applied AND confirmed by validation.
-    return terminal(
-        exit_code=EXIT_OK,
-        outcome="materialized",
-        tool=runner.VENDOR_PACKAGE,
-        mutation_attempted=True,
+    # 5-7. Execute, confirm the effect, validate.
+    return _execute_and_confirm(
+        root,
+        verdict=verdict,
+        entry=entry,
+        guidance=guidance,
+        backup_ref=backup_ref,
+        mcp_runner=mcp_runner,
+        validator=validator,
+        terminal=terminal,
     )
