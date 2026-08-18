@@ -228,11 +228,107 @@ def _run_preflight(args) -> int:
     return 2 if result.status == "blocked" else 0
 
 
+def _utc_stamp() -> str:
+    """The run timestamp. Isolated so tests can pin it."""
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _probe_tree_clean(repo_root: Path) -> bool | None:
+    """Whether the working tree is clean, or None when it could not be probed.
+
+    None -- not True -- on any failure: an unprobeable git state must refuse
+    rather than pass the git-safety precondition by omission.
+    """
+    from seshat.gitstate import run_git
+
+    try:
+        status = run_git(repo_root, "status", "--porcelain")
+    except (OSError, RuntimeError):
+        return None
+    if status.returncode != 0:
+        return None
+    return not status.stdout.strip()
+
+
+def _run_write_leg(args, *, dry_run: bool) -> int:
+    """Shared body for ``plan-write`` and ``apply``.
+
+    One implementation, so the dry run cannot drift from the real thing.
+    """
+    from seshat.pbi_mcp.detect import BypassFlagRefused
+    from seshat.pbi_mcp.scan import GeneratedSecretError
+    from seshat.pbi_mcp_adapter import orchestrate
+
+    repo_root = Path(args.repo)
+    try:
+        report = orchestrate.apply_write(
+            repo_root,
+            target_id=args.target,
+            operation_id=args.operation,
+            timestamp=_utc_stamp(),
+            tree_clean=_probe_tree_clean(repo_root),
+            backup_ref=getattr(args, "backup_ref", None),
+            argv=tuple(sys.argv[1:]),
+            dry_run=dry_run,
+        )
+    except BypassFlagRefused as refusal:
+        print(f"{_prog(args)}: {refusal}", file=sys.stderr)
+        return 1
+    except GeneratedSecretError as refusal:
+        print(f"{_prog(args)}: refused -- {refusal}", file=sys.stderr)
+        return 1
+
+    if getattr(args, "as_json", False):
+        print(
+            json.dumps(
+                {
+                    "outcome": report.outcome,
+                    "exit_code": report.exit_code,
+                    "mutation_attempted": report.mutation_attempted,
+                    "blockers": list(report.blockers),
+                    "rollback_guidance": list(report.rollback_guidance),
+                    "evidence": (
+                        report.evidence_path.as_posix()
+                        if report.evidence_path is not None
+                        else None
+                    ),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return report.exit_code
+
+    prog = _prog(args)
+    print(f"{prog}: [{report.outcome}] target={args.target} op={args.operation}")
+    for blocker in report.blockers:
+        print(f"{prog}:   blocker {blocker}", file=sys.stderr)
+    if report.rollback_guidance:
+        print(f"{prog}: rollback:", file=sys.stderr)
+        for line in report.rollback_guidance:
+            print(f"{prog}:   {line}", file=sys.stderr)
+    if report.evidence_path is not None:
+        print(f"{prog}: evidence {report.evidence_path.as_posix()}")
+    return report.exit_code
+
+
+def _run_plan_write(args) -> int:
+    return _run_write_leg(args, dry_run=True)
+
+
+def _run_apply(args) -> int:
+    return _run_write_leg(args, dry_run=False)
+
+
 def pbi_mcp_main(args) -> int:
     handlers = {
         "doctor": _run_doctor,
         "generate-config": _run_generate_config,
         "preflight": _run_preflight,
+        "plan-write": _run_plan_write,
+        "apply": _run_apply,
     }
     handler = handlers.get(getattr(args, "pbi_mcp_cmd", None))
     if handler is None:
