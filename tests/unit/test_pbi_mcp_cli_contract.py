@@ -39,7 +39,7 @@ READINESS = (
     "  - stage: publish_ready\n"
     f"    owner: {OWNER!r}\n"
     "    at: '2026-08-18'\n"
-    f"    note: 'approved for {TARGET}'\n"
+    f"    note: 'approved for {TARGET}: {OPERATION}'\n"
 )
 ALLOWLIST = (
     f"targets:\n  - target_id: {TARGET}\n"
@@ -295,3 +295,85 @@ def test_group_help_no_longer_claims_no_mutation_path_exists() -> None:
             assert "stays parked" not in help_text
             return
     raise AssertionError("pbi-mcp group not found")
+
+
+# --------------------------------------------------------------------------
+# HIGH: the CONFIG half of the bypass guard must be live on the write path
+# --------------------------------------------------------------------------
+
+
+def test_a_config_carrying_the_bypass_flag_refuses_apply(ready_repo: Path) -> None:
+    """FR-002 covers BOTH arrival routes, not just argv.
+
+    ``orchestrate.apply_write`` accepted ``config_state`` but the CLI never
+    supplied it, so a machine-local ``.mcp.json`` carrying ``--skipconfirmation``
+    was undetected on a write -- while the same verdict was already computed for
+    the read-only legs. The branch was TESTED and unreachable in production: the
+    injected-seam-needs-a-populated-registry defect.
+
+    Run as a subprocess, so this exercises the real handler wiring rather than a
+    library call.
+    """
+    _write(
+        ready_repo,
+        ".mcp.json",
+        json.dumps(
+            {
+                "mcpServers": {
+                    "powerbi": {
+                        "command": "npx",
+                        "args": [
+                            "@microsoft/powerbi-modeling-mcp",
+                            "--skipconfirmation",
+                        ],
+                    }
+                }
+            }
+        ),
+    )
+    result = _run_cli(ready_repo, "apply", "--target", TARGET, "--operation", OPERATION)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "skipconfirmation" in (result.stdout + result.stderr).lower()
+
+
+def test_a_clean_config_does_not_block_apply(ready_repo: Path) -> None:
+    """The positive control -- a read-only config must not be refused."""
+    _write(
+        ready_repo,
+        ".mcp.json",
+        json.dumps(
+            {
+                "mcpServers": {
+                    "powerbi": {
+                        "command": "npx",
+                        "args": ["@microsoft/powerbi-modeling-mcp", "--readonly"],
+                    }
+                }
+            }
+        ),
+    )
+    _git(ready_repo, "add", "-A")
+    _git(ready_repo, "commit", "-q", "-m", "config", "--no-gpg-sign")
+    result = _run_cli(
+        ready_repo, "plan-write", "--target", TARGET, "--operation", OPERATION, "--json"
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_plan_write_twice_still_sees_a_clean_tree(ready_repo: Path) -> None:
+    """The evidence artifact must not dirty the tree it later reports as clean.
+
+    Otherwise plan-write -> apply leaves the second invocation seeing a dirty
+    tree, pushing the operator toward --backup-ref on a self-inflicted dirty
+    state. Requires the evidence path to be gitignored.
+    """
+    first = _run_cli(
+        ready_repo, "plan-write", "--target", TARGET, "--operation", OPERATION, "--json"
+    )
+    assert first.returncode == 0, first.stderr
+    second = _run_cli(
+        ready_repo, "plan-write", "--target", TARGET, "--operation", OPERATION, "--json"
+    )
+    assert second.returncode == 0, second.stdout + second.stderr
+    payload = json.loads(second.stdout)
+    assert payload["blockers"] == []

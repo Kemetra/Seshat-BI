@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from seshat.pbi_mcp.detect import refuse_if_bypass_flag
-from seshat.pbi_mcp_adapter import evidence, gate, runner, validation
+from seshat.pbi_mcp_adapter import drift, evidence, gate, runner, validation
 
 #: Exit codes, per contracts/cli-contract.md. 2 and 3 stay DISTINCT: collapsing
 #: them would let a caller treat an indeterminate write as a clean failure.
@@ -87,6 +87,7 @@ def apply_write(
     dry_run: bool = False,
     mcp_runner: object = None,
     validator: object = None,
+    capability_profile: drift.RuntimeCapabilityProfile | None = None,
 ) -> WriteReport:
     """Run the governed write pipeline for one target.
 
@@ -110,7 +111,16 @@ def apply_write(
         backup_ref=backup_ref,
     )
 
-    if not verdict.cleared:
+    # 2b. Vendor preview drift. Gated on DRIFT rather than version compatibility:
+    # the supported range is permanently `unknown` while both servers are
+    # unreleased previews, so a compatibility gate would block forever. A drifted
+    # runtime may have moved the very flag names the bypass matcher pins.
+    drift_blockers: tuple[str, ...] = ()
+    if not dry_run and capability_profile is not None:
+        drift_blockers = capability_profile.blockers
+
+    if not verdict.cleared or drift_blockers:
+        combined = (*verdict.blockers, *drift_blockers)
         path = _finalize(
             root,
             target_id=target_id,
@@ -118,14 +128,14 @@ def apply_write(
             timestamp=timestamp,
             outcome="blocked",
             mutation_attempted=False,
-            blockers=verdict.blockers,
+            blockers=combined,
             mode=mode,
             tool="none",
         )
         return WriteReport(
             exit_code=EXIT_REFUSED,
             outcome="blocked",
-            blockers=verdict.blockers,
+            blockers=combined,
             rollback_guidance=(),
             evidence_path=path,
             mutation_attempted=False,
@@ -182,6 +192,10 @@ def apply_write(
         # A stalled or crashed runtime may have left the artifact half-written,
         # so this is indeterminate rather than a clean failure.
         indeterminate = result.mutation_attempted
+        # Computed ONCE: passing result.blockers to the report while substituting
+        # a fallback into the evidence made the two disagree, and exit 3 was
+        # reachable with an empty blocker list.
+        reported_blockers = result.blockers or (runner.BLOCKER_RUNTIME_UNEXPLAINED,)
         path = _finalize(
             root,
             target_id=target_id,
@@ -189,7 +203,7 @@ def apply_write(
             timestamp=timestamp,
             outcome="blocked" if indeterminate else "failed",
             mutation_attempted=result.mutation_attempted,
-            blockers=result.blockers or ("PBIMCP-RUN-04",),
+            blockers=reported_blockers,
             rollback_guidance=guidance,
             mode=mode,
             tool=runner.VENDOR_PACKAGE,
@@ -197,7 +211,7 @@ def apply_write(
         return WriteReport(
             exit_code=EXIT_INDETERMINATE if indeterminate else EXIT_REFUSED,
             outcome="blocked" if indeterminate else "failed",
-            blockers=result.blockers,
+            blockers=reported_blockers,
             rollback_guidance=guidance,
             evidence_path=path,
             mutation_attempted=result.mutation_attempted,

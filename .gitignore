@@ -172,3 +172,8 @@ src/seshat/studio/static/
 # watches; if it ever adopts a real uv lockfile workflow, an unanchored pattern
 # would swallow its lock silently.
 /uv.lock
+
+# Spec 149: per-run write evidence. Local, regenerated every run -- and if it
+# were tracked, `plan-write` would dirty the tree it then reports as clean,
+# pushing the operator toward --backup-ref on a self-inflicted dirty state.
+.seshat/pbi-mcp-write-evidence.json

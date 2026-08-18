@@ -51,7 +51,11 @@ def _readiness_yaml(
     owner: str = OWNER,
     include_approval: bool = True,
 ) -> str:
-    note = f"approved for {target}" if approval_note is None else approval_note
+    note = (
+        f"approved for {target}: {OPERATION}"
+        if approval_note is None
+        else approval_note
+    )
     body = (
         "stages:\n"
         f"  semantic_model_ready:\n    status: {semantic_status}\n"
@@ -727,7 +731,7 @@ def test_every_blocker_id_has_readable_detail() -> None:
         for name, value in vars(gate).items()
         if name.startswith("BLOCKER_") and isinstance(value, str)
     ]
-    assert len(ids) == 13
+    assert len(ids) == 15
     for blocker in ids:
         assert gate.BLOCKER_DETAIL.get(blocker), blocker
         assert blocker.startswith("PBIMCP-GATE-")
@@ -875,14 +879,32 @@ def test_resolvable_backup_ref_clears(committed_repo: Path) -> None:
 def test_backup_ref_guard_is_load_bearing(
     committed_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Disable ONLY the ref check; the bogus ref then clears.
+    """Disable the ref checks one at a time; each refusal must disappear in turn.
 
-    Proves the refusal above comes from the verification rather than from
-    something incidental.
+    There are now TWO independent guards on a declared backup -- the ref must
+    resolve, AND it must hold the target's current content. Disabling only the
+    first leaves the second refusing, which is defence in depth working. So this
+    proves each guard separately rather than asserting the whole leg clears.
     """
     bogus = "refs/tags/no-such-backup"
-    assert not _evaluate(committed_repo, tree_clean=False, backup_ref=bogus).cleared
+
+    # Guard 1: resolution.
+    first = _evaluate(committed_repo, tree_clean=False, backup_ref=bogus)
+    assert not first.cleared
+    assert gate.BLOCKER_BACKUP_UNRESOLVABLE in first.blockers
+
     monkeypatch.setattr(gate, "_ref_resolves", lambda root, ref: True)
+
+    # With resolution neutered the refusal MOVES to the custody guard -- proof
+    # that guard 1 produced the first refusal and guard 2 is independent.
+    second = _evaluate(committed_repo, tree_clean=False, backup_ref=bogus)
+    assert not second.cleared
+    assert gate.BLOCKER_BACKUP_UNRESOLVABLE not in second.blockers
+    assert gate.BLOCKER_BACKUP_MISSES_TARGET in second.blockers
+
+    # Guard 2: custody. With both neutered the leg clears, so nothing incidental
+    # was producing these refusals.
+    monkeypatch.setattr(gate, "_ref_holds_target", lambda root, ref, rel: True)
     assert _evaluate(committed_repo, tree_clean=False, backup_ref=bogus).cleared
 
 
@@ -1013,3 +1035,116 @@ def test_the_repo_root_itself_is_not_a_valid_target(tmp_path: Path) -> None:
     verdict = _evaluate(repo)
     assert not verdict.cleared
     assert gate.BLOCKER_TARGET_ESCAPES_REPO in verdict.blockers
+
+
+# --------------------------------------------------------------------------
+# CRITICAL: a declared backup must HOLD the target, not merely resolve
+# --------------------------------------------------------------------------
+
+
+def test_backup_ref_head_on_a_dirty_tree_refuses(committed_repo: Path) -> None:
+    """``--backup-ref HEAD`` with uncommitted target changes must REFUSE.
+
+    The seventh caller-satisfies-its-own-precondition hole, found by an
+    independent review of the built code. HEAD resolves fine and backs up
+    NOTHING -- it is precisely where the uncommitted content is not. Worse, the
+    rollback guidance would then emit ``git restore --source=HEAD``, destroying
+    the operator's uncommitted work and calling it recovery.
+
+    Verifying that a ref RESOLVES is verifying the wrong property; custody is
+    what matters.
+    """
+    target = committed_repo / "models" / f"{TARGET}.tmdl"
+    target.write_text("// UNCOMMITTED WORK IN PROGRESS\n", encoding="utf-8")
+
+    verdict = _evaluate(committed_repo, tree_clean=False, backup_ref="HEAD")
+    assert not verdict.cleared
+    assert not verdict.git_safe
+    assert gate.BLOCKER_BACKUP_MISSES_TARGET in verdict.blockers
+
+
+def test_a_backup_ref_that_holds_the_target_clears(committed_repo: Path) -> None:
+    """The positive control: a genuine backup DOES satisfy the leg.
+
+    Without this the custody check could refuse every backup and still pass the
+    test above. The tree is dirty in a file OTHER than the target, so HEAD
+    genuinely holds the target's current content.
+    """
+    (committed_repo / "README.md").write_text("dirtied elsewhere\n", encoding="utf-8")
+    verdict = _evaluate(committed_repo, tree_clean=False, backup_ref="HEAD")
+    assert verdict.git_safe
+    assert verdict.cleared
+
+
+def test_a_stash_style_ref_capturing_the_change_clears(committed_repo: Path) -> None:
+    """A ref created AFTER the edit holds it, so it is a real backup.
+
+    Uses ``git stash create``, which writes a commit object without touching the
+    worktree -- the realistic way an operator captures work in progress.
+    """
+    target = committed_repo / "models" / f"{TARGET}.tmdl"
+    target.write_text("// work in progress\n", encoding="utf-8")
+    created = subprocess.run(
+        ["git", "stash", "create"],
+        cwd=committed_repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    stash_sha = created.stdout.strip()
+    assert stash_sha, "git stash create produced no object"
+
+    verdict = _evaluate(committed_repo, tree_clean=False, backup_ref=stash_sha)
+    assert verdict.git_safe, verdict.blockers
+    assert verdict.cleared
+
+
+# --------------------------------------------------------------------------
+# HIGH: the named human must approve the OPERATION, not just the target
+# --------------------------------------------------------------------------
+
+
+def test_approval_naming_only_the_target_does_not_authorize_an_operation(
+    tmp_path: Path,
+) -> None:
+    """One approval must not authorize every operation on a target forever.
+
+    Before this check, "approved for sales_model" cleared any operation the
+    allowlist happened to list -- so "approved" meant "committed to a YAML file",
+    not "a named human ruled on this change". FR-011c requires BOTH checks.
+    """
+    repo = _build_repo(
+        tmp_path,
+        readiness=_readiness_yaml(approval_note=f"approved for {TARGET}"),
+        allowlist=_allowlist_yaml(),
+    )
+    verdict = _evaluate(repo)
+    assert not verdict.cleared
+    assert verdict.approval_names_target, "the target IS named"
+    assert not verdict.approval_names_operation
+    assert gate.BLOCKER_APPROVAL_OPERATION in verdict.blockers
+
+
+def test_approval_naming_target_and_operation_clears(committed_repo: Path) -> None:
+    """The positive control for the operation-naming rule."""
+    verdict = _evaluate(committed_repo)
+    assert verdict.approval_names_operation
+    assert verdict.cleared
+
+
+def test_operation_must_be_named_as_a_whole_token_too(tmp_path: Path) -> None:
+    """The same whole-token discipline applies to the operation name.
+
+    An approval naming ``update_measure_draft`` must not authorize
+    ``update_measure``.
+    """
+    repo = _build_repo(
+        tmp_path,
+        readiness=_readiness_yaml(
+            approval_note=f"approved for {TARGET}: {OPERATION}_draft"
+        ),
+        allowlist=_allowlist_yaml(),
+    )
+    verdict = _evaluate(repo)
+    assert not verdict.cleared
+    assert gate.BLOCKER_APPROVAL_OPERATION in verdict.blockers

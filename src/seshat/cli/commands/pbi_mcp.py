@@ -240,16 +240,32 @@ def _probe_tree_clean(repo_root: Path) -> bool | None:
 
     None -- not True -- on any failure: an unprobeable git state must refuse
     rather than pass the git-safety precondition by omission.
+
+    The adapter's OWN evidence artifact is excluded. Every run writes it, so
+    counting it would make ``plan-write`` dirty the tree it then reports as
+    clean: a second invocation would be refused for git-safety and the operator
+    pushed toward ``--backup-ref`` on a self-inflicted dirty state. Excluding it
+    here rather than relying on ``.gitignore`` is deliberate -- a user's own
+    project will not carry this repo's ignore rules.
     """
     from seshat.gitstate import run_git
+    from seshat.pbi_mcp_adapter.evidence import ARTIFACT_RELPATH
 
     try:
-        status = run_git(repo_root, "status", "--porcelain")
+        # `--untracked-files=all` is required: the default collapses untracked
+        # files into their directory (`?? .seshat/`), so an exact-path exclusion
+        # would never match and every run would read as dirty.
+        status = run_git(repo_root, "status", "--porcelain", "--untracked-files=all")
     except (OSError, RuntimeError):
         return None
     if status.returncode != 0:
         return None
-    return not status.stdout.strip()
+    ours = ARTIFACT_RELPATH.replace("\\", "/")
+    for line in status.stdout.splitlines():
+        entry = line[3:].strip().strip('"').replace("\\", "/")
+        if entry and entry != ours:
+            return False
+    return True
 
 
 def _run_write_leg(args, *, dry_run: bool) -> int:
@@ -257,11 +273,17 @@ def _run_write_leg(args, *, dry_run: bool) -> int:
 
     One implementation, so the dry run cannot drift from the real thing.
     """
-    from seshat.pbi_mcp.detect import BypassFlagRefused
+    from seshat.pbi_mcp.detect import BypassFlagRefused, classify_mcp_config
     from seshat.pbi_mcp.scan import GeneratedSecretError
     from seshat.pbi_mcp_adapter import orchestrate
 
     repo_root = Path(args.repo)
+    # The config half of the bypass guard was dead on this path: orchestrate
+    # accepted config_state but nothing supplied it, so a machine-local .mcp.json
+    # carrying --skipconfirmation was never detected on a write. The verdict is
+    # already computed for the read-only legs; wire it in rather than trust argv
+    # alone (FR-002 covers BOTH arrival routes).
+    config_state = classify_mcp_config(repo_root / ".mcp.json")
     try:
         report = orchestrate.apply_write(
             repo_root,
@@ -271,6 +293,7 @@ def _run_write_leg(args, *, dry_run: bool) -> int:
             tree_clean=_probe_tree_clean(repo_root),
             backup_ref=getattr(args, "backup_ref", None),
             argv=tuple(sys.argv[1:]),
+            config_state=config_state,
             dry_run=dry_run,
         )
     except BypassFlagRefused as refusal:
@@ -280,6 +303,8 @@ def _run_write_leg(args, *, dry_run: bool) -> int:
         print(f"{_prog(args)}: refused -- {refusal}", file=sys.stderr)
         return 1
 
+    from seshat.pbi_mcp_adapter.evidence import redact
+
     if getattr(args, "as_json", False):
         print(
             json.dumps(
@@ -287,8 +312,10 @@ def _run_write_leg(args, *, dry_run: bool) -> int:
                     "outcome": report.outcome,
                     "exit_code": report.exit_code,
                     "mutation_attempted": report.mutation_attempted,
-                    "blockers": list(report.blockers),
-                    "rollback_guidance": list(report.rollback_guidance),
+                    "blockers": [redact(b) for b in report.blockers],
+                    "rollback_guidance": [
+                        redact(line) for line in report.rollback_guidance
+                    ],
                     "evidence": (
                         report.evidence_path.as_posix()
                         if report.evidence_path is not None
@@ -304,11 +331,11 @@ def _run_write_leg(args, *, dry_run: bool) -> int:
     prog = _prog(args)
     print(f"{prog}: [{report.outcome}] target={args.target} op={args.operation}")
     for blocker in report.blockers:
-        print(f"{prog}:   blocker {blocker}", file=sys.stderr)
+        print(f"{prog}:   blocker {redact(blocker)}", file=sys.stderr)
     if report.rollback_guidance:
         print(f"{prog}: rollback:", file=sys.stderr)
         for line in report.rollback_guidance:
-            print(f"{prog}:   {line}", file=sys.stderr)
+            print(f"{prog}:   {redact(line)}", file=sys.stderr)
     if report.evidence_path is not None:
         print(f"{prog}: evidence {report.evidence_path.as_posix()}")
     return report.exit_code

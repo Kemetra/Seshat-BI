@@ -56,6 +56,8 @@ BLOCKER_ALLOWLIST_UNCOMMITTED = "PBIMCP-GATE-10"
 BLOCKER_GIT_UNPROBED = "PBIMCP-GATE-11"
 BLOCKER_BACKUP_UNRESOLVABLE = "PBIMCP-GATE-12"
 BLOCKER_TARGET_ESCAPES_REPO = "PBIMCP-GATE-13"
+BLOCKER_BACKUP_MISSES_TARGET = "PBIMCP-GATE-14"
+BLOCKER_APPROVAL_OPERATION = "PBIMCP-GATE-15"
 
 #: Human-readable detail per blocker id. Categorical text only -- never a score.
 BLOCKER_DETAIL: dict[str, str] = {
@@ -95,6 +97,14 @@ BLOCKER_DETAIL: dict[str, str] = {
     BLOCKER_TARGET_ESCAPES_REPO: (
         "the allowlisted target path resolves outside the repository; a write "
         "target must be contained by the repo it is governed in"
+    ),
+    BLOCKER_BACKUP_MISSES_TARGET: (
+        "the declared backup ref resolves but does not contain the target's "
+        "current content, so it is not a backup of what is about to change"
+    ),
+    BLOCKER_APPROVAL_OPERATION: (
+        "the publish_ready approval note does not name the requested operation; "
+        "a target-naming approval does not authorize every operation on it"
     ),
 }
 
@@ -147,6 +157,7 @@ class GateVerdict:
     stage_pass: bool
     approval: Approval | None
     approval_names_target: bool
+    approval_names_operation: bool
     operation_binds: bool
     target_allowlisted: bool
     target_exists: bool
@@ -162,6 +173,7 @@ class GateVerdict:
             and self.stage_pass
             and self.approval is not None
             and self.approval_names_target
+            and self.approval_names_operation
             and self.operation_binds
             and self.target_allowlisted
             and self.target_exists
@@ -192,10 +204,6 @@ def _ref_resolves(repo_root: Path, ref: str) -> bool:
     Fails CLOSED: an empty ref, a git failure, or any exception reads as
     unresolvable. Uses the hardened :func:`seshat.gitstate.run_git`, so this is
     read-only and never touches the ref it verifies.
-
-    The point is that a backup is *verified*, not attested. A boolean
-    ``--backup-declared`` would let the party requesting the mutation satisfy the
-    precondition protecting it -- the same defect as a caller-supplied allowlist.
     """
     if not ref:
         return False
@@ -204,6 +212,32 @@ def _ref_resolves(repo_root: Path, ref: str) -> bool:
     except (OSError, RuntimeError):
         return False
     return probe.returncode == 0
+
+
+def _ref_holds_target(repo_root: Path, ref: str, relative: str) -> bool:
+    """Whether ``ref`` actually contains the target's CURRENT content.
+
+    Resolution is the wrong property to verify. ``--backup-ref HEAD`` on a dirty
+    tree resolves fine and backs up **nothing** -- HEAD is precisely where the
+    uncommitted content is *not*. Worse, the rollback guidance then emits
+    ``git restore --source=HEAD``, which destroys the operator's uncommitted work
+    and presents that as the recovery path.
+
+    Verifying *custody* rather than *resolution* is what makes the backup real.
+    A boolean ``--backup-declared`` let the requesting party satisfy the
+    precondition protecting it; verifying only that a ref exists reintroduced the
+    same defect one level down.
+
+    Fails CLOSED on any git failure.
+    """
+    if not _ref_resolves(repo_root, ref):
+        return False
+    try:
+        diff = run_git(Path(repo_root), "diff", "--quiet", ref, "--", relative)
+    except (OSError, RuntimeError):
+        return False
+    # returncode 0 == no difference: the ref holds exactly this content.
+    return diff.returncode == 0
 
 
 def _load_committed_yaml(repo_root: Path, relpath: str) -> tuple[dict | None, bool]:
@@ -389,6 +423,20 @@ def evaluate(
     if approval is not None and not names_target:
         blockers.append(BLOCKER_APPROVAL_TARGET)
 
+    # The named human must approve the OPERATION, not merely the target. Without
+    # this, one approval reading "approved for sales_model" authorizes every
+    # operation the allowlist lists for that target, indefinitely -- and
+    # "approved" would mean "committed to a YAML file", not "a human ruled on
+    # this change". FR-011c requires both checks; this is the second one, and it
+    # needs no external producer (unlike FR-011b's content hash).
+    names_operation = (
+        approval is not None
+        and bool(operation_id)
+        and note_names_target(approval.note, operation_id)
+    )
+    if approval is not None and not names_operation:
+        blockers.append(BLOCKER_APPROVAL_OPERATION)
+
     allowlist, allowlist_committed = read_allowlist(root)
     if not allowlist_committed:
         blockers.append(BLOCKER_ALLOWLIST_UNCOMMITTED)
@@ -432,11 +480,17 @@ def evaluate(
     elif backup_ref is None:
         git_safe = False
         blockers.append(BLOCKER_GIT_UNSAFE)
-    elif _ref_resolves(root, backup_ref):
-        git_safe = True
-    else:
+    elif not _ref_resolves(root, backup_ref):
         git_safe = False
         blockers.append(BLOCKER_BACKUP_UNRESOLVABLE)
+    elif entry is not None and not _ref_holds_target(root, backup_ref, entry.path):
+        # Resolution is not custody: `--backup-ref HEAD` on a dirty tree resolves
+        # but backs up nothing, and its rollback would destroy the very work it
+        # claimed to protect.
+        git_safe = False
+        blockers.append(BLOCKER_BACKUP_MISSES_TARGET)
+    else:
+        git_safe = True
 
     return GateVerdict(
         target_id=target_id,
@@ -445,6 +499,7 @@ def evaluate(
         stage_pass=stage_pass,
         approval=approval,
         approval_names_target=names_target,
+        approval_names_operation=names_operation,
         operation_binds=operation_binds,
         target_allowlisted=allowlisted,
         target_exists=target_exists,

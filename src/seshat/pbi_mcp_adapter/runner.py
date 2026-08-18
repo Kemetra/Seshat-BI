@@ -50,6 +50,7 @@ TIMEOUT_EXIT_CODE = 124
 BLOCKER_GATE_NOT_CLEARED = "PBIMCP-RUN-01"
 BLOCKER_RUNTIME_STALLED = "PBIMCP-RUN-02"
 BLOCKER_RUNTIME_MISSING = "PBIMCP-RUN-03"
+BLOCKER_RUNTIME_UNEXPLAINED = "PBIMCP-RUN-04"
 
 BLOCKER_DETAIL: dict[str, str] = {
     BLOCKER_GATE_NOT_CLEARED: (
@@ -61,6 +62,10 @@ BLOCKER_DETAIL: dict[str, str] = {
         "killed"
     ),
     BLOCKER_RUNTIME_MISSING: "the vendor runtime could not be launched",
+    BLOCKER_RUNTIME_UNEXPLAINED: (
+        "the vendor runtime failed without naming a cause; treated as "
+        "indeterminate because the artifact may have been partially written"
+    ),
 }
 
 

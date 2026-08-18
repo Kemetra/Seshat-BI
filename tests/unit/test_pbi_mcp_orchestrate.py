@@ -33,7 +33,7 @@ READINESS = (
     "  - stage: publish_ready\n"
     f"    owner: {OWNER!r}\n"
     "    at: '2026-08-18'\n"
-    f"    note: 'approved for {TARGET}'\n"
+    f"    note: 'approved for {TARGET}: {OPERATION}'\n"
 )
 
 ALLOWLIST = (
@@ -312,3 +312,98 @@ def test_dry_run_reports_the_same_blockers_as_apply(ready_repo: Path) -> None:
     dry = _apply(ready_repo, dry_run=True, tree_clean=False)
     wet = _apply(ready_repo, tree_clean=False)
     assert dry.blockers == wet.blockers
+
+
+# --------------------------------------------------------------------------
+# HIGH: the drift gate must actually GATE, not just exist as a library
+# --------------------------------------------------------------------------
+
+
+def test_a_drifted_runtime_refuses_the_write(ready_repo: Path) -> None:
+    """Drift blocks the pipeline (FR-019).
+
+    Before this wiring, ``drift.py``'s only importer was its own test file: 15
+    green tests and a dead feature. The PBIMCP-DRIFT-* blockers could never
+    appear in a real verdict, so "add the drift gate" had added a library.
+    """
+    from seshat.pbi_mcp_adapter import drift
+
+    profile = drift.RuntimeCapabilityProfile(
+        observed_tools=("unexpected_tool",),
+        recorded_tools=("update_measure",),
+    )
+    before = (ready_repo / TARGET_PATH).read_text(encoding="utf-8")
+    report = _apply(ready_repo, capability_profile=profile)
+
+    assert report.exit_code == orchestrate.EXIT_REFUSED
+    assert drift.BLOCKER_CAPABILITY_DRIFT in report.blockers
+    assert (ready_repo / TARGET_PATH).read_text(encoding="utf-8") == before
+
+
+def test_a_matching_runtime_profile_does_not_block(ready_repo: Path) -> None:
+    """The positive control: a non-drifted profile must not refuse."""
+    from seshat.pbi_mcp_adapter import drift
+
+    profile = drift.RuntimeCapabilityProfile(
+        observed_tools=("update_measure",),
+        recorded_tools=("update_measure",),
+    )
+    report = _apply(ready_repo, capability_profile=profile)
+    assert report.succeeded, report.blockers
+
+
+def test_an_unknown_supported_range_alone_does_not_block(ready_repo: Path) -> None:
+    """`unknown` is never COMPATIBLE, but it must not block a write forever.
+
+    Both servers are unreleased previews for the life of this spec, so gating on
+    version compatibility would make the feature permanently unusable.
+    """
+    from seshat.pbi_mcp_adapter import drift
+
+    profile = drift.RuntimeCapabilityProfile(
+        observed_tools=("update_measure",),
+        recorded_tools=("update_measure",),
+        supported_range=drift.UNKNOWN_RANGE,
+    )
+    report = _apply(ready_repo, capability_profile=profile)
+    assert not profile.range_is_compatible
+    assert report.succeeded, report.blockers
+
+
+def test_drift_blockers_reach_the_evidence_record(ready_repo: Path) -> None:
+    from seshat.pbi_mcp_adapter import drift
+
+    profile = drift.RuntimeCapabilityProfile(
+        observed_tools=(), recorded_tools=("update_measure",)
+    )
+    report = _apply(ready_repo, capability_profile=profile)
+    payload = json.loads(report.evidence_path.read_text(encoding="utf-8"))  # type: ignore[union-attr]
+    assert drift.BLOCKER_CAPABILITY_DRIFT in payload["blockers"]
+
+
+# --------------------------------------------------------------------------
+# MED: report and evidence blockers must never disagree
+# --------------------------------------------------------------------------
+
+
+def test_report_and_evidence_blockers_agree_on_an_unexplained_failure(
+    ready_repo: Path,
+) -> None:
+    """Exit 3 was reachable with an EMPTY report blocker list.
+
+    The fallback was substituted into the evidence record only, so an auditor
+    reading records saw a cause the caller never got -- and the id used was not
+    in any BLOCKER_DETAIL map.
+    """
+
+    def silent_failure(argv: list[str], cwd: Path):
+        return subprocess.CompletedProcess(args=argv, returncode=1, stdout="")
+
+    report = _apply(ready_repo, mcp_runner=silent_failure)
+    payload = json.loads(report.evidence_path.read_text(encoding="utf-8"))  # type: ignore[union-attr]
+
+    assert report.blockers, "exit 3 must never be reported with no blocker"
+    assert list(report.blockers) == payload["blockers"]
+    from seshat.pbi_mcp_adapter import runner as runner_mod
+
+    assert runner_mod.BLOCKER_RUNTIME_UNEXPLAINED in runner_mod.BLOCKER_DETAIL

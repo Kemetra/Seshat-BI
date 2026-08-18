@@ -40,6 +40,7 @@ def _cleared_verdict() -> gate.GateVerdict:
             note="approved for sales_model",
         ),
         approval_names_target=True,
+        approval_names_operation=True,
         operation_binds=True,
         target_allowlisted=True,
         target_exists=True,
