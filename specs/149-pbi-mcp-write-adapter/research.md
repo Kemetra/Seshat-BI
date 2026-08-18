@@ -152,12 +152,20 @@ no binary and add no Python dependency.
 Rejected: Principle II (external, unforked, independently upgradeable); also a 36MB+ preview
 binary is not shippable payload."*
 
-**Note on a stale contract line**: `templates/pbi-mcp-adapter-contract.md` still describes "a
-local stdio process to the **vendored** Power BI Modeling MCP binary
-(`tools/powerbi-modeling-mcp/`, gitignored)". That predates the ADR's vendoring rejection.
-The ADR is the governing decision, so the plan follows `npx`. **Flagged for the owner** — the
-contract template's wording should be reconciled, but editing a template that other features
-bind to is out of this feature's scope.
+**The vendoring contradiction is in CODE, not just prose.** `templates/pbi-mcp-adapter-contract.md`
+describes "a local stdio process to the **vendored** Power BI Modeling MCP binary
+(`tools/powerbi-modeling-mcp/`, gitignored)" — and `src/seshat/pbi_mcp/detect.py:49` backs it
+with a live constant:
+
+```python
+VENDORED_RUNTIME_DIR = "tools/powerbi-modeling-mcp"
+```
+
+Both predate ADR 0018's rejection of vendoring. The ADR is the governing decision, so this plan
+follows `npx`. **Flagged for the owner, deliberately not resolved here** (task T053): the
+constant is consumed by the shipped read-only family, so removing or repointing it is a change
+to slices 1–4's behavior, not a slice-5 concern. Whether the vendored path stays as a
+*supported alternative* or is retired is an owner call, not a derivation.
 
 ---
 

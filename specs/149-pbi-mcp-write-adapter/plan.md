@@ -110,9 +110,12 @@ specs/149-pbi-mcp-write-adapter/
 ### Source Code (repository root)
 
 ```text
+src/seshat/pbi_mcp/                  # EXISTING (slices 1-4) — EXTENDED, not replaced
+└── detect.py                        # the ALREADY-SHIPPED bypass-flag chokepoint;
+                                     # gains argv inspection (config-only today)
+
 src/seshat/pbi_mcp_adapter/          # NEW — mirrors src/seshat/dagster_adapter/
 ├── __init__.py                      # status vocabulary + public surface
-├── invariants.py                    # the --skipconfirmation chokepoint (every mode)
 ├── gate.py                          # the four write preconditions, fail-closed
 ├── target.py                        # declared target allowlist resolution
 ├── git_safety.py                    # clean-or-declared-backup check
@@ -127,7 +130,7 @@ src/seshat/cli/                      # EXTENDED — the existing pbi-mcp verb fa
 └── SKILL.md
 
 tests/unit/
-├── test_pbi_mcp_invariants.py       # bypass flag refused in EVERY mode
+├── test_pbi_mcp_detect.py           # EXISTING — extended: bypass flag in argv too
 ├── test_pbi_mcp_gate.py             # each precondition broken independently
 ├── test_pbi_mcp_runner.py           # stubbed runtime; no live tenant
 ├── test_pbi_mcp_validation.py       # failure is blocking + carries rollback guidance
@@ -141,10 +144,14 @@ so copying its decomposition keeps reviewer intuition transferable and avoids a 
 divergent adapter idiom. The CLI legs extend the **existing** `pbi-mcp` group rather than
 creating a new top-level verb, because slices 1–4 already established that namespace.
 
-One deliberate deviation from the Dagster layout: `invariants.py` is its own module. The
-bypass-flag prohibition must be a single chokepoint that no callsite can skip, and giving it
-a module (rather than a helper inside `gate.py`) makes "is this checked on every path?" a
-question a reviewer can answer by grepping imports.
+**Correction after verifying against shipped code**: an earlier draft of this plan proposed a
+new `invariants.py` module for the bypass-flag prohibition. That is **cancelled**. The
+enforcement already exists at `src/seshat/pbi_mcp/detect.py:51` (`_FORBIDDEN_FLAG`,
+`_WRITE_FLAGS` covering **both** `--readwrite` and `--read-write`), consumed by `preflight.py`
+and `recommend.py` and already under test. A second module would be a second enforcement path
+for one rule — the `no-second-approval-trust-path` defect. The real gap is narrower: the
+shipped check inspects `.mcp.json` **config args only** and never invocation **argv**, because
+until now nothing could be invoked in write mode. Slice 5 extends that one matcher.
 
 ## Phase 0: Research
 
