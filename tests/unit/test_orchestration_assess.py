@@ -295,9 +295,9 @@ def test_pbi_mcp_opt_in_is_read_only_and_never_offers_mutation(
 ) -> None:
     """The opt-in path is the read-only doctor family, never a write mode.
 
-    ADR 0018 is Proposed and NOT ratified, so F016 mutations stay parked. An
-    assessment that advertised write mode would be advising a capability the
-    governing ADR has not authorized.
+    ADR 0018 is ratified (2026-08-18) but slice 5 (mutations) is unbuilt, so no
+    write path exists. An assessment that advertised write mode would be
+    advising a capability that is not built.
     """
     _write_status(tmp_path, "orders", _gold_ready("orders"))
     _pbip_model(tmp_path)
@@ -409,7 +409,7 @@ def test_power_bi_mcp_server_is_adoption(tmp_path: Path) -> None:
 def test_state_changing_config_is_warned_about(tmp_path: Path) -> None:
     """A config requesting a state-changing mode is adopted BUT flagged.
 
-    ADR 0018 is Proposed and NOT ratified, so a local stdio server without
+    ADR 0018 is ratified but slice 5 is unbuilt, so a local stdio server without
     `--readonly` is worth naming as a caution -- warning about the reader's own
     config is the opposite of advertising the mode.
     """

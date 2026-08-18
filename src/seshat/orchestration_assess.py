@@ -53,9 +53,10 @@ _DBT_OPT_IN = "pip install 'seshat-bi[dbt]'  (then: seshat dbt init; seshat dbt 
 _DAGSTER_OPT_IN = "seshat dagster init  (then: seshat dagster doctor)"
 
 # The Power BI MCP opt-in is the READ-ONLY doctor family and nothing else. ADR
-# 0018 is Proposed and NOT ratified, so F016 execution stays parked; advertising
-# any state-changing mode here would be advising a capability the governing ADR
-# has not authorized (Principle V, never_self_grant_approval).
+# 0018 is RATIFIED (2026-08-18), but ratification armed the TERMS, not a build:
+# slice 5 (approval-gated mutations) still needs its own spec, so no write path
+# exists to advertise. Naming one here would advise a capability that is not
+# built (Principle V, never_self_grant_approval).
 _PBI_MCP_OPT_IN = (
     "seshat pbi-mcp doctor  (then: pbi-mcp generate-config; pbi-mcp preflight "
     "-- the read-only family)"
@@ -342,12 +343,13 @@ def _assess_pbi_mcp(s: _WorkspaceSignals) -> _AdapterAssessment:
     if s.mcp_config not in _CONFIG_NOT_ADOPTED:
         # Adopted. If the committed config requests a state-changing mode, say so:
         # warning about the READER'S OWN config is the opposite of advertising it,
-        # and ADR 0018 (Proposed, not ratified) has authorized nothing.
+        # and ADR 0018, though ratified, has authorized no BUILT write path yet.
         caution: tuple[str, ...] = ()
         if s.mcp_config in _CONFIG_STATE_CHANGING:
             caution = (
                 f"{_MCP_CONFIG} classifies as '{s.mcp_config}': it does not pin the "
-                "read-only posture. ADR 0018 is Proposed and NOT ratified, so run "
+                "read-only posture. ADR 0018 is ratified but slice 5 is unbuilt, so "
+                "run "
                 "`seshat pbi-mcp doctor` and pin read-only before relying on it",
             )
         return _AdapterAssessment(

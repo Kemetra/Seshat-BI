@@ -1,12 +1,13 @@
 # 0018 -- Un-park F016: the Power BI MCP execution adapter (terms of entry)
 
 - **Date:** 2026-07-24 (drafted)
-- **Status:** **Proposed -- NOT ratified.** This ADR takes effect ONLY when the
-  owner replaces this line with an explicit ratification
-  (`Accepted -- RATIFIED by <name> (owner) on <date>`). An agent must never
-  edit this Status line (Principle V, never_self_grant_approval). Until
-  ratification, F016 remains parked and every boundary below is inert: it
-  authorizes nothing today.
+- **Status:** **Accepted -- RATIFIED by Ahmed Shaaban (owner) on 2026-08-18.**
+  The owner stated this ratification verbatim; the agent transcribed it and did
+  NOT self-ratify (the sanctioned pattern recorded in the constitution's own
+  ledger: "an explicit human action; the agent transcribed this decision and did
+  not self-ratify"). The park on F016 is LIFTED and every boundary below is now
+  BINDING and non-severable. Slice 5 (approval-gated mutations) may be specced
+  and built; slice 6 (remote, query-only) remains gated on decision 7.
 - **Roadmap feature:** F016 (Power BI execution adapter) -- the deliberately-last,
   execution-only, `publish-capable` slot (constitution Principle II binding;
   `docs/roadmap/roadmap.md` lists it as the only parked feature). Issue #450 is

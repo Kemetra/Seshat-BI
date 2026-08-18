@@ -3,10 +3,11 @@
  pbi-mcp-adapter-contract.md  --  the F016 specialization of templates/adapter-contract.md
 =============================================================================
  Specializes the GENERIC Execution Adapter contract for the Power BI Modeling
- MCP integration (F016, parked). This is Slice 1 of issue #450: docs and
- contract only -- no runtime code, no new CLI verb, no MCP call is authorized
- by this file. F016 stays parked until an owner-ratified ADR lifts it; this
- contract documents the shape the adapter MUST take if/when that happens.
+ MCP integration (F016). Authored as Slice 1 of issue #450 (docs and contract
+ only). ADR 0018 was RATIFIED 2026-08-18, so the park is LIFTED and these terms
+ are BINDING -- but ratification armed the terms, not a build: no MCP MUTATION
+ is authorized by this file alone. The write path ships only under
+ specs/149-pbi-mcp-write-adapter (slice 5) with its own tests and review.
 
  Read alongside: docs/integrations/pbi-mcp-adapter.md (the three-MCP-senses
  disambiguation), docs/operations/adapter-compatibility-matrix.md (F016's
@@ -17,14 +18,16 @@
 
 # Adapter Contract -- Power BI Modeling MCP (F016)
 
-- **Authority category:** Execution Adapter / publish-capable (PARKED)
+- **Authority category:** Execution Adapter / publish-capable (park LIFTED 2026-08-18)
 - **Connectivity level:** `publish-capable` *(the strongest it uses; also DB/host-adjacent via the on-disk PBIP/TMDL it edits and, for the remote server, the published-model query path)*
 - **Product layer:** `6` *(Publish -- see docs/roadmap/roadmap.md; orthogonal to category)*
-- **Roadmap feature:** `F016`  **On-disk spec:** `<none -- parked, pending owner-ratified ADR>`
+- **Roadmap feature:** `F016`  **On-disk spec:** `specs/149-pbi-mcp-write-adapter` (slice 5)
 - **Owner:** `UNASSIGNED`
-- **Status:** `Parked` -- pending an owner-ratified ADR that un-parks F016. Nothing in
-  this contract authorizes running the adapter today; it declares the shape it MUST
-  take if the park is lifted.
+- **Status:** `Authorized, not yet built` -- ADR 0018 was RATIFIED by Ahmed Shaaban (owner)
+  on 2026-08-18, so the park is LIFTED and this contract's terms are BINDING. Ratification
+  armed the terms, not a build: the mutation path ships only under `specs/149-*`'s own tests
+  and review, so **no write path exists in the shipped package today**. The read-only family
+  (`pbi-mcp doctor|generate-config|preflight`) is what currently runs.
 
 ## What it does (one line)
 
@@ -118,8 +121,12 @@ These hold for EVERY Execution Adapter regardless of connectivity level:
 When the artifact it would execute is undefined, or the gate it is downstream of is not
 `pass`, the adapter SURFACES it as a blocker and fails closed -- it never invents the
 definition, self-approves, or executes past the missing gate (Principle V; stop-and-ask).
-Because F016 is parked, the current correct behavior for ANY invocation is to report the
-park (and the absent ADR) as the blocker, full stop.
+The park is LIFTED (ADR 0018 ratified 2026-08-18), so a missing gate or approval is no longer
+reported as "parked" — it is reported as the specific missing authority (stage not `pass`,
+approval absent or not naming the target, operation not bound to an approved definition, target
+not allowlisted, or an unsafe working tree). Until the slice-5 mutation path ships under
+`specs/149-pbi-mcp-write-adapter`, a WRITE invocation is refused because no write path is
+built, not because F016 is parked. Read-only invocations run as they always have.
 
 ## See also
 
@@ -127,8 +134,11 @@ park (and the absent ADR) as the blocker, full stop.
 - The seam (Adapter vs Module): `docs/architecture/core-vs-modules-and-adapters.md`.
 - The generic skeleton this specializes: `templates/adapter-contract.md`.
 - The three-MCP-senses disambiguation: `docs/integrations/pbi-mcp-adapter.md`.
-- The tracked status row (parked, `unknown`, `UNASSIGNED`):
+- The tracked status row (`unknown`, `UNASSIGNED` -- both correct: the servers are public
+  preview with no published release to pin, and `unknown` is never compatible):
   `docs/operations/adapter-compatibility-matrix.md`.
+- The ratified authority and its eight binding terms:
+  `docs/decisions/0018-unpark-f016-power-bi-mcp-execution-adapter.md`.
 - The Lane C update governance for this adapter: `docs/operations/adapter-update-policy.md`.
 - The constitution's Depend-Never-Fork binding for the adapter role:
   `.specify/memory/constitution.md` Principle II.
