@@ -411,7 +411,16 @@ def evaluate(
 
     # Operation binding is RESOLVED, not asserted: the identifier must appear in
     # the committed entry's approved set, and that entry must be for this target.
-    operation_binds = bool(operation_id)
+    # Operation binding is RESOLVED, not asserted: the identifier must appear in
+    # the committed entry's approved set, and that entry must be for this target.
+    # `bool(operation_id)` ALONE is a fail-open -- any non-empty string would
+    # clear -- and reverting to it silently undoes FR-011a and FR-011c.
+    operation_binds = (
+        entry is not None
+        and bool(operation_id)
+        and entry.target_id == target_id
+        and entry.permits(operation_id)
+    )
     if not operation_binds:
         blockers.append(BLOCKER_OPERATION_UNBOUND)
 
