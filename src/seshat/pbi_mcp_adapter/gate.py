@@ -152,6 +152,13 @@ class GateVerdict:
     """The write preconditions evaluated together. Immutable and fail-closed."""
 
     target_id: str
+    #: What this verdict AUTHORIZED. The runner must execute these and nothing
+    #: else. Carrying them here is what makes a verdict unreplayable: previously
+    #: the runner checked `cleared` and then independently accepted whatever
+    #: target_path and operation_id a caller handed it, so a verdict cleared for
+    #: sales_model/update_measure could launch drop_all_tables on ../outside.tmdl.
+    authorized_operation: str
+    authorized_path: str | None
     stage_readable: bool
     state_committed: bool
     stage_pass: bool
@@ -178,6 +185,8 @@ class GateVerdict:
             and self.target_allowlisted
             and self.target_exists
             and self.git_safe
+            and self.authorized_path is not None
+            and bool(self.authorized_operation)
             and not self.blockers
         )
 
@@ -232,8 +241,24 @@ def _ref_holds_target(repo_root: Path, ref: str, relative: str) -> bool:
     """
     if not _ref_resolves(repo_root, ref):
         return False
+    root = Path(repo_root)
     try:
-        diff = run_git(Path(repo_root), "diff", "--quiet", ref, "--", relative)
+        # RESTORE-CAPABLE, not merely resolvable. `rev-parse --verify` accepts a
+        # BLOB sha, and `git diff <blob> -- <path>` reports no difference for it --
+        # but `git restore --source=<blob>` exits 128, so the emitted rollback
+        # guidance would fail exactly when the operator needs it. A backup must be
+        # a commit-ish, which is what `<ref>^{commit}` asserts.
+        commitish = run_git(
+            root, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"
+        )
+        if commitish.returncode != 0:
+            return False
+        # The ref must actually CONTAIN the target, not merely differ from nothing:
+        # `git diff` against a tree that lacks the path reports no difference.
+        listed = run_git(root, "cat-file", "-e", f"{ref}:{relative}")
+        if listed.returncode != 0:
+            return False
+        diff = run_git(root, "diff", "--quiet", ref, "--", relative)
     except (OSError, RuntimeError):
         return False
     # returncode 0 == no difference: the ref holds exactly this content.
@@ -494,6 +519,8 @@ def evaluate(
 
     return GateVerdict(
         target_id=target_id,
+        authorized_operation=operation_id,
+        authorized_path=(entry.path if entry is not None and target_exists else None),
         stage_readable=stage_readable,
         state_committed=committed,
         stage_pass=stage_pass,

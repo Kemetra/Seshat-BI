@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from seshat.pbi_mcp.detect import refuse_if_bypass_flag
+from seshat.pbi_mcp.scan import SECRET_PATTERNS
 from seshat.pbi_mcp_adapter.evidence import redact
 from seshat.pbi_mcp_adapter.gate import GateVerdict
 
@@ -122,30 +123,43 @@ def _run(argv: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
 
 
 def _redact_and_tail(text: str, limit: int) -> str:
-    """Redact FIRST, then trim (#362).
+    """Redact FIRST, then trim (#362), through BOTH layers.
 
     Trimming first can split a DSN across the discarded boundary and leave a
     remainder no later redaction pass recognizes.
+
+    ``redact`` is the DSN-shaped layer only -- its own docstring says it cannot see
+    a tenant GUID or a user path and must never be the last thing a writer calls.
+    Vendor output is exactly where those appear (the runtime prints local project
+    paths), so the comprehensive scanner runs afterwards. Unlike the evidence
+    writer this SCRUBS rather than refuses: a leaky transcript must not discard the
+    record of a mutation that already happened, so the classes derive-then-replace
+    cannot handle are masked by label instead.
     """
     scrubbed = redact(text)
+    for label, pattern in SECRET_PATTERNS:
+        scrubbed = pattern.sub(f"[REDACTED:{label}]", scrubbed)
     return scrubbed if len(scrubbed) <= limit else scrubbed[-limit:]
 
 
 def invoke(
     verdict: GateVerdict,
     *,
-    target_path: str,
-    operation_id: str,
     repo_root: Path,
     read_only: bool = False,
     runner: object = None,
 ) -> RunResult:
     """Invoke the vendor runtime, but only behind a cleared gate.
 
-    Refuses -- without launching anything -- when the gate is not cleared. A
-    caller cannot pass a hand-built "cleared" verdict cheaply either: every field
-    of :class:`GateVerdict` is derived by ``gate.evaluate``, and ``cleared`` is a
-    computed property rather than a stored flag.
+    The target path and operation come from the VERDICT, not from parameters.
+    That is the whole point: this function previously took ``target_path`` and
+    ``operation_id`` of its own and only checked ``verdict.cleared``, so a verdict
+    legitimately cleared for one target/operation could be replayed to launch a
+    different operation against a different path -- including one outside the
+    repository, defeating the containment check the gate had just performed.
+
+    A verdict authorizes a specific mutation. There is now no parameter by which
+    a caller can substitute another.
     """
     if not verdict.cleared:
         return RunResult(
@@ -153,6 +167,19 @@ def invoke(
             output="refused: the write gate is not cleared",
             mutation_attempted=False,
             blockers=(BLOCKER_GATE_NOT_CLEARED, *verdict.blockers),
+        )
+
+    # Read from the verdict. `cleared` guarantees both are populated.
+    target_path = verdict.authorized_path
+    operation_id = verdict.authorized_operation
+    if (
+        target_path is None or not operation_id
+    ):  # pragma: no cover - cleared implies both
+        return RunResult(
+            exit_code=1,
+            output="refused: the verdict names no authorized target or operation",
+            mutation_attempted=False,
+            blockers=(BLOCKER_GATE_NOT_CLEARED,),
         )
 
     argv = build_argv(target_path, operation_id, read_only=read_only)

@@ -1148,3 +1148,80 @@ def test_operation_must_be_named_as_a_whole_token_too(tmp_path: Path) -> None:
     verdict = _evaluate(repo)
     assert not verdict.cleared
     assert gate.BLOCKER_APPROVAL_OPERATION in verdict.blockers
+
+
+def test_a_blob_sha_is_not_an_acceptable_backup(committed_repo: Path) -> None:
+    """``rev-parse --verify`` accepts a BLOB; ``git restore --source=<blob>`` fails.
+
+    So a blob cleared the gate while the emitted rollback guidance would exit 128
+    exactly when the operator needed it. A backup must be restore-capable.
+    """
+    blob = subprocess.run(
+        ["git", "rev-parse", f"HEAD:models/{TARGET}.tmdl"],
+        cwd=committed_repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert blob, "expected a blob sha"
+
+    target = committed_repo / "models" / f"{TARGET}.tmdl"
+    target.write_text("// work in progress\n", encoding="utf-8")
+
+    verdict = _evaluate(committed_repo, tree_clean=False, backup_ref=blob)
+    assert not verdict.cleared
+    assert gate.BLOCKER_BACKUP_MISSES_TARGET in verdict.blockers
+
+
+def test_the_emitted_rollback_command_actually_runs_for_an_accepted_ref(
+    committed_repo: Path,
+) -> None:
+    """Whatever the gate accepts as a backup must survive `git restore`.
+
+    Runs the emitted command rather than asserting its shape, which is what
+    would have caught the blob case.
+    """
+    from seshat.pbi_mcp_adapter.validation import rollback_guidance_for
+
+    target = committed_repo / "models" / f"{TARGET}.tmdl"
+    original = target.read_text(encoding="utf-8")
+
+    # Accept the ref FIRST, while HEAD still holds the target's current bytes --
+    # that is the state a real run is in when the gate clears. Corrupting the file
+    # before asking would (correctly) trip PBIMCP-GATE-14, since HEAD would no
+    # longer be a backup of what is about to change.
+    assert _evaluate(committed_repo, tree_clean=False, backup_ref="HEAD").git_safe
+
+    # Now the "write" happens and goes wrong.
+    target.write_text("// corrupted\n", encoding="utf-8")
+
+    command = rollback_guidance_for(f"models/{TARGET}.tmdl", "HEAD")[0]
+    completed = subprocess.run(
+        command.split("#")[0].strip().split(),
+        cwd=committed_repo,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert target.read_text(encoding="utf-8") == original
+
+
+def test_a_ref_that_lacks_the_target_is_not_a_backup(committed_repo: Path) -> None:
+    """A commit that never contained the file cannot be its backup.
+
+    ``git diff`` against a tree lacking the path reports no difference, so a
+    diff-only check would accept it.
+    """
+    _git(committed_repo, "checkout", "-q", "--orphan", "empty-branch")
+    _git(committed_repo, "rm", "-rq", "--cached", ".")
+    (committed_repo / "unrelated.txt").write_text("x\n", encoding="utf-8")
+    _git(committed_repo, "add", "unrelated.txt")
+    _git(committed_repo, "commit", "-q", "-m", "orphan", "--no-gpg-sign")
+    orphan = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=committed_repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert not gate._ref_holds_target(committed_repo, orphan, f"models/{TARGET}.tmdl")

@@ -30,6 +30,8 @@ def _cleared_verdict() -> gate.GateVerdict:
     """
     return gate.GateVerdict(
         target_id="sales_model",
+        authorized_operation=OPERATION,
+        authorized_path=TARGET_PATH,
         stage_readable=True,
         state_committed=True,
         stage_pass=True,
@@ -83,8 +85,6 @@ def test_runner_refuses_uncleared_gate(tmp_path: Path) -> None:
     stub = _stub()
     result = runner.invoke(
         _uncleared_verdict(),
-        target_path=TARGET_PATH,
-        operation_id=OPERATION,
         repo_root=tmp_path,
         runner=stub,
     )
@@ -97,8 +97,6 @@ def test_refusal_reports_no_mutation_attempted(tmp_path: Path) -> None:
     """Distinguishes refused-before-launch from launched-state-unknown."""
     result = runner.invoke(
         _uncleared_verdict(),
-        target_path=TARGET_PATH,
-        operation_id=OPERATION,
         repo_root=tmp_path,
         runner=_stub(),
     )
@@ -109,8 +107,6 @@ def test_refusal_carries_the_gate_blockers_through(tmp_path: Path) -> None:
     """The specific missing authority survives to the caller (FR-009)."""
     result = runner.invoke(
         _uncleared_verdict(blockers=(gate.BLOCKER_APPROVAL_TARGET,)),
-        target_path=TARGET_PATH,
-        operation_id=OPERATION,
         repo_root=tmp_path,
         runner=_stub(),
     )
@@ -122,8 +118,6 @@ def test_cleared_gate_does_invoke(tmp_path: Path) -> None:
     stub = _stub()
     result = runner.invoke(
         _cleared_verdict(),
-        target_path=TARGET_PATH,
-        operation_id=OPERATION,
         repo_root=tmp_path,
         runner=stub,
     )
@@ -142,8 +136,6 @@ def test_stall_becomes_typed_blocked_not_a_hang(tmp_path: Path) -> None:
 
     result = runner.invoke(
         _cleared_verdict(),
-        target_path=TARGET_PATH,
-        operation_id=OPERATION,
         repo_root=tmp_path,
         runner=stall,
     )
@@ -160,8 +152,6 @@ def test_a_stalled_run_reports_a_mutation_was_attempted(tmp_path: Path) -> None:
 
     result = runner.invoke(
         _cleared_verdict(),
-        target_path=TARGET_PATH,
-        operation_id=OPERATION,
         repo_root=tmp_path,
         runner=stall,
     )
@@ -174,8 +164,6 @@ def test_missing_runtime_is_typed_not_an_exception(tmp_path: Path) -> None:
 
     result = runner.invoke(
         _cleared_verdict(),
-        target_path=TARGET_PATH,
-        operation_id=OPERATION,
         repo_root=tmp_path,
         runner=missing,
     )
@@ -211,8 +199,6 @@ def test_runner_never_passes_the_bypass_flag(tmp_path: Path) -> None:
     stub = _stub()
     runner.invoke(
         _cleared_verdict(),
-        target_path=TARGET_PATH,
-        operation_id=OPERATION,
         repo_root=tmp_path,
         runner=stub,
     )
@@ -237,8 +223,6 @@ def test_a_bypass_flag_smuggled_into_the_argv_raises(
     with pytest.raises(detect.BypassFlagRefused):
         runner.invoke(
             _cleared_verdict(),
-            target_path=TARGET_PATH,
-            operation_id=OPERATION,
             repo_root=tmp_path,
             runner=_stub(),
         )
@@ -249,8 +233,6 @@ def test_read_only_mode_passes_readonly_explicitly(tmp_path: Path) -> None:
     stub = _stub()
     runner.invoke(
         _cleared_verdict(),
-        target_path=TARGET_PATH,
-        operation_id=OPERATION,
         repo_root=tmp_path,
         read_only=True,
         runner=stub,
@@ -263,8 +245,6 @@ def test_write_mode_is_explicit_too(tmp_path: Path) -> None:
     stub = _stub()
     runner.invoke(
         _cleared_verdict(),
-        target_path=TARGET_PATH,
-        operation_id=OPERATION,
         repo_root=tmp_path,
         read_only=False,
         runner=stub,
@@ -277,8 +257,6 @@ def test_the_vendor_runtime_is_invoked_through_npx(tmp_path: Path) -> None:
     stub = _stub()
     runner.invoke(
         _cleared_verdict(),
-        target_path=TARGET_PATH,
-        operation_id=OPERATION,
         repo_root=tmp_path,
         runner=stub,
     )
@@ -298,8 +276,6 @@ def test_output_is_redacted_before_truncation(tmp_path: Path) -> None:
     leaky = f"{noise} host=db.example.com user=admin password=hunter2"
     result = runner.invoke(
         _cleared_verdict(),
-        target_path=TARGET_PATH,
-        operation_id=OPERATION,
         repo_root=tmp_path,
         runner=_stub(stdout=leaky),
     )
@@ -310,8 +286,6 @@ def test_output_is_redacted_before_truncation(tmp_path: Path) -> None:
 def test_stderr_is_captured_alongside_stdout(tmp_path: Path) -> None:
     result = runner.invoke(
         _cleared_verdict(),
-        target_path=TARGET_PATH,
-        operation_id=OPERATION,
         repo_root=tmp_path,
         runner=_stub(returncode=1, stdout="out", stderr="boom"),
     )
@@ -321,8 +295,6 @@ def test_stderr_is_captured_alongside_stdout(tmp_path: Path) -> None:
 def test_nonzero_exit_is_not_succeeded(tmp_path: Path) -> None:
     result = runner.invoke(
         _cleared_verdict(),
-        target_path=TARGET_PATH,
-        operation_id=OPERATION,
         repo_root=tmp_path,
         runner=_stub(returncode=2),
     )
@@ -332,10 +304,89 @@ def test_nonzero_exit_is_not_succeeded(tmp_path: Path) -> None:
 def test_result_is_immutable(tmp_path: Path) -> None:
     result = runner.invoke(
         _cleared_verdict(),
-        target_path=TARGET_PATH,
-        operation_id=OPERATION,
         repo_root=tmp_path,
         runner=_stub(),
     )
     with pytest.raises(Exception):
         result.exit_code = 0  # type: ignore[misc]
+
+
+# --------------------------------------------------------------------------
+# CRITICAL: a cleared verdict is not replayable against another op/path
+# --------------------------------------------------------------------------
+
+
+def test_the_runner_executes_only_what_the_verdict_authorized(tmp_path: Path) -> None:
+    """The argv comes from the VERDICT, never from a parameter.
+
+    The hole this closes: ``invoke`` used to take its own ``target_path`` and
+    ``operation_id`` and check only ``verdict.cleared``, so a verdict legitimately
+    cleared for sales_model/update_measure launched ``drop_all_tables`` against
+    ``../outside.tmdl`` -- defeating the containment check the gate had just
+    performed.
+    """
+    stub = _stub()
+    runner.invoke(_cleared_verdict(), repo_root=tmp_path, runner=stub)
+    argv = stub.calls[0]
+    assert argv[argv.index("--target") + 1] == TARGET_PATH
+    assert argv[argv.index("--operation") + 1] == OPERATION
+
+
+def test_invoke_accepts_no_target_or_operation_parameter() -> None:
+    """Pins the CAPABILITY: there is no parameter by which to substitute one.
+
+    Asserted against the real signature, so re-adding either name fails here
+    rather than silently reopening the replay path.
+    """
+    import inspect
+
+    params = set(inspect.signature(runner.invoke).parameters)
+    for forbidden in ("target_path", "operation_id", "target", "operation"):
+        assert forbidden not in params, f"invoke must not accept {forbidden}"
+
+
+def test_a_verdict_naming_no_path_is_refused(tmp_path: Path) -> None:
+    """Defence in depth for a hand-built verdict with the pair missing."""
+    base = _cleared_verdict()
+    fields = {k: getattr(base, k) for k in vars(base)}
+    fields["authorized_path"] = None
+    verdict = gate.GateVerdict(**fields)  # type: ignore[arg-type]
+    stub = _stub()
+    result = runner.invoke(verdict, repo_root=tmp_path, runner=stub)
+    assert not result.succeeded
+    assert stub.calls == []
+
+
+# --------------------------------------------------------------------------
+# MED: vendor output goes through BOTH redaction layers
+# --------------------------------------------------------------------------
+
+
+def test_runner_output_scrubs_tenant_guids_and_user_paths(tmp_path: Path) -> None:
+    """``redact`` alone cannot see these -- its own docstring says so.
+
+    Vendor output is exactly where they appear, since the runtime prints local
+    project paths.
+    """
+    leaky = (
+        "tenant=3f2504e0-4f89-11d3-9a0c-0305e82c3301 "
+        r"project=C:\Users\ahmed\models\sales.tmdl"
+    )
+    result = runner.invoke(
+        _cleared_verdict(),
+        repo_root=tmp_path,
+        runner=_stub(stdout=leaky),
+    )
+    assert "3f2504e0-4f89-11d3-9a0c-0305e82c3301" not in result.output
+    assert "ahmed" not in result.output
+    assert "REDACTED" in result.output
+
+
+def test_runner_output_still_scrubs_dsn_spans(tmp_path: Path) -> None:
+    """The DSN layer must keep working alongside the scanner layer."""
+    result = runner.invoke(
+        _cleared_verdict(),
+        repo_root=tmp_path,
+        runner=_stub(stdout="host=db.example.com user=admin password=hunter2"),
+    )
+    assert "hunter2" not in result.output

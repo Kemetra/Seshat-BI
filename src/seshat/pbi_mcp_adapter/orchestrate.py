@@ -31,6 +31,79 @@ EXIT_VALIDATION_FAILED = 2
 EXIT_INDETERMINATE = 3
 
 
+#: A runtime exit of 0 is a claim, not proof. These name what the claim failed.
+BLOCKER_TARGET_UNCHANGED = "PBIMCP-EFF-01"
+BLOCKER_OUT_OF_SCOPE_CHANGE = "PBIMCP-EFF-02"
+
+BLOCKER_DETAIL: dict[str, str] = {
+    BLOCKER_TARGET_UNCHANGED: (
+        "the runtime reported success but the target's bytes are unchanged; a "
+        "no-op is reported honestly, never as an applied change"
+    ),
+    BLOCKER_OUT_OF_SCOPE_CHANGE: (
+        "the run modified files outside the authorized target; only the resolved "
+        "allowlist path may change"
+    ),
+}
+
+
+def _digest(path: Path) -> str | None:
+    """SHA-256 of ``path``, or None when absent."""
+    import hashlib
+
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def _snapshot(repo_root: Path) -> dict[str, str]:
+    """Digest every tracked-or-untracked file, so an out-of-scope write is visible.
+
+    Uses git so ignored files (including this adapter's own evidence artifact) are
+    excluded -- otherwise the evidence write would itself look like scope creep.
+    """
+    from seshat.gitstate import run_git
+
+    try:
+        listed = run_git(
+            repo_root, "ls-files", "--cached", "--others", "--exclude-standard"
+        )
+    except (OSError, RuntimeError):
+        return {}
+    if listed.returncode != 0:
+        return {}
+    snapshot: dict[str, str] = {}
+    for line in listed.stdout.splitlines():
+        rel = line.strip().strip('"')
+        if not rel:
+            continue
+        digest = _digest(repo_root / rel)
+        if digest is not None:
+            snapshot[rel] = digest
+    return snapshot
+
+
+def _effect_blockers(
+    before: dict[str, str], after: dict[str, str], authorized: str
+) -> tuple[str, ...]:
+    """What the run actually did, versus what it was authorized to do.
+
+    Exit 0 from the vendor runtime proves only that the process ended well. It
+    does not prove the intended artifact changed, nor that nothing else did.
+    """
+    found: list[str] = []
+    target = authorized.replace("\\", "/")
+    changed = {
+        rel for rel in set(before) | set(after) if before.get(rel) != after.get(rel)
+    }
+    if target not in changed:
+        found.append(BLOCKER_TARGET_UNCHANGED)
+    if changed - {target}:
+        found.append(BLOCKER_OUT_OF_SCOPE_CHANGE)
+    return tuple(found)
+
+
 @dataclass(frozen=True)
 class WriteReport:
     """What one run did, and how it ended."""
@@ -176,11 +249,11 @@ def apply_write(
         timestamp=timestamp,
     )
 
-    # 4. Execute.
+    # 4. Execute, with a before/after snapshot so a claim of success can be
+    # checked against what actually changed.
+    before = _snapshot(root)
     result = runner.invoke(
         verdict,
-        target_path=entry.path,
-        operation_id=operation_id,
         repo_root=root,
         read_only=False,
         runner=mcp_runner,
@@ -215,6 +288,31 @@ def apply_write(
             rollback_guidance=guidance,
             evidence_path=path,
             mutation_attempted=result.mutation_attempted,
+        )
+
+    # 4b. Did the run do what it was authorized to do? A no-op and an
+    # out-of-scope mutation both previously reported `materialized`.
+    effect_blockers = _effect_blockers(before, _snapshot(root), entry.path)
+    if effect_blockers:
+        path = _finalize(
+            root,
+            target_id=target_id,
+            operation_id=operation_id,
+            timestamp=timestamp,
+            outcome="failed",
+            mutation_attempted=True,
+            blockers=effect_blockers,
+            rollback_guidance=guidance,
+            mode=mode,
+            tool=runner.VENDOR_PACKAGE,
+        )
+        return WriteReport(
+            exit_code=EXIT_VALIDATION_FAILED,
+            outcome="failed",
+            blockers=effect_blockers,
+            rollback_guidance=guidance,
+            evidence_path=path,
+            mutation_attempted=True,
         )
 
     # 5. Validate. A zero exit from the runtime is not confirmation.

@@ -407,3 +407,84 @@ def test_report_and_evidence_blockers_agree_on_an_unexplained_failure(
     from seshat.pbi_mcp_adapter import runner as runner_mod
 
     assert runner_mod.BLOCKER_RUNTIME_UNEXPLAINED in runner_mod.BLOCKER_DETAIL
+
+
+# --------------------------------------------------------------------------
+# HIGH: exit 0 from the runtime is a CLAIM, not proof of the intended mutation
+# --------------------------------------------------------------------------
+
+
+def test_a_no_op_run_is_not_materialized(ready_repo: Path) -> None:
+    """The spec's own edge case: "returns success but touched nothing".
+
+    Both the runtime and the validator exit 0, and the artifact is byte-identical.
+    Previously reported ``materialized``.
+    """
+    before = (ready_repo / TARGET_PATH).read_text(encoding="utf-8")
+    report = _apply(ready_repo, mcp_runner=_mcp(returncode=0))
+    assert report.outcome == "failed"
+    assert orchestrate.BLOCKER_TARGET_UNCHANGED in report.blockers
+    assert (ready_repo / TARGET_PATH).read_text(encoding="utf-8") == before
+
+
+def test_a_mutation_outside_the_authorized_target_is_rejected(
+    ready_repo: Path,
+) -> None:
+    """Only the resolved allowlist path may change.
+
+    A runtime that edited README.md instead previously reported ``materialized``,
+    so the adapter certified a change it had not authorized.
+    """
+
+    def hijack(argv: list[str], cwd: Path):
+        (Path(cwd) / "README.md").write_text("HIJACKED\n", encoding="utf-8")
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok")
+
+    report = _apply(ready_repo, mcp_runner=hijack)
+    assert report.outcome == "failed"
+    assert orchestrate.BLOCKER_OUT_OF_SCOPE_CHANGE in report.blockers
+
+
+def test_a_run_touching_target_AND_another_file_is_rejected(
+    ready_repo: Path,
+) -> None:
+    """Changing the right file does not license changing others too."""
+
+    def both(argv: list[str], cwd: Path):
+        (Path(cwd) / TARGET_PATH).write_text("// mutated\n", encoding="utf-8")
+        (Path(cwd) / "README.md").write_text("also me\n", encoding="utf-8")
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok")
+
+    report = _apply(ready_repo, mcp_runner=both)
+    assert report.outcome == "failed"
+    assert orchestrate.BLOCKER_OUT_OF_SCOPE_CHANGE in report.blockers
+
+
+def test_a_genuine_in_scope_mutation_still_materializes(ready_repo: Path) -> None:
+    """The positive control.
+
+    Without it the effect check could reject every run and still pass the three
+    tests above.
+    """
+    report = _apply(ready_repo)
+    assert report.succeeded, report.blockers
+    assert report.outcome == "materialized"
+
+
+def test_effect_blockers_reach_the_evidence_record(ready_repo: Path) -> None:
+    report = _apply(ready_repo, mcp_runner=_mcp(returncode=0))
+    payload = json.loads(report.evidence_path.read_text(encoding="utf-8"))  # type: ignore[union-attr]
+    assert orchestrate.BLOCKER_TARGET_UNCHANGED in payload["blockers"]
+    assert payload["rollback_guidance"]
+
+
+def test_every_effect_blocker_has_readable_detail() -> None:
+    ids = [
+        value
+        for name, value in vars(orchestrate).items()
+        if name.startswith("BLOCKER_") and isinstance(value, str)
+    ]
+    assert len(ids) == 2
+    for blocker in ids:
+        assert orchestrate.BLOCKER_DETAIL.get(blocker)
+        assert blocker.startswith("PBIMCP-EFF-")
