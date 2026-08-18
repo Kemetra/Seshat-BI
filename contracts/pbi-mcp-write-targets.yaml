@@ -1,0 +1,33 @@
+# Power BI MCP write-target allowlist (spec 149 / F016 slice 5).
+#
+# The declared set of artifacts an approval-gated write may touch. Anything not
+# listed here is refused (FR-007).
+#
+# WHY THIS IS A COMMITTED FILE, NOT A CLI FLAG
+# -------------------------------------------
+# The read-only preflight family accepts `--allow` on argv, which is fine when
+# the allowlist only gates *validation*. As a *write* precondition it authorizes
+# nothing: the party requesting the mutation would be supplying the list that
+# permits it. So the write gate reads THIS path, fixed in code as
+# `gate.TARGET_ALLOWLIST_RELPATH`, and reads it from HEAD via
+# `gitstate.committed_text` -- an uncommitted widening is invisible to the gate,
+# and `seshat pbi-mcp apply` exposes no flag that can extend it.
+#
+# Adding a target here is therefore a reviewed, committed change. It is NOT an
+# approval: a listed target still requires a passing `semantic_model_ready`
+# stage, a shape-valid named-human `publish_ready` approval whose note names the
+# target as a whole token, a resolved operation, and a safe git state.
+#
+# SHAPE
+#   targets:
+#     - target_id: <declared identity used as --target>
+#       path: <repo-relative path to the artifact>
+#
+# `target_id` is matched as a WHOLE TOKEN against the approval note, so an entry
+# named `sales_model` is not authorized by an approval naming `sales_model_v2`
+# (or vice versa). Keep ids distinct under that rule.
+#
+# An empty list is a valid, maximally-safe state: it refuses every write. That is
+# the intended resting state until an owner declares a real target.
+
+targets: []

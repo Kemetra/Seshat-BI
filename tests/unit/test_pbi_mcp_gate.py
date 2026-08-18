@@ -1,21 +1,28 @@
-"""Spec 149 T009-T014 -- the four write preconditions, fail-closed.
+"""Spec 149 T009-T014 -- the write preconditions, fail-closed.
 
 US2 is built BEFORE US1 deliberately: the refusal path IS the governance, and
 building the write path first would leave a window in which mutation exists
 without a proven gate.
 
-Two repo-earned bars are enforced structurally here, not by convention:
+**The fixtures COMMIT their records.** An earlier draft of this suite wrote
+readiness records to the worktree and asserted they cleared, which encoded the
+worst fail-open in the feature -- an agent authoring its own approval -- as
+correct behavior, with a green suite. ``committed_repo`` therefore runs real
+``git`` commands, and ``test_uncommitted_but_passing_record_refuses`` is the
+positive control that proves the committed-state check is load-bearing.
 
-* **No absence-assertions.** Nothing below asserts a symbol is missing. Each test
-  asserts an observable verdict, so it cannot go green when the capability ships
-  in a different shape.
-* **No vacuous branches.** The precondition suite is hold-three-break-one AND
-  asserts a refusal COUNT, so a branch that stopped being exercised is visible
-  rather than silently skipped.
+Two repo-earned bars enforced structurally, not by convention:
+
+* **No absence-assertions.** Nothing asserts a symbol is missing; every test
+  asserts an observable verdict, so it cannot go green when a capability ships in
+  a different shape.
+* **No vacuous branches.** The precondition suite is hold-N-break-one AND asserts
+  a refusal COUNT, so a branch that stopped being exercised is visible.
 """
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -25,75 +32,121 @@ from seshat.pbi_mcp_adapter import gate
 pytestmark = pytest.mark.unit
 
 
-# --------------------------------------------------------------------------
-# Fixture builders -- one happy-path repo, perturbed one precondition at a time
-# --------------------------------------------------------------------------
-
 TARGET = "sales_model"
 OTHER_TARGET = "returns_model"
+#: A shape-valid owner: a named decider WITH an authority class. A bare name is
+#: rejected by ``approval_is_shape_valid`` (issue #487), which is why the earlier
+#: draft's ``owner: Ahmed Shaaban`` was itself wrong.
+OWNER = "Ahmed Shaaban (data_owner)"
 
 
-def _write_readiness(
-    repo: Path,
+def _readiness_yaml(
     *,
     target: str = TARGET,
     semantic_status: str = "pass",
     approval_note: str | None = None,
-    malformed: bool = False,
-    omit: bool = False,
-) -> None:
-    """Write the per-target readiness record the gate reads.
-
-    ``approval_note`` defaults to a note naming ``target`` exactly -- the
-    happy path. Pass an explicit note to test the naming rule.
-    """
-    record = repo / "mappings" / target / "readiness-status.yaml"
-    record.parent.mkdir(parents=True, exist_ok=True)
-    if omit:
-        return
-    if malformed:
-        record.write_text("stages: [this is: not valid: yaml\n", encoding="utf-8")
-        return
+    approval_stage: str = "publish_ready",
+    owner: str = OWNER,
+    include_approval: bool = True,
+) -> str:
     note = f"approved for {target}" if approval_note is None else approval_note
-    record.write_text(
+    body = (
         "stages:\n"
         f"  semantic_model_ready:\n    status: {semantic_status}\n"
         "  publish_ready:\n    status: pass\n"
-        "approvals:\n"
-        "  - stage: publish_ready\n"
-        "    owner: Ahmed Shaaban\n"
-        "    at: '2026-08-18'\n"
-        f"    note: {note!r}\n",
-        encoding="utf-8",
     )
+    if include_approval:
+        body += (
+            "approvals:\n"
+            f"  - stage: {approval_stage}\n"
+            f"    owner: {owner!r}\n"
+            "    at: '2026-08-18'\n"
+            f"    note: {note!r}\n"
+        )
+    return body
 
 
-def _write_allowlist(repo: Path, targets: tuple[str, ...] = (TARGET,)) -> None:
-    allowlist = repo / ".seshat" / "pbi-mcp-targets.yaml"
-    allowlist.parent.mkdir(parents=True, exist_ok=True)
-    body = "".join(
+def _allowlist_yaml(targets: tuple[str, ...] = (TARGET,)) -> str:
+    if not targets:
+        return "targets: []\n"
+    rows = "".join(
         f"  - target_id: {name}\n    path: models/{name}.tmdl\n" for name in targets
     )
-    allowlist.write_text(f"targets:\n{body}", encoding="utf-8")
-    for name in targets:
-        artifact = repo / "models" / f"{name}.tmdl"
-        artifact.parent.mkdir(parents=True, exist_ok=True)
-        artifact.write_text(f"// {name}\n", encoding="utf-8")
+    return f"targets:\n{rows}"
 
 
-@pytest.fixture
-def clean_repo(tmp_path: Path) -> Path:
-    """A repo where all four preconditions hold."""
-    _write_readiness(tmp_path)
-    _write_allowlist(tmp_path)
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", "-c", "commit.gpgsign=false", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+
+
+def _init_repo(tmp_path: Path) -> Path:
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "test@example.invalid")
+    _git(tmp_path, "config", "user.name", "Test")
     return tmp_path
 
 
+def _write(repo: Path, relpath: str, text: str) -> None:
+    path = repo / relpath
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _commit_all(repo: Path, message: str = "fixture") -> None:
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message, "--no-gpg-sign")
+
+
+def _build_repo(
+    tmp_path: Path,
+    *,
+    readiness: str | None = None,
+    allowlist: str | None = None,
+    artifacts: tuple[str, ...] = (TARGET,),
+    target: str = TARGET,
+    commit: bool = True,
+) -> Path:
+    """A repo with the requested state, committed unless told otherwise."""
+    repo = _init_repo(tmp_path)
+    if readiness is not None:
+        _write(repo, f"mappings/{target}/readiness-status.yaml", readiness)
+    if allowlist is not None:
+        _write(repo, gate.TARGET_ALLOWLIST_RELPATH, allowlist)
+    for name in artifacts:
+        _write(repo, f"models/{name}.tmdl", f"// {name}\n")
+    # A repo needs at least one commit for HEAD to resolve.
+    _write(repo, "README.md", "fixture\n")
+    if commit:
+        _commit_all(repo)
+    else:
+        # Commit ONLY the baseline so HEAD exists; leave the state files untracked.
+        _git(repo, "add", "README.md")
+        for name in artifacts:
+            _git(repo, "add", f"models/{name}.tmdl")
+        if allowlist is not None:
+            _git(repo, "add", gate.TARGET_ALLOWLIST_RELPATH)
+        _git(repo, "commit", "-q", "-m", "baseline", "--no-gpg-sign")
+    return repo
+
+
+@pytest.fixture
+def committed_repo(tmp_path: Path) -> Path:
+    """A repo where every precondition holds, all state COMMITTED."""
+    return _build_repo(
+        tmp_path, readiness=_readiness_yaml(), allowlist=_allowlist_yaml()
+    )
+
+
 def _evaluate(repo: Path, **kwargs: object) -> gate.GateVerdict:
-    """Evaluate the gate with happy-path defaults, overridable per test."""
     params: dict[str, object] = {
         "repo_root": repo,
         "target_id": TARGET,
+        "operation_binds": True,
         "backup_declared": False,
         "tree_clean": True,
     }
@@ -102,116 +155,263 @@ def _evaluate(repo: Path, **kwargs: object) -> gate.GateVerdict:
 
 
 # --------------------------------------------------------------------------
-# T009 -- hold three, break one (with an explicit refusal COUNT)
+# The positive control -- without it, every refusal test below could pass
+# against a gate that refuses unconditionally.
 # --------------------------------------------------------------------------
 
 
-def test_all_four_preconditions_holding_clears_the_gate(clean_repo: Path) -> None:
-    """The positive control.
-
-    Without this, every refusal test below could pass against a gate that
-    refuses unconditionally -- the vacuity this suite is designed to expose.
-    """
-    verdict = _evaluate(clean_repo)
+def test_all_preconditions_holding_clears_the_gate(committed_repo: Path) -> None:
+    verdict = _evaluate(committed_repo)
     assert verdict.cleared, f"expected cleared, blockers={verdict.blockers}"
     assert verdict.blockers == ()
+    assert verdict.blocking is False
 
+
+# --------------------------------------------------------------------------
+# CRITICAL-1 -- the committed-state check. THE catching test.
+# --------------------------------------------------------------------------
+
+
+def test_uncommitted_but_passing_record_refuses(tmp_path: Path) -> None:
+    """A VALID, PASSING, UNCOMMITTED readiness record must refuse.
+
+    This is the whole reason the gate reads HEAD instead of the worktree. The
+    record below would satisfy every other precondition; it is refused solely
+    because it never entered audit history. If this test fails, the agent can
+    author its own approval (#334).
+    """
+    repo = _build_repo(
+        tmp_path,
+        readiness=_readiness_yaml(),
+        allowlist=_allowlist_yaml(),
+        commit=False,
+    )
+    verdict = _evaluate(repo)
+    assert not verdict.cleared
+    assert not verdict.state_committed
+    assert gate.BLOCKER_STATE_UNCOMMITTED in verdict.blockers
+
+
+def test_committed_then_locally_edited_record_refuses(committed_repo: Path) -> None:
+    """A committed record edited in the worktree is also refused.
+
+    ``is_tracked_and_clean`` covers tracked-but-dirty, not just untracked -- so a
+    passing record cannot be produced by editing a committed one.
+    """
+    _write(
+        committed_repo,
+        f"mappings/{TARGET}/readiness-status.yaml",
+        _readiness_yaml(approval_note="approved for anything at all"),
+    )
+    verdict = _evaluate(committed_repo)
+    assert not verdict.cleared
+    assert gate.BLOCKER_STATE_UNCOMMITTED in verdict.blockers
+
+
+def test_the_gate_reads_head_not_the_worktree(committed_repo: Path) -> None:
+    """Behavioral proof of provenance: HEAD's value is the one that counts.
+
+    Commit a NON-passing record, then write a passing one in the worktree. A
+    worktree reader would clear; a HEAD reader must refuse.
+    """
+    _write(
+        committed_repo,
+        f"mappings/{TARGET}/readiness-status.yaml",
+        _readiness_yaml(semantic_status="warning"),
+    )
+    _commit_all(committed_repo, "commit a NOT-pass record")
+    _write(
+        committed_repo,
+        f"mappings/{TARGET}/readiness-status.yaml",
+        _readiness_yaml(semantic_status="pass"),
+    )
+    verdict = _evaluate(committed_repo)
+    assert not verdict.cleared, "a worktree-only 'pass' must never clear the gate"
+
+
+# --------------------------------------------------------------------------
+# T009 -- hold the rest, break one (with an explicit refusal COUNT)
+# --------------------------------------------------------------------------
 
 #: Each case breaks exactly ONE precondition and names the blocker it must
-#: produce. Named explicitly rather than generated, so that dropping a
-#: precondition cannot hide behind a still-passing "all four" phrase (T009).
-BREAK_ONE_CASES: tuple[tuple[str, dict[str, object], str], ...] = (
-    ("stage_not_pass", {"semantic_status": "warning"}, gate.BLOCKER_STAGE_NOT_PASS),
-    ("approval_wrong_target", {"approval_note": "approved for other"}, gate.BLOCKER_APPROVAL_TARGET),
-    ("target_not_allowlisted", {"allowlist": ()}, gate.BLOCKER_TARGET_NOT_ALLOWLISTED),
-    ("git_dirty_no_backup", {"tree_clean": False}, gate.BLOCKER_GIT_UNSAFE),
+#: produce. Named explicitly rather than generated, so dropping a precondition
+#: cannot hide behind a still-passing "all of them" phrase.
+BREAK_ONE_CASES: tuple[tuple[str, str], ...] = (
+    ("stage_not_pass", gate.BLOCKER_STAGE_NOT_PASS),
+    ("state_uncommitted", gate.BLOCKER_STATE_UNCOMMITTED),
+    ("approval_absent", gate.BLOCKER_APPROVAL_ABSENT),
+    ("approval_wrong_target", gate.BLOCKER_APPROVAL_TARGET),
+    ("operation_unbound", gate.BLOCKER_OPERATION_UNBOUND),
+    ("target_not_allowlisted", gate.BLOCKER_TARGET_NOT_ALLOWLISTED),
+    ("target_absent_on_disk", gate.BLOCKER_TARGET_ABSENT),
+    ("git_dirty_no_backup", gate.BLOCKER_GIT_UNSAFE),
 )
+
+
+def _repo_for_case(tmp_path: Path, label: str) -> tuple[Path, dict[str, object]]:
+    """Build a repo breaking exactly ``label`` and return the evaluate kwargs."""
+    if label == "stage_not_pass":
+        repo = _build_repo(
+            tmp_path,
+            readiness=_readiness_yaml(semantic_status="warning"),
+            allowlist=_allowlist_yaml(),
+        )
+        return repo, {}
+    if label == "state_uncommitted":
+        repo = _build_repo(
+            tmp_path,
+            readiness=_readiness_yaml(),
+            allowlist=_allowlist_yaml(),
+            commit=False,
+        )
+        return repo, {}
+    if label == "approval_absent":
+        repo = _build_repo(
+            tmp_path,
+            readiness=_readiness_yaml(include_approval=False),
+            allowlist=_allowlist_yaml(),
+        )
+        return repo, {}
+    if label == "approval_wrong_target":
+        repo = _build_repo(
+            tmp_path,
+            readiness=_readiness_yaml(approval_note=f"approved for {OTHER_TARGET}"),
+            allowlist=_allowlist_yaml(),
+        )
+        return repo, {}
+    if label == "operation_unbound":
+        repo = _build_repo(
+            tmp_path, readiness=_readiness_yaml(), allowlist=_allowlist_yaml()
+        )
+        return repo, {"operation_binds": False}
+    if label == "target_not_allowlisted":
+        repo = _build_repo(
+            tmp_path,
+            readiness=_readiness_yaml(),
+            allowlist=_allowlist_yaml(targets=(OTHER_TARGET,)),
+        )
+        return repo, {}
+    if label == "target_absent_on_disk":
+        repo = _build_repo(
+            tmp_path,
+            readiness=_readiness_yaml(),
+            allowlist=_allowlist_yaml(),
+            artifacts=(),
+        )
+        return repo, {}
+    if label == "git_dirty_no_backup":
+        repo = _build_repo(
+            tmp_path, readiness=_readiness_yaml(), allowlist=_allowlist_yaml()
+        )
+        return repo, {"tree_clean": False, "backup_declared": False}
+    raise AssertionError(f"unhandled case {label!r}")
 
 
 @pytest.mark.parametrize(
-    ("label", "perturbation", "expected_blocker"),
+    ("label", "expected_blocker"),
     BREAK_ONE_CASES,
     ids=[case[0] for case in BREAK_ONE_CASES],
 )
-def test_hold_three_break_one(
-    tmp_path: Path,
-    label: str,
-    perturbation: dict[str, object],
-    expected_blocker: str,
+def test_hold_the_rest_break_one(
+    tmp_path: Path, label: str, expected_blocker: str
 ) -> None:
     """Break exactly one precondition; assert refusal naming THAT precondition."""
-    readiness_kwargs = {
-        k: v for k, v in perturbation.items() if k in {"semantic_status", "approval_note"}
-    }
-    _write_readiness(tmp_path, **readiness_kwargs)  # type: ignore[arg-type]
-    allowlist = perturbation.get("allowlist", (TARGET,))
-    _write_allowlist(tmp_path, targets=allowlist)  # type: ignore[arg-type]
-
-    verdict = _evaluate(tmp_path, tree_clean=perturbation.get("tree_clean", True))
-
+    repo, kwargs = _repo_for_case(tmp_path, label)
+    verdict = _evaluate(repo, **kwargs)
     assert not verdict.cleared, f"{label}: expected refusal"
     assert expected_blocker in verdict.blockers, (
-        f"{label}: expected blocker {expected_blocker!r}, got {verdict.blockers!r}"
+        f"{label}: expected {expected_blocker!r}, got {verdict.blockers!r}"
     )
 
 
 def test_every_precondition_has_its_own_break_case() -> None:
-    """The anti-vacuity assertion: the refusal COUNT is pinned at four.
+    """The anti-vacuity assertion: the refusal COUNT is pinned.
 
-    If a precondition is ever dropped from the parameter list, this fails --
-    which is the whole point. A suite that silently shrinks proves less each
-    time while still reporting green.
+    If a precondition is dropped from the case list this fails, which is the
+    point -- a suite that silently shrinks proves less each time while still
+    reporting green.
     """
-    assert len(BREAK_ONE_CASES) == 4
-    assert len({case[2] for case in BREAK_ONE_CASES}) == 4, "blockers must be distinct"
+    assert len(BREAK_ONE_CASES) == 8
+    assert len({case[1] for case in BREAK_ONE_CASES}) == 8, "blockers must be distinct"
 
 
-def test_each_unmet_precondition_contributes_a_distinct_blocker(tmp_path: Path) -> None:
-    """Break ALL four at once: four distinct blockers, not one generic failure."""
-    _write_readiness(tmp_path, semantic_status="warning", approval_note="nothing named")
-    _write_allowlist(tmp_path, targets=())
-    verdict = _evaluate(tmp_path, tree_clean=False)
+def test_each_break_case_is_actually_exercised(tmp_path: Path) -> None:
+    """Every declared case must genuinely produce its blocker.
+
+    Guards against a case whose fixture stopped breaking what it claims -- the
+    branch would go unexercised while the parameterized test still passed for
+    the wrong reason.
+    """
+    produced: set[str] = set()
+    for label, expected in BREAK_ONE_CASES:
+        case_root = tmp_path / label
+        case_root.mkdir()
+        repo, kwargs = _repo_for_case(case_root, label)
+        verdict = _evaluate(repo, **kwargs)
+        assert expected in verdict.blockers, label
+        produced.add(expected)
+    assert produced == {case[1] for case in BREAK_ONE_CASES}
+
+
+def test_each_unmet_precondition_contributes_a_distinct_blocker(
+    tmp_path: Path,
+) -> None:
+    """Break several at once: distinct blockers, not one generic failure."""
+    repo = _build_repo(
+        tmp_path,
+        readiness=_readiness_yaml(semantic_status="warning", approval_note="nothing"),
+        allowlist=_allowlist_yaml(targets=()),
+        artifacts=(),
+    )
+    verdict = _evaluate(repo, operation_binds=False, tree_clean=False)
     assert not verdict.cleared
     assert len(set(verdict.blockers)) >= 4, verdict.blockers
 
 
 # --------------------------------------------------------------------------
-# T010 -- unreadable state fails CLOSED (three distinct cases)
+# T010 -- unreadable state fails CLOSED
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "readiness_kwargs",
-    [
-        pytest.param({"omit": True}, id="absent"),
-        pytest.param({"malformed": True}, id="malformed"),
-    ],
-)
-def test_unreadable_state_refuses(
-    tmp_path: Path, readiness_kwargs: dict[str, bool]
-) -> None:
-    """An unreadable gate is NEVER a passing gate (FR-005)."""
-    _write_readiness(tmp_path, **readiness_kwargs)  # type: ignore[arg-type]
-    _write_allowlist(tmp_path)
-    verdict = _evaluate(tmp_path)
+def test_absent_readiness_record_refuses(tmp_path: Path) -> None:
+    repo = _build_repo(tmp_path, readiness=None, allowlist=_allowlist_yaml())
+    verdict = _evaluate(repo)
     assert not verdict.cleared
     assert not verdict.stage_readable
     assert gate.BLOCKER_STAGE_UNREADABLE in verdict.blockers
 
 
-def test_unreadable_directory_refuses(tmp_path: Path) -> None:
-    """A readiness path that is a DIRECTORY, not a file -- an OSError on read.
+def test_malformed_readiness_record_refuses_without_raising(tmp_path: Path) -> None:
+    """Malformed YAML becomes a typed refusal, NOT an exception.
 
-    Included as a third case because 'unreadable' in the spec is not only
-    'absent' or 'malformed': a real filesystem produces read errors, and the
-    fail-closed path must cover them rather than propagating an exception.
+    ``dagster_adapter/gate.py`` calls ``yaml.safe_load`` unguarded, so a
+    malformed record raises out of the reader. A traceback is not a refusal: it
+    has no blocker and an undefined exit code.
     """
-    record = tmp_path / "mappings" / TARGET / "readiness-status.yaml"
-    record.mkdir(parents=True)
-    _write_allowlist(tmp_path)
-    verdict = _evaluate(tmp_path)
+    repo = _build_repo(
+        tmp_path,
+        readiness="stages: [this is: not valid: yaml\n",
+        allowlist=_allowlist_yaml(),
+    )
+    verdict = _evaluate(repo)  # must not raise
     assert not verdict.cleared
     assert not verdict.stage_readable
+    assert gate.BLOCKER_STAGE_UNREADABLE in verdict.blockers
+
+
+def test_readiness_record_that_is_not_a_mapping_refuses(tmp_path: Path) -> None:
+    """Valid YAML of the wrong TYPE is still unreadable state."""
+    repo = _build_repo(
+        tmp_path, readiness="- just\n- a\n- list\n", allowlist=_allowlist_yaml()
+    )
+    verdict = _evaluate(repo)
+    assert not verdict.cleared
+    assert not verdict.stage_readable
+
+
+def test_empty_readiness_record_refuses(tmp_path: Path) -> None:
+    repo = _build_repo(tmp_path, readiness="", allowlist=_allowlist_yaml())
+    assert not _evaluate(repo).cleared
 
 
 # --------------------------------------------------------------------------
@@ -222,27 +422,33 @@ def test_unreadable_directory_refuses(tmp_path: Path) -> None:
 def test_approval_naming_a_prefix_does_not_authorize_the_longer_target(
     tmp_path: Path,
 ) -> None:
-    """``sales_model`` must NOT authorize ``sales_model_v2`` (the prefix case).
+    """``sales_model`` must NOT authorize ``sales_model_v2``.
 
-    A bare substring check would let a loosely-worded note widen its own scope --
-    the self-granted authority Principle V forbids.
+    ``\\b`` alone would pass this wrongly: ``_`` is a word character in ``re``.
     """
     longer = f"{TARGET}_v2"
-    _write_readiness(tmp_path, target=longer, approval_note=f"approved for {TARGET}")
-    _write_allowlist(tmp_path, targets=(longer,))
-    verdict = _evaluate(tmp_path, target_id=longer)
+    repo = _build_repo(
+        tmp_path,
+        readiness=_readiness_yaml(
+            target=longer, approval_note=f"approved for {TARGET}"
+        ),
+        allowlist=_allowlist_yaml(targets=(longer,)),
+        artifacts=(longer,),
+        target=longer,
+    )
+    verdict = _evaluate(repo, target_id=longer)
     assert not verdict.cleared
     assert not verdict.approval_names_target
     assert gate.BLOCKER_APPROVAL_TARGET in verdict.blockers
 
 
-def test_approval_naming_the_exact_token_authorizes_it(clean_repo: Path) -> None:
+def test_approval_naming_the_exact_token_authorizes_it(committed_repo: Path) -> None:
     """The exact-token case must CLEAR -- the other half of the rule.
 
-    Without this, the matcher could refuse everything and still pass the prefix
+    Without it, the matcher could refuse everything and still pass the prefix
     test above.
     """
-    verdict = _evaluate(clean_repo)
+    verdict = _evaluate(committed_repo)
     assert verdict.approval_names_target
     assert verdict.cleared
 
@@ -251,90 +457,187 @@ def test_approval_naming_the_exact_token_authorizes_it(clean_repo: Path) -> None
     "note",
     [
         pytest.param(f"approved for {TARGET}", id="whitespace-delimited"),
-        pytest.param(f"{TARGET}", id="whole-note"),
+        pytest.param(TARGET, id="whole-note"),
         pytest.param(f"target: {TARGET}.", id="trailing-period"),
         pytest.param(f"({TARGET})", id="parenthesised"),
         pytest.param(f"apply to {TARGET}, per ADR", id="comma-delimited"),
+        pytest.param(f"{TARGET}/measure", id="slash-delimited"),
     ],
 )
-def test_target_named_at_a_token_boundary_is_recognised(
-    tmp_path: Path, note: str
-) -> None:
-    """Punctuation and whitespace are legitimate delimiters."""
-    _write_readiness(tmp_path, approval_note=note)
-    _write_allowlist(tmp_path)
-    assert _evaluate(tmp_path).approval_names_target
+def test_target_named_at_a_token_boundary_is_recognised(note: str) -> None:
+    assert gate.note_names_target(note, TARGET)
 
 
 @pytest.mark.parametrize(
     "note",
     [
-        pytest.param(f"{TARGET}_v2", id="longer-token"),
+        pytest.param(f"{TARGET}_v2", id="longer-token-suffix"),
         pytest.param(f"pre_{TARGET}", id="prefixed-token"),
         pytest.param(f"{TARGET}x", id="suffixed-no-delimiter"),
+        pytest.param(f"x{TARGET}", id="prefixed-no-delimiter"),
+        pytest.param(f"{TARGET}2", id="digit-suffix"),
         pytest.param("approved for everything", id="generic-approval"),
         pytest.param("", id="empty-note"),
     ],
 )
-def test_target_not_named_at_a_boundary_is_refused(tmp_path: Path, note: str) -> None:
-    """A generic or near-miss approval never authorizes this target (FR-006)."""
-    _write_readiness(tmp_path, approval_note=note)
-    _write_allowlist(tmp_path)
-    assert not _evaluate(tmp_path).approval_names_target
+def test_target_not_named_at_a_boundary_is_refused(note: str) -> None:
+    assert not gate.note_names_target(note, TARGET)
 
 
 def test_approval_for_a_different_stage_does_not_count(tmp_path: Path) -> None:
-    """Only a ``publish_ready`` row authorizes a write.
+    """Only a ``publish_ready`` row authorizes a write."""
+    repo = _build_repo(
+        tmp_path,
+        readiness=_readiness_yaml(approval_stage="semantic_model_ready"),
+        allowlist=_allowlist_yaml(),
+    )
+    verdict = _evaluate(repo)
+    assert not verdict.cleared
+    assert verdict.approval is None
+    assert gate.BLOCKER_APPROVAL_ABSENT in verdict.blockers
 
-    A ``semantic_model_ready`` approval naming the target must not be mistaken
-    for publish authority.
+
+# --------------------------------------------------------------------------
+# HIGH-1 -- approval shape is the SHARED predicate (issue #487)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "owner",
+    [
+        pytest.param("data_owner", id="bare-role-token"),
+        pytest.param("data owner", id="bare-role-spaced"),
+        pytest.param("Ahmed Shaaban", id="name-with-no-authority-class"),
+        pytest.param("owner (data_owner)", id="role-masquerading-as-name"),
+        pytest.param("Ada (wizard)", id="unknown-authority-class"),
+        pytest.param("", id="empty-owner"),
+    ],
+)
+def test_approval_with_an_invalid_owner_shape_refuses(
+    tmp_path: Path, owner: str
+) -> None:
+    """Delegated to ``approval_is_shape_valid`` -- one definition of named human.
+
+    A local re-implementation would be a fourth predicate; issue #487 records
+    three surfaces disagreeing and failing OPEN on the approval path.
     """
-    record = tmp_path / "mappings" / TARGET / "readiness-status.yaml"
-    record.parent.mkdir(parents=True, exist_ok=True)
-    record.write_text(
+    repo = _build_repo(
+        tmp_path, readiness=_readiness_yaml(owner=owner), allowlist=_allowlist_yaml()
+    )
+    verdict = _evaluate(repo)
+    assert not verdict.cleared
+    assert verdict.approval is None
+    assert gate.BLOCKER_APPROVAL_ABSENT in verdict.blockers
+
+
+def test_approval_without_an_iso_date_refuses(tmp_path: Path) -> None:
+    """A missing/unparseable ``at:`` is not shape-valid either."""
+    readiness = (
         "stages:\n  semantic_model_ready:\n    status: pass\n"
         "approvals:\n"
-        "  - stage: semantic_model_ready\n"
-        "    owner: Ahmed Shaaban\n"
-        "    at: '2026-08-18'\n"
-        f"    note: 'approved for {TARGET}'\n",
-        encoding="utf-8",
+        "  - stage: publish_ready\n"
+        f"    owner: {OWNER!r}\n"
+        "    at: 'not-a-date'\n"
+        f"    note: 'approved for {TARGET}'\n"
     )
-    _write_allowlist(tmp_path)
-    verdict = _evaluate(tmp_path)
+    repo = _build_repo(tmp_path, readiness=readiness, allowlist=_allowlist_yaml())
+    verdict = _evaluate(repo)
     assert not verdict.cleared
     assert verdict.approval is None
 
 
 # --------------------------------------------------------------------------
-# T012 -- allowlist, and allowlisted-but-absent
+# CRITICAL-3 / T012 -- the allowlist is COMMITTED, never caller-supplied
 # --------------------------------------------------------------------------
 
 
-def test_target_not_allowlisted_refuses(tmp_path: Path) -> None:
-    _write_readiness(tmp_path)
-    _write_allowlist(tmp_path, targets=(OTHER_TARGET,))
-    verdict = _evaluate(tmp_path)
+def test_target_not_in_the_committed_allowlist_refuses(tmp_path: Path) -> None:
+    repo = _build_repo(
+        tmp_path,
+        readiness=_readiness_yaml(),
+        allowlist=_allowlist_yaml(targets=(OTHER_TARGET,)),
+    )
+    verdict = _evaluate(repo)
+    assert not verdict.cleared
+    assert gate.BLOCKER_TARGET_NOT_ALLOWLISTED in verdict.blockers
+
+
+def test_evaluate_exposes_no_way_for_a_caller_to_widen_the_allowlist() -> None:
+    """The provenance control CRITICAL-3 demanded.
+
+    Asserted against the actual signature: if a future edit adds an allowlist
+    parameter, the requesting party could supply the list permitting it, and
+    FR-007 would authorize nothing. Pins the CAPABILITY (no caller-supplied
+    allowlist) rather than the absence of one specific name.
+    """
+    import inspect
+
+    params = set(inspect.signature(gate.evaluate).parameters)
+    forbidden = {"allow", "allowlist", "target_allowlist", "allowed_targets", "allows"}
+    leaked = params & forbidden
+    assert not leaked, (
+        f"gate.evaluate must not accept a caller-supplied allowlist; found {leaked}"
+    )
+
+
+def test_uncommitted_allowlist_widening_is_invisible(tmp_path: Path) -> None:
+    """Adding a target to the allowlist without committing must not permit it."""
+    repo = _build_repo(
+        tmp_path,
+        readiness=_readiness_yaml(),
+        allowlist=_allowlist_yaml(targets=(OTHER_TARGET,)),
+    )
+    _write(repo, gate.TARGET_ALLOWLIST_RELPATH, _allowlist_yaml(targets=(TARGET,)))
+    verdict = _evaluate(repo)
+    assert not verdict.cleared
+    assert gate.BLOCKER_TARGET_NOT_ALLOWLISTED in verdict.blockers
+
+
+def test_missing_allowlist_refuses_everything(tmp_path: Path) -> None:
+    """No allowlist is a refusal, never an implicit permit-all."""
+    repo = _build_repo(tmp_path, readiness=_readiness_yaml(), allowlist=None)
+    verdict = _evaluate(repo)
     assert not verdict.cleared
     assert gate.BLOCKER_TARGET_NOT_ALLOWLISTED in verdict.blockers
 
 
 def test_target_allowlisted_but_absent_on_disk_refuses(tmp_path: Path) -> None:
-    """Refused as an undefined artifact -- the adapter never invents it (FR-011)."""
-    _write_readiness(tmp_path)
-    _write_allowlist(tmp_path)
-    (tmp_path / "models" / f"{TARGET}.tmdl").unlink()
-    verdict = _evaluate(tmp_path)
+    """Refused as an undefined artifact -- never invented (FR-011)."""
+    repo = _build_repo(
+        tmp_path,
+        readiness=_readiness_yaml(),
+        allowlist=_allowlist_yaml(),
+        artifacts=(),
+    )
+    verdict = _evaluate(repo)
     assert not verdict.cleared
     assert gate.BLOCKER_TARGET_ABSENT in verdict.blockers
 
 
-def test_missing_allowlist_file_refuses(tmp_path: Path) -> None:
-    """No allowlist at all is not an empty-allowlist pass -- it is a refusal."""
-    _write_readiness(tmp_path)
-    verdict = _evaluate(tmp_path)
+# --------------------------------------------------------------------------
+# FR-011a/c -- operation binding is distinct from target-naming
+# --------------------------------------------------------------------------
+
+
+def test_unbound_operation_refuses_even_with_a_valid_target_approval(
+    committed_repo: Path,
+) -> None:
+    """Target-naming alone must NOT authorize an arbitrary mutation (FR-011c).
+
+    This is the fail-open a caller holding one valid approval would otherwise
+    exploit by substituting an unrelated operation.
+    """
+    verdict = _evaluate(committed_repo, operation_binds=False)
     assert not verdict.cleared
-    assert gate.BLOCKER_TARGET_NOT_ALLOWLISTED in verdict.blockers
+    assert verdict.approval_names_target, "the approval itself is valid"
+    assert gate.BLOCKER_OPERATION_UNBOUND in verdict.blockers
+
+
+def test_operation_binding_defaults_to_unbound(committed_repo: Path) -> None:
+    """Omitting the resolution step refuses; it never clears by omission."""
+    verdict = gate.evaluate(committed_repo, TARGET)
+    assert not verdict.cleared
+    assert gate.BLOCKER_OPERATION_UNBOUND in verdict.blockers
 
 
 # --------------------------------------------------------------------------
@@ -342,25 +645,24 @@ def test_missing_allowlist_file_refuses(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------
 
 
-def test_dirty_tree_without_declared_backup_refuses(clean_repo: Path) -> None:
-    verdict = _evaluate(clean_repo, tree_clean=False, backup_declared=False)
+def test_dirty_tree_without_declared_backup_refuses(committed_repo: Path) -> None:
+    verdict = _evaluate(committed_repo, tree_clean=False, backup_declared=False)
     assert not verdict.cleared
     assert gate.BLOCKER_GIT_UNSAFE in verdict.blockers
 
 
-def test_dirty_tree_with_declared_backup_clears(clean_repo: Path) -> None:
-    """The declared-backup escape is legitimate -- and must actually work.
+def test_dirty_tree_with_declared_backup_clears(committed_repo: Path) -> None:
+    """The declared-backup escape must actually work.
 
-    Its absence would make the gate refuse every dirty tree, which the spec
-    does not require.
+    Its absence would refuse every dirty tree, which the spec does not require.
     """
-    verdict = _evaluate(clean_repo, tree_clean=False, backup_declared=True)
+    verdict = _evaluate(committed_repo, tree_clean=False, backup_declared=True)
     assert verdict.git_safe
     assert verdict.cleared
 
 
-def test_clean_tree_clears_without_a_backup(clean_repo: Path) -> None:
-    assert _evaluate(clean_repo, tree_clean=True, backup_declared=False).git_safe
+def test_clean_tree_clears_without_a_backup(committed_repo: Path) -> None:
+    assert _evaluate(committed_repo, tree_clean=True, backup_declared=False).git_safe
 
 
 # --------------------------------------------------------------------------
@@ -369,33 +671,88 @@ def test_clean_tree_clears_without_a_backup(clean_repo: Path) -> None:
 
 
 def test_non_empty_blockers_is_always_blocking(tmp_path: Path) -> None:
-    """There is no 'warning' verdict a script could ignore (FR-009)."""
-    _write_readiness(tmp_path, semantic_status="warning")
-    _write_allowlist(tmp_path)
-    verdict = _evaluate(tmp_path)
+    repo = _build_repo(
+        tmp_path,
+        readiness=_readiness_yaml(semantic_status="warning"),
+        allowlist=_allowlist_yaml(),
+    )
+    verdict = _evaluate(repo)
     assert verdict.blockers
     assert not verdict.cleared
     assert verdict.blocking is True
 
 
-def test_cleared_and_blocking_are_mutually_exclusive(clean_repo: Path) -> None:
-    """The two states cannot both hold -- degradation is unexpressible."""
-    cleared = _evaluate(clean_repo)
-    assert cleared.cleared is True
-    assert cleared.blocking is False
+def test_cleared_and_blocking_are_mutually_exclusive(committed_repo: Path) -> None:
+    verdict = _evaluate(committed_repo)
+    assert verdict.cleared is True
+    assert verdict.blocking is False
 
 
-def test_verdict_is_immutable(clean_repo: Path) -> None:
+def test_verdict_is_immutable(committed_repo: Path) -> None:
     """A caller cannot flip a refusal into a pass after the fact."""
-    verdict = _evaluate(clean_repo)
+    verdict = _evaluate(committed_repo)
     with pytest.raises(Exception):
         verdict.blockers = ()  # type: ignore[misc]
 
 
-def test_verdict_carries_no_score(clean_repo: Path) -> None:
+def test_verdict_carries_no_score(committed_repo: Path) -> None:
     """Hard rule #9 at the gate boundary: typed blockers, never a number."""
-    verdict = _evaluate(clean_repo)
-    for field_name in vars(verdict):
-        assert not isinstance(getattr(verdict, field_name), (int, float)) or isinstance(
-            getattr(verdict, field_name), bool
-        ), f"{field_name} looks like a score"
+    verdict = _evaluate(committed_repo)
+    for name, value in vars(verdict).items():
+        if isinstance(value, bool):
+            continue
+        assert not isinstance(value, (int, float)), f"{name} looks like a score"
+
+
+def test_every_blocker_id_has_readable_detail() -> None:
+    """A typed blocker a human cannot read is not actionable."""
+    ids = [
+        value
+        for name, value in vars(gate).items()
+        if name.startswith("BLOCKER_") and isinstance(value, str)
+    ]
+    assert len(ids) == 9
+    for blocker in ids:
+        assert gate.BLOCKER_DETAIL.get(blocker), blocker
+        assert blocker.startswith("PBIMCP-GATE-")
+
+
+# --------------------------------------------------------------------------
+# T019 -- the fail-open proof
+# --------------------------------------------------------------------------
+
+
+def test_committed_state_guard_is_what_produces_the_refusal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Disable ONLY the committed-state guard; assert the old verdict returns.
+
+    A refusal test alone cannot distinguish "the guard refused this" from "this
+    would have been refused anyway for some other reason". This monkeypatches out
+    exactly one thing and shows the same agent-authored, never-committed approval
+    then CLEARS -- so the guard is load-bearing rather than incidental.
+    """
+    repo = _build_repo(
+        tmp_path,
+        readiness=_readiness_yaml(),
+        allowlist=_allowlist_yaml(),
+        commit=False,
+    )
+
+    guarded = _evaluate(repo)
+    assert not guarded.cleared
+    assert gate.BLOCKER_STATE_UNCOMMITTED in guarded.blockers
+
+    monkeypatch.setattr(gate, "is_tracked_and_clean", lambda root, rel: True)
+    monkeypatch.setattr(
+        gate,
+        "committed_text",
+        lambda root, rel: (Path(root) / rel).read_text(encoding="utf-8"),
+    )
+
+    unguarded = _evaluate(repo)
+    assert unguarded.cleared, (
+        "expected the fail-open to reproduce once the guard is removed; if this "
+        "fails the refusal above came from something other than the guard, and "
+        "the guard is not actually protecting anything"
+    )
