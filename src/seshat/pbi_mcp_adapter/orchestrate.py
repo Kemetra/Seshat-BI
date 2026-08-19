@@ -141,7 +141,19 @@ def _effect_blockers(
 
 @dataclass(frozen=True)
 class WriteReport:
-    """What one run did, and how it ended."""
+    """What one run did, and how it ended.
+
+    Carries what the documented ``--json`` verdict needs
+    (``contracts/cli-contract.md``): the governed target, the mode, and which
+    post-write checks ran and failed. Those last two were previously dropped --
+    only ``blockers`` and ``rollback_guidance`` propagated -- so a CI consumer
+    could not associate a verdict with its target or see what was verified
+    (issue #662).
+
+    ``checks_run`` empty and ``validation_failed`` empty is NOT the same state as
+    ``checks_run`` populated and ``validation_failed`` empty: the first means
+    nothing was verified, the second that everything passed.
+    """
 
     exit_code: int
     outcome: str
@@ -149,6 +161,10 @@ class WriteReport:
     rollback_guidance: tuple[str, ...]
     evidence_path: Path | None
     mutation_attempted: bool
+    target_id: str = ""
+    mode: str = ""
+    checks_run: tuple[str, ...] = ()
+    validation_failed: tuple[str, ...] = ()
 
     @property
     def succeeded(self) -> bool:
@@ -170,6 +186,10 @@ class _Ending:
     mutation_attempted: bool
     blockers: tuple[str, ...] = ()
     rollback_guidance: tuple[str, ...] = ()
+    #: What the post-write validator ran and what of it failed. Empty on every
+    #: path that never reached validation, which is honest: nothing was verified.
+    checks_run: tuple[str, ...] = ()
+    validation_failed: tuple[str, ...] = ()
 
 
 def _terminate(
@@ -202,6 +222,10 @@ def _terminate(
         rollback_guidance=ending.rollback_guidance,
         evidence_path=path,
         mutation_attempted=ending.mutation_attempted,
+        target_id=identity.target_id,
+        mode=identity.mode,
+        checks_run=ending.checks_run,
+        validation_failed=ending.validation_failed,
     )
 
 
@@ -294,6 +318,8 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
             mutation_attempted=True,
             blockers=outcome.blockers,
             rollback_guidance=outcome.rollback_guidance or guidance,
+            checks_run=outcome.checks_run,
+            validation_failed=outcome.failed,
         )
 
     # Applied AND confirmed by validation.
@@ -302,6 +328,8 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
         outcome="materialized",
         tool=runner.VENDOR_PACKAGE,
         mutation_attempted=True,
+        checks_run=outcome.checks_run,
+        validation_failed=outcome.failed,
     )
 
 

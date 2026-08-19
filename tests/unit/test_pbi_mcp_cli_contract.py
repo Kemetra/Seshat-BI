@@ -420,3 +420,180 @@ def test_neither_output_form_emits_an_absolute_evidence_path(tmp_path: Path) -> 
     )
     assert tmp_path.as_posix() not in emitted
     assert not Path(emitted).is_absolute()
+
+
+# --------------------------------------------------------------------------
+# Issue #662: the payload's REQUIRED content, not only its forbidden content
+# --------------------------------------------------------------------------
+
+#: Every key `cli-contract.md` documents for the write-leg JSON verdict.
+DOCUMENTED_VERDICT_KEYS = frozenset(
+    {
+        "target",
+        "mode",
+        "outcome",
+        "authority",
+        "blockers",
+        "validation",
+        "rollback_guidance",
+    }
+)
+
+
+def _write_report(**overrides: object):
+    from seshat.pbi_mcp_adapter import orchestrate
+
+    fields: dict[str, object] = {
+        "exit_code": 0,
+        "outcome": "materialized",
+        "blockers": (),
+        "rollback_guidance": (),
+        "evidence_path": Path("x/.seshat/pbi-mcp-write-evidence.json"),
+        "mutation_attempted": True,
+        "target_id": "sales_model",
+        "mode": "readwrite",
+        "checks_run": ("seshat semantic-check --require-inputs",),
+        "validation_failed": (),
+    }
+    fields.update(overrides)
+    return orchestrate.WriteReport(**fields)  # type: ignore[arg-type]
+
+
+def test_json_verdict_carries_every_documented_key() -> None:
+    """The contract documents seven keys; the payload omitted four of them.
+
+    Without `target` and `mode` a CI consumer cannot associate a verdict with the
+    governed target it came from, and without `validation` it cannot see which
+    post-write checks ran or failed. A schema-validating integration rejects the
+    response outright.
+
+    The payload's FORBIDDEN content was already contract-tested; its REQUIRED
+    content was not, which is how four documented fields went missing unnoticed.
+
+    Issue #662.
+    """
+    from seshat.cli.commands import pbi_mcp as command
+
+    payload = command._write_leg_payload(_write_report())
+
+    missing = DOCUMENTED_VERDICT_KEYS - set(payload)
+    assert not missing, f"payload omits documented keys: {sorted(missing)}"
+
+
+def test_json_verdict_names_its_target_and_mode() -> None:
+    """`target` and `mode` must be the run's real values, not placeholders."""
+    from seshat.cli.commands import pbi_mcp as command
+
+    payload = command._write_leg_payload(
+        _write_report(target_id="sales_model", mode="readonly")
+    )
+
+    assert payload["target"] == "sales_model"
+    assert payload["mode"] == "readonly"
+
+
+def test_json_verdict_reports_which_checks_ran_and_failed() -> None:
+    """`validation` must carry both halves, so a pass is distinguishable.
+
+    `{"checks_run": [], "failed": []}` and `{"checks_run": [...], "failed": []}`
+    mean very different things -- nothing was verified versus everything passed.
+    """
+    from seshat.cli.commands import pbi_mcp as command
+
+    payload = command._write_leg_payload(
+        _write_report(
+            outcome="failed",
+            exit_code=2,
+            checks_run=("seshat semantic-check --require-inputs",),
+            validation_failed=("semantic-check exit 1",),
+            rollback_guidance=("git restore -- models/x.tmdl",),
+        )
+    )
+
+    validation = payload["validation"]
+    assert isinstance(validation, dict)
+    assert validation["checks_run"] == ["seshat semantic-check --require-inputs"]
+    assert validation["failed"] == ["semantic-check exit 1"]
+
+
+def test_json_verdict_authority_is_the_shipped_label() -> None:
+    """`authority` is read from the shipped constant, never re-spelled.
+
+    A locally spelled label could drift from the one the evidence record carries,
+    and then two surfaces would claim different authority for the same run.
+    """
+    from seshat.cli.commands import pbi_mcp as command
+    from seshat.pbi_mcp_adapter import evidence
+
+    payload = command._write_leg_payload(_write_report())
+    assert payload["authority"] == evidence.AUTHORITY
+
+
+GUID_VALUE = "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
+
+
+def test_a_secret_shaped_target_does_not_reach_stdout() -> None:
+    """`redact()` is layer ONE and cannot see a tenant GUID.
+
+    `evidence.redact` derives DSN/URI components, so a bare GUID passes through it
+    unchanged -- measured, not assumed. The evidence ARTIFACT is protected because
+    `finalize` applies the refusing/redacting chokepoint, but the CLI payload was
+    built with `redact()` alone, so an allowlisted target whose id is a
+    tenant/workspace GUID printed verbatim to stdout.
+
+    That violates the contract guarantee (cli-contract.md:155) that no output
+    carries a host, tenant, credential or user path.
+
+    Codex review, PR #667 (P1).
+    """
+    from seshat.cli.commands import pbi_mcp as command
+
+    payload = command._write_leg_payload(_write_report(target_id=GUID_VALUE))
+
+    assert GUID_VALUE not in json.dumps(payload), (
+        f"a tenant-shaped target id reached the payload: {payload['target']!r}"
+    )
+
+
+def test_every_payload_string_passes_the_secret_scanner() -> None:
+    """The guarantee is about the WHOLE payload, not one field.
+
+    `blockers`, `rollback_guidance` and `validation` were built with `redact()`
+    alone too, so this pins the property at the payload level rather than
+    per-field -- a new field added later inherits the protection instead of
+    needing its own patch.
+    """
+    from seshat.cli.commands import pbi_mcp as command
+    from seshat.pbi_mcp.scan import scan_text
+
+    payload = command._write_leg_payload(
+        _write_report(
+            target_id=GUID_VALUE,
+            outcome="failed",
+            exit_code=2,
+            blockers=(f"tenant {GUID_VALUE}",),
+            rollback_guidance=(f"git restore --source={GUID_VALUE} -- x.tmdl",),
+            checks_run=(f"check on {GUID_VALUE}",),
+            validation_failed=(f"failed for {GUID_VALUE}",),
+        )
+    )
+
+    findings = scan_text(json.dumps(payload, indent=2, sort_keys=True))
+    assert not findings, f"payload carries secret-shaped values: {findings}"
+
+
+def test_scanning_leaves_an_ordinary_payload_untouched() -> None:
+    """Positive control: scrubbing must not mangle normal values.
+
+    Without this, a fix that redacted everything would satisfy the two tests
+    above while destroying the payload's usefulness.
+    """
+    from seshat.cli.commands import pbi_mcp as command
+
+    payload = command._write_leg_payload(
+        _write_report(target_id="sales_model", blockers=("PBIMCP-GATE-01",))
+    )
+
+    assert payload["target"] == "sales_model"
+    assert payload["blockers"] == ["PBIMCP-GATE-01"]
+    assert payload["outcome"] == "materialized"

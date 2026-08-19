@@ -270,14 +270,40 @@ def _probe_tree_clean(repo_root: Path) -> bool | None:
 
 def _write_leg_payload(report) -> dict[str, object]:
     """The ``--json`` body. Every string field goes through ``redact``."""
-    from seshat.pbi_mcp_adapter.evidence import ARTIFACT_RELPATH, redact
+    from seshat.pbi_mcp_adapter.evidence import (
+        ARTIFACT_RELPATH,
+        AUTHORITY,
+        redact,
+        scrub_secret_shaped,
+    )
+
+    def clean(text: str) -> str:
+        """Both layers, in order, on one string.
+
+        ``redact`` derives DSN/URI components; ``scrub_secret_shaped`` covers what
+        derive-then-replace cannot see -- tenant GUIDs, user paths, credential
+        assignments. Applying only the first leaked an allowlisted target whose id
+        is a workspace GUID straight to stdout (PR #667).
+        """
+        scrubbed, _ = scrub_secret_shaped(redact(text))
+        return scrubbed
 
     return {
+        # Every key `contracts/cli-contract.md` documents. `target` and `mode`
+        # let a consumer associate the verdict with the governed run it came
+        # from; `validation` shows what was actually verified (issue #662).
+        "target": clean(report.target_id),
+        "mode": report.mode,
+        "authority": AUTHORITY,
+        "validation": {
+            "checks_run": [clean(c) for c in report.checks_run],
+            "failed": [clean(f) for f in report.validation_failed],
+        },
         "outcome": report.outcome,
         "exit_code": report.exit_code,
         "mutation_attempted": report.mutation_attempted,
-        "blockers": [redact(b) for b in report.blockers],
-        "rollback_guidance": [redact(line) for line in report.rollback_guidance],
+        "blockers": [clean(b) for b in report.blockers],
+        "rollback_guidance": [clean(line) for line in report.rollback_guidance],
         # The FIXED repo-relative path, never `evidence_path.as_posix()`: that is
         # absolute whenever `--repo` is, so it leaked the operator's home-directory
         # path (the shape `inspect_release_artifacts` calls a "user path") into
@@ -294,20 +320,32 @@ def _report_write_leg(args, report) -> int:
     presentation branching. This function decides nothing: the exit code comes
     from the report it was handed.
     """
-    from seshat.pbi_mcp_adapter.evidence import ARTIFACT_RELPATH, redact
+    from seshat.pbi_mcp_adapter.evidence import (
+        ARTIFACT_RELPATH,
+        redact,
+        scrub_secret_shaped,
+    )
+
+    def clean(text: str) -> str:
+        """Both redaction layers -- see :func:`_write_leg_payload`."""
+        scrubbed, _ = scrub_secret_shaped(redact(text))
+        return scrubbed
 
     if getattr(args, "as_json", False):
         print(json.dumps(_write_leg_payload(report), indent=2, sort_keys=True))
         return report.exit_code
 
     prog = _prog(args)
-    print(f"{prog}: [{report.outcome}] target={args.target} op={args.operation}")
+    print(
+        f"{prog}: [{report.outcome}] "
+        f"target={clean(str(args.target))} op={clean(str(args.operation))}"
+    )
     for blocker in report.blockers:
-        print(f"{prog}:   blocker {redact(blocker)}", file=sys.stderr)
+        print(f"{prog}:   blocker {clean(blocker)}", file=sys.stderr)
     if report.rollback_guidance:
         print(f"{prog}: rollback:", file=sys.stderr)
         for line in report.rollback_guidance:
-            print(f"{prog}:   {redact(line)}", file=sys.stderr)
+            print(f"{prog}:   {clean(line)}", file=sys.stderr)
     if report.evidence_path is not None:
         # Repo-relative here too -- the human line leaked the same absolute path.
         print(f"{prog}: evidence {ARTIFACT_RELPATH}")
