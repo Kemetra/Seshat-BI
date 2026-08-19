@@ -55,6 +55,12 @@ APPROVAL_ABSENT = "absent"
 
 VENDORED_RUNTIME_DIR = "tools/powerbi-modeling-mcp"
 
+#: The official vendor package. Defined HERE, not in the adapter, because
+#: `detect` is the lower layer (`pbi_mcp_adapter.runner` imports from it, never
+#: the reverse) and server IDENTITY is a detection concern. Server recognition
+#: matches on this, so aliasing the entry cannot hide it.
+VENDOR_PACKAGE = "@microsoft/powerbi-modeling-mcp"
+
 # Flags in the machine-local .mcp.json (Microsoft's documented spellings plus
 # the misspelling this repo once shipped; both count as write mode).
 _FORBIDDEN_FLAG = "--skipconfirmation"
@@ -83,11 +89,27 @@ class DetectedFacts:
 
 def _is_powerbi_server(name: str, entry: dict) -> bool:
     """Only Power BI-shaped servers are classified -- an unrelated MCP server
-    in the same .mcp.json (a docs server, say) must not flip the verdict."""
+    in the same .mcp.json (a docs server, say) must not flip the verdict.
+
+    The ARGUMENT VECTOR counts, not just the name. `npx` invocations carry the
+    package in ``args``, so a config that aliases the official server (say
+    ``modeling``) named nothing Power BI-shaped and classified as ``absent`` --
+    handing the bypass guard a clean verdict while ``--skipconfirmation`` sat in
+    the same entry. Identity comes from what is RUN, not what it is called
+    (Codex review, PR #659).
+
+    Still narrow: the match is on the vendor package and the vendored runtime
+    path, both specific, so an unrelated server does not become Power BI-shaped.
+    """
     blob = " ".join(
         (name, str(entry.get("command", "")), str(entry.get("url", "")))
     ).lower()
-    return "powerbi" in blob or "pbi" in blob
+    if "powerbi" in blob or "pbi" in blob:
+        return True
+    return any(
+        VENDOR_PACKAGE in arg or VENDORED_RUNTIME_DIR in arg
+        for arg in _server_args(entry)
+    )
 
 
 def _server_args(entry: dict) -> list[str]:

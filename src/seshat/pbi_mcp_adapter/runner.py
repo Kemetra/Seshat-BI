@@ -30,14 +30,16 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from seshat.pbi_mcp.detect import refuse_if_bypass_flag
+from seshat.pbi_mcp.detect import VENDOR_PACKAGE, refuse_if_bypass_flag
 from seshat.pbi_mcp.scan import SECRET_PATTERNS
 from seshat.pbi_mcp_adapter.evidence import redact
 from seshat.pbi_mcp_adapter.gate import GateVerdict
 
 #: The vendor package, invoked through npx. Never vendored, never pinned into
 #: pyproject: it is a preview binary, not shippable payload.
-VENDOR_PACKAGE = "@microsoft/powerbi-modeling-mcp"
+#: Re-exported from :mod:`seshat.pbi_mcp.detect`, which owns the single
+#: definition -- two copies could drift and one of them gates a refusal.
+__all__ = ["VENDOR_PACKAGE"]
 
 #: Sized for a model operation on a real semantic model, not for a git command.
 RUN_TIMEOUT_SECONDS = 900

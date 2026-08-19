@@ -272,3 +272,64 @@ def test_unreadable_record_reads_not_pass_never_pass(tmp_path: Path) -> None:
     status, tables, _ = read_semantic_readiness(tmp_path)
     assert status == READINESS_NOT_PASS
     assert tables == ()
+
+
+def test_an_aliased_server_is_recognised_by_its_argument_vector(
+    tmp_path: Path,
+) -> None:
+    """The vendor package in ``args`` identifies the server, whatever it is called.
+
+    ``_is_powerbi_server`` joined only name/command/url, so a config naming the
+    official server ``modeling`` -- with the package and ``--skipconfirmation``
+    both in ``args`` -- classified as ``absent``. The bypass guard was then handed
+    a clean verdict and ``apply`` proceeded despite the prohibited flag, defeating
+    the standing prohibition this feature exists to enforce (FR-002, SC-005:
+    refused in 100% of modes).
+
+    Codex review, PR #659.
+    """
+    for alias in ("modeling", "semantic-model", "ms-server"):
+        config = tmp_path / f"{alias}.mcp.json"
+        config.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        alias: {
+                            "command": "npx",
+                            "args": [
+                                "@microsoft/powerbi-modeling-mcp",
+                                "--skipconfirmation",
+                            ],
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        assert classify_mcp_config(config) == CONFIG_FORBIDDEN_FLAG, (
+            f"alias {alias!r} hid the forbidden flag from the guard"
+        )
+
+
+def test_an_unrelated_server_still_does_not_flip_the_verdict(tmp_path: Path) -> None:
+    """Widening recognition must not classify every MCP server as Power BI.
+
+    The original narrowness had a purpose: an unrelated server in the same
+    `.mcp.json` must not flip the verdict. Recognising the vendor package in
+    ``args`` keeps that, since the package name is specific.
+    """
+    config = tmp_path / "unrelated.mcp.json"
+    config.write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "docs": {
+                        "command": "npx",
+                        "args": ["@some/docs-mcp", "--skipconfirmation"],
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert classify_mcp_config(config) == CONFIG_ABSENT
