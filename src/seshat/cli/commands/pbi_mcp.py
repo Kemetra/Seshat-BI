@@ -279,7 +279,8 @@ def _write_leg_payload(report) -> dict[str, object]:
         "blockers": [redact(b) for b in report.blockers],
         "rollback_guidance": [redact(line) for line in report.rollback_guidance],
         # The FIXED repo-relative path, never `evidence_path.as_posix()`: that is
-        # absolute whenever `--repo` is, so it leaked `C:/Users/<name>/...` into
+        # absolute whenever `--repo` is, so it leaked the operator's home-directory
+        # path (the shape `inspect_release_artifacts` calls a "user path") into
         # stdout and bypassed the output scanner, against the contract guarantee
         # that no output carries a user path (Codex review, PR #659).
         "evidence": (ARTIFACT_RELPATH if report.evidence_path is not None else None),
