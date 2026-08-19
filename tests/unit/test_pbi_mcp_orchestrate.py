@@ -488,3 +488,39 @@ def test_every_effect_blocker_has_readable_detail() -> None:
     for blocker in ids:
         assert orchestrate.BLOCKER_DETAIL.get(blocker)
         assert blocker.startswith("PBIMCP-EFF-")
+
+
+# --------------------------------------------------------------------------
+# The intent record lands BEFORE the mutation (FR-015 crash-survivability)
+# --------------------------------------------------------------------------
+
+
+def test_intent_record_exists_before_the_mutation_runs(ready_repo: Path) -> None:
+    """A crash mid-write must still leave a trace naming what was attempted.
+
+    Pinned by OBSERVATION rather than by call order: the stub runtime reads the
+    evidence file at the moment it mutates, so moving `write_intent` after the
+    runner -- or dropping it -- fails here. A test asserting only that a record
+    exists afterwards passes either way, which is why that shape is not used.
+    """
+    seen: dict[str, object] = {}
+
+    def observing_invoke(argv: list[str], cwd: Path):
+        path = evidence.evidence_path(Path(cwd))
+        seen["existed"] = path.is_file()
+        seen["payload"] = (
+            json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
+        )
+        (Path(cwd) / TARGET_PATH).write_text("// mutated\n", encoding="utf-8")
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok")
+
+    report = _apply(ready_repo, mcp_runner=observing_invoke)
+
+    assert report.succeeded, report.blockers
+    assert seen["existed"], "no intent record existed when the mutation ran"
+    payload = seen["payload"]
+    assert payload is not None
+    assert payload["outcome"] == "deferred"
+    assert payload["mutation_attempted"] is True
+    assert payload["target_id"] == TARGET
+    assert payload["operation_id"] == OPERATION
