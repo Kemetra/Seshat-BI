@@ -158,6 +158,26 @@ def _run_validator(
     )
 
 
+def _target_was_examined(artifact: Path) -> bool:
+    """Whether ``semantic-check`` could actually have parsed this artifact.
+
+    Uses the SAME extractor the command uses (``seshat.tmdl.parse_tmdl``), so the
+    two cannot disagree about what counts as parseable. ``parse_tmdl`` returns
+    ``None`` for a file with no top-level ``table`` block, which is exactly the
+    case ``semantic.py`` skips with ``continue`` -- and therefore exactly the case
+    a zero exit fails to cover.
+
+    Fails CLOSED: an unreadable file is "not examined", never "examined and fine".
+    """
+    from seshat.tmdl import parse_tmdl
+
+    try:
+        text = artifact.read_text(encoding="utf-8-sig")
+    except OSError:
+        return False
+    return parse_tmdl(text) is not None
+
+
 def validate_semantic_model(
     repo_root: Path,
     *,
@@ -171,6 +191,13 @@ def validate_semantic_model(
     not the report-layer R-family, and with the flag that turns "no input
     discovered" from exit 0 into exit 1. ``runner`` is injectable so tests can
     drive every branch without a real subprocess.
+
+    A zero exit is necessary but NOT sufficient. ``--require-inputs`` catches only
+    an EMPTY corpus; it says nothing about whether *this* target was among the
+    inputs actually parsed. ``semantic-check`` skips a ``*.tmdl`` that no longer
+    holds a top-level ``table`` block, so a write which destroyed the target is
+    silently absent from a "no drift" run. :func:`_target_was_examined` closes
+    that gap by reading the artifact directly (Codex review, PR #659).
     """
     root = Path(repo_root)
     artifact = root / target_path
@@ -203,6 +230,18 @@ def validate_semantic_model(
         )
 
     if completed.returncode == 0:
+        # Exit 0 is the validator's claim, not proof it looked at THIS file.
+        if not _target_was_examined(artifact):
+            return ValidationOutcome(
+                checks_run=checks_run,
+                artifacts_examined=(),
+                failed=(
+                    "the validator did not examine the target: it is not a "
+                    "parseable semantic-model artifact after the write",
+                ),
+                rollback_guidance=rollback_guidance_for(target_path, backup_ref),
+                blockers=(BLOCKER_READ_NOTHING,),
+            )
         return ValidationOutcome(
             checks_run=checks_run,
             artifacts_examined=(target_path,),

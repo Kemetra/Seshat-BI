@@ -22,6 +22,15 @@ pytestmark = pytest.mark.unit
 TARGET = "sales_model"
 OPERATION = "update_measure"
 TARGET_PATH = f"models/{TARGET}.tmdl"
+
+#: Real TMDL, not a placeholder comment. ``seshat semantic-check`` skips a
+#: ``*.tmdl`` with no top-level ``table`` block, so a fixture using
+#: ``// original`` gave the validator nothing to parse -- invisible here only
+#: because these tests inject a validator stub returning 0.
+#: ``validation._target_was_examined`` reads the artifact itself, so the content
+#: has to be honest (Codex review, PR #659).
+BASELINE_TMDL = "table sales_model\n\n\tcolumn Amount\n\t\tdataType: double\n"
+MUTATED_TMDL = BASELINE_TMDL + "\n\tmeasure Total = SUM(sales_model[Amount])\n"
 STAMP = "2026-08-18T00:00:00Z"
 OWNER = "Ahmed Shaaban (data_owner)"
 
@@ -66,7 +75,7 @@ def ready_repo(tmp_path: Path) -> Path:
     _git(tmp_path, "config", "user.name", "T")
     _write(tmp_path, f"mappings/{TARGET}/readiness-status.yaml", READINESS)
     _write(tmp_path, gate.TARGET_ALLOWLIST_RELPATH, ALLOWLIST)
-    _write(tmp_path, TARGET_PATH, "// original\n")
+    _write(tmp_path, TARGET_PATH, BASELINE_TMDL)
     _write(tmp_path, "README.md", "fixture\n")
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-q", "-m", "baseline", "--no-gpg-sign")
@@ -99,7 +108,7 @@ def _apply(repo: Path, **kwargs: object) -> orchestrate.WriteReport:
         "operation_id": OPERATION,
         "timestamp": STAMP,
         "tree_clean": True,
-        "mcp_runner": _mcp(mutates="// mutated\n"),
+        "mcp_runner": _mcp(mutates=MUTATED_TMDL),
         "validator": _validator(0),
     }
     params.update(kwargs)
@@ -120,7 +129,7 @@ def test_successful_write_reports_materialized(ready_repo: Path) -> None:
 
 def test_successful_write_changed_the_artifact(ready_repo: Path) -> None:
     _apply(ready_repo)
-    assert (ready_repo / TARGET_PATH).read_text(encoding="utf-8") == "// mutated\n"
+    assert (ready_repo / TARGET_PATH).read_text(encoding="utf-8") == MUTATED_TMDL
 
 
 def test_successful_write_leaves_exactly_one_evidence_record(
@@ -451,7 +460,7 @@ def test_a_run_touching_target_AND_another_file_is_rejected(
     """Changing the right file does not license changing others too."""
 
     def both(argv: list[str], cwd: Path):
-        (Path(cwd) / TARGET_PATH).write_text("// mutated\n", encoding="utf-8")
+        (Path(cwd) / TARGET_PATH).write_text(MUTATED_TMDL, encoding="utf-8")
         (Path(cwd) / "README.md").write_text("also me\n", encoding="utf-8")
         return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok")
 
@@ -511,7 +520,7 @@ def test_intent_record_exists_before_the_mutation_runs(ready_repo: Path) -> None
         seen["payload"] = (
             json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
         )
-        (Path(cwd) / TARGET_PATH).write_text("// mutated\n", encoding="utf-8")
+        (Path(cwd) / TARGET_PATH).write_text(MUTATED_TMDL, encoding="utf-8")
         return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok")
 
     report = _apply(ready_repo, mcp_runner=observing_invoke)

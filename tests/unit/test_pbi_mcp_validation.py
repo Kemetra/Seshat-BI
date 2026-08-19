@@ -23,6 +23,15 @@ pytestmark = pytest.mark.unit
 TARGET_PATH = "models/sales_model.tmdl"
 
 
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", "-c", "commit.gpgsign=false", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+
+
 def _fake_runner(returncode: int):
     def run(repo_root: Path, args: tuple[str, ...]):
         return subprocess.CompletedProcess(
@@ -293,3 +302,59 @@ def test_every_blocker_id_has_readable_detail() -> None:
     for blocker in ids:
         assert validation.BLOCKER_DETAIL.get(blocker)
         assert blocker.startswith("PBIMCP-VAL-")
+
+
+# --------------------------------------------------------------------------
+# Codex P1 (PR #659): exit 0 does not prove the TARGET was examined
+# --------------------------------------------------------------------------
+
+
+def test_unparseable_target_is_a_failure_not_a_silent_pass(tmp_path: Path) -> None:
+    """A corrupted target must fail validation even when the repo exits 0.
+
+    ``semantic-check`` SKIPS a ``*.tmdl`` whose top-level ``table`` block is gone
+    (``parse_tmdl`` returns ``None`` -> ``continue``). With another discoverable
+    input present the command still prints "no drift" and exits 0, so asserting
+    ``artifacts_examined = (target_path,)`` from the exit code alone reports a
+    mutation that DESTROYED the target as ``materialized``.
+
+    Runs the REAL validator, not a stub: a fake returning 0 cannot tell
+    "examined and clean" from "skipped", which is the entire defect. The fixture
+    is real for the same reason -- discovery requires a TRACKED path under
+    ``*.SemanticModel/definition/``, so a ``models/x.tmdl`` fixture trips the
+    empty-corpus guard and would pass for the wrong reason.
+
+    Codex review, PR #659 (P1).
+    """
+    definition = tmp_path / "Sales.SemanticModel" / "definition"
+    definition.mkdir(parents=True)
+    # Measure-free tables, so L3 contract checks cannot supply the exit code.
+    (definition / "other_model.tmdl").write_text(
+        "table other_model\n\n\tcolumn Region\n\t\tdataType: string\n",
+        encoding="utf-8",
+    )
+    target_rel = "Sales.SemanticModel/definition/sales_model.tmdl"
+    target = tmp_path / target_rel
+    target.write_text(
+        "table sales_model\n\n\tcolumn Amount\n\t\tdataType: double\n",
+        encoding="utf-8",
+    )
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "t@e.invalid")
+    _git(tmp_path, "config", "user.name", "T")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "baseline", "--no-gpg-sign")
+
+    # The write destroyed the target: no top-level `table` block survives.
+    target.write_text("this is not tmdl at all\n", encoding="utf-8")
+
+    outcome = validation.validate_semantic_model(
+        tmp_path, target_path=target_rel, backup_ref=None
+    )
+
+    assert not outcome.passed, (
+        "a DESTROYED target reported clean -- "
+        f"examined={outcome.artifacts_examined} failed={outcome.failed}"
+    )
+    assert outcome.blockers, "a failure with no blocker is not actionable"
+    assert outcome.rollback_guidance, "a destroyed target needs rollback guidance"
