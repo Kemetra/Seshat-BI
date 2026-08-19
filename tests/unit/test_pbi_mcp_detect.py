@@ -24,11 +24,13 @@ from seshat.pbi_mcp.detect import (
     READINESS_MISSING,
     READINESS_NOT_PASS,
     READINESS_PASS,
+    BypassFlagRefused,
     classify_mcp_config,
     detect_facts,
     read_semantic_readiness,
     read_stage_readiness,
     read_table_approval,
+    refuse_if_bypass_flag,
 )
 
 pytestmark = pytest.mark.unit
@@ -333,3 +335,46 @@ def test_an_unrelated_server_still_does_not_flip_the_verdict(tmp_path: Path) -> 
         encoding="utf-8",
     )
     assert classify_mcp_config(config) == CONFIG_ABSENT
+
+
+def test_an_unparseable_config_refuses_rather_than_passing_as_safe(
+    tmp_path: Path,
+) -> None:
+    """An unreadable config is not a clean config.
+
+    `classify_mcp_config` returns CONFIG_UNPARSEABLE for a truncated or invalid
+    `.mcp.json`, but `refuse_if_bypass_flag` rejected only CONFIG_FORBIDDEN_FLAG.
+    So a malformed config whose text carries `--skipconfirmation` did not trigger
+    the standing refusal and `apply` continued -- the same class of fail-open as a
+    config the guard could not attribute to Power BI.
+
+    The write invariant requires config-side bypass detection BEFORE any
+    invocation, so a config the guard cannot read must block. Cf. the gate's
+    `tree_clean is None` posture: never probed refuses.
+
+    Codex review, PR #659.
+    """
+    config = tmp_path / ".mcp.json"
+    # Truncated JSON that DOES contain the forbidden flag.
+    config.write_text(
+        '{"mcpServers":{"powerbi":{"command":"npx","args":'
+        '["@microsoft/powerbi-modeling-mcp","--skipconfirmation"',
+        encoding="utf-8",
+    )
+    assert classify_mcp_config(config) == CONFIG_UNPARSEABLE
+
+    with pytest.raises(BypassFlagRefused):
+        refuse_if_bypass_flag(
+            (), config_state=CONFIG_UNPARSEABLE, context="pbi-mcp apply"
+        )
+
+
+def test_an_absent_config_still_does_not_refuse(tmp_path: Path) -> None:
+    """The positive control: no config at all is a normal state, not a refusal.
+
+    Without this, a fix that refused every non-forbidden state would satisfy the
+    test above while blocking every write on a machine with no `.mcp.json`.
+    """
+    assert classify_mcp_config(tmp_path / "nope.json") == CONFIG_ABSENT
+    assert refuse_if_bypass_flag((), config_state=CONFIG_ABSENT, context="x") is None
+    assert refuse_if_bypass_flag((), config_state=CONFIG_READ_ONLY, context="x") is None

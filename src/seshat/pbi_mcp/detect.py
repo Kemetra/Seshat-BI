@@ -253,6 +253,17 @@ def refuse_if_bypass_flag(
             f"{context}: refused -- the machine-local MCP config carries "
             f"{_FORBIDDEN_FLAG}; remove it before any write is attempted"
         )
+    if config_state == CONFIG_UNPARSEABLE:
+        # An unreadable config is not a clean config. A truncated `.mcp.json`
+        # carrying --skipconfirmation classifies as `unparseable`, and treating
+        # that as safe let the flag through -- the same fail-open as a config the
+        # guard could not attribute to Power BI. Mirrors the gate's
+        # `tree_clean is None` posture: never probed refuses (Codex, PR #659).
+        raise BypassFlagRefused(
+            f"{context}: refused -- the machine-local MCP config could not be "
+            "parsed, so it cannot be shown to be free of "
+            f"{_FORBIDDEN_FLAG}; fix or remove the config before any write"
+        )
     if classify_invocation_argv(argv) == CONFIG_FORBIDDEN_FLAG:
         raise BypassFlagRefused(
             f"{context}: refused -- the invocation carries {_FORBIDDEN_FLAG}. "
