@@ -96,7 +96,7 @@ db = [
 # Governed numerical execution environments. These remain outside the base
 # install and are imported only by the statistical method that needs them.
 stats = [
-    "numpy==2.5.1",
+    "numpy==2.5.2",
     "scipy==1.18.0",
     "statsmodels==0.14.6",
 ]
