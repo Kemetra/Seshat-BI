@@ -156,6 +156,12 @@ def _build_repo(tmp_path: Path, **overrides: object) -> Path:
 
 
 def _evaluate(repo: Path, **kwargs: object) -> gate.GateVerdict:
+    """Call the gate, translating the git kwargs into :class:`gate.GitState`.
+
+    Callers keep writing ``tree_clean=``/``backup_ref=`` -- the git facts are one
+    value at the gate boundary, but spelling them out at each call site is what
+    makes a test's git precondition readable.
+    """
     params: dict[str, object] = {
         "repo_root": repo,
         "target_id": TARGET,
@@ -163,4 +169,8 @@ def _evaluate(repo: Path, **kwargs: object) -> gate.GateVerdict:
         "tree_clean": True,
     }
     params.update(kwargs)
-    return gate.evaluate(**params)  # type: ignore[arg-type]
+    git = gate.GitState(
+        tree_clean=params.pop("tree_clean"),  # type: ignore[arg-type]
+        backup_ref=params.pop("backup_ref", None),  # type: ignore[arg-type]
+    )
+    return gate.evaluate(**params, git_state=git)  # type: ignore[arg-type]

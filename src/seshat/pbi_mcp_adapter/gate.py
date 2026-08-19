@@ -559,13 +559,28 @@ def _git_safety(
     return True, ()
 
 
+@dataclass(frozen=True)
+class GitState:
+    """The PROBED git facts, bundled so they travel as one value.
+
+    ``tree_clean`` keeps its fail-closed default: ``None`` means "never probed"
+    and :func:`_git_safety` refuses on it. Bundling changes only how the pair is
+    passed -- the refusal reads the FIELD, so an omitted probe still refuses and
+    a caller gains no way to assert its way past the check.
+
+    ``backup_ref`` is a git ref, not a boolean attestation: see
+    :func:`_ref_holds_target`.
+    """
+
+    tree_clean: bool | None = None
+    backup_ref: str | None = None
+
+
 def evaluate(
     repo_root: Path,
     target_id: str,
     operation_id: str = "",
-    *,
-    tree_clean: bool | None = None,
-    backup_ref: str | None = None,
+    git_state: GitState | None = None,
 ) -> GateVerdict:
     """Evaluate every write precondition for ``target_id``. Fail-closed.
 
@@ -581,7 +596,9 @@ def evaluate(
     requested one (FR-011c). Only the approval-time content hash (FR-011b) is out
     of scope -- externally blocked for want of a producer this spec may not build.
 
-    ``tree_clean`` has **no default**: ``None`` means "never probed" and refuses.
+    ``git_state`` carries the probed facts. ``tree_clean`` keeps **no permissive
+    default**: ``None`` -- including an omitted ``git_state`` -- means "never
+    probed" and refuses.
     Callers source it from :mod:`seshat.gitstate`, which fails closed on a git
     error; ``dagster_adapter/evidence._is_workspace_dirty`` must NOT be used -- it
     returns ``False`` (clean) on an exception, turning a git failure into a
@@ -596,10 +613,11 @@ def evaluate(
     authorized_path = (
         target.entry.path if target.entry is not None and target.target_exists else None
     )
+    git = GitState() if git_state is None else git_state
     git_safe, git_blockers = _git_safety(
         root,
-        tree_clean=tree_clean,
-        backup_ref=backup_ref,
+        tree_clean=git.tree_clean,
+        backup_ref=git.backup_ref,
         target_path=target.entry.path if target.entry is not None else None,
     )
 

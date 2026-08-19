@@ -139,7 +139,9 @@ def test_unbound_operation_refuses_even_with_a_valid_target_approval(
 
 def test_omitting_the_operation_refuses(committed_repo: Path) -> None:
     """No operation id means nothing resolved; it never clears by omission."""
-    verdict = gate.evaluate(committed_repo, TARGET, tree_clean=True)
+    verdict = gate.evaluate(
+        committed_repo, TARGET, git_state=gate.GitState(tree_clean=True)
+    )
     assert not verdict.cleared
     assert gate.BLOCKER_OPERATION_UNBOUND in verdict.blockers
 

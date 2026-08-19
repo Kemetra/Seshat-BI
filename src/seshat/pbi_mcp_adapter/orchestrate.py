@@ -300,8 +300,7 @@ def _preflight(
         root,
         request.target_id,
         request.operation_id,
-        tree_clean=request.tree_clean,
-        backup_ref=request.backup_ref,
+        gate.GitState(tree_clean=request.tree_clean, backup_ref=request.backup_ref),
     )
 
     # 3. Vendor preview drift. Gated on DRIFT rather than version compatibility:
