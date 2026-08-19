@@ -432,3 +432,36 @@ def test_git_state_probe_failure_is_not_a_pass(committed_repo: Path) -> None:
         gate_module.run_git = original  # type: ignore[assignment]
     assert not verdict.cleared
     assert gate.BLOCKER_BACKUP_UNRESOLVABLE in verdict.blockers
+
+
+def test_a_supplied_backup_ref_is_validated_even_on_a_clean_tree(
+    committed_repo: Path,
+) -> None:
+    """Cleanliness satisfying the gate must not leave a supplied ref unchecked.
+
+    `_git_safety` returned early on `tree_clean=True`, skipping both ref
+    resolution and the custody check. But `rollback_guidance_for` PREFERS a
+    supplied ref, so an unresolvable ref made rollback fail, and a stale one would
+    restore an OLDER model rather than the pre-write state -- precisely when the
+    operator is relying on the guidance.
+
+    Codex review, PR #659.
+    """
+    verdict = _evaluate(
+        committed_repo, tree_clean=True, backup_ref="refs/tags/no-such-backup"
+    )
+
+    assert not verdict.cleared, (
+        "a clean tree cleared the gate while carrying an unresolvable backup ref"
+    )
+    assert gate.BLOCKER_BACKUP_UNRESOLVABLE in verdict.blockers
+
+
+def test_a_clean_tree_with_no_backup_ref_still_clears(committed_repo: Path) -> None:
+    """Positive control: cleanliness alone remains sufficient.
+
+    Without this, a fix that demanded a valid ref unconditionally would satisfy
+    the test above while breaking the ordinary clean-tree write.
+    """
+    verdict = _evaluate(committed_repo, tree_clean=True, backup_ref=None)
+    assert verdict.git_safe, verdict.blockers

@@ -597,10 +597,16 @@ def _git_safety(
     """
     if tree_clean is None:
         return False, (BLOCKER_GIT_UNPROBED,)
-    if tree_clean:
+    if tree_clean and backup_ref is None:
+        # Cleanliness alone satisfies the gate: `git restore` recovers the target.
         return True, ()
     if backup_ref is None:
         return False, (BLOCKER_GIT_UNSAFE,)
+    # A SUPPLIED ref is validated whether or not the tree is clean. Returning
+    # early on cleanliness left it unchecked while `rollback_guidance_for` still
+    # PREFERRED it -- so an unresolvable ref made the promised rollback fail, and a
+    # stale one would restore an OLDER model instead of the pre-write state,
+    # exactly when the operator is relying on the guidance (Codex, PR #659).
     if not _ref_resolves(repo_root, backup_ref):
         return False, (BLOCKER_BACKUP_UNRESOLVABLE,)
     if target_path is not None and not _ref_holds_target(
