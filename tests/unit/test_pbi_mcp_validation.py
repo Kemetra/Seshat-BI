@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -417,3 +418,38 @@ def test_rollback_guidance_neutralizes_a_hostile_ref(tmp_path: Path) -> None:
     assert any(t == f"--source={hostile}" for t in tokens), (
         f"the ref did not survive as a single argument: {tokens}"
     )
+
+
+def test_validator_runs_the_active_interpreter_not_path_python(
+    repo_with_target: Path,
+) -> None:
+    """The subprocess must use ``sys.executable``.
+
+    On the documented pipx install -- or any system exposing only ``python3`` --
+    a bare ``python`` is absent or lacks Seshat. The mutation would succeed and
+    then EVERY apply would report a post-mutation validation failure with
+    rollback guidance for a write that was actually fine.
+
+    Pins the CAPABILITY (an interpreter that can import seshat) rather than the
+    literal string, so a future switch to a different absolute path still passes
+    while a regression to a bare name does not.
+
+    Codex review, PR #659.
+    """
+    seen: dict[str, tuple[str, ...]] = {}
+
+    def capture(repo_root: Path, args: tuple[str, ...]):
+        seen["args"] = tuple(args)
+        return subprocess.CompletedProcess(args=list(args), returncode=0)
+
+    validation.validate_semantic_model(
+        repo_with_target, target_path=TARGET_PATH, runner=capture
+    )
+
+    interpreter = seen["args"][0]
+    assert interpreter == sys.executable, (
+        f"validator ran {interpreter!r}, not the active interpreter"
+    )
+    # A bare name would be resolved through PATH, which is the defect.
+    assert Path(interpreter).is_absolute(), f"{interpreter!r} is PATH-resolved"
+    assert Path(interpreter).exists(), f"{interpreter!r} does not exist"

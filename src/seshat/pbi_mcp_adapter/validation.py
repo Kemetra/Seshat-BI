@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import shlex
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -218,8 +219,13 @@ def validate_semantic_model(
         return read_nothing_outcome(checks_run)
 
     invoke = runner if runner is not None else _run_validator
+    # The RUNNING interpreter, not whatever `python` resolves to on PATH. On the
+    # documented pipx install -- or any system exposing only `python3` -- a bare
+    # `python` is absent or lacks Seshat, so the validator would fail to start and
+    # every apply would report a post-mutation validation failure with rollback
+    # guidance for a write that was actually fine (Codex review, PR #659).
     args = (
-        "python",
+        sys.executable,
         "-m",
         "seshat.cli",
         "semantic-check",
