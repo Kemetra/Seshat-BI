@@ -315,26 +315,54 @@ def _stage_status(data: dict, stage: str) -> str:
     return str(block.get("status", "missing"))
 
 
-def _shape_valid_approval(data: dict, stage: str) -> Approval | None:
-    """The first shape-valid approval for ``stage``, or None.
+def _shape_valid_approvals(data: dict, stage: str) -> tuple[Approval, ...]:
+    """EVERY shape-valid approval for ``stage``, in recorded order.
 
     Shape validity is delegated, not re-implemented: one definition of
     "named human" across every gate-deciding surface (issue #487).
+
+    All of them, not the first: an audit trail GROWS, so a target may carry an
+    older approval for one operation and a newer one for another. Returning only
+    the first made the second unauthorizable unless the older row were rewritten
+    -- and rewriting a recorded human approval to authorize new work is what an
+    append-only trail exists to prevent (Codex review, PR #659).
     """
     rows = data.get("approvals")
     if not isinstance(rows, list):
-        return None
+        return ()
+    found: list[Approval] = []
     for row in rows:
         if not isinstance(row, dict) or row.get("stage") != stage:
             continue
         if not approval_is_shape_valid(row):
             continue
-        return Approval(
-            stage=str(row.get("stage", "")),
-            owner=str(row.get("owner", "")),
-            at=str(row.get("at", "")),
-            note=str(row.get("note", "")),
+        found.append(
+            Approval(
+                stage=str(row.get("stage", "")),
+                owner=str(row.get("owner", "")),
+                at=str(row.get("at", "")),
+                note=str(row.get("note", "")),
+            )
         )
+    return tuple(found)
+
+
+def _authorizing_approval(
+    approvals: tuple[Approval, ...], target_id: str, operation_id: str
+) -> Approval | None:
+    """The first approval naming BOTH the target and the operation.
+
+    Both token checks on the SAME row. They must not be satisfiable by different
+    rows: two narrow approvals would otherwise combine into one wider authority
+    no human granted, and an approval naming the target still does not authorize
+    an arbitrary operation on it (FR-011c).
+    """
+    for approval in approvals:
+        names_operation = bool(operation_id) and note_names_target(
+            approval.note, operation_id
+        )
+        if names_operation and note_names_target(approval.note, target_id):
+            return approval
     return None
 
 
@@ -443,10 +471,21 @@ def _approval_blockers(
     """
     if data is None:
         return None, False, False, ()
-    approval = _shape_valid_approval(data, APPROVAL_STAGE)
-    if approval is None:
+    approvals = _shape_valid_approvals(data, APPROVAL_STAGE)
+    if not approvals:
         return None, False, False, (BLOCKER_APPROVAL_ABSENT,)
 
+    authorizing = _authorizing_approval(approvals, target_id, operation_id)
+    if authorizing is not None:
+        return authorizing, True, True, ()
+
+    # Nothing authorizes this pair. Report against the row that came CLOSEST --
+    # one naming the target -- so the blocker names the missing OPERATION when a
+    # human approved this target for something else.
+    approval = next(
+        (a for a in approvals if note_names_target(a.note, target_id)),
+        approvals[0],
+    )
     blockers: list[str] = []
     names_target = note_names_target(approval.note, target_id)
     if not names_target:

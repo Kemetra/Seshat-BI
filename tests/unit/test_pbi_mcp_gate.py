@@ -409,3 +409,54 @@ def test_approval_without_an_iso_date_refuses(tmp_path: Path) -> None:
     verdict = _evaluate(repo)
     assert not verdict.cleared
     assert verdict.approval is None
+
+
+def test_a_later_approval_row_can_authorize_a_second_operation(
+    tmp_path: Path,
+) -> None:
+    """Every shape-valid row is eligible, not just the first one found.
+
+    An audit trail GROWS: after `update_measure` was approved, a human appends a
+    new `publish_ready` approval for `rename_measure`. Selecting the first
+    shape-valid stage row and only then checking the tokens means the second
+    operation can never be authorized unless the OLDER audit row is rewritten --
+    and rewriting a recorded human approval to authorize new work is exactly what
+    an append-only trail exists to prevent.
+
+    Codex review, PR #659.
+    """
+    readiness = (
+        "stages:\n"
+        "  semantic_model_ready:\n    status: pass\n"
+        "  publish_ready:\n    status: not_started\n"
+        "approvals:\n"
+        "  - stage: publish_ready\n"
+        f"    owner: {OWNER!r}\n"
+        "    at: '2026-08-18'\n"
+        "    note: 'approved for sales_model: update_measure'\n"
+        "  - stage: publish_ready\n"
+        f"    owner: {OWNER!r}\n"
+        "    at: '2026-08-19'\n"
+        "    note: 'approved for sales_model: rename_measure'\n"
+    )
+    allowlist = (
+        f"targets:\n  - target_id: {TARGET}\n"
+        f"    path: models/{TARGET}.tmdl\n"
+        "    operations:\n      - update_measure\n      - rename_measure\n"
+    )
+    repo = _build_repo(tmp_path, readiness=readiness, allowlist=allowlist)
+
+    # The OLDER row still authorizes its own operation.
+    older = _evaluate(repo, operation_id="update_measure")
+    assert older.cleared, older.blockers
+
+    # The NEWER row must authorize the second operation too.
+    newer = _evaluate(repo, operation_id="rename_measure")
+    assert newer.cleared, (
+        f"a later approval row did not authorize its operation: {newer.blockers}"
+    )
+
+    # An operation NO row names is still refused: the scan must not degrade into
+    # "any approval authorizes anything".
+    unapproved = _evaluate(repo, operation_id="delete_table")
+    assert not unapproved.cleared
