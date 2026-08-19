@@ -57,6 +57,34 @@ def _digest(path: Path) -> str | None:
         return None
 
 
+def _decode_git_path(reported: str) -> str:
+    """Recover a git-reported path that the locale codec mis-decoded.
+
+    ``gitstate.run_git`` uses ``text=True`` with no explicit encoding, so git's
+    raw UTF-8 path bytes are decoded with the locale codec -- cp1252 on Windows,
+    which turns ``café.tmdl`` into ``cafÃ©.tmdl``. The mis-decoded name does not
+    resolve on disk, so ``_digest`` returns None and the file drops out of the
+    snapshot entirely.
+
+    Re-encoding through the same codec and decoding as UTF-8 recovers the
+    original. ``surrogateescape`` on both legs keeps it lossless for bytes the
+    locale codec cannot represent, and a name that was already correct round-trips
+    unchanged. Fixed here rather than in ``run_git``, whose ``text=True`` is shared
+    by eleven callers -- changing the encoding globally is a far wider blast radius
+    than this defect.
+    """
+    import locale
+
+    encoding = locale.getpreferredencoding(False)
+    try:
+        recovered = reported.encode(encoding, errors="surrogateescape").decode(
+            "utf-8", errors="surrogateescape"
+        )
+    except (UnicodeError, LookupError):
+        return reported
+    return recovered
+
+
 def _snapshot(repo_root: Path) -> dict[str, str]:
     """Digest every tracked-or-untracked file, so an out-of-scope write is visible.
 
@@ -67,20 +95,27 @@ def _snapshot(repo_root: Path) -> dict[str, str]:
 
     try:
         listed = run_git(
-            repo_root, "ls-files", "--cached", "--others", "--exclude-standard"
+            repo_root, "ls-files", "-z", "--cached", "--others", "--exclude-standard"
         )
     except (OSError, RuntimeError):
         return {}
     if listed.returncode != 0:
         return {}
     snapshot: dict[str, str] = {}
-    for line in listed.stdout.splitlines():
-        rel = line.strip().strip('"')
+    # `-z` because git C-QUOTES any path with non-ASCII bytes, a newline, a quote
+    # or a backslash: `café.tmdl` arrives as `"caf\303\251.tmdl"`. Stripping the
+    # quotes is not decoding the escapes, so `_digest` read a nonexistent path,
+    # returned None, and the file VANISHED from the snapshot -- making an
+    # out-of-scope write to such a file invisible to the effect check, and an
+    # authorized target with such a name falsely "unchanged" (Codex review,
+    # PR #659). NUL-delimited output is verbatim, so there is nothing to unquote.
+    for rel in listed.stdout.split("\0"):
         if not rel:
             continue
-        digest = _digest(repo_root / rel)
+        name = _decode_git_path(rel)
+        digest = _digest(repo_root / name)
         if digest is not None:
-            snapshot[rel] = digest
+            snapshot[name] = digest
     return snapshot
 
 

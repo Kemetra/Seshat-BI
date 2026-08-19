@@ -537,3 +537,62 @@ def test_intent_record_exists_before_the_mutation_runs(ready_repo: Path) -> None
     assert payload["mutation_attempted"] is True
     assert payload["target_id"] == TARGET
     assert payload["operation_id"] == OPERATION
+
+
+# --------------------------------------------------------------------------
+# Codex (PR #659): git C-quotes unusual paths, so the snapshot must use -z
+# --------------------------------------------------------------------------
+
+
+def test_snapshot_sees_a_non_ascii_path(tmp_path: Path) -> None:
+    """`git ls-files` C-quotes non-ASCII names, and stripping quotes is not decoding.
+
+    `git ls-files` emits `"caf\303\251.tmdl"` for `café.tmdl` by default. Removing
+    the surrounding quotes leaves the octal escapes intact, so `_digest` reads a
+    path that does not exist, returns None, and the file DISAPPEARS from the
+    snapshot -- which is what makes an out-of-scope write to such a file
+    invisible to the effect check.
+    """
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "t@e.invalid")
+    _git(tmp_path, "config", "user.name", "T")
+    (tmp_path / "plain.tmdl").write_text("a\n", encoding="utf-8")
+    (tmp_path / "caf\u00e9.tmdl").write_text("b\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "baseline", "--no-gpg-sign")
+
+    snapshot = orchestrate._snapshot(tmp_path)
+
+    assert "caf\u00e9.tmdl" in snapshot, (
+        f"the non-ASCII path is missing from the snapshot: {sorted(snapshot)}"
+    )
+    assert "plain.tmdl" in snapshot
+
+
+def test_an_out_of_scope_write_to_a_quoted_path_is_caught(tmp_path: Path) -> None:
+    """The consequence: such a file must not be a blind spot for the scope check.
+
+    This is the assertion that matters -- a runtime writing outside its authorized
+    target is exactly what `_effect_blockers` exists to catch, and a path git
+    quotes must not be a way around it.
+    """
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "t@e.invalid")
+    _git(tmp_path, "config", "user.name", "T")
+    target = "authorized.tmdl"
+    (tmp_path / target).write_text("original\n", encoding="utf-8")
+    sneaky = tmp_path / "caf\u00e9.tmdl"
+    sneaky.write_text("before\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "baseline", "--no-gpg-sign")
+
+    before = orchestrate._snapshot(tmp_path)
+    # The "runtime" changes BOTH the authorized target and the quoted-path file.
+    (tmp_path / target).write_text("mutated\n", encoding="utf-8")
+    sneaky.write_text("after\n", encoding="utf-8")
+    after = orchestrate._snapshot(tmp_path)
+
+    blockers = orchestrate._effect_blockers(before, after, target)
+    assert orchestrate.BLOCKER_OUT_OF_SCOPE_CHANGE in blockers, (
+        "an out-of-scope write to a git-quoted path was not detected"
+    )
