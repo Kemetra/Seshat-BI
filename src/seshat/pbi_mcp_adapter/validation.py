@@ -276,7 +276,12 @@ def validate_semantic_model(
     silently absent from a "no drift" run. :func:`_target_was_examined` closes
     that gap by reading the artifact directly (Codex review, PR #659).
     """
-    root = Path(repo_root)
+    # RESOLVED, because the child gets both `cwd=root` and `--repo <root>`. With a
+    # non-dot relative repo (`--repo ../project`) the child would re-resolve that
+    # string from inside the repository and validate a different or nonexistent
+    # directory -- reporting a good mutation as a validation failure and telling
+    # the operator to roll it back (Codex review, PR #659).
+    root = Path(repo_root).resolve()
     artifact = root / target_path
     checks_run = ("seshat semantic-check --require-inputs",)
 

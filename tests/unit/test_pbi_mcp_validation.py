@@ -527,3 +527,51 @@ def test_a_target_inside_the_corpus_still_passes(tmp_path: Path) -> None:
 
     assert outcome.passed, f"a discoverable target was refused: {outcome.blockers}"
     assert outcome.artifacts_examined == (target_rel,)
+
+
+def test_validator_receives_an_absolute_repo_path(tmp_path: Path) -> None:
+    """A relative repo must be resolved before it is handed to the child.
+
+    The child gets BOTH ``cwd=root`` and ``--repo <root>``. With a non-dot
+    relative repo (``--repo ../project``) it would re-resolve that string from
+    inside the repository and validate a different or nonexistent directory --
+    reporting a good mutation as a validation failure and telling the operator to
+    roll it back.
+
+    Pins the CAPABILITY (the argument is absolute and names this repo) rather than
+    a literal string.
+
+    Codex review, PR #659.
+    """
+    artifact = tmp_path / TARGET_PATH
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_text("table sales_model\n", encoding="utf-8")
+
+    seen: dict[str, tuple[str, ...]] = {}
+
+    def capture(repo_root: Path, args: tuple[str, ...]):
+        seen["args"] = tuple(args)
+        seen["cwd"] = repo_root
+        return subprocess.CompletedProcess(args=list(args), returncode=1)
+
+    # A relative path pointing at the same repo, via its parent.
+    relative = Path(tmp_path.name)
+    import os
+
+    previous = Path.cwd()
+    os.chdir(tmp_path.parent)
+    try:
+        validation.validate_semantic_model(
+            relative, target_path=TARGET_PATH, runner=capture
+        )
+    finally:
+        os.chdir(previous)
+
+    args = seen["args"]
+    repo_arg = Path(args[args.index("--repo") + 1])
+    assert repo_arg.is_absolute(), f"--repo was relative: {repo_arg}"
+    assert repo_arg.resolve() == tmp_path.resolve(), (
+        f"--repo names {repo_arg} rather than the repo {tmp_path}"
+    )
+    # And the cwd handed to the runner must agree with it.
+    assert Path(seen["cwd"]).resolve() == tmp_path.resolve()
