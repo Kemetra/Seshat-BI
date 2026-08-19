@@ -32,7 +32,66 @@ intent-before-mutation guard had no test. It is pinned by **observation** — th
 reads the evidence file at the moment it mutates — and was proven non-vacuous by removing the
 guard and watching it fail, before and after the refactor.
 
+## Update — resolved with the CodeScene CLI (same day)
+
+The four items below were originally written up as "needs an owner suppression",
+on the belief that no committable config existed and that two of them could not be
+refactored without weakening a security property. **Three of those four judgements were
+wrong**, and the local CodeScene CLI (`cs review`, `cs delta`) is what showed it — the MCP
+tools were token-gated, but the CLI needs no API token.
+
+| Was | Verdict | Result |
+| --- | --- | --- |
+| `gate.evaluate` 5 args | **FIXED** — `gate.GitState` bundles the probed git facts | `gate.py` 9.33 → 9.63 |
+| `GateVerdict.cleared` cc 13 | **FIXED** — `all()` over an explicit tuple | `gate.py` 9.63 → **10.0** |
+| `_subparser_choices` depth 4 | **FIXED** — `_choice_maps` generator flattens the walk | test file 9.38 → **10.0** |
+| `_run_write_leg` cc 10 | **FIXED** — reporting split into `_report_write_leg` | `pbi_mcp.py` back to **10.0** |
+| `apply_write` 12 args | **OPEN** — see below | `orchestrate.py` 9.68 |
+
+Two corrections worth keeping:
+
+* **`.codescene/code-health-rules.json` IS a committable mechanism** (`cs rules-config
+  set-rule` / `set-threshold`, per-glob). The earlier "UI suppression only" claim confused
+  *the file is absent* with *the mechanism does not exist*. No such file was needed in the
+  end, but it is the right route if an exception is ever wanted.
+* **`cleared` could be fixed without hiding preconditions.** The old argument — "cyclomatic 13
+  is correct for a 13-precondition gate" — was sound about the branch count but wrong about the
+  options. `all()` over a tuple keeps every precondition on its own line, in the same function,
+  in the same order, and reads as one conjunction. Equivalence was proven exhaustively over all
+  8192 field combinations, not argued: every element is a plain field read on a frozen
+  dataclass, so losing short-circuit evaluation changes nothing.
+* **`gate.evaluate`'s cost was overstated.** The claimed "~11 security assertions to rewrite"
+  were `_evaluate(...)` *fixture-wrapper* calls. There are only 4 real call sites, and the
+  wrapper absorbed the change — every test still spells out `tree_clean=`/`backup_ref=`.
+  Fail-closed was proven, not assumed: calling `evaluate()` with no `git_state` still yields
+  `git_safe=False`, `cleared=False`, `BLOCKER_GIT_UNPROBED`.
+* **`cs delta origin/main <branch>` found a fifth finding the PR threads never showed**
+  (`_run_write_leg`). Read the branch delta, not just the review threads.
+
+### Still open: `apply_write` — 12 arguments (max 4)
+
+Grouping the three test-injection knobs (`mcp_runner`, `validator`, `capability_profile` —
+never passed by the production CLI) was measured and reaches **10** arguments, not 4. Getting
+to 4 requires collapsing the governed request keywords themselves — `target_id`,
+`operation_id`, `timestamp`, `tree_clean`, `backup_ref`, `argv`, `config_state`, `dry_run` —
+which is the CLI contract surface, and the surface
+`test_a_config_carrying_the_bypass_flag_refuses_apply` exists to protect: `config_state` was
+once accepted but never supplied, a tested-but-unreachable branch, and the explicit keyword
+at the call site is what makes that visible.
+
+**Owner's call**, three options:
+1. Suppress this one finding (CodeScene UI, or a committed `.codescene/code-health-rules.json`
+   raising `function_max_arguments` for this path).
+2. Accept the partial improvement: group the three injection knobs → 10 args, finding stays.
+3. Collapse the governed keywords into one object → clears the finding, and gives up the
+   call-site visibility described above. **Not recommended.**
+
+---
+
+## Original assessment (superseded above, kept for the reasoning)
+
 ## Needs an owner decision (4 findings)
+
 
 There is **no CodeScene rules-config file in this repo**, so none of these can be expressed
 as a committed config change. Each is a suppression click in the CodeScene UI.
