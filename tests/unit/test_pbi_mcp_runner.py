@@ -390,3 +390,97 @@ def test_runner_output_still_scrubs_dsn_spans(tmp_path: Path) -> None:
         runner=_stub(stdout="host=db.example.com user=admin password=hunter2"),
     )
     assert "hunter2" not in result.output
+
+
+# --------------------------------------------------------------------------
+# Issue #658: the vendor process must not inherit the parent environment
+# --------------------------------------------------------------------------
+
+
+def test_credentials_never_reach_the_vendor_environment() -> None:
+    """Deny by default. This is the assertion that makes the helper a gate.
+
+    The vendor runtime is external, unforked and a public preview (ADR 0018), so
+    anything in the parent environment is visible to a third party. An ABSENCE
+    assertion is what catches a later edit that copies the Dagster adapter's
+    prefix rules over -- that helper forwards `DATABASE_URL` and `ANALYTICS_DB_*`
+    BY DESIGN, because it feeds governed Seshat connections. Forwarding a database
+    credential to a preview binary would be worse than inheriting it by accident,
+    because it would look deliberate.
+
+    Issue #658.
+    """
+    hostile = {
+        "PATH": "/usr/bin",
+        "SYSTEMROOT": "C:\\Windows",
+        "DATABASE_URL": "postgres://u:p@host:5432/db",
+        "ANALYTICS_DB_PASSWORD": "hunter2",
+        "SESHAT_DBT_PROFILE": "prod",
+        "AWS_SECRET_ACCESS_KEY": "AKIAsecret",
+        "GITHUB_TOKEN": "ghp_realtokenvalue",
+        "AZURE_CLIENT_SECRET": "s3cret",
+    }
+
+    env = runner.allowed_vendor_environment(hostile)
+
+    leaked = sorted(set(env) - {"PATH", "SYSTEMROOT"})
+    assert not leaked, f"credential-bearing variables reached the vendor: {leaked}"
+    for value in ("hunter2", "AKIAsecret", "ghp_realtokenvalue", "s3cret"):
+        assert value not in "".join(env.values())
+
+
+def test_the_vendor_environment_keeps_what_npx_needs() -> None:
+    """Positive control: a helper returning {} would satisfy the absence test.
+
+    Measured against the real toolchain rather than guessed:
+    `npx --yes cowsay@1.6.0 hi` fetches AND executes with only PATH, SYSTEMROOT
+    and PATHEXT present.
+    """
+    source = {
+        "PATH": "/usr/bin",
+        "PATHEXT": ".COM;.EXE",
+        "SYSTEMROOT": "C:\\Windows",
+        "APPDATA": "C:\\Users\\u\\AppData\\Roaming",
+        "SECRET": "nope",
+    }
+
+    env = runner.allowed_vendor_environment(source)
+
+    assert env["PATH"] == "/usr/bin"
+    assert env["PATHEXT"] == ".COM;.EXE"
+    assert "SECRET" not in env
+
+
+def test_no_prefix_wildcard_widens_the_vendor_allowlist() -> None:
+    """The allowlist is EXACT keys only -- no prefix rules.
+
+    A prefix rule is how an allowlist grows silently: one governed family today,
+    an unrelated match tomorrow. The Dagster helper needs prefixes; this one
+    forwards no connection variables at all, so it must not have them.
+    """
+    invented = {
+        "SESHAT_ANYTHING": "x",
+        "ANALYTICS_DB_HOST": "y",
+        "PBI_MCP_TOKEN": "z",
+        "PATH": "/usr/bin",
+    }
+
+    env = runner.allowed_vendor_environment(invented)
+
+    assert set(env) == {"PATH"}
+
+
+def test_the_runner_passes_the_sanitized_environment() -> None:
+    """The helper must actually be WIRED, not merely present.
+
+    An injected seam that nothing calls is a tested-but-dead feature -- this
+    adapter has already shipped that defect once (`config_state`), so the wiring
+    gets its own assertion.
+    """
+    import inspect
+
+    source = inspect.getsource(runner._run)
+    assert "env=" in source, "_run does not pass an explicit environment"
+    assert "allowed_vendor_environment" in source, (
+        "_run does not use the sanitizing helper"
+    )
