@@ -270,7 +270,7 @@ def _probe_tree_clean(repo_root: Path) -> bool | None:
 
 def _write_leg_payload(report) -> dict[str, object]:
     """The ``--json`` body. Every string field goes through ``redact``."""
-    from seshat.pbi_mcp_adapter.evidence import redact
+    from seshat.pbi_mcp_adapter.evidence import ARTIFACT_RELPATH, redact
 
     return {
         "outcome": report.outcome,
@@ -278,11 +278,11 @@ def _write_leg_payload(report) -> dict[str, object]:
         "mutation_attempted": report.mutation_attempted,
         "blockers": [redact(b) for b in report.blockers],
         "rollback_guidance": [redact(line) for line in report.rollback_guidance],
-        "evidence": (
-            report.evidence_path.as_posix()
-            if report.evidence_path is not None
-            else None
-        ),
+        # The FIXED repo-relative path, never `evidence_path.as_posix()`: that is
+        # absolute whenever `--repo` is, so it leaked `C:/Users/<name>/...` into
+        # stdout and bypassed the output scanner, against the contract guarantee
+        # that no output carries a user path (Codex review, PR #659).
+        "evidence": (ARTIFACT_RELPATH if report.evidence_path is not None else None),
     }
 
 
@@ -293,7 +293,7 @@ def _report_write_leg(args, report) -> int:
     presentation branching. This function decides nothing: the exit code comes
     from the report it was handed.
     """
-    from seshat.pbi_mcp_adapter.evidence import redact
+    from seshat.pbi_mcp_adapter.evidence import ARTIFACT_RELPATH, redact
 
     if getattr(args, "as_json", False):
         print(json.dumps(_write_leg_payload(report), indent=2, sort_keys=True))
@@ -308,7 +308,8 @@ def _report_write_leg(args, report) -> int:
         for line in report.rollback_guidance:
             print(f"{prog}:   {redact(line)}", file=sys.stderr)
     if report.evidence_path is not None:
-        print(f"{prog}: evidence {report.evidence_path.as_posix()}")
+        # Repo-relative here too -- the human line leaked the same absolute path.
+        print(f"{prog}: evidence {ARTIFACT_RELPATH}")
     return report.exit_code
 
 

@@ -388,3 +388,35 @@ def test_plan_write_twice_still_sees_a_clean_tree(ready_repo: Path) -> None:
     assert second.returncode == 0, second.stdout + second.stderr
     payload = json.loads(second.stdout)
     assert payload["blockers"] == []
+
+
+def test_neither_output_form_emits_an_absolute_evidence_path(tmp_path: Path) -> None:
+    """The CLI guarantee is "no user path in stdout/stderr" (cli-contract.md:155).
+
+    `report.evidence_path` is absolute whenever `--repo` is, so emitting
+    `as_posix()` leaked `C:/Users/<name>/project/...` into both the JSON `evidence`
+    field and the human `evidence` line -- bypassing the output scanner. The
+    artifact lives at a FIXED repo-relative path, so that is what callers need.
+
+    Codex review, PR #659.
+    """
+    from seshat.cli.commands import pbi_mcp as command
+    from seshat.pbi_mcp_adapter import evidence, orchestrate
+
+    absolute = tmp_path / evidence.ARTIFACT_RELPATH
+    report = orchestrate.WriteReport(
+        exit_code=0,
+        outcome="materialized",
+        blockers=(),
+        rollback_guidance=(),
+        evidence_path=absolute,
+        mutation_attempted=True,
+    )
+
+    payload = command._write_leg_payload(report)
+    emitted = str(payload["evidence"])
+    assert emitted == evidence.ARTIFACT_RELPATH, (
+        f"JSON leaked an absolute evidence path: {emitted!r}"
+    )
+    assert tmp_path.as_posix() not in emitted
+    assert not Path(emitted).is_absolute()
