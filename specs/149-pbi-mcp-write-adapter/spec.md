@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-18
 
-**Status**: Draft
+**Status**: Ratified (Ahmed Shaaban, 2026-08-18)
 
 **Input**: User description: "Slice 5 of F016: the approval-gated Power BI MCP write adapter, authorized by ADR 0018 (RATIFIED by Ahmed Shaaban 2026-08-18). Pipeline: write operations -> approval gate -> target allowlist -> git safety -> Microsoft MCP execution -> post-write validation -> rollback/evidence."
 
@@ -210,9 +210,24 @@ assert preflight reports a blocker rather than proceeding.
 - **FR-011a**: The requested operation MUST be **resolved from** the committed approved
   definition set for the target, never accepted as free-form input. An operation identifier
   that does not resolve is a refusal.
-- **FR-011b**: The resolved definition MUST be verified against the content the approval
-  covers (a content hash recorded at approval time). A mismatch — the definition changed after
-  sign-off — is a refusal, not a warning.
+- **FR-011b** — **EXTERNALLY BLOCKED (owner decision, Ahmed Shaaban, 2026-08-18).** *Intent*:
+  the resolved definition MUST be verified against the content the approval covers (a content
+  hash recorded at approval time); a mismatch — the definition changed after sign-off — is a
+  refusal, not a warning.
+  **Why blocked**: the verification needs a hash *captured at sign-off*, and this feature is
+  forbidden to write approvals (see Assumptions: approval records are read-only inputs here).
+  No task inside this spec can therefore create the record it would validate — doing so would
+  put the adapter in the position of writing the record that authorizes its own mutation, the
+  exact fail-open FR-011a exists to prevent. The hash *primitive* already exists
+  (`artifact_identity.sha256_file`, with the recorded-vs-observed idiom at
+  `agent_verify/checks.py`); the missing piece is a producer at approval time.
+  **Posture while blocked**: same as the F032 `unknown` range — the check is not stubbed to a
+  permissive value and is not silently skipped. `operation_binds` drops only its *hash*
+  component; operation **resolution** and **target match** (FR-011a, FR-011c) remain required
+  and are enforced.
+  **Unblocked by**: a companion spec adding an `approved_definitions[]` block to
+  `templates/readiness-status.yaml` carrying `{operation_id, target_id, content_sha256}`,
+  written at sign-off by a named human. Until then FR-011b is out of scope, not unimplemented.
 - **FR-011c**: An approval naming a target MUST NOT authorize an arbitrary mutation of that
   target. Target-naming and operation-binding are two distinct checks, and both are required.
 - **FR-012**: The adapter MUST consume the vendor runtime as an external, unforked dependency
@@ -324,6 +339,10 @@ assert preflight reports a blocker rather than proceeding.
 - Authoring metrics, mappings, semantic logic, or dashboard design.
 - Live database provisioning, tenant configuration, or workspace administration.
 - Making the DEFINE/CHECK core capable of driving a mutation.
+- **FR-011b's approval-time content hash** (owner decision, 2026-08-18): verifying a resolved
+  definition against a hash recorded at sign-off requires a producer this spec is forbidden to
+  build, since it never writes approvals. Operation resolution and target-match still apply.
+  Deferred to a companion spec that adds `approved_definitions[]` to the readiness template.
 - Advancing the F032 supported-version range beyond `unknown` (externally blocked until
   Microsoft publishes a release and a smoke run passes).
 

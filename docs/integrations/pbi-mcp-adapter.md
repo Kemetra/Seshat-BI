@@ -2,9 +2,14 @@
 
 Three unrelated things are all called "MCP" near this repo. This doc disambiguates
 them, then covers the two OFFICIAL Microsoft Power BI MCP servers that make up the
-parked F016 execution adapter. Microsoft's separate official report-authoring
-skill is also named because native PBIR authoring is not an MCP responsibility.
-No MCP call or report mutation is authorized by this document.
+F016 execution adapter. Microsoft's separate official report-authoring skill is also
+named because native PBIR authoring is not an MCP responsibility.
+
+**Status (2026-08-18):** the local modeling server's WRITE path is BUILT -- ADR 0018 was
+ratified, spec 149 was ratified, and slice 5 ships as `seshat pbi-mcp plan-write` /
+`seshat pbi-mcp apply`. The remote query-only server (slice 6) remains gated on ADR
+decision 7. This document describes the shape and the gates; the authority to apply a
+change comes from a committed named-human approval, never from this doc.
 
 ## Why it exists
 
@@ -69,10 +74,9 @@ route remains blocked unless that exact probe reports `discoverable`.
   named-human `publish_ready` approval, never the default.
 - **Never** runs with `--skipconfirmation` -- that flag bypasses the local server's own
   per-write confirmation and is forbidden outright.
-- **Stays parked**: F016 is parked pending an owner-ratified ADR. Nothing in this repo
-  currently authorizes running either server for real; this doc and the contract
-  describe the shape the adapter MUST take if/when the park is lifted -- they do not
-  lift it.
+- **The write path is now BUILT and gated** (spec 149, 2026-08-18). Nine typed
+  preconditions must hold before a mutation, every one DERIVED from committed state
+  rather than accepted as a caller assertion. See the write-path section below.
 
 ### The recommendation matrix (plain language)
 
@@ -154,3 +158,56 @@ the runtime, not ahead of it.
   - Remote server getting-started: `https://learn.microsoft.com/en-us/power-bi/developer/mcp/remote-mcp-server-get-started`
   - Report Authoring skill: `https://learn.microsoft.com/en-us/power-bi/developer/projects/projects-report-authoring-skill`
   - Official skills bundle: `https://github.com/microsoft/skills-for-fabric`
+
+
+## The write path (slice 5, spec 149)
+
+Built 2026-08-18 under ADR 0018. Two legs, identical arguments so the dry run is a
+truthful preflight for the real thing:
+
+```bash
+seshat pbi-mcp plan-write --target <id> --operation <id>   # evaluates, mutates nothing
+seshat pbi-mcp apply      --target <id> --operation <id>   # applies, then validates
+```
+
+### The preconditions, and why each is DERIVED
+
+Every one is read from committed state. A precondition the requesting party supplies is
+a request, not a gate -- ask *checked against what?*
+
+| Precondition | Source of truth |
+|---|---|
+| `semantic_model_ready = pass` | the readiness record **at HEAD** |
+| readiness state readable | absent / malformed / unreadable all refuse |
+| readiness state **committed** | `gitstate.is_tracked_and_clean`; a worktree-only pass is refused |
+| named-human `publish_ready` approval | `rules.readiness_status.approval_is_shape_valid` (issue #487) |
+| the approval names **this** target | whole-token match, so `sales_model` never authorizes `sales_model_v2` |
+| the operation is approved for this target | resolved against `contracts/pbi-mcp-write-targets.yaml` |
+| the target is allowlisted | that same committed file -- there is no `--allow` on a write leg |
+| the artifact exists | never invented if absent |
+| the tree is clean, or a backup ref **resolves** | `git rev-parse --verify`, not a boolean attestation |
+
+The committed-state requirement is the one that matters most: an agent can write files,
+so a gate reading the working tree would let the agent author its own approval.
+
+### Exit codes
+
+`0` applied and validated (or a clean dry run) - `1` refused, nothing mutated -
+`2` applied then validation FAILED, rollback guidance printed - `3` **indeterminate**,
+the runtime stalled or died and the artifact may be half-written. 2 and 3 are
+deliberately distinct.
+
+### What a write never does
+
+It advances no readiness stage, writes no `approvals[]` entry, defines nothing, and
+never vendors the runtime (`npx`, external and unforked). Every run -- including a
+refusal -- writes exactly one score-free evidence record to
+`.seshat/pbi-mcp-write-evidence.json`, with an intent record landed *before* the
+mutation so a crash still leaves a trace.
+
+### Known blocked scope
+
+**FR-011b** (verifying the definition against a content hash recorded at approval time)
+is EXTERNALLY BLOCKED by owner decision: the hash needs a producer written by a named
+human at sign-off, and this feature is forbidden to write approvals. Operation
+resolution and target-match still apply.

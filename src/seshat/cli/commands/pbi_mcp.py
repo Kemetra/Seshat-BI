@@ -228,11 +228,145 @@ def _run_preflight(args) -> int:
     return 2 if result.status == "blocked" else 0
 
 
+def _utc_stamp() -> str:
+    """The run timestamp. Isolated so tests can pin it."""
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _probe_tree_clean(repo_root: Path) -> bool | None:
+    """Whether the working tree is clean, or None when it could not be probed.
+
+    None -- not True -- on any failure: an unprobeable git state must refuse
+    rather than pass the git-safety precondition by omission.
+
+    The adapter's OWN evidence artifact is excluded. Every run writes it, so
+    counting it would make ``plan-write`` dirty the tree it then reports as
+    clean: a second invocation would be refused for git-safety and the operator
+    pushed toward ``--backup-ref`` on a self-inflicted dirty state. Excluding it
+    here rather than relying on ``.gitignore`` is deliberate -- a user's own
+    project will not carry this repo's ignore rules.
+    """
+    from seshat.gitstate import run_git
+    from seshat.pbi_mcp_adapter.evidence import ARTIFACT_RELPATH
+
+    try:
+        # `--untracked-files=all` is required: the default collapses untracked
+        # files into their directory (`?? .seshat/`), so an exact-path exclusion
+        # would never match and every run would read as dirty.
+        status = run_git(repo_root, "status", "--porcelain", "--untracked-files=all")
+    except (OSError, RuntimeError):
+        return None
+    if status.returncode != 0:
+        return None
+    ours = ARTIFACT_RELPATH.replace("\\", "/")
+    for line in status.stdout.splitlines():
+        entry = line[3:].strip().strip('"').replace("\\", "/")
+        if entry and entry != ours:
+            return False
+    return True
+
+
+def _write_leg_payload(report) -> dict[str, object]:
+    """The ``--json`` body. Every string field goes through ``redact``."""
+    from seshat.pbi_mcp_adapter.evidence import ARTIFACT_RELPATH, redact
+
+    return {
+        "outcome": report.outcome,
+        "exit_code": report.exit_code,
+        "mutation_attempted": report.mutation_attempted,
+        "blockers": [redact(b) for b in report.blockers],
+        "rollback_guidance": [redact(line) for line in report.rollback_guidance],
+        # The FIXED repo-relative path, never `evidence_path.as_posix()`: that is
+        # absolute whenever `--repo` is, so it leaked the operator's home-directory
+        # path (the shape `inspect_release_artifacts` calls a "user path") into
+        # stdout and bypassed the output scanner, against the contract guarantee
+        # that no output carries a user path (Codex review, PR #659).
+        "evidence": (ARTIFACT_RELPATH if report.evidence_path is not None else None),
+    }
+
+
+def _report_write_leg(args, report) -> int:
+    """Print one write leg's outcome and return its exit code.
+
+    Split from :func:`_run_write_leg` so the guard-and-invoke half stays free of
+    presentation branching. This function decides nothing: the exit code comes
+    from the report it was handed.
+    """
+    from seshat.pbi_mcp_adapter.evidence import ARTIFACT_RELPATH, redact
+
+    if getattr(args, "as_json", False):
+        print(json.dumps(_write_leg_payload(report), indent=2, sort_keys=True))
+        return report.exit_code
+
+    prog = _prog(args)
+    print(f"{prog}: [{report.outcome}] target={args.target} op={args.operation}")
+    for blocker in report.blockers:
+        print(f"{prog}:   blocker {redact(blocker)}", file=sys.stderr)
+    if report.rollback_guidance:
+        print(f"{prog}: rollback:", file=sys.stderr)
+        for line in report.rollback_guidance:
+            print(f"{prog}:   {redact(line)}", file=sys.stderr)
+    if report.evidence_path is not None:
+        # Repo-relative here too -- the human line leaked the same absolute path.
+        print(f"{prog}: evidence {ARTIFACT_RELPATH}")
+    return report.exit_code
+
+
+def _run_write_leg(args, *, dry_run: bool) -> int:
+    """Shared body for ``plan-write`` and ``apply``.
+
+    One implementation, so the dry run cannot drift from the real thing.
+    """
+    from seshat.pbi_mcp.detect import BypassFlagRefused, classify_mcp_config
+    from seshat.pbi_mcp.scan import GeneratedSecretError
+    from seshat.pbi_mcp_adapter import orchestrate
+
+    repo_root = Path(args.repo)
+    # The config half of the bypass guard was dead on this path: orchestrate
+    # accepted config_state but nothing supplied it, so a machine-local .mcp.json
+    # carrying --skipconfirmation was never detected on a write. The verdict is
+    # already computed for the read-only legs; wire it in rather than trust argv
+    # alone (FR-002 covers BOTH arrival routes).
+    config_state = classify_mcp_config(repo_root / ".mcp.json")
+    try:
+        report = orchestrate.apply_write(
+            repo_root,
+            target_id=args.target,
+            operation_id=args.operation,
+            timestamp=_utc_stamp(),
+            tree_clean=_probe_tree_clean(repo_root),
+            backup_ref=getattr(args, "backup_ref", None),
+            argv=tuple(sys.argv[1:]),
+            config_state=config_state,
+            dry_run=dry_run,
+        )
+    except BypassFlagRefused as refusal:
+        print(f"{_prog(args)}: {refusal}", file=sys.stderr)
+        return 1
+    except GeneratedSecretError as refusal:
+        print(f"{_prog(args)}: refused -- {refusal}", file=sys.stderr)
+        return 1
+
+    return _report_write_leg(args, report)
+
+
+def _run_plan_write(args) -> int:
+    return _run_write_leg(args, dry_run=True)
+
+
+def _run_apply(args) -> int:
+    return _run_write_leg(args, dry_run=False)
+
+
 def pbi_mcp_main(args) -> int:
     handlers = {
         "doctor": _run_doctor,
         "generate-config": _run_generate_config,
         "preflight": _run_preflight,
+        "plan-write": _run_plan_write,
+        "apply": _run_apply,
     }
     handler = handlers.get(getattr(args, "pbi_mcp_cmd", None))
     if handler is None:

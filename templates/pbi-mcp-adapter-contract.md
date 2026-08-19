@@ -54,10 +54,22 @@ it requires; the adapter fails closed if that approval/evidence is absent.
 Enumerate EVERY external boundary this adapter touches. `publish-capable` implies the
 publish gate applies. Record the strongest connectivity above; list all here.
 
-- Opens a local stdio process to the vendored Power BI Modeling MCP binary
-  (`tools/powerbi-modeling-mcp/`, gitignored), which in turn reads/writes the local
-  Power BI Desktop / Fabric / on-disk PBIP-TMDL project (`local-file` + `local-service`
-  boundary).
+- Opens a local stdio process to the official Power BI Modeling MCP, invoked through
+  `npx` as an external, unforked, independently upgradeable dependency, which in turn
+  reads/writes the local Power BI Desktop / Fabric / on-disk PBIP-TMDL project
+  (`local-file` + `local-service` boundary).
+
+  > **Corrected 2026-08-18.** This clause previously described a *vendored* binary at
+  > `tools/powerbi-modeling-mcp/`. That contradicted ADR 0018, which rejects vendoring
+  > outright (the preview binary is not shippable payload, and Principle II requires
+  > external consumption), and it described an execution shape slice 5 does not use:
+  > `pbi_mcp_adapter/runner.py` invokes `npx --yes @microsoft/powerbi-modeling-mcp`.
+  >
+  > **Still open, owner-gated:** the `VENDORED_RUNTIME_DIR` constant at
+  > `src/seshat/pbi_mcp/detect.py` remains live and feeds
+  > `DetectedFacts.vendored_runtime`, which the shipped `seshat pbi-mcp doctor` reports
+  > in both its text and `--json` output. Retiring it therefore changes slices 1-4
+  > behaviour, so it is deliberately NOT removed here (spec 149, T053).
 - For the remote server: opens a Streamable HTTP connection to the published Power BI
   MCP endpoint, which queries an already-published semantic model in the Power BI
   Service (`external-service-connected` boundary; query-only, no local file writes).

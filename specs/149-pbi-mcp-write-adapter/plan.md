@@ -120,6 +120,9 @@ src/seshat/pbi_mcp_adapter/          # NEW — mirrors src/seshat/dagster_adapte
 ├── target.py                        # declared target allowlist resolution
 ├── git_safety.py                    # clean-or-declared-backup check
 ├── runner.py                        # npx stdio invocation; stdin=DEVNULL + own timeout
+│                                    # ^ DEVNULL IS WRONG HERE -- see research.md CORRECTED
+│                                    #   note and issue #660: the vendor is an MCP stdio
+│                                    #   server, so stdin is its protocol channel
 ├── validation.py                    # post-write validation, blocking + rollback guidance
 └── evidence.py                      # derived run record, both paths, score-free
 

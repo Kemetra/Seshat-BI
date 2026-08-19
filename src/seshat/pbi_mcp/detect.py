@@ -9,16 +9,25 @@ contacted; nothing is written.
 The readiness read mirrors the ``seshat.dagster_adapter.gate`` reader style
 (read-only by contract, missing artifacts reported as ``missing``, never
 guessed). It reads the WORKTREE files -- sufficient for a read-only advisory.
-The slice-5 mutation gate (owner-ADR-gated, NOT implemented here) must
-additionally require the committed state via ``gitstate.is_tracked_and_clean``
-per the #334 lesson: an uncommitted gate artifact is never a GO signal.
+
+**Updated 2026-08-18 (spec 149).** The slice-5 mutation gate now EXISTS, in
+``seshat.pbi_mcp_adapter.gate``, and it does require the committed state via
+``gitstate.is_tracked_and_clean`` per the #334 lesson -- an uncommitted gate
+artifact is never a GO signal. The worktree reads below remain correct for the
+read-only advisory family; never reuse them to authorize a mutation.
+
+This module also owns the standing bypass-flag prohibition for BOTH surfaces:
+:func:`classify_mcp_config` (the machine-local ``.mcp.json``) and
+:func:`classify_invocation_argv` (one invocation's argv) return advisory states,
+while :func:`refuse_if_bypass_flag` RAISES and is what the write path calls --
+one rule, one matcher, no verdict a caller can obtain and discard.
 """
 
 from __future__ import annotations
 
 import json
 import shutil
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -45,6 +54,12 @@ APPROVAL_RECORDED = "recorded"
 APPROVAL_ABSENT = "absent"
 
 VENDORED_RUNTIME_DIR = "tools/powerbi-modeling-mcp"
+
+#: The official vendor package. Defined HERE, not in the adapter, because
+#: `detect` is the lower layer (`pbi_mcp_adapter.runner` imports from it, never
+#: the reverse) and server IDENTITY is a detection concern. Server recognition
+#: matches on this, so aliasing the entry cannot hide it.
+VENDOR_PACKAGE = "@microsoft/powerbi-modeling-mcp"
 
 # Flags in the machine-local .mcp.json (Microsoft's documented spellings plus
 # the misspelling this repo once shipped; both count as write mode).
@@ -74,11 +89,27 @@ class DetectedFacts:
 
 def _is_powerbi_server(name: str, entry: dict) -> bool:
     """Only Power BI-shaped servers are classified -- an unrelated MCP server
-    in the same .mcp.json (a docs server, say) must not flip the verdict."""
+    in the same .mcp.json (a docs server, say) must not flip the verdict.
+
+    The ARGUMENT VECTOR counts, not just the name. `npx` invocations carry the
+    package in ``args``, so a config that aliases the official server (say
+    ``modeling``) named nothing Power BI-shaped and classified as ``absent`` --
+    handing the bypass guard a clean verdict while ``--skipconfirmation`` sat in
+    the same entry. Identity comes from what is RUN, not what it is called
+    (Codex review, PR #659).
+
+    Still narrow: the match is on the vendor package and the vendored runtime
+    path, both specific, so an unrelated server does not become Power BI-shaped.
+    """
     blob = " ".join(
         (name, str(entry.get("command", "")), str(entry.get("url", "")))
     ).lower()
-    return "powerbi" in blob or "pbi" in blob
+    if "powerbi" in blob or "pbi" in blob:
+        return True
+    return any(
+        VENDOR_PACKAGE in arg or VENDORED_RUNTIME_DIR in arg
+        for arg in _server_args(entry)
+    )
 
 
 def _server_args(entry: dict) -> list[str]:
@@ -116,8 +147,23 @@ def _carries_forbidden_flag(per_server_args: list[list[str]]) -> bool:
     return any(_FORBIDDEN_FLAG in arg for args in per_server_args for arg in args)
 
 
+def _is_write_flag(arg: str) -> bool:
+    """Whether one argument requests write mode.
+
+    Matches the bare flag and its ``=value`` form. The value form matters
+    because an exact membership test reads ``--readwrite=true`` as *not* write
+    mode -- harmless while nothing could be invoked in write mode (slices 2-4),
+    a fail-open once slice 5 makes it reachable.
+
+    The split is on ``=`` rather than a substring test so that a longer flag
+    which merely starts with the same letters (``--readwrite-dry-run``) is not
+    swept up as a write request.
+    """
+    return arg.split("=", 1)[0] in _WRITE_FLAGS
+
+
 def _requests_write_mode(per_server_args: list[list[str]]) -> bool:
-    return any(arg in _WRITE_FLAGS for args in per_server_args for arg in args)
+    return any(_is_write_flag(arg) for args in per_server_args for arg in args)
 
 
 def _all_read_only(per_server_args: list[list[str]]) -> bool:
@@ -171,6 +217,82 @@ def _transport_verdict(relevant: list[dict]) -> str:
     if _all_read_only([_server_args(entry) for entry in local]):
         return CONFIG_READ_ONLY
     return CONFIG_WRITE_MODE
+
+
+class BypassFlagRefused(ValueError):
+    """A confirmation-bypass flag was present -- the run is refused.
+
+    Raised, not returned. :func:`classify_mcp_config` and
+    :func:`classify_invocation_argv` return advisory *strings*, which each caller
+    then decides what to do with; that is right for the read-only advisory family
+    (a preflight wants to report the state, not abort), but it means the
+    prohibition is only as strong as each consumer's remembering to compare. For
+    the mutation path that is not a chokepoint -- a new callsite inherits nothing.
+    So the write path calls :func:`refuse_if_bypass_flag`, which cannot be
+    ignored, following the ``refuse_if_secret_shaped`` idiom in ``scan.py``.
+    """
+
+
+def refuse_if_bypass_flag(
+    argv: Sequence[str] = (),
+    *,
+    config_state: str | None = None,
+    context: str = "pbi-mcp write",
+) -> None:
+    """Raise unless neither the invocation nor the config requests a bypass.
+
+    Evaluated before ANY runtime invocation, in EVERY mode including read-only
+    and including in tests (FR-002). Returns None on success so it can only be
+    used as a guard -- there is no verdict to accidentally ignore.
+
+    Both inputs are checked because the flag can arrive either way, and the
+    verdict comes from the one shared matcher rather than a second copy.
+    """
+    if config_state == CONFIG_FORBIDDEN_FLAG:
+        raise BypassFlagRefused(
+            f"{context}: refused -- the machine-local MCP config carries "
+            f"{_FORBIDDEN_FLAG}; remove it before any write is attempted"
+        )
+    if config_state == CONFIG_UNPARSEABLE:
+        # An unreadable config is not a clean config. A truncated `.mcp.json`
+        # carrying --skipconfirmation classifies as `unparseable`, and treating
+        # that as safe let the flag through -- the same fail-open as a config the
+        # guard could not attribute to Power BI. Mirrors the gate's
+        # `tree_clean is None` posture: never probed refuses (Codex, PR #659).
+        raise BypassFlagRefused(
+            f"{context}: refused -- the machine-local MCP config could not be "
+            "parsed, so it cannot be shown to be free of "
+            f"{_FORBIDDEN_FLAG}; fix or remove the config before any write"
+        )
+    if classify_invocation_argv(argv) == CONFIG_FORBIDDEN_FLAG:
+        raise BypassFlagRefused(
+            f"{context}: refused -- the invocation carries {_FORBIDDEN_FLAG}. "
+            "This flag is prohibited in every mode, including read-only."
+        )
+
+
+def classify_invocation_argv(argv: Sequence[str]) -> str:
+    """Classify one INVOCATION's argv through the same flag matcher as config.
+
+    Spec 149 (F016 slice 5). Until write mode became reachable, the only place a
+    bypass flag could appear was the machine-local ``.mcp.json``, so
+    :func:`classify_mcp_config` was the whole story. An invocation can now carry
+    the flag too, and it must be judged by the SAME rule -- hence this delegates
+    to :func:`_flag_verdict` rather than owning a second matcher. One rule, one
+    enforcement path.
+
+    Args are lowercased first, mirroring what :func:`_server_args` does for the
+    config path; without it an argv-only case bypass (``--SkipConfirmation``)
+    would exist that the config path does not have.
+
+    Returns ``CONFIG_FORBIDDEN_FLAG``, ``CONFIG_WRITE_MODE``, or
+    ``CONFIG_READ_ONLY``. Read-only is the resting state: an invocation naming no
+    mode resolves to read-only, so write mode is never reached by omission
+    (FR-001).
+    """
+    lowered = [str(arg).lower() for arg in argv]
+    forced = _flag_verdict([lowered])
+    return forced if forced is not None else CONFIG_READ_ONLY
 
 
 def classify_mcp_config(path: Path) -> str:

@@ -89,6 +89,20 @@ for any deferred/gated item).
   > (vendoring is a rejected alternative) and the F032 row is externally blocked (both
   > Microsoft servers are public preview with no release to pin), leaving slice-6
   > timing as the only one genuinely open.
+  >
+  > **Updated 2026-08-18 (slice 5 BUILT).** Spec 149 was ratified by the owner and
+  > slice 5 is now implemented, not merely specified: `src/seshat/pbi_mcp_adapter/`
+  > (gate / evidence / runner / validation / drift / orchestrate) plus the
+  > `seshat pbi-mcp plan-write` and `seshat pbi-mcp apply` legs, behind twelve typed
+  > gate blockers. A write requires committed passing readiness, a shape-valid
+  > named-human `publish_ready` approval naming the target as a whole token, a
+  > committed allowlist entry, a resolved operation, and a clean tree or a resolvable
+  > backup ref -- and a successful write advances **no** readiness stage. Two scope
+  > carve-outs stand: **FR-011b** (verifying a definition against a content hash
+  > recorded at approval time) is EXTERNALLY BLOCKED, because the hash needs a producer
+  > written by a named human at sign-off and this feature is forbidden to write
+  > approvals; and **slice 6** remains gated on ADR decision 7, with all three of its
+  > prerequisites (tenant setting, Build permission, Copilot licence) outside this repo.
 - **F034 built page** -- a human builds the approved design in Power BI Desktop and
   commits the PBIR; the agent's procedure + trace + review are ready, and the gate
   already permits the build.

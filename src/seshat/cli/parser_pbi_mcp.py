@@ -1,9 +1,16 @@
-"""Argument definitions for the read-only Power BI MCP doctor family (#450).
+"""Argument definitions for the Power BI MCP family (#450 slices 2-4, spec 149).
 
 Same closed-vocabulary adapter-family shape as ``seshat dagster`` / ``seshat
 dbt`` (the sanctioned Option-B narrow-gate precedent): one ``pbi-mcp`` group,
-three read-only verbs, no raw MCP arguments accepted. Registration is
-stdlib-only; importing the root CLI never imports the pbi_mcp modules.
+no raw MCP arguments accepted. Registration is stdlib-only; importing the root
+CLI never imports the pbi_mcp modules.
+
+Five verbs: three read-only (``doctor``, ``generate-config``, ``preflight``) and
+two approval-gated write legs (``plan-write``, ``apply``) authorized by ADR 0018.
+The write legs deliberately expose NO escape hatch -- no ``--force``, no
+``--yes``, no ``--skip-*``, and notably no ``--allow``: the write allowlist is a
+committed artifact read from HEAD, because a caller who supplies the list that
+permits their own write has not been gated at all.
 """
 
 from __future__ import annotations
@@ -137,14 +144,80 @@ def _add_preflight_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_write_precondition_arguments(parser: argparse.ArgumentParser) -> None:
+    """The precondition inputs BOTH write legs must accept, identically.
+
+    Parity is not cosmetic: if ``plan-write`` and ``apply`` took different
+    inputs, the recommended dry run would report a different verdict than the
+    real thing and be useless as a preflight (Codex review, PR #656).
+
+    Note what is deliberately ABSENT: no ``--allow``. The write allowlist is a
+    committed artifact read from HEAD, because a caller who supplies the list
+    that permits their own write has not been gated at all.
+    """
+    parser.add_argument("--repo", default=".", help="repo root to operate in")
+    parser.add_argument(
+        "--target",
+        required=True,
+        help="declared target id from the committed allowlist",
+    )
+    parser.add_argument(
+        "--operation",
+        required=True,
+        help=(
+            "operation id, RESOLVED against the committed allowlist entry for "
+            "the target -- never free-form mutation text"
+        ),
+    )
+    parser.add_argument(
+        "--backup-ref",
+        dest="backup_ref",
+        default=None,
+        help=(
+            "git ref holding a backup, required when the tree is dirty; it must "
+            "actually resolve (verified with rev-parse), not merely be asserted"
+        ),
+    )
+    parser.add_argument(
+        "--json", dest="as_json", action="store_true", help="machine-readable output"
+    )
+
+
+def _add_plan_write_parser(sub: argparse._SubParsersAction) -> None:
+    parser = sub.add_parser(
+        "plan-write",
+        help=(
+            "dry run: evaluate every write precondition and report the verdict; "
+            "mutates nothing. Emits a deferred evidence record so the gate "
+            "cannot be probed without a trace"
+        ),
+    )
+    _add_write_precondition_arguments(parser)
+
+
+def _add_apply_parser(sub: argparse._SubParsersAction) -> None:
+    parser = sub.add_parser(
+        "apply",
+        help=(
+            "apply an already-approved semantic-model change through the "
+            "official Power BI MCP, behind the write gate; validates the "
+            "touched artifact afterwards and records what ran"
+        ),
+    )
+    _add_write_precondition_arguments(parser)
+
+
 def add_pbi_mcp_parsers(sub: argparse._SubParsersAction) -> None:
     """Register the closed pbi-mcp command vocabulary."""
     parser = sub.add_parser(
         "pbi-mcp",
         help=(
-            "read-only Power BI MCP doctor family: doctor / generate-config "
-            "/ preflight (#450 slices 2-4; F016 stays parked -- no mutation "
-            "path exists here)"
+            "Power BI MCP family: read-only doctor / generate-config / "
+            "preflight, plus the approval-gated write legs plan-write / apply "
+            "(#450 slices 2-4; F016 slice 5 per ADR 0018). A write requires a "
+            "committed passing stage, a named-human approval naming the target, "
+            "a committed allowlist entry, a resolved operation and a safe tree; "
+            "a successful write advances no readiness stage"
         ),
     )
     commands = parser.add_subparsers(dest="pbi_mcp_cmd", required=True)
@@ -152,5 +225,7 @@ def add_pbi_mcp_parsers(sub: argparse._SubParsersAction) -> None:
         _add_doctor_parser,
         _add_generate_config_parser,
         _add_preflight_parser,
+        _add_plan_write_parser,
+        _add_apply_parser,
     ):
         add_parser(commands)
