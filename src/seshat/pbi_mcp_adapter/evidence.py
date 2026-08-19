@@ -174,8 +174,13 @@ def _scan_payload_values(payload: dict[str, object]) -> None:
         refuse_if_secret_shaped(text, context=f"{ARTIFACT_RELPATH}:{field_name}")
 
 
-def _scrub_secret_shaped(text: str) -> tuple[str, tuple[str, ...]]:
+def scrub_secret_shaped(text: str) -> tuple[str, tuple[str, ...]]:
     """Replace every secret-shaped span in ``text``, naming what was replaced.
+
+    PUBLIC because two surfaces need it: this module's terminal records and the
+    CLI's ``--json`` verdict. :func:`redact` is layer ONE (DSN/URI components)
+    and cannot see a bare tenant GUID, so a writer that calls only ``redact``
+    leaks one -- measured, not assumed (PR #667).
 
     Uses the shipped :data:`SECRET_PATTERNS` table so this cannot drift from what
     the refusing chokepoint detects. Returns the scrubbed text and the labels that
@@ -200,7 +205,7 @@ def _redact_payload(payload: dict[str, object]) -> tuple[str, ...]:
 
     def scrub(value: object) -> object:
         if isinstance(value, str):
-            cleaned, labels = _scrub_secret_shaped(value)
+            cleaned, labels = scrub_secret_shaped(value)
             applied.update(labels)
             return cleaned
         if isinstance(value, list):
@@ -242,7 +247,7 @@ def render(record: RunEvidence) -> str:
         if applied:
             payload["redactions_applied"] = list(applied)
         text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
-        scrubbed, _ = _scrub_secret_shaped(text)
+        scrubbed, _ = scrub_secret_shaped(text)
         return scrubbed
     _scan_payload_values(payload)
     text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
