@@ -173,21 +173,36 @@ class GateVerdict:
 
     @property
     def cleared(self) -> bool:
-        """The ONLY GO signal. Every component must hold; never inferred."""
-        return (
-            self.stage_readable
-            and self.state_committed
-            and self.stage_pass
-            and self.approval is not None
-            and self.approval_names_target
-            and self.approval_names_operation
-            and self.operation_binds
-            and self.target_allowlisted
-            and self.target_exists
-            and self.git_safe
-            and self.authorized_path is not None
-            and bool(self.authorized_operation)
-            and not self.blockers
+        """The ONLY GO signal. Every component must hold; never inferred.
+
+        ``all()`` over an explicit tuple rather than a 13-term ``and``-chain: one
+        precondition per line either way, so nothing is hidden behind a helper,
+        but the reader sees a single conjunction instead of thirteen branches.
+        Equivalent because every element is a plain field read on a frozen
+        dataclass -- no side effects and no exceptions, so losing short-circuit
+        evaluation changes nothing. Verified exhaustively over all 8192 field
+        combinations against the previous chain.
+
+        Adding a precondition means adding a LINE here. It must never become a
+        call to a helper that groups several: the point of this list is that a
+        reviewer can answer "what clears this gate?" without leaving the function.
+        """
+        return all(
+            (
+                self.stage_readable,
+                self.state_committed,
+                self.stage_pass,
+                self.approval is not None,
+                self.approval_names_target,
+                self.approval_names_operation,
+                self.operation_binds,
+                self.target_allowlisted,
+                self.target_exists,
+                self.git_safe,
+                self.authorized_path is not None,
+                bool(self.authorized_operation),
+                not self.blockers,
+            )
         )
 
     @property
