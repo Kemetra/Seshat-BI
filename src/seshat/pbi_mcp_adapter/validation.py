@@ -25,6 +25,7 @@ The invalid states this type refuses to hold:
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -111,15 +112,23 @@ def rollback_guidance_for(target_path: str, backup_ref: str | None) -> tuple[str
 
     Named commands rather than prose: guidance an operator has to translate is
     guidance they will get wrong under pressure.
+
+    Both interpolated values are shell-quoted. A PBIP path with spaces -- routine
+    on Windows -- otherwise splits into several pathspecs and the promised rollback
+    fails exactly when it is needed. The ref is operator-supplied input, so
+    unquoted it can carry a second command into guidance the operator is told to
+    paste (Codex review, PR #659).
     """
+    path = shlex.quote(target_path)
     if backup_ref:
+        ref = shlex.quote(f"--source={backup_ref}")
         return (
-            f"git restore --source={backup_ref} -- {target_path}",
-            f"git diff --stat {backup_ref} -- {target_path}   # confirm restored",
+            f"git restore {ref} -- {path}",
+            f"git diff --stat {shlex.quote(backup_ref)} -- {path}   # confirm restored",
         )
     return (
-        f"git restore -- {target_path}   # discard the write (tree was clean)",
-        f"git status --short -- {target_path}   # confirm restored",
+        f"git restore -- {path}   # discard the write (tree was clean)",
+        f"git status --short -- {path}   # confirm restored",
     )
 
 

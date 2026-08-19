@@ -10,6 +10,7 @@ Review finding C2 in test form. Two independent vacuities are pinned here:
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -358,3 +359,61 @@ def test_unparseable_target_is_a_failure_not_a_silent_pass(tmp_path: Path) -> No
     )
     assert outcome.blockers, "a failure with no blocker is not actionable"
     assert outcome.rollback_guidance, "a destroyed target needs rollback guidance"
+
+
+def test_rollback_guidance_survives_a_path_with_spaces(tmp_path: Path) -> None:
+    """A PBIP path with spaces must still produce a runnable command.
+
+    Windows PBIP projects routinely live under paths with spaces. Unquoted
+    interpolation splits one pathspec into several, so the promised copy-paste
+    rollback fails precisely when it is needed -- right after a bad write. Parsed
+    with ``shlex.split`` (what a shell does), not ``str.split``, so the quoting is
+    what is under test rather than the test's own tokenizer.
+
+    Codex review, PR #659.
+    """
+    spaced = "My Model.SemanticModel/definition/sales model.tmdl"
+
+    def git(*args: str) -> None:
+        subprocess.run(
+            ["git", "-c", "commit.gpgsign=false", *args],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+        )
+
+    git("init", "-q")
+    git("config", "user.email", "t@e.invalid")
+    git("config", "user.name", "T")
+    artifact = tmp_path / spaced
+    artifact.parent.mkdir(parents=True)
+    original = "table sales_model\n"
+    artifact.write_text(original, encoding="utf-8")
+    git("add", "-A")
+    git("commit", "-q", "-m", "baseline", "--no-gpg-sign")
+
+    artifact.write_text("corrupted\n", encoding="utf-8")
+
+    guidance = validation.rollback_guidance_for(spaced, None)
+    restore = shlex.split(guidance[0].split("#")[0].strip())
+    subprocess.run(restore, cwd=tmp_path, check=True, capture_output=True, text=True)
+
+    assert artifact.read_text(encoding="utf-8") == original, (
+        "the emitted rollback did not restore a path containing spaces: "
+        f"{guidance[0]!r}"
+    )
+
+
+def test_rollback_guidance_neutralizes_a_hostile_ref(tmp_path: Path) -> None:
+    """A backup ref is user input, so it must not be able to inject a command.
+
+    Asserts on the TOKENS a shell would produce: the ref must arrive as one
+    argument to ``--source=``, never as a second command.
+    """
+    hostile = "HEAD; rm -rf ."
+    guidance = validation.rollback_guidance_for(TARGET_PATH, hostile)
+    tokens = shlex.split(guidance[0])
+    assert "rm" not in tokens, f"ref split into a second command: {tokens}"
+    assert any(t == f"--source={hostile}" for t in tokens), (
+        f"the ref did not survive as a single argument: {tokens}"
+    )
