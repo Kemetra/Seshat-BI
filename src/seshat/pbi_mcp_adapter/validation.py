@@ -188,6 +188,55 @@ def _target_was_examined(artifact: Path) -> bool:
     return parse_tmdl(text) is not None
 
 
+@dataclass(frozen=True)
+class _ValidationRun:
+    """What one validation run is about: the artifact and how to report on it."""
+
+    artifact: Path
+    target_path: str
+    backup_ref: str | None
+    checks_run: tuple[str, ...]
+
+
+def _outcome_for(returncode: int, run: _ValidationRun) -> ValidationOutcome:
+    """Turn one finished validator run into a verdict.
+
+    Split from :func:`validate_semantic_model` so invoking the validator and
+    judging its result read as two steps. Decides nothing about WHETHER to run --
+    it is handed a returncode and reports what that plus the artifact prove.
+    """
+    target_path, backup_ref = run.target_path, run.backup_ref
+    checks_run, artifact = run.checks_run, run.artifact
+    if returncode != 0:
+        return ValidationOutcome(
+            checks_run=checks_run,
+            artifacts_examined=(target_path,),
+            failed=(f"semantic-check exit {returncode}",),
+            rollback_guidance=rollback_guidance_for(target_path, backup_ref),
+            blockers=(BLOCKER_VALIDATION_FAILED,),
+        )
+
+    # Exit 0 is the validator's claim, not proof it looked at THIS file.
+    if not _target_was_examined(artifact):
+        return ValidationOutcome(
+            checks_run=checks_run,
+            artifacts_examined=(),
+            failed=(
+                "the validator did not examine the target: it is not a "
+                "parseable semantic-model artifact after the write",
+            ),
+            rollback_guidance=rollback_guidance_for(target_path, backup_ref),
+            blockers=(BLOCKER_READ_NOTHING,),
+        )
+    return ValidationOutcome(
+        checks_run=checks_run,
+        artifacts_examined=(target_path,),
+        failed=(),
+        rollback_guidance=(),
+        blockers=(),
+    )
+
+
 def validate_semantic_model(
     repo_root: Path,
     *,
@@ -244,31 +293,7 @@ def validate_semantic_model(
             blockers=(BLOCKER_VALIDATOR_ERROR,),
         )
 
-    if completed.returncode == 0:
-        # Exit 0 is the validator's claim, not proof it looked at THIS file.
-        if not _target_was_examined(artifact):
-            return ValidationOutcome(
-                checks_run=checks_run,
-                artifacts_examined=(),
-                failed=(
-                    "the validator did not examine the target: it is not a "
-                    "parseable semantic-model artifact after the write",
-                ),
-                rollback_guidance=rollback_guidance_for(target_path, backup_ref),
-                blockers=(BLOCKER_READ_NOTHING,),
-            )
-        return ValidationOutcome(
-            checks_run=checks_run,
-            artifacts_examined=(target_path,),
-            failed=(),
-            rollback_guidance=(),
-            blockers=(),
-        )
-
-    return ValidationOutcome(
-        checks_run=checks_run,
-        artifacts_examined=(target_path,),
-        failed=(f"semantic-check exit {completed.returncode}",),
-        rollback_guidance=rollback_guidance_for(target_path, backup_ref),
-        blockers=(BLOCKER_VALIDATION_FAILED,),
+    return _outcome_for(
+        completed.returncode,
+        _ValidationRun(artifact, target_path, backup_ref, checks_run),
     )
