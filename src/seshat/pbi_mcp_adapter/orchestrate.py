@@ -17,7 +17,6 @@ asserted: a caller who can hand in a cleared verdict is a caller who can lie.
 
 from __future__ import annotations
 
-import functools
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -123,14 +122,10 @@ class WriteReport:
 
 def _terminate(
     repo_root: Path,
+    identity: evidence.RunIdentity,
     *,
     exit_code: int,
     outcome: str,
-    target_id: str,
-    operation_id: str,
-    timestamp: str,
-    mode: str,
-    tool: str,
     mutation_attempted: bool,
     blockers: tuple[str, ...] = (),
     rollback_guidance: tuple[str, ...] = (),
@@ -140,13 +135,17 @@ def _terminate(
     One helper for both, so the report and the record cannot disagree -- an
     earlier version substituted a fallback blocker into the record only, and exit
     3 became reachable with an empty report blocker list.
+
+    ``identity`` carries who/what/when as one frozen value; the caller pre-binds
+    the four fixed fields and varies only ``tool`` via
+    :meth:`evidence.RunIdentity.with_tool`.
     """
     record = evidence.RunEvidence(
-        tool=tool,
-        mode=mode,
-        target_id=target_id,
-        operation_id=operation_id,
-        timestamp=timestamp,
+        tool=identity.tool,
+        mode=identity.mode,
+        target_id=identity.target_id,
+        operation_id=identity.operation_id,
+        timestamp=identity.timestamp,
         outcome=outcome,
         mutation_attempted=mutation_attempted,
         blockers=blockers,
@@ -163,27 +162,42 @@ def _terminate(
     )
 
 
-def _execute_and_confirm(
-    root,
-    *,
-    verdict,
-    entry,
-    guidance: tuple[str, ...],
-    backup_ref: str | None,
-    mcp_runner: object,
-    validator: object,
-    terminal,
-) -> WriteReport:
+@dataclass(frozen=True)
+class _Execution:
+    """Everything the execute/confirm phase needs, as one value.
+
+    Deliberately WITHOUT defaults. ``mcp_runner``, ``validator`` and ``terminal``
+    are injection seams: a default would let a call site omit one and still
+    construct, which is how an injected seam goes quietly dead. Requiring all
+    fields makes an incomplete construction a TypeError at the call site.
+    """
+
+    verdict: object
+    entry: object
+    guidance: tuple[str, ...]
+    backup_ref: str | None
+    mcp_runner: object
+    validator: object
+    terminal: object
+
+
+def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
     """Execute the authorized mutation, then prove it did what it claimed.
 
-    Split out of :func:`apply_write` so the pre-flight gates and the
+    Split out of :func:`_run_pipeline` so the pre-flight gates and the
     execute/confirm phase read as two things. Every exit here is terminal.
     """
+    verdict = plan.verdict
+    entry = plan.entry
+    guidance = plan.guidance
+    terminal = plan.terminal
     # A before/after snapshot, so a claim of success can be checked against what
     # actually changed. The target path and operation come from the VERDICT --
     # there is no parameter by which to substitute another.
     before = _snapshot(root)
-    result = runner.invoke(verdict, repo_root=root, read_only=False, runner=mcp_runner)
+    result = runner.invoke(
+        verdict, repo_root=root, read_only=False, runner=plan.mcp_runner
+    )
 
     if not result.succeeded:
         # A stalled or crashed runtime may have left the artifact half-written, so
@@ -213,7 +227,10 @@ def _execute_and_confirm(
 
     # A zero exit from the runtime is not confirmation.
     outcome = validation.validate_semantic_model(
-        root, target_path=entry.path, backup_ref=backup_ref, runner=validator
+        root,
+        target_path=entry.path,
+        backup_ref=plan.backup_ref,
+        runner=plan.validator,
     )
     if not outcome.passed:
         return terminal(
@@ -234,6 +251,126 @@ def _execute_and_confirm(
     )
 
 
+@dataclass(frozen=True)
+class _WriteRequest:
+    """What the caller asked for, as one value.
+
+    ``apply_write`` keeps its keyword-only public signature -- the CLI contract --
+    while the pipeline helpers pass one thing rather than re-threading nine
+    parameters each.
+    """
+
+    target_id: str
+    operation_id: str
+    timestamp: str
+    tree_clean: bool | None
+    backup_ref: str | None
+    argv: tuple[str, ...]
+    config_state: str | None
+    mcp_runner: object
+    validator: object
+    capability_profile: drift.RuntimeCapabilityProfile | None
+
+
+def _preflight(
+    root: Path, request: _WriteRequest, *, dry_run: bool
+) -> tuple[object, tuple[str, ...]]:
+    """Steps 1-3: the standing prohibition, the gate, then vendor drift.
+
+    Extracted as a unit because the three run in a fixed order and none may be
+    reordered or skipped. Returns the verdict plus any drift blockers; it decides
+    nothing terminal, so the caller still owns every exit and the evidence record
+    that goes with it.
+    """
+    # 1. The standing prohibition, before anything else, in every mode. Raises.
+    refuse_if_bypass_flag(
+        request.argv, config_state=request.config_state, context="pbi-mcp apply"
+    )
+
+    # 2. Every precondition, all derived inside the gate.
+    verdict = gate.evaluate(
+        root,
+        request.target_id,
+        request.operation_id,
+        tree_clean=request.tree_clean,
+        backup_ref=request.backup_ref,
+    )
+
+    # 3. Vendor preview drift. Gated on DRIFT rather than version compatibility:
+    # the supported range is permanently `unknown` while both servers are
+    # unreleased previews, so a compatibility gate would block forever.
+    profile = request.capability_profile
+    drift_blockers = profile.blockers if not dry_run and profile is not None else ()
+    return verdict, drift_blockers
+
+
+def _run_pipeline(root: Path, request: _WriteRequest, *, dry_run: bool) -> WriteReport:
+    """The governed sequence itself, over an already-bundled request.
+
+    Sequence, and it is not negotiable:
+    bypass guard -> gate -> drift -> [intent record] -> execute -> effect check
+    -> validate -> evidence.
+
+    Separated from the public :func:`apply_write` so the keyword-only CLI
+    signature stays exactly as the contract specifies while the pipeline reads
+    against one value.
+    """
+    mode = "readonly" if dry_run else "readwrite"
+    identity = evidence.RunIdentity(
+        tool="none",
+        mode=mode,
+        target_id=request.target_id,
+        operation_id=request.operation_id,
+        timestamp=request.timestamp,
+    )
+
+    def terminal(*, tool: str, **kwargs: object) -> WriteReport:
+        """Terminate with ``tool`` swapped into the pre-bound identity."""
+        return _terminate(root, identity.with_tool(tool), **kwargs)  # type: ignore[arg-type]
+
+    # 1-3. Bypass guard, gate, drift -- in that order, none skippable.
+    verdict, drift_blockers = _preflight(root, request, dry_run=dry_run)
+
+    if not verdict.cleared or drift_blockers:
+        return terminal(
+            exit_code=EXIT_REFUSED,
+            outcome="blocked",
+            tool="none",
+            mutation_attempted=False,
+            blockers=(*verdict.blockers, *drift_blockers),
+        )
+
+    allowlist, _ = gate.read_allowlist(root)
+    entry = allowlist[request.target_id]
+    guidance = validation.rollback_guidance_for(entry.path, request.backup_ref)
+
+    if dry_run:
+        # Everything cleared, but plan-write mutates nothing by contract.
+        return terminal(
+            exit_code=EXIT_OK,
+            outcome="deferred",
+            tool="none",
+            mutation_attempted=False,
+        )
+
+    # 4. Intent BEFORE the mutation, so a crash still leaves a trace.
+    evidence.write_intent(root, identity.with_tool(runner.VENDOR_PACKAGE))
+
+    # 5-7. Execute, confirm the effect, validate.
+    return _execute_and_confirm(
+        root,
+        _Execution(
+            verdict=verdict,
+            entry=entry,
+            guidance=guidance,
+            backup_ref=request.backup_ref,
+            mcp_runner=request.mcp_runner,
+            validator=request.validator,
+            terminal=terminal,
+        ),
+    )
+
+
 def apply_write(
     repo_root: Path,
     *,
@@ -251,85 +388,28 @@ def apply_write(
 ) -> WriteReport:
     """Run the governed write pipeline for one target.
 
-    Sequence, and it is not negotiable:
-    bypass guard -> gate -> drift -> [intent record] -> execute -> effect check
-    -> validate -> evidence.
+    The public entry point, whose keyword-only signature is the CLI contract in
+    ``contracts/cli-contract.md``. It bundles the request and delegates; the
+    sequence lives in :func:`_run_pipeline`.
 
     ``dry_run`` is the ``plan-write`` leg: it evaluates every precondition and
     mutates nothing. It still emits a ``deferred`` evidence record, so "every run
     produces exactly one record" stays literally true and an operator cannot probe
     the gate repeatedly without a trace.
     """
-    root = Path(repo_root)
-    mode = "readonly" if dry_run else "readwrite"
-    terminal = functools.partial(
-        _terminate,
-        root,
-        target_id=target_id,
-        operation_id=operation_id,
-        timestamp=timestamp,
-        mode=mode,
-    )
-
-    # 1. The standing prohibition, before anything else, in every mode. Raises.
-    refuse_if_bypass_flag(argv, config_state=config_state, context="pbi-mcp apply")
-
-    # 2. Every precondition, all derived inside the gate.
-    verdict = gate.evaluate(
-        root, target_id, operation_id, tree_clean=tree_clean, backup_ref=backup_ref
-    )
-
-    # 3. Vendor preview drift. Gated on DRIFT rather than version compatibility:
-    # the supported range is permanently `unknown` while both servers are
-    # unreleased previews, so a compatibility gate would block forever.
-    drift_blockers = (
-        capability_profile.blockers
-        if not dry_run and capability_profile is not None
-        else ()
-    )
-
-    if not verdict.cleared or drift_blockers:
-        return terminal(
-            exit_code=EXIT_REFUSED,
-            outcome="blocked",
-            tool="none",
-            mutation_attempted=False,
-            blockers=(*verdict.blockers, *drift_blockers),
-        )
-
-    allowlist, _ = gate.read_allowlist(root)
-    entry = allowlist[target_id]
-    guidance = validation.rollback_guidance_for(entry.path, backup_ref)
-
-    if dry_run:
-        # Everything cleared, but plan-write mutates nothing by contract.
-        return terminal(
-            exit_code=EXIT_OK,
-            outcome="deferred",
-            tool="none",
-            mutation_attempted=False,
-        )
-
-    # 4. Intent BEFORE the mutation, so a crash still leaves a trace.
-    evidence.write_intent(
-        root,
-        evidence.RunIdentity(
-            tool=runner.VENDOR_PACKAGE,
-            mode=mode,
+    return _run_pipeline(
+        Path(repo_root),
+        _WriteRequest(
             target_id=target_id,
             operation_id=operation_id,
             timestamp=timestamp,
+            tree_clean=tree_clean,
+            backup_ref=backup_ref,
+            argv=argv,
+            config_state=config_state,
+            mcp_runner=mcp_runner,
+            validator=validator,
+            capability_profile=capability_profile,
         ),
-    )
-
-    # 5-7. Execute, confirm the effect, validate.
-    return _execute_and_confirm(
-        root,
-        verdict=verdict,
-        entry=entry,
-        guidance=guidance,
-        backup_ref=backup_ref,
-        mcp_runner=mcp_runner,
-        validator=validator,
-        terminal=terminal,
+        dry_run=dry_run,
     )

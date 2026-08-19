@@ -28,7 +28,7 @@ Three review findings shaped this module:
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from seshat.dagster_adapter import OUTCOMES
@@ -217,6 +217,16 @@ class RunIdentity:
     target_id: str
     operation_id: str
     timestamp: str
+
+    def with_tool(self, tool: str) -> RunIdentity:
+        """The same run, attributed to a different tool.
+
+        ``tool`` is the one field that varies per terminal state ("none" for a
+        refusal, the vendor package once the runtime is reached) while the other
+        four are fixed for the whole run. Returning a new frozen value keeps the
+        identity immutable rather than letting a caller mutate it late.
+        """
+        return replace(self, tool=tool)
 
 
 def write_intent(repo_root: Path, identity: RunIdentity) -> Path:
