@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -119,16 +120,21 @@ def test_apply_leg_is_registered() -> None:
 # --------------------------------------------------------------------------
 
 
+def _choice_maps(holder: object) -> Iterator[dict[str, object]]:
+    """Every ``choices`` dict directly on ``holder``'s argparse actions."""
+    for action in getattr(holder, "_actions", []):
+        choices = getattr(action, "choices", None)
+        if isinstance(choices, dict):
+            yield choices
+
+
 def _subparser_choices(parser: object) -> dict[str, object]:
     """The subcommand map under the ``pbi-mcp`` group, or an empty map."""
-    for action in getattr(parser, "_actions", []):
-        choices = getattr(action, "choices", None)
-        if isinstance(choices, dict) and "pbi-mcp" in choices:
-            family = choices["pbi-mcp"]
-            for sub_action in getattr(family, "_actions", []):
-                sub_choices = getattr(sub_action, "choices", None)
-                if isinstance(sub_choices, dict):
-                    return sub_choices
+    for choices in _choice_maps(parser):
+        if "pbi-mcp" not in choices:
+            continue
+        for sub_choices in _choice_maps(choices["pbi-mcp"]):
+            return sub_choices
     return {}
 
 
