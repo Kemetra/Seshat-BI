@@ -323,9 +323,31 @@ def test_redact_alone_cannot_see_a_tenant_guid() -> None:
 
 
 def test_a_secret_shaped_record_is_refused_not_written(tmp_path: Path) -> None:
+    # Post-mutation: REDACTED, not refused -- suppressing a record after the
+    # artifact changed would leave a mutated model with no trace. The property
+    # that matters is that the secret does not reach disk.
+    path = evidence.finalize(tmp_path, _record(tool=r"C:\Users\ahmed\mcp.exe"))
+    written = path.read_text(encoding="utf-8")
+    assert "ahmed" not in written
+    assert r"C:\Users" not in written
+    assert json.loads(written)["redactions_applied"] == ["Windows user path"]
+
+    # Pre-mutation: still REFUSED. Nothing was touched, so failing the run is the
+    # safe outcome and there is no audit trail to destroy.
     with pytest.raises(GeneratedSecretError):
-        evidence.finalize(tmp_path, _record(tool=r"C:\Users\ahmed\mcp.exe"))
-    assert not evidence.evidence_path(tmp_path).is_file()
+        evidence.finalize(
+            tmp_path,
+            _record(
+                tool=r"C:\Users\ahmed\mcp.exe",
+                outcome="blocked",
+                mutation_attempted=False,
+                blockers=("PBIMCP-GATE-01",),
+            ),
+        )
+    # The refusal wrote NOTHING: the file still holds the earlier redacted record,
+    # unchanged. (It cannot be asserted absent -- the post-mutation call above
+    # legitimately created it.)
+    assert evidence.evidence_path(tmp_path).read_text(encoding="utf-8") == written
 
 
 # --------------------------------------------------------------------------
@@ -360,13 +382,107 @@ def test_json_escaping_cannot_hide_a_windows_path_from_the_scanner() -> None:
         "the JSON-encoded form is NOT caught by a text scan -- which is exactly "
         "why render() must scan raw values first"
     )
+    # Post-mutation redacts; the point of the test is that JSON escaping cannot
+    # hide the path from the scanner, so assert the raw value is GONE.
+    rendered = evidence.render(_record(target_id=leaky))
+    assert "ahmed" not in rendered
+    assert "Users" not in rendered.replace("user path", "")
+
+    # Pre-mutation still refuses, which is where the doubled-backslash fail-open
+    # would have mattered.
     with pytest.raises(GeneratedSecretError):
-        evidence.render(_record(target_id=leaky))
+        evidence.render(
+            _record(
+                target_id=leaky,
+                outcome="blocked",
+                mutation_attempted=False,
+                blockers=("PBIMCP-GATE-01",),
+            )
+        )
 
 
 def test_secret_in_a_list_field_is_also_refused() -> None:
     """Blockers and rollback guidance are scanned too, not just scalars."""
+    # A LIST field is scrubbed too, not just top-level strings.
+    rendered = evidence.render(
+        _record(rollback_guidance=(r"git restore C:\Users\ahmed\x.tmdl",))
+    )
+    assert "ahmed" not in rendered
+
     with pytest.raises(GeneratedSecretError):
         evidence.render(
-            _record(rollback_guidance=(r"git restore C:\Users\ahmed\x.tmdl",))
+            _record(
+                rollback_guidance=(r"git restore C:\Users\ahmed\x.tmdl",),
+                outcome="blocked",
+                mutation_attempted=False,
+                blockers=("PBIMCP-GATE-01",),
+            )
+        )
+
+
+# --------------------------------------------------------------------------
+# Codex P1 (PR #659): after a mutation, REFUSING the record is worse than
+# redacting it -- the artifact is already changed
+# --------------------------------------------------------------------------
+
+GUID_REF = "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
+
+
+def _post_mutation_record(**overrides: object) -> evidence.RunEvidence:
+    """A terminal record for a run that DID attempt a mutation."""
+    fields: dict[str, object] = {
+        "tool": "vendor",
+        "mode": "readwrite",
+        "target_id": "sales_model",
+        "operation_id": "update_measure",
+        "timestamp": STAMP,
+        "outcome": "failed",
+        "mutation_attempted": True,
+        "blockers": ("PBIMCP-VAL-01",),
+        "rollback_guidance": (f"git restore --source={GUID_REF} -- models/x.tmdl",),
+    }
+    fields.update(overrides)
+    return evidence.RunEvidence(**fields)  # type: ignore[arg-type]
+
+
+def test_a_post_mutation_record_is_redacted_not_refused(tmp_path: Path) -> None:
+    """A GUID-shaped but VALID backup tag must not suppress terminal evidence.
+
+    The artifact has already changed. Refusing to write the record leaves the
+    operator with exit 1, no rollback commands, and a stale `deferred` intent --
+    a mutated model with no guidance, which is the exact untraceable mutation
+    this feature exists to eliminate.
+
+    Codex review, PR #659 (P1).
+    """
+    path = evidence.finalize(tmp_path, _post_mutation_record())
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["outcome"] == "failed"
+    assert payload["mutation_attempted"] is True
+    assert payload["rollback_guidance"], "the operator needs rollback guidance"
+    # The GUID itself must NOT survive: redacted, not passed through.
+    assert GUID_REF not in path.read_text(encoding="utf-8")
+    # And the redaction must be RECORDED, never silent.
+    assert payload.get("redactions_applied"), (
+        "a record that was scrubbed must say so; a silent swap is its own fail-open"
+    )
+
+
+def test_a_pre_mutation_record_still_refuses(tmp_path: Path) -> None:
+    """The refusing posture is unchanged where refusal costs nothing.
+
+    Nothing was touched yet, so failing the run is the safe outcome and there is
+    no audit trail to destroy. Without this, the fix above would have weakened the
+    chokepoint everywhere instead of only after a mutation.
+    """
+    with pytest.raises(GeneratedSecretError):
+        evidence.finalize(
+            tmp_path,
+            _post_mutation_record(
+                outcome="blocked",
+                mutation_attempted=False,
+                rollback_guidance=(),
+                blockers=(f"tenant {GUID_REF}",),
+            ),
         )

@@ -32,7 +32,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from seshat.dagster_adapter import OUTCOMES
-from seshat.pbi_mcp.scan import refuse_if_secret_shaped
+from seshat.pbi_mcp.scan import SECRET_PATTERNS, refuse_if_secret_shaped
 from seshat.redaction_core import (
     conninfo_component_values,
     replace_fragments,
@@ -174,6 +174,46 @@ def _scan_payload_values(payload: dict[str, object]) -> None:
         refuse_if_secret_shaped(text, context=f"{ARTIFACT_RELPATH}:{field_name}")
 
 
+def _scrub_secret_shaped(text: str) -> tuple[str, tuple[str, ...]]:
+    """Replace every secret-shaped span in ``text``, naming what was replaced.
+
+    Uses the shipped :data:`SECRET_PATTERNS` table so this cannot drift from what
+    the refusing chokepoint detects. Returns the scrubbed text and the labels that
+    matched -- the labels are what makes the substitution AUDITABLE rather than a
+    silent swap.
+    """
+    applied: list[str] = []
+    scrubbed = text
+    for label, pattern in SECRET_PATTERNS:
+        if pattern.search(scrubbed):
+            scrubbed = pattern.sub(REDACTED, scrubbed)
+            applied.append(label)
+    return scrubbed, tuple(applied)
+
+
+def _redact_payload(payload: dict[str, object]) -> tuple[str, ...]:
+    """Scrub every string field IN PLACE; return the labels that matched.
+
+    Only reached on the post-mutation path -- see :func:`render`.
+    """
+    applied: set[str] = set()
+
+    def scrub(value: object) -> object:
+        if isinstance(value, str):
+            cleaned, labels = _scrub_secret_shaped(value)
+            applied.update(labels)
+            return cleaned
+        if isinstance(value, list):
+            return [scrub(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(scrub(item) for item in value)
+        return value
+
+    for key, value in list(payload.items()):
+        payload[key] = scrub(value)
+    return tuple(sorted(applied))
+
+
 def render(record: RunEvidence) -> str:
     """Deterministic JSON for one record, refused if secret-shaped.
 
@@ -183,9 +223,27 @@ def render(record: RunEvidence) -> str:
     payload = record.to_payload()
     # Layer TWO: the shipped chokepoint. Covers tenant GUIDs, Windows and macOS
     # user paths, credential assignments and managed-database endpoints -- the
-    # classes derive-then-replace cannot see. It REFUSES rather than replacing,
-    # so a leak fails the run instead of shipping a half-scrubbed record.
+    # classes derive-then-replace cannot see.
+    #
+    # It REFUSES rather than replacing, so a leak fails the run instead of
+    # shipping a half-scrubbed record -- but ONLY where refusing is the safe
+    # outcome. Once a mutation has been attempted the artifact has already
+    # changed, and suppressing the terminal record leaves the operator with no
+    # rollback guidance and a stale `deferred` intent: a mutated model with no
+    # trace, which is the untraceable mutation this feature exists to eliminate.
+    # A legitimate value can be secret-SHAPED (a backup tag whose name is a
+    # GUID), so refusal there is a real outcome, not a hypothetical.
+    #
+    # Post-mutation therefore REDACTS and records which patterns matched, so the
+    # substitution is auditable rather than silent (Codex review, PR #659).
     # Raw values FIRST (JSON escaping would hide a Windows path from the scanner).
+    if record.mutation_attempted:
+        applied = _redact_payload(payload)
+        if applied:
+            payload["redactions_applied"] = list(applied)
+        text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+        scrubbed, _ = _scrub_secret_shaped(text)
+        return scrubbed
     _scan_payload_values(payload)
     text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
     return refuse_if_secret_shaped(text, context=ARTIFACT_RELPATH)
