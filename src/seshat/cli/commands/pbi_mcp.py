@@ -268,6 +268,50 @@ def _probe_tree_clean(repo_root: Path) -> bool | None:
     return True
 
 
+def _write_leg_payload(report) -> dict[str, object]:
+    """The ``--json`` body. Every string field goes through ``redact``."""
+    from seshat.pbi_mcp_adapter.evidence import redact
+
+    return {
+        "outcome": report.outcome,
+        "exit_code": report.exit_code,
+        "mutation_attempted": report.mutation_attempted,
+        "blockers": [redact(b) for b in report.blockers],
+        "rollback_guidance": [redact(line) for line in report.rollback_guidance],
+        "evidence": (
+            report.evidence_path.as_posix()
+            if report.evidence_path is not None
+            else None
+        ),
+    }
+
+
+def _report_write_leg(args, report) -> int:
+    """Print one write leg's outcome and return its exit code.
+
+    Split from :func:`_run_write_leg` so the guard-and-invoke half stays free of
+    presentation branching. This function decides nothing: the exit code comes
+    from the report it was handed.
+    """
+    from seshat.pbi_mcp_adapter.evidence import redact
+
+    if getattr(args, "as_json", False):
+        print(json.dumps(_write_leg_payload(report), indent=2, sort_keys=True))
+        return report.exit_code
+
+    prog = _prog(args)
+    print(f"{prog}: [{report.outcome}] target={args.target} op={args.operation}")
+    for blocker in report.blockers:
+        print(f"{prog}:   blocker {redact(blocker)}", file=sys.stderr)
+    if report.rollback_guidance:
+        print(f"{prog}: rollback:", file=sys.stderr)
+        for line in report.rollback_guidance:
+            print(f"{prog}:   {redact(line)}", file=sys.stderr)
+    if report.evidence_path is not None:
+        print(f"{prog}: evidence {report.evidence_path.as_posix()}")
+    return report.exit_code
+
+
 def _run_write_leg(args, *, dry_run: bool) -> int:
     """Shared body for ``plan-write`` and ``apply``.
 
@@ -303,42 +347,7 @@ def _run_write_leg(args, *, dry_run: bool) -> int:
         print(f"{_prog(args)}: refused -- {refusal}", file=sys.stderr)
         return 1
 
-    from seshat.pbi_mcp_adapter.evidence import redact
-
-    if getattr(args, "as_json", False):
-        print(
-            json.dumps(
-                {
-                    "outcome": report.outcome,
-                    "exit_code": report.exit_code,
-                    "mutation_attempted": report.mutation_attempted,
-                    "blockers": [redact(b) for b in report.blockers],
-                    "rollback_guidance": [
-                        redact(line) for line in report.rollback_guidance
-                    ],
-                    "evidence": (
-                        report.evidence_path.as_posix()
-                        if report.evidence_path is not None
-                        else None
-                    ),
-                },
-                indent=2,
-                sort_keys=True,
-            )
-        )
-        return report.exit_code
-
-    prog = _prog(args)
-    print(f"{prog}: [{report.outcome}] target={args.target} op={args.operation}")
-    for blocker in report.blockers:
-        print(f"{prog}:   blocker {redact(blocker)}", file=sys.stderr)
-    if report.rollback_guidance:
-        print(f"{prog}: rollback:", file=sys.stderr)
-        for line in report.rollback_guidance:
-            print(f"{prog}:   {redact(line)}", file=sys.stderr)
-    if report.evidence_path is not None:
-        print(f"{prog}: evidence {report.evidence_path.as_posix()}")
-    return report.exit_code
+    return _report_write_leg(args, report)
 
 
 def _run_plan_write(args) -> int:
