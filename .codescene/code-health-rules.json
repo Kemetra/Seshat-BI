@@ -1,0 +1,9 @@
+{
+  "rule_sets" : [ {
+    "matching_content_path" : "src/seshat/pbi_mcp_adapter/orchestrate.py",
+    "thresholds" : [ {
+      "name" : "function_max_arguments",
+      "value" : 12
+    } ]
+  } ]
+}
