@@ -249,10 +249,17 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
     if not result.succeeded:
         # A stalled or crashed runtime may have left the artifact half-written, so
         # this is indeterminate rather than a clean failure.
+        #
+        # Either way the outcome is `blocked`, and the exit code carries the
+        # difference. `cli-contract.md` defines exit 1 as "Refused before
+        # execution ... Evidence outcome `blocked`. Nothing was mutated." and exit
+        # 3 as indeterminate, also `blocked`. Recording `failed` for a runtime
+        # that never launched (npx absent, say) gave evidence consumers a state
+        # the contract does not define for exit 1 (Codex review, PR #659).
         indeterminate = result.mutation_attempted
         return terminal(
             exit_code=EXIT_INDETERMINATE if indeterminate else EXIT_REFUSED,
-            outcome="blocked" if indeterminate else "failed",
+            outcome="blocked",
             tool=runner.VENDOR_PACKAGE,
             mutation_attempted=result.mutation_attempted,
             blockers=result.blockers or (runner.BLOCKER_RUNTIME_UNEXPLAINED,),

@@ -596,3 +596,31 @@ def test_an_out_of_scope_write_to_a_quoted_path_is_caught(tmp_path: Path) -> Non
     assert orchestrate.BLOCKER_OUT_OF_SCOPE_CHANGE in blockers, (
         "an out-of-scope write to a git-quoted path was not detected"
     )
+
+
+def test_a_pre_launch_runtime_failure_is_blocked_not_failed(ready_repo: Path) -> None:
+    """Exit 1 with no mutation is `blocked` per the CLI contract, not `failed`.
+
+    `contracts/cli-contract.md` row for exit 1: "Refused before execution
+    (invariant or precondition). Evidence outcome `blocked`. Nothing was mutated."
+    When `npx` is absent the runtime never starts, so `mutation_attempted` is
+    False and exit 1 is correct -- but the record said `failed`, giving evidence
+    consumers a state the contract does not define for that exit code.
+
+    Codex review, PR #659.
+    """
+
+    def cannot_launch(argv: list[str], cwd: Path):
+        raise FileNotFoundError("npx not found")
+
+    report = _apply(ready_repo, mcp_runner=cannot_launch)
+
+    assert report.exit_code == orchestrate.EXIT_REFUSED
+    assert not report.mutation_attempted
+    assert report.outcome == "blocked", (
+        f"exit 1 with no mutation recorded outcome {report.outcome!r}; the "
+        "contract defines that state as 'blocked'"
+    )
+    payload = json.loads(report.evidence_path.read_text(encoding="utf-8"))
+    assert payload["outcome"] == "blocked"
+    assert payload["mutation_attempted"] is False
