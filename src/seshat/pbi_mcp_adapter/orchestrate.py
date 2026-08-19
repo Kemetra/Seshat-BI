@@ -181,7 +181,11 @@ class _Execution:
     """
 
     verdict: object
-    entry: object
+    #: The path the GATE authorized, taken from the cleared verdict. Never
+    #: re-read from the allowlist after authorization: a second read can see a
+    #: different HEAD or worktree, and then the executed write, the effect check,
+    #: the validation and the rollback guidance can all refer to different paths.
+    authorized_path: str
     guidance: tuple[str, ...]
     backup_ref: str | None
     mcp_runner: object
@@ -196,7 +200,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
     execute/confirm phase read as two things. Every exit here is terminal.
     """
     verdict = plan.verdict
-    entry = plan.entry
+    authorized_path = plan.authorized_path
     guidance = plan.guidance
     terminal = plan.terminal
     # A before/after snapshot, so a claim of success can be checked against what
@@ -222,7 +226,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
 
     # Did the run do what it was authorized to do? A no-op and an out-of-scope
     # mutation both previously reported `materialized`.
-    effect_blockers = _effect_blockers(before, _snapshot(root), entry.path)
+    effect_blockers = _effect_blockers(before, _snapshot(root), authorized_path)
     if effect_blockers:
         return terminal(
             exit_code=EXIT_VALIDATION_FAILED,
@@ -236,7 +240,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
     # A zero exit from the runtime is not confirmation.
     outcome = validation.validate_semantic_model(
         root,
-        target_path=entry.path,
+        target_path=authorized_path,
         backup_ref=plan.backup_ref,
         runner=plan.validator,
     )
@@ -347,9 +351,13 @@ def _run_pipeline(root: Path, request: _WriteRequest, *, dry_run: bool) -> Write
             blockers=(*verdict.blockers, *drift_blockers),
         )
 
-    allowlist, _ = gate.read_allowlist(root)
-    entry = allowlist[request.target_id]
-    guidance = validation.rollback_guidance_for(entry.path, request.backup_ref)
+    # The gate already resolved and bound the target. `cleared` requires
+    # `authorized_path is not None`, so past the refusal above it is present --
+    # and re-reading the allowlist here would both risk a KeyError BEFORE any
+    # evidence record exists (violating FR-015) and let the executed path drift
+    # from the authorized one (Codex review, PR #659).
+    authorized_path = str(verdict.authorized_path)
+    guidance = validation.rollback_guidance_for(authorized_path, request.backup_ref)
 
     if dry_run:
         # Everything cleared, but plan-write mutates nothing by contract.
@@ -368,7 +376,7 @@ def _run_pipeline(root: Path, request: _WriteRequest, *, dry_run: bool) -> Write
         root,
         _Execution(
             verdict=verdict,
-            entry=entry,
+            authorized_path=authorized_path,
             guidance=guidance,
             backup_ref=request.backup_ref,
             mcp_runner=request.mcp_runner,
