@@ -270,9 +270,23 @@ def _probe_tree_clean(repo_root: Path) -> bool | None:
 
 def _write_leg_payload(report) -> dict[str, object]:
     """The ``--json`` body. Every string field goes through ``redact``."""
-    from seshat.pbi_mcp_adapter.evidence import ARTIFACT_RELPATH, redact
+    from seshat.pbi_mcp_adapter.evidence import (
+        ARTIFACT_RELPATH,
+        AUTHORITY,
+        redact,
+    )
 
     return {
+        # Every key `contracts/cli-contract.md` documents. `target` and `mode`
+        # let a consumer associate the verdict with the governed run it came
+        # from; `validation` shows what was actually verified (issue #662).
+        "target": redact(report.target_id),
+        "mode": report.mode,
+        "authority": AUTHORITY,
+        "validation": {
+            "checks_run": [redact(c) for c in report.checks_run],
+            "failed": [redact(f) for f in report.validation_failed],
+        },
         "outcome": report.outcome,
         "exit_code": report.exit_code,
         "mutation_attempted": report.mutation_attempted,
