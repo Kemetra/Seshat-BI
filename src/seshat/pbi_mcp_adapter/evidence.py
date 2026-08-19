@@ -253,29 +253,21 @@ def finalize(repo_root: Path, record: RunEvidence) -> Path:
     return path
 
 
-def refusal_record(
-    *,
-    target_id: str,
-    operation_id: str,
-    timestamp: str,
-    blockers: tuple[str, ...],
-    tool: str = "none",
-    mode: str = "readonly",
-) -> RunEvidence:
+def refusal_record(identity: RunIdentity, *, blockers: tuple[str, ...]) -> RunEvidence:
     """The record for a run that never reached the runtime.
 
     ``mutation_attempted`` is false, which is the whole point of the field: an
-    auditor reading records rather than exit codes can tell this apart from a
-    run that executed and left state indeterminate.
+    auditor reading records rather than exit codes can tell this apart from a run
+    that executed and left state indeterminate.
     """
     if not blockers:
         raise EvidenceRefused("a refusal record must name at least one blocker")
     return RunEvidence(
-        tool=tool,
-        mode=mode,
-        target_id=target_id,
-        operation_id=operation_id,
-        timestamp=timestamp,
+        tool=identity.tool,
+        mode=identity.mode,
+        target_id=identity.target_id,
+        operation_id=identity.operation_id,
+        timestamp=identity.timestamp,
         outcome="blocked",
         mutation_attempted=False,
         blockers=blockers,

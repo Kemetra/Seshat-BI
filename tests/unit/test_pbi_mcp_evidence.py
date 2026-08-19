@@ -62,9 +62,13 @@ def test_evidence_written_on_the_failure_path(tmp_path: Path) -> None:
 def test_evidence_written_on_the_refusal_path(tmp_path: Path) -> None:
     """A refusal is a run, and a run produces exactly one record (FR-015)."""
     record = evidence.refusal_record(
-        target_id="sales_model",
-        operation_id="update_measure",
-        timestamp=STAMP,
+        evidence.RunIdentity(
+            tool="none",
+            mode="readonly",
+            target_id="sales_model",
+            operation_id="update_measure",
+            timestamp=STAMP,
+        ),
         blockers=("PBIMCP-GATE-01",),
     )
     payload = json.loads(evidence.finalize(tmp_path, record).read_text("utf-8"))
@@ -93,7 +97,14 @@ def test_a_refusal_record_must_name_a_blocker() -> None:
     """A refusal with no named cause is not actionable (FR-009)."""
     with pytest.raises(evidence.EvidenceRefused):
         evidence.refusal_record(
-            target_id="t", operation_id="o", timestamp=STAMP, blockers=()
+            evidence.RunIdentity(
+                tool="none",
+                mode="readonly",
+                target_id="t",
+                operation_id="o",
+                timestamp=STAMP,
+            ),
+            blockers=(),
         )
 
 
@@ -104,7 +115,14 @@ def test_a_refusal_record_must_name_a_blocker() -> None:
 
 def test_refusal_record_says_no_mutation_was_attempted() -> None:
     record = evidence.refusal_record(
-        target_id="t", operation_id="o", timestamp=STAMP, blockers=("B",)
+        evidence.RunIdentity(
+            tool="none",
+            mode="readonly",
+            target_id="t",
+            operation_id="o",
+            timestamp=STAMP,
+        ),
+        blockers=("B",),
     )
     assert record.mutation_attempted is False
 

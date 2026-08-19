@@ -26,8 +26,6 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-import pytest
-
 from seshat.pbi_mcp_adapter import gate
 
 TARGET = "sales_model"
@@ -121,44 +119,40 @@ def _commit_all(repo: Path, message: str = "fixture") -> None:
     _git(repo, "commit", "-q", "-m", message, "--no-gpg-sign")
 
 
-def _build_repo(
-    tmp_path: Path,
-    *,
-    readiness: str | None = None,
-    allowlist: str | None = None,
-    artifacts: tuple[str, ...] = (TARGET,),
-    target: str = TARGET,
-    commit: bool = True,
-) -> Path:
+@dataclass(frozen=True)
+class RepoSpec:
+    """What fixture repo to build. Defaults are the happy path."""
+
+    readiness: str | None = None
+    allowlist: str | None = None
+    artifacts: tuple[str, ...] = (TARGET,)
+    target: str = TARGET
+    commit: bool = True
+
+
+def _build_repo(tmp_path: Path, **overrides: object) -> Path:
     """A repo with the requested state, committed unless told otherwise."""
+    spec = RepoSpec(**overrides)  # type: ignore[arg-type]
     repo = _init_repo(tmp_path)
-    if readiness is not None:
-        _write(repo, f"mappings/{target}/readiness-status.yaml", readiness)
-    if allowlist is not None:
-        _write(repo, gate.TARGET_ALLOWLIST_RELPATH, allowlist)
-    for name in artifacts:
+    if spec.readiness is not None:
+        _write(repo, f"mappings/{spec.target}/readiness-status.yaml", spec.readiness)
+    if spec.allowlist is not None:
+        _write(repo, gate.TARGET_ALLOWLIST_RELPATH, spec.allowlist)
+    for name in spec.artifacts:
         _write(repo, f"models/{name}.tmdl", f"// {name}\n")
     # A repo needs at least one commit for HEAD to resolve.
     _write(repo, "README.md", "fixture\n")
-    if commit:
+    if spec.commit:
         _commit_all(repo)
-    else:
-        # Commit ONLY the baseline so HEAD exists; leave the state files untracked.
-        _git(repo, "add", "README.md")
-        for name in artifacts:
-            _git(repo, "add", f"models/{name}.tmdl")
-        if allowlist is not None:
-            _git(repo, "add", gate.TARGET_ALLOWLIST_RELPATH)
-        _git(repo, "commit", "-q", "-m", "baseline", "--no-gpg-sign")
+        return repo
+    # Commit ONLY the baseline so HEAD exists; leave the state files untracked.
+    _git(repo, "add", "README.md")
+    for name in spec.artifacts:
+        _git(repo, "add", f"models/{name}.tmdl")
+    if spec.allowlist is not None:
+        _git(repo, "add", gate.TARGET_ALLOWLIST_RELPATH)
+    _git(repo, "commit", "-q", "-m", "baseline", "--no-gpg-sign")
     return repo
-
-
-@pytest.fixture
-def committed_repo(tmp_path: Path) -> Path:
-    """A repo where every precondition holds, all state COMMITTED."""
-    return _build_repo(
-        tmp_path, readiness=_readiness_yaml(), allowlist=_allowlist_yaml()
-    )
 
 
 def _evaluate(repo: Path, **kwargs: object) -> gate.GateVerdict:

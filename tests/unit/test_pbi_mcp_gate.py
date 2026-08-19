@@ -132,63 +132,44 @@ BREAK_ONE_CASES: tuple[tuple[str, str], ...] = (
 )
 
 
+#: label -> (readiness overrides, allowlist targets, evaluate overrides).
+#: A table rather than an if-chain: each row IS the perturbation, so a reader sees
+#: all eight break-one cases at once instead of tracing branches.
+_CASE_TABLE: dict[
+    str, tuple[dict[str, object], tuple[str, ...] | None, dict[str, object]]
+] = {
+    "stage_not_pass": ({"semantic_status": "warning"}, None, {}),
+    "state_uncommitted": ({}, None, {"__commit__": False}),
+    "approval_absent": ({"include_approval": False}, None, {}),
+    "approval_wrong_target": (
+        {"approval_note": f"approved for {OTHER_TARGET}"},
+        None,
+        {},
+    ),
+    "operation_unbound": ({}, None, {"operation_id": ""}),
+    "target_not_allowlisted": ({}, (OTHER_TARGET,), {}),
+    "target_absent_on_disk": ({}, None, {"__artifacts__": ()}),
+    "git_dirty_no_backup": ({}, None, {"tree_clean": False, "backup_ref": None}),
+}
+
+
 def _repo_for_case(tmp_path: Path, label: str) -> tuple[Path, dict[str, object]]:
     """Build a repo breaking exactly ``label`` and return the evaluate kwargs."""
-    if label == "stage_not_pass":
-        repo = _build_repo(
-            tmp_path,
-            readiness=_readiness_yaml(semantic_status="warning"),
-            allowlist=_allowlist_yaml(),
-        )
-        return repo, {}
-    if label == "state_uncommitted":
-        repo = _build_repo(
-            tmp_path,
-            readiness=_readiness_yaml(),
-            allowlist=_allowlist_yaml(),
-            commit=False,
-        )
-        return repo, {}
-    if label == "approval_absent":
-        repo = _build_repo(
-            tmp_path,
-            readiness=_readiness_yaml(include_approval=False),
-            allowlist=_allowlist_yaml(),
-        )
-        return repo, {}
-    if label == "approval_wrong_target":
-        repo = _build_repo(
-            tmp_path,
-            readiness=_readiness_yaml(approval_note=f"approved for {OTHER_TARGET}"),
-            allowlist=_allowlist_yaml(),
-        )
-        return repo, {}
-    if label == "operation_unbound":
-        repo = _build_repo(
-            tmp_path, readiness=_readiness_yaml(), allowlist=_allowlist_yaml()
-        )
-        return repo, {"operation_id": ""}
-    if label == "target_not_allowlisted":
-        repo = _build_repo(
-            tmp_path,
-            readiness=_readiness_yaml(),
-            allowlist=_allowlist_yaml(targets=(OTHER_TARGET,)),
-        )
-        return repo, {}
-    if label == "target_absent_on_disk":
-        repo = _build_repo(
-            tmp_path,
-            readiness=_readiness_yaml(),
-            allowlist=_allowlist_yaml(),
-            artifacts=(),
-        )
-        return repo, {}
-    if label == "git_dirty_no_backup":
-        repo = _build_repo(
-            tmp_path, readiness=_readiness_yaml(), allowlist=_allowlist_yaml()
-        )
-        return repo, {"tree_clean": False, "backup_ref": None}
-    raise AssertionError(f"unhandled case {label!r}")
+    if label not in _CASE_TABLE:
+        raise AssertionError(f"unhandled case {label!r}")
+    readiness_overrides, allowlist_targets, evaluate_kwargs = _CASE_TABLE[label]
+    kwargs = dict(evaluate_kwargs)
+    repo_overrides: dict[str, object] = {
+        "readiness": _readiness_yaml(**readiness_overrides),
+        "allowlist": _allowlist_yaml(
+            targets=allowlist_targets if allowlist_targets is not None else (TARGET,)
+        ),
+    }
+    if "__commit__" in kwargs:
+        repo_overrides["commit"] = kwargs.pop("__commit__")
+    if "__artifacts__" in kwargs:
+        repo_overrides["artifacts"] = kwargs.pop("__artifacts__")
+    return _build_repo(tmp_path, **repo_overrides), kwargs
 
 
 @pytest.mark.parametrize(
