@@ -21,7 +21,11 @@ pytestmark = pytest.mark.unit
 
 TARGET = "sales_model"
 OPERATION = "update_measure"
-TARGET_PATH = f"models/{TARGET}.tmdl"
+#: Under `*.SemanticModel/definition/`, because that is the ONLY corpus
+#: `seshat semantic-check` discovers. A fixture at `models/*.tmdl` is never
+#: examined by the validator, so post-write validation could not really pass --
+#: previously masked by the injected validator stub (Codex review, PR #659).
+TARGET_PATH = f"Sales.SemanticModel/definition/{TARGET}.tmdl"
 
 #: Real TMDL, not a placeholder comment. ``seshat semantic-check`` skips a
 #: ``*.tmdl`` with no top-level ``table`` block, so a fixture using

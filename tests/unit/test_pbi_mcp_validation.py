@@ -453,3 +453,77 @@ def test_validator_runs_the_active_interpreter_not_path_python(
     # A bare name would be resolved through PATH, which is the defect.
     assert Path(interpreter).is_absolute(), f"{interpreter!r} is PATH-resolved"
     assert Path(interpreter).exists(), f"{interpreter!r} does not exist"
+
+
+def test_a_target_outside_the_validator_corpus_is_not_examined(
+    tmp_path: Path,
+) -> None:
+    """Parseable is not the same as DISCOVERED.
+
+    `semantic-check` only discovers tracked TMDL under `*.SemanticModel/definition/`,
+    while the committed allowlist accepts any contained path. So a perfectly
+    parseable target at `models/x.tmdl` is SKIPPED by the validator, and with
+    another discoverable input present the command still exits 0.
+
+    The first version of `_target_was_examined` parsed the target independently,
+    which proved only that it COULD be parsed -- not that the subprocess looked at
+    it. That is the same fail-open one level in.
+
+    Codex review, PR #659 (follow-up on the ee218146 fix).
+    """
+    definition = tmp_path / "Sales.SemanticModel" / "definition"
+    definition.mkdir(parents=True)
+    # Discoverable, so the corpus is non-empty and semantic-check exits 0.
+    (definition / "other.tmdl").write_text(
+        "table other\n\n\tcolumn A\n\t\tdataType: string\n", encoding="utf-8"
+    )
+    # The TARGET: tracked and perfectly parseable, but OUTSIDE the corpus.
+    target_rel = "models/sales_model.tmdl"
+    target = tmp_path / target_rel
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "table sales_model\n\n\tcolumn Amount\n\t\tdataType: double\n",
+        encoding="utf-8",
+    )
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "t@e.invalid")
+    _git(tmp_path, "config", "user.name", "T")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "baseline", "--no-gpg-sign")
+
+    outcome = validation.validate_semantic_model(
+        tmp_path, target_path=target_rel, backup_ref=None
+    )
+
+    assert not outcome.passed, (
+        "a target the validator never discovers reported clean -- "
+        f"examined={outcome.artifacts_examined}"
+    )
+    assert outcome.blockers, "a failure with no blocker is not actionable"
+
+
+def test_a_target_inside_the_corpus_still_passes(tmp_path: Path) -> None:
+    """The positive control: containment must not refuse everything.
+
+    Without this, a fix that always returned "not examined" would satisfy the
+    test above while breaking every real write.
+    """
+    definition = tmp_path / "Sales.SemanticModel" / "definition"
+    definition.mkdir(parents=True)
+    target_rel = "Sales.SemanticModel/definition/sales_model.tmdl"
+    (tmp_path / target_rel).write_text(
+        "table sales_model\n\n\tcolumn Amount\n\t\tdataType: double\n",
+        encoding="utf-8",
+    )
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "t@e.invalid")
+    _git(tmp_path, "config", "user.name", "T")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "baseline", "--no-gpg-sign")
+
+    outcome = validation.validate_semantic_model(
+        tmp_path, target_path=target_rel, backup_ref=None
+    )
+
+    assert outcome.passed, f"a discoverable target was refused: {outcome.blockers}"
+    assert outcome.artifacts_examined == (target_rel,)

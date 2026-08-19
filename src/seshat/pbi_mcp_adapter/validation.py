@@ -168,19 +168,36 @@ def _run_validator(
     )
 
 
-def _target_was_examined(artifact: Path) -> bool:
-    """Whether ``semantic-check`` could actually have parsed this artifact.
+def _target_was_examined(repo_root: Path, artifact: Path) -> bool:
+    """Whether ``semantic-check`` actually examined this artifact.
 
-    Uses the SAME extractor the command uses (``seshat.tmdl.parse_tmdl``), so the
-    two cannot disagree about what counts as parseable. ``parse_tmdl`` returns
-    ``None`` for a file with no top-level ``table`` block, which is exactly the
-    case ``semantic.py`` skips with ``continue`` -- and therefore exactly the case
-    a zero exit fails to cover.
+    TWO conditions, because either alone is a fail-open:
 
-    Fails CLOSED: an unreadable file is "not examined", never "examined and fine".
+    1. **Discovered.** ``_semantic_files`` is the command's OWN discovery, so the
+       two cannot disagree about the corpus. It only yields tracked TMDL under
+       ``*.SemanticModel/definition/``, while the committed allowlist accepts any
+       contained path -- so a perfectly parseable target at ``models/x.tmdl`` is
+       SKIPPED, and another discoverable input still makes the command exit 0.
+    2. **Parseable.** ``parse_tmdl`` is the command's own extractor; it returns
+       ``None`` for a file with no top-level ``table`` block, which
+       ``semantic.py`` skips with ``continue``.
+
+    Checking only (2) proves the file COULD be parsed, not that the subprocess
+    looked at it -- the same fail-open one level in (Codex review, PR #659).
+
+    Fails CLOSED throughout: an unreadable file or a discovery error is "not
+    examined", never "examined and fine".
     """
+    from seshat.cli.commands.semantic import _semantic_files
     from seshat.tmdl import parse_tmdl
 
+    try:
+        discovered = _semantic_files(Path(repo_root).resolve(), False)
+    except (OSError, RuntimeError, ValueError):
+        return False
+    resolved = artifact.resolve()
+    if not any(found.resolve() == resolved for found in discovered):
+        return False
     try:
         text = artifact.read_text(encoding="utf-8-sig")
     except OSError:
@@ -192,6 +209,7 @@ def _target_was_examined(artifact: Path) -> bool:
 class _ValidationRun:
     """What one validation run is about: the artifact and how to report on it."""
 
+    repo_root: Path
     artifact: Path
     target_path: str
     backup_ref: str | None
@@ -217,7 +235,7 @@ def _outcome_for(returncode: int, run: _ValidationRun) -> ValidationOutcome:
         )
 
     # Exit 0 is the validator's claim, not proof it looked at THIS file.
-    if not _target_was_examined(artifact):
+    if not _target_was_examined(run.repo_root, artifact):
         return ValidationOutcome(
             checks_run=checks_run,
             artifacts_examined=(),
@@ -295,5 +313,5 @@ def validate_semantic_model(
 
     return _outcome_for(
         completed.returncode,
-        _ValidationRun(artifact, target_path, backup_ref, checks_run),
+        _ValidationRun(root, artifact, target_path, backup_ref, checks_run),
     )
