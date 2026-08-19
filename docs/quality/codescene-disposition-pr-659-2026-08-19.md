@@ -34,6 +34,8 @@ guard and watching it fail, before and after the refactor.
 
 ## Update — resolved with the CodeScene CLI (same day)
 
+**Final state: `cs delta origin/main` reports "No issues found!" across the branch.**
+
 The four items below were originally written up as "needs an owner suppression",
 on the belief that no committable config existed and that two of them could not be
 refactored without weakening a security property. **Three of those four judgements were
@@ -46,7 +48,7 @@ tools were token-gated, but the CLI needs no API token.
 | `GateVerdict.cleared` cc 13 | **FIXED** — `all()` over an explicit tuple | `gate.py` 9.63 → **10.0** |
 | `_subparser_choices` depth 4 | **FIXED** — `_choice_maps` generator flattens the walk | test file 9.38 → **10.0** |
 | `_run_write_leg` cc 10 | **FIXED** — reporting split into `_report_write_leg` | `pbi_mcp.py` back to **10.0** |
-| `apply_write` 12 args | **OPEN** — see below | `orchestrate.py` 9.68 |
+| `apply_write` 12 args | **EXCEPTED** — scoped `.codescene` threshold, see below | `orchestrate.py` **10.0** |
 
 Two corrections worth keeping:
 
@@ -68,7 +70,7 @@ Two corrections worth keeping:
 * **`cs delta origin/main <branch>` found a fifth finding the PR threads never showed**
   (`_run_write_leg`). Read the branch delta, not just the review threads.
 
-### Still open: `apply_write` — 12 arguments (max 4)
+### RESOLVED: `apply_write` — 12 arguments (max 4) — scoped rules-config exception
 
 Grouping the three test-injection knobs (`mcp_runner`, `validator`, `capability_profile` —
 never passed by the production CLI) was measured and reaches **10** arguments, not 4. Getting
@@ -79,12 +81,16 @@ which is the CLI contract surface, and the surface
 once accepted but never supplied, a tested-but-unreachable branch, and the explicit keyword
 at the call site is what makes that visible.
 
-**Owner's call**, three options:
-1. Suppress this one finding (CodeScene UI, or a committed `.codescene/code-health-rules.json`
-   raising `function_max_arguments` for this path).
-2. Accept the partial improvement: group the three injection knobs → 10 args, finding stays.
-3. Collapse the governed keywords into one object → clears the finding, and gives up the
-   call-site visibility described above. **Not recommended.**
+**Resolved** by option 1: a committed `.codescene/code-health-rules.json` raising
+`function_max_arguments` to 12 for this one file. Rationale, retirement condition and
+validate commands live in `.codescene/README.md` (JSON carries no comments).
+
+Rejected: grouping the injection knobs (measured — reaches 10, not 4, so the finding stays),
+and collapsing the governed keywords (clears it, but gives up the call-site visibility above).
+
+Verified: `cs check-rules` matches only `orchestrate.py` and returns "No matching rule found"
+for siblings; `orchestrate.py` reviews at **10.0**; `cs delta origin/main` reports
+**"No issues found!"** across the branch.
 
 ---
 
