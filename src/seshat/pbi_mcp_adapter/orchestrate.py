@@ -120,25 +120,33 @@ class WriteReport:
         return self.exit_code == EXIT_OK
 
 
+@dataclass(frozen=True)
+class _Ending:
+    """How one run ended: the exit code, the outcome, and what explains them.
+
+    Bundled because the record and the report must describe the SAME ending. An
+    earlier version passed these separately and substituted a fallback blocker
+    into the record only, which made exit 3 reachable with an empty report
+    blocker list. One value cannot disagree with itself.
+    """
+
+    exit_code: int
+    outcome: str
+    mutation_attempted: bool
+    blockers: tuple[str, ...] = ()
+    rollback_guidance: tuple[str, ...] = ()
+
+
 def _terminate(
-    repo_root: Path,
-    identity: evidence.RunIdentity,
-    *,
-    exit_code: int,
-    outcome: str,
-    mutation_attempted: bool,
-    blockers: tuple[str, ...] = (),
-    rollback_guidance: tuple[str, ...] = (),
+    repo_root: Path, identity: evidence.RunIdentity, ending: _Ending
 ) -> WriteReport:
     """Write the terminal evidence record and return the matching report.
 
-    One helper for both, so the report and the record cannot disagree -- an
-    earlier version substituted a fallback blocker into the record only, and exit
-    3 became reachable with an empty report blocker list.
+    One helper for both, so the report and the record cannot disagree.
 
-    ``identity`` carries who/what/when as one frozen value; the caller pre-binds
-    the four fixed fields and varies only ``tool`` via
-    :meth:`evidence.RunIdentity.with_tool`.
+    ``identity`` carries who/what/when and ``ending`` carries how it finished;
+    the caller pre-binds the four fixed identity fields and varies only ``tool``
+    via :meth:`evidence.RunIdentity.with_tool`.
     """
     record = evidence.RunEvidence(
         tool=identity.tool,
@@ -146,19 +154,19 @@ def _terminate(
         target_id=identity.target_id,
         operation_id=identity.operation_id,
         timestamp=identity.timestamp,
-        outcome=outcome,
-        mutation_attempted=mutation_attempted,
-        blockers=blockers,
-        rollback_guidance=rollback_guidance,
+        outcome=ending.outcome,
+        mutation_attempted=ending.mutation_attempted,
+        blockers=ending.blockers,
+        rollback_guidance=ending.rollback_guidance,
     )
     path = evidence.finalize(repo_root, record)
     return WriteReport(
-        exit_code=exit_code,
-        outcome=outcome,
-        blockers=blockers,
-        rollback_guidance=rollback_guidance,
+        exit_code=ending.exit_code,
+        outcome=ending.outcome,
+        blockers=ending.blockers,
+        rollback_guidance=ending.rollback_guidance,
         evidence_path=path,
-        mutation_attempted=mutation_attempted,
+        mutation_attempted=ending.mutation_attempted,
     )
 
 
@@ -326,7 +334,7 @@ def _run_pipeline(root: Path, request: _WriteRequest, *, dry_run: bool) -> Write
 
     def terminal(*, tool: str, **kwargs: object) -> WriteReport:
         """Terminate with ``tool`` swapped into the pre-bound identity."""
-        return _terminate(root, identity.with_tool(tool), **kwargs)  # type: ignore[arg-type]
+        return _terminate(root, identity.with_tool(tool), _Ending(**kwargs))  # type: ignore[arg-type]
 
     # 1-3. Bypass guard, gate, drift -- in that order, none skippable.
     verdict, drift_blockers = _preflight(root, request, dry_run=dry_run)
