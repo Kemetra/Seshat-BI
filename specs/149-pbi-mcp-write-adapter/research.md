@@ -108,6 +108,23 @@ user-workload-length operation — adopting the governor cap would abort legitim
 load-bearing (a child inheriting a live JSON-RPC pipe deadlocks), and an explicit timeout
 converts a stall into a typed `blocked` outcome rather than an unbounded hang.
 
+> [!CAUTION]
+> **CORRECTED 2026-08-19 (issue #660). The conclusion above is wrong for THIS caller.**
+>
+> `stdin=DEVNULL` is right when you *spawn a build tool* that should not inherit a JSON-RPC
+> pipe -- which is the dbt/dagster case the lesson was drawn from. It inverts for a caller
+> that must *be* the JSON-RPC peer. `@microsoft/powerbi-modeling-mcp` is an MCP **stdio
+> server**: stdin IS its protocol channel, so `DEVNULL` does not prevent a deadlock, it
+> guarantees EOF before any work happens. Combined with the invented `--target` /
+> `--operation` CLI flags, no real write can execute at all.
+>
+> The timeout half of the lesson stands. The `stdin=DEVNULL` half must NOT be carried into
+> the rebuilt transport, which needs a bounded MCP client exchange (`initialize`,
+> `tools/list`, `tools/call`, response parsing) over a live stdin/stdout pair.
+>
+> Recorded here because a future reader following the reasoning above would re-derive the
+> same inverted conclusion.
+
 **Alternatives considered**: raise `SUBPROCESS_TIMEOUT` globally so the shared helper fits —
 rejected, it would weaken the deadlock protection for every read-only governor tool to
 accommodate one long-running writer.
