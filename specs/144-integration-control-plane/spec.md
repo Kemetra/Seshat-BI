@@ -6,6 +6,11 @@
 
 **Status**: ratified -- Ahmed Shaaban, 2026-08-07
 
+**Amended**: 2026-08-20 by spec 154 (issue #671) -- FR-010's **approval prompt**
+clause is narrowed: the prompt no longer confers provisioning authorization. All
+other FR-010 clauses and every other requirement in this spec are unchanged. See
+FR-010 below and `specs/154-secure-provisioning-approval/spec.md`.
+
 **Status history**: draft
 
 **Input**: Official-first roadmap Phase 2: retain a thin compatibility facade
@@ -118,6 +123,18 @@ refused and never reported present; complete content passes.
   enable network access itself.
 - **FR-010**: The current CLI flags, approval prompt, exit-code behavior, JSON
   shape, workspace validation, and catalog-backed routing MUST survive.
+  **AMENDED by spec 154 (issue #671), 2026-08-20 -- one clause narrowed.** The
+  **approval prompt** clause no longer guarantees that the prompt (or the
+  `--yes` flag that suppresses it) CONFERS AUTHORIZATION. The prompt may survive
+  as a user-experience affordance, but provisioning authority now comes from a
+  committed, named-human approval record read at HEAD; a caller-supplied flag,
+  a TTY answer, or a stdin response is not authority. Rationale: this FR was a
+  Phase-2 no-regression guarantee, not a trust-model endorsement -- FR-009 above
+  already required that compatibility apply "never infer approval". The other
+  five clauses of this FR (CLI flags exist, exit-code behavior, JSON shape,
+  workspace validation, catalog-backed routing) are UNAMENDED and still bind.
+  See `specs/154-secure-provisioning-approval/spec.md`, section "Amendment to
+  Spec 144 FR-010".
 - **FR-011**: Existing exact-version, isolation, non-clobbering MCP, lock, and
   compatibility-policy contracts MUST remain green.
 - **FR-012**: Active installation documentation MUST describe the canonical

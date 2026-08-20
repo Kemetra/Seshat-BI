@@ -597,3 +597,30 @@ def test_scanning_leaves_an_ordinary_payload_untouched() -> None:
     assert payload["target"] == "sales_model"
     assert payload["blockers"] == ["PBIMCP-GATE-01"]
     assert payload["outcome"] == "materialized"
+
+
+def test_the_git_safety_probe_reads_c_quoted_non_ascii_paths(
+    tmp_path: Path,
+) -> None:
+    """Issue #663 gap 2 does NOT reach this probe -- measured, not assumed.
+
+    `git status --porcelain` C-QUOTES any non-ASCII path into pure ASCII
+    (`?? "\\320\\201.tmdl"`), so its output carries no byte the locale
+    codec can fail on and the dead-reader-thread crash cannot occur here.
+    Only raw `-z` output (`ls-files -z`, used by `_snapshot`) is affected.
+
+    Pinned so a future switch of this probe to `-z` -- which would import the
+    crash -- fails here rather than silently taking the gate down.
+    """
+    from seshat.cli.commands import pbi_mcp
+    from tests.unit._gitfix import commit_all, make_git_repo
+
+    repo = make_git_repo(tmp_path)
+    (repo / "seed.txt").write_text("x\n", encoding="utf-8")
+    commit_all(repo, "seed")
+    (repo / "Ё.tmdl").write_text("table x\n", encoding="utf-8")
+
+    verdict = pbi_mcp._probe_tree_clean(repo)
+
+    # A real verdict, not a crash and not None: the untracked file is seen.
+    assert verdict is False, f"a dirty tree with such a file read as {verdict!r}"

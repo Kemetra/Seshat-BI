@@ -468,3 +468,138 @@ def test_intent_record_exists_before_the_mutation_runs(ready_repo: Path) -> None
     assert payload["mutation_attempted"] is True
     assert payload["target_id"] == TARGET
     assert payload["operation_id"] == OPERATION
+
+
+# --------------------------------------------------------------------------
+# Issue #663 gaps 1 + 2 -- scope snapshot: ignored files, and a lossless read.
+# --------------------------------------------------------------------------
+
+
+def test_a_snapshot_survives_a_filename_the_locale_codec_cannot_decode(
+    tmp_path: Path,
+) -> None:
+    """`_snapshot` caught (OSError, RuntimeError) -- the real failure is neither.
+
+    A dead reader thread yields `stdout is None`, so `.split` raises
+    AttributeError, which escapes uncaught. That abort happens AFTER
+    `write_intent` has landed the `deferred` record, leaving a permanent
+    "mutation attempted, never finalized" trace for a run that never mutated.
+    """
+    from tests.unit._gitfix import commit_all, make_git_repo
+
+    repo = make_git_repo(tmp_path)
+    (repo / "Ё.tmdl").write_text("table x\n", encoding="utf-8")
+    commit_all(repo, "add a non-cp1252 filename")
+
+    snapshot = orchestrate._snapshot(repo)
+
+    assert "Ё.tmdl" in snapshot, f"the file vanished from the snapshot: {snapshot}"
+
+
+def test_an_ignored_out_of_scope_change_is_still_out_of_scope(
+    tmp_path: Path,
+) -> None:
+    """`--exclude-standard` without `--ignored` hid every gitignored file.
+
+    So a vendor run that changed the authorized target AND an ignored file
+    reported `materialized` with no out-of-scope blocker.
+    """
+    from tests.unit._gitfix import commit_all, make_git_repo
+
+    repo = make_git_repo(tmp_path)
+    (repo / ".gitignore").write_text("build/\n", encoding="utf-8")
+    (repo / "target.tmdl").write_text("table x\n", encoding="utf-8")
+    commit_all(repo, "seed")
+    (repo / "build").mkdir()
+    (repo / "build" / "leaked.txt").write_text("before\n", encoding="utf-8")
+
+    before = orchestrate._snapshot(repo)
+    (repo / "target.tmdl").write_text("table x2\n", encoding="utf-8")
+    (repo / "build" / "leaked.txt").write_text("after\n", encoding="utf-8")
+    after = orchestrate._snapshot(repo)
+
+    blockers = orchestrate._effect_blockers(before, after, "target.tmdl")
+    assert orchestrate.BLOCKER_OUT_OF_SCOPE_CHANGE in blockers, (
+        f"an ignored file changed out of scope and was not reported: {blockers}"
+    )
+
+
+def test_the_adapters_own_evidence_artifacts_are_never_scope_creep(
+    tmp_path: Path,
+) -> None:
+    """Both are gitignored AND written mid-run, so both must be excluded.
+
+    The history log is append-only, so it provably differs between the two
+    snapshots. Excluding only the latest-run file would make every single apply
+    report out-of-scope change against itself.
+    """
+    from seshat.pbi_mcp_adapter import evidence
+    from tests.unit._gitfix import commit_all, make_git_repo
+
+    repo = make_git_repo(tmp_path)
+    (repo / ".gitignore").write_text(
+        f"{evidence.ARTIFACT_RELPATH}\n{evidence.HISTORY_RELPATH}\n", encoding="utf-8"
+    )
+    (repo / "target.tmdl").write_text("table x\n", encoding="utf-8")
+    commit_all(repo, "seed")
+
+    identity = evidence.RunIdentity(
+        tool="t",
+        mode="readwrite",
+        target_id="target.tmdl",
+        operation_id="op",
+        timestamp="2026-08-20T00:00:00Z",
+    )
+    evidence.write_intent(repo, identity)
+    before = orchestrate._snapshot(repo)
+
+    (repo / "target.tmdl").write_text("table x2\n", encoding="utf-8")
+    evidence.finalize(
+        repo,
+        evidence.RunEvidence(
+            tool="t",
+            mode="readwrite",
+            target_id="target.tmdl",
+            operation_id="op",
+            timestamp="2026-08-20T00:00:00Z",
+            outcome="materialized",
+            mutation_attempted=True,
+        ),
+    )
+    after = orchestrate._snapshot(repo)
+
+    blockers = orchestrate._effect_blockers(before, after, "target.tmdl")
+    assert orchestrate.BLOCKER_OUT_OF_SCOPE_CHANGE not in blockers, (
+        f"the adapter reported its own evidence write as scope creep: {blockers}"
+    )
+
+
+def test_a_non_evidence_ignored_file_is_still_visible_to_the_scope_check(
+    tmp_path: Path,
+) -> None:
+    """The exclusion is two EXACT paths, never a `.seshat/` prefix.
+
+    A prefix exclusion would blind the check to everything under that directory
+    -- measured: `.seshat/some-other-artifact.json` is a legitimate file the
+    scope check must still see.
+    """
+    from tests.unit._gitfix import commit_all, make_git_repo
+
+    repo = make_git_repo(tmp_path)
+    (repo / ".gitignore").write_text(".seshat/\n", encoding="utf-8")
+    (repo / "target.tmdl").write_text("table x\n", encoding="utf-8")
+    commit_all(repo, "seed")
+    (repo / ".seshat").mkdir(exist_ok=True)
+    other = repo / ".seshat" / "some-other-artifact.json"
+    other.write_text("before\n", encoding="utf-8")
+
+    before = orchestrate._snapshot(repo)
+    (repo / "target.tmdl").write_text("table x2\n", encoding="utf-8")
+    other.write_text("after\n", encoding="utf-8")
+    after = orchestrate._snapshot(repo)
+
+    blockers = orchestrate._effect_blockers(before, after, "target.tmdl")
+    assert orchestrate.BLOCKER_OUT_OF_SCOPE_CHANGE in blockers, (
+        "a non-evidence ignored file was excluded by a prefix rule; the "
+        f"exclusion must be exact-path only: {blockers}"
+    )
