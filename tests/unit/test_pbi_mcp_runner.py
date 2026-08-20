@@ -141,7 +141,9 @@ def test_build_argv_no_longer_invents_target_or_operation_flags():
     argv = runner.build_argv(read_only=True)
     assert "--target" not in argv
     assert "--operation" not in argv
-    assert argv == ["npx", "--yes", runner.VENDOR_PACKAGE, "--readonly"]
+    # The package slot carries the version-floored SPEC since #658, not the bare
+    # identity constant -- see `test_the_argv_floors_the_version_npx_may_resolve`.
+    assert argv == ["npx", "--yes", runner.VENDOR_PACKAGE_SPEC, "--readonly"]
 
 
 def test_build_argv_asks_for_write_mode_explicitly():
@@ -384,7 +386,9 @@ def test_a_bypass_flag_smuggled_into_the_argv_still_raises(
 def test_the_vendor_runtime_is_invoked_through_npx(tmp_path: Path) -> None:
     argv = runner.build_argv(read_only=False)
     assert argv[0] == "npx"
-    assert runner.VENDOR_PACKAGE in argv
+    # Substring, not membership: the arg is the version-floored spec (#658), and
+    # it must still CONTAIN the identity the bypass matcher keys on.
+    assert any(runner.VENDOR_PACKAGE in arg for arg in argv)
 
 
 def test_the_operation_vocabulary_is_the_shared_one() -> None:
@@ -545,3 +549,71 @@ def test_a_cross_product_pair_is_refused_before_launch(tmp_path: Path) -> None:
     )
     assert runner.BLOCKER_UNKNOWN_OPERATION in result.blockers
     assert fake.handshaken is False
+
+
+# --------------------------------------------------------------------------
+# #658 -- name what actually executed, and floor what npx may resolve
+# --------------------------------------------------------------------------
+
+
+def test_the_resolved_runtime_version_is_captured(tmp_path: Path) -> None:
+    """`npx` resolves a floating tag, so the record must name the BUILD that ran.
+
+    Without this the invocation is not merely unpinned, it is untraceable: the
+    handshake already reports `serverInfo.version` and the runner discarded it.
+    """
+    fake = FakeSession(
+        [_outcome(read_only=True), _outcome(read_only=False), _outcome(read_only=True)]
+    )
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+
+    assert result.runtime_version == "0.5.0.0"
+
+
+def test_a_refused_handshake_records_no_version_rather_than_a_guess(
+    tmp_path: Path,
+) -> None:
+    """None, never the string "unknown": a fabricated value would be mistaken
+    for a measured one by anyone reading the record."""
+    fake = FakeSession(handshake_error=session.SessionError("refused"))
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+
+    assert result.runtime_version is None
+
+
+def test_the_argv_floors_the_version_npx_may_resolve() -> None:
+    """A floor, not a pin: the package publishes only prereleases (measured
+    2026-08-20 -- 0.5.0-beta.2 through beta.12, no stable release), so there is
+    nothing to pin to. The range still refuses a surprise jump to an
+    incompatible future major.
+    """
+    argv = runner.build_argv(read_only=True)
+    spec = argv[2]
+
+    assert spec == runner.VENDOR_PACKAGE_SPEC
+    assert spec.startswith(runner.VENDOR_PACKAGE)
+    assert "@^0.5.0-beta" in spec
+
+
+def test_the_identity_constant_stays_free_of_a_version_range() -> None:
+    """`VENDOR_PACKAGE` gates a REFUSAL and labels every evidence record.
+
+    `pbi_mcp.detect` matches it as a substring of a configured server's args, so
+    a version suffix on the shared identity would change what the bypass
+    prohibition recognises. The range belongs to the argv only.
+    """
+    assert "@^" not in runner.VENDOR_PACKAGE
+    assert runner.VENDOR_PACKAGE == "@microsoft/powerbi-modeling-mcp"
+
+
+def test_the_bypass_matcher_still_recognises_a_version_suffixed_arg() -> None:
+    """The floor must not create a hole in the bypass prohibition."""
+    from seshat.pbi_mcp.detect import _is_powerbi_server
+
+    entry = {"command": "npx", "args": ["--yes", runner.VENDOR_PACKAGE_SPEC]}
+
+    assert _is_powerbi_server("unrelated-name", entry) is True

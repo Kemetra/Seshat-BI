@@ -622,3 +622,28 @@ def test_a_skip_reason_is_redacted_like_every_other_string(tmp_path: Path) -> No
 
     assert "hunter2" not in text
     assert "db.example.com" not in text
+
+
+def test_the_record_names_the_runtime_build_that_ran(tmp_path: Path) -> None:
+    """#658: `npx` resolves a floating tag, so the record must say WHICH build.
+
+    Unpinned is tolerable while the vendor publishes only prereleases; unpinned
+    AND unrecorded is not -- an auditor could not tell what executed.
+    """
+    payload = json.loads(
+        evidence.finalize(tmp_path, _record(runtime_version="0.5.0.0")).read_text(
+            "utf-8"
+        )
+    )
+
+    assert payload["runtime_version"] == "0.5.0.0"
+
+
+def test_an_absent_runtime_version_is_null_not_a_guess(tmp_path: Path) -> None:
+    """A run that never completed the handshake measured nothing.
+
+    `null` says that; the string "unknown" would read as a measured value.
+    """
+    payload = json.loads(evidence.finalize(tmp_path, _record()).read_text("utf-8"))
+
+    assert payload["runtime_version"] is None

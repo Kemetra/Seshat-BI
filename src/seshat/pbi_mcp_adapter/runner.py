@@ -45,7 +45,20 @@ from seshat.pbi_mcp_adapter.gate import GateVerdict
 #: pyproject: it is a preview binary, not shippable payload.
 #: Re-exported from :mod:`seshat.pbi_mcp.detect`, which owns the single
 #: definition -- two copies could drift and one of them gates a refusal.
-__all__ = ["VENDOR_PACKAGE"]
+__all__ = ["VENDOR_PACKAGE", "VENDOR_PACKAGE_SPEC"]
+
+#: What ``npx`` is asked to resolve: the identity PLUS a version floor.
+#:
+#: A floor, deliberately not a pin. Measured 2026-08-20: the package publishes
+#: only prereleases (``0.5.0-beta.2`` .. ``0.5.0-beta.12``), so there is nothing
+#: to pin to, and pinning a beta would freeze the adapter onto a build the
+#: publisher may unpublish. The floor still refuses a jump to a future major.
+#:
+#: The range lives HERE, never on :data:`VENDOR_PACKAGE`: that constant is
+#: matched as a SUBSTRING by ``pbi_mcp.detect`` to gate the bypass prohibition
+#: and labels every evidence record, so a suffix there would change what a
+#: refusal recognises. Substring matching means this spec still matches (#658).
+VENDOR_PACKAGE_SPEC = f"{VENDOR_PACKAGE}@^0.5.0-beta"
 
 #: Sized for a model operation on a real semantic model, not for a git command.
 RUN_TIMEOUT_SECONDS = 900
@@ -120,10 +133,26 @@ class RunResult:
     output: str
     mutation_attempted: bool
     blockers: tuple[str, ...] = ()
+    #: The build that actually ran, from the handshake's ``serverInfo.version``.
+    #: ``None`` when no handshake completed -- never a fabricated placeholder,
+    #: which a reader would mistake for a measured value (#658).
+    runtime_version: str | None = None
 
     @property
     def succeeded(self) -> bool:
         return self.exit_code == 0 and not self.blockers
+
+
+def _reported_version(info: object) -> str | None:
+    """The runtime's own reported version, or None if it named none.
+
+    Reads only; never derives or defaults. The point of the field is to say
+    what ACTUALLY ran, so a guess would defeat it.
+    """
+    if not isinstance(info, dict):
+        return None
+    version = info.get("version")
+    return version if isinstance(version, str) and version else None
 
 
 def build_argv(*, read_only: bool) -> list[str]:
@@ -141,7 +170,7 @@ def build_argv(*, read_only: bool) -> list[str]:
     return [
         "npx",
         "--yes",
-        VENDOR_PACKAGE,
+        VENDOR_PACKAGE_SPEC,
         "--readonly" if read_only else "--readwrite",
     ]
 
@@ -424,6 +453,10 @@ class _Exchange:
     target_path: str
     writes: bool
     attempted: bool = False
+    #: The build that answered the handshake, set once it lands. Mutable for the
+    #: same reason `attempted` is: it is discovered mid-run, and every ending --
+    #: including an abort -- must still be able to name what ran (#658).
+    runtime_version: str | None = None
 
 
 def _exchange(
@@ -478,6 +511,39 @@ def _exchange(
     return blockers, spec.attempted
 
 
+def _aborted(
+    transcript: list[str],
+    detail: str,
+    spec: _Exchange,
+    *,
+    stalled: bool = False,
+) -> RunResult:
+    """One aborted exchange, reported identically however it aborted.
+
+    ``stalled`` separates the only two endings that differ: a hung child is
+    indeterminate and may have left the artifact half-written, while a closed
+    stream or refused handshake is NOT a stall -- reporting that as "did not
+    finish within 900s and was killed" tells the operator something false
+    (review M2). Dispatch is on the exception TYPE at the call site, never on
+    message text.
+
+    This also catches OSError/ValueError so no traceback escapes ``invoke``
+    (review H3): an exception leaving it means no RunResult, so ``orchestrate``
+    never reaches ``_terminate`` and writes NO evidence record -- violating
+    FR-015 on the one path where the record matters most.
+
+    Every ending carries ``runtime_version``: a run that handshook and then
+    failed still knows which build ran (#658).
+    """
+    return RunResult(
+        exit_code=TIMEOUT_EXIT_CODE if stalled else 1,
+        output=_redact_and_tail("\n".join([*transcript, detail]), TAIL_CHARS),
+        mutation_attempted=spec.attempted,
+        blockers=(BLOCKER_RUNTIME_STALLED if stalled else BLOCKER_RUNTIME_UNEXPLAINED,),
+        runtime_version=spec.runtime_version,
+    )
+
+
 def _converse(
     live: session.McpSession,
     *,
@@ -502,7 +568,8 @@ def _converse(
     blockers: list[str] = []
     attempted = False
     try:
-        live.handshake()
+        info = live.handshake()
+        spec.runtime_version = _reported_version(info)
         blockers, attempted = _exchange(live, spec, transcript)
         if blockers == [BLOCKER_VENDOR_REFUSED] and not attempted:
             # The bind itself failed, so the transcript is the whole story.
@@ -511,40 +578,15 @@ def _converse(
                 output=_redact_and_tail("\n".join(transcript), TAIL_CHARS),
                 mutation_attempted=False,
                 blockers=(BLOCKER_VENDOR_REFUSED,),
+                runtime_version=spec.runtime_version,
             )
     except session.SessionStalled as exc:
-        # A hung child: indeterminate, the artifact may be half-written.
-        return RunResult(
-            exit_code=TIMEOUT_EXIT_CODE,
-            output=_redact_and_tail("\n".join([*transcript, str(exc)]), TAIL_CHARS),
-            mutation_attempted=spec.attempted,
-            blockers=(BLOCKER_RUNTIME_STALLED,),
-        )
+        return _aborted(transcript, str(exc), spec, stalled=True)
     except session.SessionError as exc:
-        # A closed stream or a refused handshake is NOT a stall. Reporting it as
-        # "did not finish within 900s and was killed" tells the operator
-        # something false about what happened (review M2). Dispatch is on the
-        # TYPE, never on the message text.
-        return RunResult(
-            exit_code=1,
-            output=_redact_and_tail("\n".join([*transcript, str(exc)]), TAIL_CHARS),
-            mutation_attempted=spec.attempted,
-            blockers=(BLOCKER_RUNTIME_UNEXPLAINED,),
-        )
+        return _aborted(transcript, str(exc), spec)
     except (OSError, ValueError) as exc:  # UnicodeDecodeError is a ValueError
-        # NEVER let this escape as a traceback (review H3). An exception leaving
-        # `invoke` means no RunResult, so `orchestrate` never reaches `_terminate`
-        # and writes NO evidence record -- violating FR-015 on the one path where
-        # the record matters most. Indeterminate, because the artifact may be
-        # half-written.
-        return RunResult(
-            exit_code=1,
-            output=_redact_and_tail(
-                "\n".join([*transcript, f"{type(exc).__name__}: {exc}"]), TAIL_CHARS
-            ),
-            mutation_attempted=spec.attempted,
-            blockers=(BLOCKER_RUNTIME_UNEXPLAINED,),
-        )
+        detail = f"{type(exc).__name__}: {exc}"
+        return _aborted(transcript, detail, spec)
     finally:
         live.close()
 
@@ -555,4 +597,5 @@ def _converse(
         ),
         mutation_attempted=spec.attempted,
         blockers=tuple(blockers),
+        runtime_version=spec.runtime_version,
     )

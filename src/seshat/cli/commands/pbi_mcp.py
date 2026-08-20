@@ -318,6 +318,14 @@ def _write_leg_payload(report) -> dict[str, object]:
         # stdout and bypassed the output scanner, against the contract guarantee
         # that no output carries a user path (Codex review, PR #659).
         "evidence": (ARTIFACT_RELPATH if report.evidence_path is not None else None),
+        # WHICH build ran. `npx` resolves a floating tag, so a verdict that does
+        # not name the runtime cannot be reproduced (issue #658). None, never a
+        # placeholder: a run that never handshook measured nothing.
+        "runtime_version": (
+            clean(report.runtime_version)
+            if getattr(report, "runtime_version", None)
+            else None
+        ),
     }
 
 
