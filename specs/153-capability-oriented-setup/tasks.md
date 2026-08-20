@@ -7,11 +7,15 @@ permanent boundary.
 
 **Spec status**: ratified -- Ahmed Shaaban, 2026-08-20. Implementation permitted.
 
-**Progress**: slice 1 (derivation + strength + normal rendering) is BUILT and
-green -- 19 tests, `pytest -m unit` 6213 passed. 15 tasks remain: decline
-handling (T023-T025, T027), satisfied-state (T019), the technical-evidence path
-(T029-T033), catalog extensibility (T039), and the T040/T042 verification sweeps.
-Nothing here is marked done that was not seen RED then GREEN.
+**Progress**: COMPLETE. All 46 tasks done -- derivation, requirement strength,
+declines, satisfied-state, the technical-evidence path, the machine-readable
+status, and the boundary + verification sweeps. 41 feature tests;
+`pytest -m unit` 6234 passed, 0 failed (baseline 6105 at session start).
+
+Nothing is marked done that was not seen RED then GREEN. **T046 carries a stated
+limitation**: the CodeScene MCP token is expired and the plugin ships no CLI
+binary, so no code-health verdict was measured -- see that task for what WAS
+measured instead.
 
 TDD order: the failing test comes before the code. A task is done only when its
 test was seen RED, then GREEN.
@@ -37,7 +41,7 @@ test was seen RED, then GREEN.
 - [x] **T007** `data-model.md`: `Capability`, `RequirementStrength` (four values),
   `DerivationEvidence`, `SetupPlanRow`, `SetupPlan`. Record that `undetermined`
   is an evidence marker, NOT a fifth strength.
-- [ ] **T008** `quickstart.md`: the two US1 projects rendering different derived
+- [x] **T008** `quickstart.md`: the two US1 projects rendering different derived
   sets, with no package name in either.
 
 ## Phase 2 -- Derivation (US1, P1)
@@ -65,7 +69,7 @@ test was seen RED, then GREEN.
 - [x] **T018** [RED] Unreadable/contradictory evidence (a `source-map.yaml` that
   exists but will not parse) -> `undetermined` naming the missing evidence, NEVER
   defaulted to `required`. (FR-005)
-- [ ] **T019** [RED] A capability already satisfied is reported satisfied and
+- [x] **T019** [RED] A capability already satisfied is reported satisfied and
   proposed for no change. (US1 AS4)
 - [x] **T020** [GREEN] Implement derivation.
 
@@ -74,17 +78,17 @@ test was seen RED, then GREEN.
 - [x] **T021** [RED] Every row carries exactly one of the four values. (FR-007)
 - [x] **T022** [RED] Every row carries a reason citing project evidence; zero
   rows lack one. (FR-008, SC-003)
-- [ ] **T023** [RED] Declining a `recommended` capability leaves remaining work
+- [x] **T023** [RED] Declining a `recommended` capability leaves remaining work
   able to proceed, and the decline is recorded so a later run does not re-propose
   it as new. (FR-009)
-- [ ] **T024** [RED] Declining a `required` capability yields an explicit blocker
+- [x] **T024** [RED] Declining a `required` capability yields an explicit blocker
   with a next action, and setup does NOT report the project as set up, nor
   downgrade the strength to make the blocker disappear. (FR-010)
-- [ ] **T025** [RED] An agent-requested capability outside derived need is
+- [x] **T025** [RED] An agent-requested capability outside derived need is
   reported as outside derived need, never promoted to `required`. (FR-006)
 - [x] **T026** [RED] `undetermined` is NOT one of the four strengths -- assert the
   strength vocabulary has exactly four members. (FR-007)
-- [ ] **T027** [GREEN] Implement strength + decline recording.
+- [x] **T027** [GREEN] Implement strength + decline recording.
 
 ## Phase 4 -- Presentation (US3, P3)
 
@@ -92,17 +96,17 @@ test was seen RED, then GREEN.
   runtime identifier and no install command. **Non-vacuous**: build the forbidden
   set from the catalog's own `coordinate` values at test time, not a hardcoded
   list that silently stops matching when the catalog changes. (FR-012, SC-004)
-- [ ] **T029** [RED] On explicit request, provider identity, compatibility/version
+- [x] **T029** [RED] On explicit request, provider identity, compatibility/version
   state, and verification basis are all reachable -- sourced from the control
   plane, not recomputed. (FR-013)
-- [ ] **T030** [RED] Where more than one provider could satisfy a capability, the
+- [x] **T030** [RED] Where more than one provider could satisfy a capability, the
   selection and its basis are both reportable. (FR-014)
-- [ ] **T031** [RED] Machine-readable status carries strength, satisfied,
+- [x] **T031** [RED] Machine-readable status carries strength, satisfied,
   reason, and any blocker/undetermined marker -- enough to answer all five agent
   questions without provider internals. (FR-015, SC-008)
-- [ ] **T032** [RED] No presentation or machine-readable output contains a
+- [x] **T032** [RED] No presentation or machine-readable output contains a
   secret, credential, connection string, or token. (FR-016, SC-011)
-- [ ] **T033** [GREEN] Implement presentation + evidence path.
+- [x] **T033** [GREEN] Implement presentation + evidence path.
 
 ## Phase 5 -- Boundaries (the FRs that keep this a delta)
 
@@ -121,17 +125,17 @@ test was seen RED, then GREEN.
 - [x] **T038** [RED] `DEFAULT_PROFILE` is unchanged and profiles still work:
   derivation is an ADDITIONAL basis, not a replacement default (FR-002, and spec
   144 FR-006 protects the exported constant's value).
-- [ ] **T039** [RED] Adding a capability/provider to the catalog changes the
+- [x] **T039** [RED] Adding a capability/provider to the catalog changes the
   derived plan with no change to the user-facing journey. (FR-020, SC-010)
 
 ## Phase 6 -- Verification that the derivation actually derives
 
-- [ ] **T040** Non-vacuity sweep: for each negative assertion, break the evidence
+- [x] **T040** Non-vacuity sweep: for each negative assertion, break the evidence
   and confirm the test FAILS. **Commit before poking**, so the restore cannot
   discard work.
 - [x] **T041** Platform-vacuity: no assertion keyed to a Windows literal -- CI is
   Linux.
-- [ ] **T042** Prove `undetermined` is reachable AND not over-reachable: it fires
+- [x] **T042** Prove `undetermined` is reachable AND not over-reachable: it fires
   on unreadable evidence and does NOT fire merely because a capability is unused.
 
 ## Phase 7 -- Gates
@@ -139,8 +143,18 @@ test was seen RED, then GREEN.
 - [x] **T043** `ruff format --check src/ tests/` and `ruff check src/ tests/`.
 - [x] **T044** `pytest -m unit` green. CI's unit job runs WITHOUT app extras.
 - [x] **T045** `seshat check` exit 0.
-- [ ] **T046** Measure changed files with `cs review` if the CodeScene CLI is
-  available; refactor a flagged function rather than suppressing. Note it was NOT
+- [x] **T046** **NOT MEASURED -- limitation stated, not papered over.** Both
+  CodeScene MCP tools (`code_health_review`, `analyze_change_set`) fail with
+  "Access token is invalid or expired", and the installed plugin
+  (`~/.claude/plugins/cache/codescene/`) ships only `.mcp.json` -- no CLI binary,
+  so the tokenless `cs review` path is unavailable too. **No code-health verdict
+  is claimed**, because reasoning about health instead of measuring it has
+  produced wrong verdicts here before.
+  What WAS measured objectively: `derivation.py` is 498 lines (well under the
+  ~800-line gate) and every function in it is under 40 lines (AST-checked). To
+  close this properly, restore `CS_ACCESS_TOKEN` or install the CLI, then run
+  `cs review` on the changed files.
+  Original task text: measure changed files with `cs review` if the CLI is
   installed during spec 154's build -- verify before claiming a health result.
 - [x] **T047** Diff contains no unrelated file.
 
