@@ -27,9 +27,11 @@ The invalid states this type refuses to hold:
 
 from __future__ import annotations
 
+import os
 import shlex
 import subprocess
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -416,6 +418,7 @@ def validate_semantic_model(
     runner: object = None,
     baseline: frozenset[str] | None = None,
     examined: object = None,
+    env: Mapping[str, str] | None = None,
 ) -> ValidationOutcome:
     """Validate the touched semantic model offline, after a write.
 
@@ -468,7 +471,7 @@ def validate_semantic_model(
             blockers=(BLOCKER_VALIDATOR_ERROR,),
         )
 
-    return _outcome_for(
+    semantic = _outcome_for(
         completed.returncode,
         _ValidationRun(
             root,
@@ -481,3 +484,164 @@ def validate_semantic_model(
             examined,
         ),
     )
+    if semantic.blocking:
+        # Terminal. Running further validators against an artifact already known
+        # bad adds noise, not information -- and the operator's next move is the
+        # rollback this outcome already carries.
+        return semantic
+    return _merged_with_other_legs(
+        semantic, root, artifact, target_path, backup_ref, env
+    )
+
+
+def _merged_with_other_legs(
+    semantic: ValidationOutcome,
+    root: Path,
+    artifact: Path,
+    target_path: str,
+    backup_ref: str | None,
+    env: Mapping[str, str] | None,
+) -> ValidationOutcome:
+    """Fold the binding and value legs into a clean semantic result (FR-013).
+
+    Both legs report `(checks_run, failures, skipped)`, so a leg that could not
+    run contributes a REASON rather than silence.
+    """
+    model_dir = _model_dir_for(artifact)
+    bind_run, bind_failed, bind_skipped = validate_bindings_for(root, model_dir)
+    value_run, value_failed, value_skipped = validate_value_for(
+        root, env=os.environ if env is None else env
+    )
+
+    failed = (*semantic.failed, *bind_failed, *value_failed)
+    return ValidationOutcome(
+        checks_run=(*semantic.checks_run, *bind_run, *value_run),
+        artifacts_examined=semantic.artifacts_examined,
+        failed=failed,
+        rollback_guidance=(
+            rollback_guidance_for(target_path, backup_ref) if failed else ()
+        ),
+        blockers=(BLOCKER_VALIDATION_FAILED,) if failed else (),
+        checks_skipped=(*semantic.checks_skipped, *bind_skipped, *value_skipped),
+    )
+
+
+def _model_dir_for(artifact: Path) -> Path:
+    """The ``*.SemanticModel`` directory containing ``artifact``.
+
+    The target may be the model folder itself or a file inside it (research R8:
+    the vendor binds and flushes a whole folder), so walk up to the
+    ``.SemanticModel`` ancestor. With no such ancestor, fall back to the
+    artifact's own directory -- which simply pairs no reports.
+    """
+    for candidate in (artifact, *artifact.parents):
+        if candidate.name.endswith(".SemanticModel"):
+            return candidate
+    return artifact if artifact.is_dir() else artifact.parent
+
+
+def _real_binding_validator() -> object:
+    """The shipped validator, imported lazily so the stdlib-only chain stays clean."""
+    from seshat.pbir_validate_bindings import validate_bindings
+
+    return validate_bindings
+
+
+def validate_bindings_for(
+    repo_root: Path,
+    model_dir: Path,
+    *,
+    validator: object = None,
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, str], ...]]:
+    """Validate every report bound to ``model_dir``. Returns (run, failures, skipped).
+
+    Only ``status == "blocked"`` is a failure. A kind mismatch is the shipped
+    validator's WARNING class, so promoting it here would block writes the
+    report layer itself does not consider broken.
+
+    A validator that raises becomes a recorded SKIP, never an implicit pass: a
+    crashed check that reads clean is exactly the fail-open this module exists
+    to prevent.
+    """
+    from seshat.pbi_mcp_adapter.validation_plan import BINDING_CHECK, paired_reports
+
+    paired, skipped_pairs = paired_reports(repo_root, model_dir)
+    skipped = list(skipped_pairs)
+    if not paired:
+        skipped.append(
+            (
+                BINDING_CHECK,
+                "no report in this repository is bound to the mutated model, so "
+                "no binding check ran",
+            )
+        )
+        return (), (), tuple(skipped)
+
+    invoke = validator if validator is not None else _real_binding_validator()
+    checks_run: list[str] = []
+    failures: list[str] = []
+    for report_dir in paired:
+        try:
+            result = invoke(report_dir=report_dir, model_dir=model_dir)  # type: ignore[operator]
+        except Exception as exc:  # noqa: BLE001 - ANY validator error is a skip
+            skipped.append(
+                (
+                    BINDING_CHECK,
+                    f"{report_dir.name}: validator did not complete ({exc})",
+                )
+            )
+            continue
+        checks_run.append(f"{BINDING_CHECK} {report_dir.name}")
+        if getattr(result, "status", "") == "blocked":
+            failures.append(
+                f"{BINDING_CHECK} {report_dir.name}: "
+                f"{len(result.unresolved)} unresolved binding(s)"
+            )
+    return tuple(checks_run), tuple(failures), tuple(skipped)
+
+
+def validate_value_for(
+    repo_root: Path,
+    *,
+    env: Mapping[str, str],
+    runner: object = None,
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, str], ...]]:
+    """Recompute approved values live, or record loudly that we could not.
+
+    No data leg is a SKIP WITH A REASON, never silence and never a pass
+    (decision D2): the shipped ``retail validate`` posture is
+    ``[PENDING LIVE PROFILE]``, and "no data leg" must not read as "validated".
+
+    No DSN value is ever interpolated into a reason or a failure. Those strings
+    reach evidence and stdout, so only the PRESENCE of a data leg is ever
+    consulted -- never its content.
+    """
+    from seshat.pbi_mcp_adapter.validation_plan import VALUE_CHECK, dsn_is_available
+
+    if not dsn_is_available(env):
+        return (
+            (),
+            (),
+            (
+                (
+                    VALUE_CHECK,
+                    "[PENDING LIVE PROFILE] no data leg is configured, so approved "
+                    "values were not recomputed after this write",
+                ),
+            ),
+        )
+
+    root = Path(repo_root).resolve()
+    argv = (sys.executable, "-m", "seshat.cli", VALUE_CHECK, "--repo", str(root))
+    invoke = runner if runner is not None else _run_validator
+    try:
+        completed = invoke(root, argv)  # type: ignore[operator]
+    except (subprocess.TimeoutExpired, OSError):
+        return ((), (), ((VALUE_CHECK, "the value validator did not complete"),))
+    if completed.returncode != 0:
+        return (
+            (f"seshat {VALUE_CHECK}",),
+            (f"seshat {VALUE_CHECK} exit {completed.returncode}",),
+            (),
+        )
+    return ((f"seshat {VALUE_CHECK}",), (), ())

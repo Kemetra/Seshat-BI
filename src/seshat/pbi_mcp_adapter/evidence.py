@@ -118,6 +118,10 @@ class RunEvidence:
     mutation_attempted: bool
     blockers: tuple[str, ...] = field(default_factory=tuple)
     rollback_guidance: tuple[str, ...] = field(default_factory=tuple)
+    #: (check, reason) for every validator that did NOT run. A record showing
+    #: only what passed invites a reader to assume everything was checked
+    #: (issue #661).
+    checks_skipped: tuple[tuple[str, str], ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         if self.outcome not in OUTCOMES:
@@ -149,6 +153,10 @@ class RunEvidence:
             "mutation_attempted": self.mutation_attempted,
             "blockers": [redact(blocker) for blocker in self.blockers],
             "rollback_guidance": [redact(line) for line in self.rollback_guidance],
+            "checks_skipped": [
+                {"check": redact(check), "reason": redact(reason)}
+                for check, reason in self.checks_skipped
+            ],
         }
 
 
@@ -162,10 +170,27 @@ def _payload_strings(payload: dict[str, object]) -> list[tuple[str, str]]:
         if isinstance(value, str):
             found.append((key, value))
         elif isinstance(value, list):
+            found.extend(_list_strings(key, value))
+    return found
+
+
+def _list_strings(key: str, value: list) -> list[tuple[str, str]]:
+    """Strings inside a list, including those one level down in a dict.
+
+    ``checks_skipped`` serializes as a list of ``{check, reason}`` objects, and
+    a scan that only saw top-level strings would let a secret in a reason reach
+    the record unscanned -- the same fail-open shape as scanning only the
+    rendered JSON.
+    """
+    found: list[tuple[str, str]] = []
+    for index, item in enumerate(value):
+        if isinstance(item, str):
+            found.append((f"{key}[{index}]", item))
+        elif isinstance(item, dict):
             found.extend(
-                (f"{key}[{index}]", item)
-                for index, item in enumerate(value)
-                if isinstance(item, str)
+                (f"{key}[{index}].{sub_key}", sub_value)
+                for sub_key, sub_value in item.items()
+                if isinstance(sub_value, str)
             )
     return found
 
@@ -224,6 +249,8 @@ def _redact_payload(payload: dict[str, object]) -> tuple[str, ...]:
             return [scrub(item) for item in value]
         if isinstance(value, tuple):
             return tuple(scrub(item) for item in value)
+        if isinstance(value, dict):
+            return {key: scrub(item) for key, item in value.items()}
         return value
 
     for key, value in list(payload.items()):

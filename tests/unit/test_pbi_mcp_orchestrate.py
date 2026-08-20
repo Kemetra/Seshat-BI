@@ -603,3 +603,26 @@ def test_a_non_evidence_ignored_file_is_still_visible_to_the_scope_check(
         "a non-evidence ignored file was excluded by a prefix rule; the "
         f"exclusion must be exact-path only: {blockers}"
     )
+
+
+def test_a_pre_existing_finding_elsewhere_does_not_block_an_apply(
+    ready_repo: Path,
+) -> None:
+    """End to end for #663 gap 3.
+
+    The corpus is repo-wide, so an error in a model this apply never touched
+    must not fail the apply nor recommend rolling it back -- that rollback
+    cannot fix the reported error.
+    """
+    other = ready_repo / "Other.SemanticModel" / "definition"
+    other.mkdir(parents=True, exist_ok=True)
+    (other / "other.tmdl").write_text(
+        "table Other\n\tmeasure Unapproved = SUM(Other[X])\n\tcolumn X\n"
+        "\t\tdataType: double\n",
+        encoding="utf-8",
+    )
+
+    report = _apply(ready_repo)
+
+    assert report.outcome == "materialized", f"blocked by: {report.blockers}"
+    assert report.rollback_guidance == ()

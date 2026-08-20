@@ -211,6 +211,7 @@ class WriteReport:
     mode: str = ""
     checks_run: tuple[str, ...] = ()
     validation_failed: tuple[str, ...] = ()
+    checks_skipped: tuple[tuple[str, str], ...] = ()
 
     @property
     def succeeded(self) -> bool:
@@ -236,6 +237,9 @@ class _Ending:
     #: path that never reached validation, which is honest: nothing was verified.
     checks_run: tuple[str, ...] = ()
     validation_failed: tuple[str, ...] = ()
+    #: Validators that did NOT run, with why. Carried alongside `checks_run` so
+    #: the record and the report cannot disagree about what was verified.
+    checks_skipped: tuple[tuple[str, str], ...] = ()
 
 
 def _terminate(
@@ -259,6 +263,7 @@ def _terminate(
         mutation_attempted=ending.mutation_attempted,
         blockers=ending.blockers,
         rollback_guidance=ending.rollback_guidance,
+        checks_skipped=ending.checks_skipped,
     )
     path = evidence.finalize(repo_root, record)
     return WriteReport(
@@ -272,6 +277,7 @@ def _terminate(
         mode=identity.mode,
         checks_run=ending.checks_run,
         validation_failed=ending.validation_failed,
+        checks_skipped=ending.checks_skipped,
     )
 
 
@@ -312,6 +318,11 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
     # actually changed. The target path and operation come from the VERDICT --
     # there is no parameter by which to substitute another.
     before = _snapshot(root)
+    # The finding baseline MUST be taken before the mutation: afterwards there is
+    # no way to tell a finding this write introduced from one that was already
+    # there, and the whole corpus is in scope (#663 gap 3). None here is not an
+    # empty baseline -- `validate_semantic_model` treats it as a blocker.
+    semantic_before = validation.semantic_baseline(root)
     # ``mcp_runner`` keeps its name as the injection seam, but at #660 its
     # CONTRACT changed: it is now a session factory (``**kwargs -> McpSession``),
     # not a subprocess invoker, because the runtime is an MCP stdio server rather
@@ -359,6 +370,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
     # A zero exit from the runtime is not confirmation.
     outcome = validation.validate_semantic_model(
         root,
+        baseline=semantic_before,
         target_path=authorized_path,
         backup_ref=plan.backup_ref,
         runner=plan.validator,
@@ -373,6 +385,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
             rollback_guidance=outcome.rollback_guidance or guidance,
             checks_run=outcome.checks_run,
             validation_failed=outcome.failed,
+            checks_skipped=outcome.checks_skipped,
         )
 
     # Applied AND confirmed by validation.
@@ -383,6 +396,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
         mutation_attempted=result.mutation_attempted,
         checks_run=outcome.checks_run,
         validation_failed=outcome.failed,
+        checks_skipped=outcome.checks_skipped,
     )
 
 
