@@ -752,3 +752,102 @@ def test_a_read_pair_records_no_mutation_attempted(ready_repo: Path) -> None:
     assert report.mutation_attempted is False, report.blockers
     payload = json.loads(report.evidence_path.read_text(encoding="utf-8"))
     assert payload["mutation_attempted"] is False
+
+
+# --------------------------------------------------------------------------
+# Review C1/H1 -- a FOLDER target: the vendor connects and flushes a directory
+# --------------------------------------------------------------------------
+
+FOLDER_TARGET = "Sales.SemanticModel"
+
+
+#: Siblings inside the model folder, COMMITTED by `_folder_repo`. They must be
+#: tracked: `_semantic_files` discovers from git with `include_untracked=False`,
+#: so a file created mid-test is invisible to the validator's own corpus.
+SIBLINGS = ("dim_customer", "dim_date", "dim_product")
+
+
+def _sibling_tmdl(name: str) -> str:
+    return f"table {name}\n\n\tcolumn Key\n\t\tdataType: string\n"
+
+
+def _folder_repo(repo: Path) -> Path:
+    """Re-point the committed allowlist at the model FOLDER, not one file."""
+    _write(
+        repo,
+        gate.TARGET_ALLOWLIST_RELPATH,
+        ALLOWLIST.replace(f"path: {TARGET_PATH}", f"path: {FOLDER_TARGET}"),
+    )
+    for name in SIBLINGS:
+        _write(
+            repo,
+            f"{FOLDER_TARGET}/definition/tables/{name}.tmdl",
+            _sibling_tmdl(name),
+        )
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "folder target", "--no-gpg-sign")
+    return repo
+
+
+def test_a_folder_target_clears_the_gate(ready_repo: Path) -> None:
+    """C1: requiring is_file() made folder targets unusable.
+
+    The vendor binds a TMDL *folder* and flushes it back, so a write target is
+    legitimately a directory. Before this fix, a file target cleared the gate but
+    could not be connected, and a folder target could be connected but never
+    cleared -- the two branches were mutually exclusive and no write could run.
+    """
+    report = _apply(_folder_repo(ready_repo))
+    assert gate.BLOCKER_TARGET_ABSENT not in report.blockers, report.blockers
+
+
+def test_a_folder_write_touching_many_files_is_in_scope(ready_repo: Path) -> None:
+    """H1: ExportToTmdlFolder rewrites the WHOLE folder -- 11 files, measured.
+
+    Scoping a folder write to a single path reports an out-of-scope change on
+    every legitimate apply.
+    """
+
+    def _rewrite_whole_folder(cwd: Path) -> None:
+        # Faithful to the real flush: the authorized artifact AND its siblings in
+        # the same model folder are all rewritten. Sibling content is valid TMDL
+        # so the post-write validator has real bytes to parse -- an invalid
+        # sibling would fail on PBIMCP-VAL-02 (read nothing) and prove nothing
+        # about scope, which is what this test is for.
+        tables = cwd / FOLDER_TARGET / "definition" / "tables"
+        (cwd / TARGET_PATH).write_text(MUTATED_TMDL, encoding="utf-8")
+        for name in SIBLINGS:
+            (tables / f"{name}.tmdl").write_text(
+                _sibling_tmdl(name) + "\tcolumn Extra\n\t\tdataType: int64\n",
+                encoding="utf-8",
+            )
+
+    report = _apply(
+        _folder_repo(ready_repo), mcp_runner=_mcp_session(_rewrite_whole_folder)
+    )
+    assert orchestrate.BLOCKER_OUT_OF_SCOPE_CHANGE not in report.blockers, (
+        report.blockers
+    )
+    assert report.succeeded, report.blockers
+
+
+def test_a_folder_write_escaping_the_subtree_is_STILL_refused(
+    ready_repo: Path,
+) -> None:
+    """Widening to a subtree must not license changes outside it."""
+
+    def _stray(cwd: Path) -> None:
+        (cwd / TARGET_PATH).write_text(MUTATED_TMDL, encoding="utf-8")
+        (cwd / "README.md").write_text("not in the model folder\n", encoding="utf-8")
+
+    report = _apply(_folder_repo(ready_repo), mcp_runner=_mcp_session(_stray))
+    assert orchestrate.BLOCKER_OUT_OF_SCOPE_CHANGE in report.blockers
+
+
+def test_a_folder_write_that_changes_nothing_is_not_materialized(
+    ready_repo: Path,
+) -> None:
+    """A no-op folder write must not report success."""
+    report = _apply(_folder_repo(ready_repo), mcp_runner=_mcp_session())
+    assert orchestrate.BLOCKER_TARGET_UNCHANGED in report.blockers
+    assert report.succeeded is False

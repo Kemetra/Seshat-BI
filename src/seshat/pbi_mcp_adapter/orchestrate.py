@@ -132,9 +132,21 @@ def _effect_blockers(
     changed = {
         rel for rel in set(before) | set(after) if before.get(rel) != after.get(rel)
     }
-    if target not in changed:
+
+    # A FOLDER target legitimately changes many files. `ExportToTmdlFolder`
+    # rewrites the entire model directory -- measured at 11 TMDL files, including
+    # tables the operation never named (research.md R8). Scoping a folder write to
+    # one path would report BLOCKER_OUT_OF_SCOPE_CHANGE on every real apply
+    # (issue #660 review H1), so for a folder the authorized scope is its subtree.
+    #
+    # This does NOT widen a file target: a file authorizes exactly itself, and
+    # anything outside the declared subtree is still out of scope either way.
+    prefix = target if target.endswith("/") else target + "/"
+    in_scope = {rel for rel in changed if rel == target or rel.startswith(prefix)}
+
+    if not in_scope:
         found.append(BLOCKER_TARGET_UNCHANGED)
-    if changed - {target}:
+    if changed - in_scope:
         found.append(BLOCKER_OUT_OF_SCOPE_CHANGE)
     return tuple(found)
 

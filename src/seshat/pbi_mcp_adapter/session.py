@@ -22,6 +22,7 @@ public registry; if something else answers, refuse rather than issue writes to i
 from __future__ import annotations
 
 import queue
+import shutil
 import subprocess
 import threading
 import time
@@ -38,6 +39,7 @@ __all__ = [
     "SessionStalled",
     "SubprocessTransport",
     "Transport",
+    "resolve_launcher",
 ]
 
 #: The server must identify as this. Probed 2026-08-20.
@@ -159,6 +161,28 @@ class McpSession:
         self._transport.terminate()
 
 
+def resolve_launcher(argv: list[str]) -> list[str]:
+    """Resolve argv[0] to an absolute executable, or leave it for Popen to fail on.
+
+    ``npx`` on Windows is ``npx.cmd``, and ``Popen`` with ``shell=False`` does NOT
+    apply PATHEXT -- so a hardcoded ``"npx"`` raises FileNotFoundError and every
+    real run reported "the vendor runtime could not be launched". Hardcoding
+    ``npx.cmd`` would then break POSIX, so resolution is delegated to
+    :func:`shutil.which`, the pattern already used in ``integrations/installer``.
+
+    Found by running the SHIPPED runner against the real vendor: all 444 unit
+    tests inject a session factory, so none of them ever executes this argv.
+
+    An unresolvable name is returned UNCHANGED rather than raising here, so the
+    failure surfaces as the runner's typed ``BLOCKER_RUNTIME_MISSING`` result
+    instead of an exception from a constructor.
+    """
+    if not argv:  # pragma: no cover - build_argv never returns empty
+        return argv
+    resolved = shutil.which(argv[0])
+    return [resolved, *argv[1:]] if resolved else argv
+
+
 class SubprocessTransport:
     """The real transport: npx over dedicated pipes, with a REAL read deadline.
 
@@ -204,7 +228,7 @@ class SubprocessTransport:
         self._stdout_q: queue.Queue[bytes | None] = queue.Queue()
         self._stderr_parts: list[bytes] = []
         self._proc = subprocess.Popen(  # noqa: S603 - fixed argv shape, no shell
-            argv,
+            resolve_launcher(argv),
             cwd=cwd,
             env=env,
             stdin=subprocess.PIPE,

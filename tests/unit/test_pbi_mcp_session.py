@@ -151,3 +151,32 @@ def test_a_deadline_of_zero_raises_instead_of_looping_forever():
     sess = session.McpSession(transport, deadline_seconds=0)
     with pytest.raises(session.SessionError):
         sess.handshake()
+
+
+# --------------------------------------------------------------------------
+# Launcher resolution -- found by running the SHIPPED runner for real
+# --------------------------------------------------------------------------
+
+
+def test_the_launcher_is_resolved_to_an_absolute_path():
+    """`npx` on Windows is `npx.cmd`, and Popen(shell=False) ignores PATHEXT.
+
+    Every real run failed with BLOCKER_RUNTIME_MISSING while 444 unit tests
+    passed, because they all inject a session factory and never execute the argv.
+    """
+    import shutil
+
+    resolved = session.resolve_launcher(["git", "--version"])
+    assert resolved[0] == shutil.which("git")
+    assert resolved[0] != "git", "argv[0] was not resolved"
+    assert resolved[1:] == ["--version"], "the arguments must be preserved"
+
+
+def test_an_unresolvable_launcher_passes_through_unchanged():
+    """So the failure surfaces as a typed RunResult, not a constructor raise."""
+    argv = ["definitely-not-a-real-binary-xyz", "--flag"]
+    assert session.resolve_launcher(argv) == argv
+
+
+def test_resolve_launcher_tolerates_an_empty_argv():
+    assert session.resolve_launcher([]) == []

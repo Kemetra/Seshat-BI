@@ -196,13 +196,32 @@ def _target_was_examined(repo_root: Path, artifact: Path) -> bool:
     except (OSError, RuntimeError, ValueError):
         return False
     resolved = artifact.resolve()
+
+    def _parseable(path: Path) -> bool:
+        try:
+            return parse_tmdl(path.read_text(encoding="utf-8-sig")) is not None
+        except OSError:
+            return False
+
+    # A FOLDER target: the vendor binds and flushes a whole model directory
+    # (research.md R8), so the authorized artifact can be a directory rather than
+    # one file. Both conditions still hold, applied to its contents: at least one
+    # DISCOVERED file inside the subtree must also be PARSEABLE. Requiring only
+    # discovery would pass on a folder full of unparseable files; requiring only
+    # parseability would not prove the subprocess looked inside.
+    #
+    # Fails CLOSED: an empty folder, or one whose files the command skips, is
+    # "not examined".
+    if artifact.is_dir():
+        return any(
+            _parseable(found)
+            for found in discovered
+            if found.resolve().is_relative_to(resolved)
+        )
+
     if not any(found.resolve() == resolved for found in discovered):
         return False
-    try:
-        text = artifact.read_text(encoding="utf-8-sig")
-    except OSError:
-        return False
-    return parse_tmdl(text) is not None
+    return _parseable(artifact)
 
 
 @dataclass(frozen=True)
@@ -287,7 +306,12 @@ def validate_semantic_model(
 
     # An absent artifact means the write produced nothing to validate. Reported
     # honestly as read-nothing rather than as a clean run.
-    if not artifact.is_file():
+    #
+    # A DIRECTORY is a legitimate target: the vendor binds and flushes a whole
+    # TMDL folder (research.md R8), so `exists()` rather than `is_file()`.
+    # Requiring a file here rejected every folder target before
+    # `_target_was_examined` could inspect its contents (issue #660 review C1).
+    if not artifact.exists():
         return read_nothing_outcome(checks_run)
 
     invoke = runner if runner is not None else _run_validator
