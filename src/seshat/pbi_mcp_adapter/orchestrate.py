@@ -370,10 +370,11 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
     # A zero exit from the runtime is not confirmation.
     outcome = validation.validate_semantic_model(
         root,
-        baseline=semantic_before,
         target_path=authorized_path,
         backup_ref=plan.backup_ref,
-        runner=plan.validator,
+        context=validation.ValidationContext(
+            runner=plan.validator, baseline=semantic_before
+        ),
     )
     if not outcome.passed:
         return terminal(

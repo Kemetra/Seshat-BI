@@ -98,7 +98,9 @@ def test_passed_requires_something_to_have_been_examined() -> None:
 def test_absent_artifact_reports_read_nothing_not_success(tmp_path: Path) -> None:
     """A write that produced no artifact is not a validated write."""
     outcome = validation.validate_semantic_model(
-        tmp_path, target_path=TARGET_PATH, runner=_fake_runner(0)
+        tmp_path,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=_fake_runner(0)),
     )
     assert not outcome.passed
     assert validation.BLOCKER_READ_NOTHING in outcome.blockers
@@ -117,7 +119,9 @@ def test_validator_is_invoked_with_require_inputs(repo_with_target: Path) -> Non
         return subprocess.CompletedProcess(args=list(args), returncode=0, stdout="")
 
     validation.validate_semantic_model(
-        repo_with_target, target_path=TARGET_PATH, runner=run
+        repo_with_target,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=run),
     )
     assert "--require-inputs" in captured["args"]
 
@@ -138,7 +142,9 @@ def test_validator_targets_the_semantic_model_family_not_the_report_family(
         return subprocess.CompletedProcess(args=list(args), returncode=0, stdout="")
 
     validation.validate_semantic_model(
-        repo_with_target, target_path=TARGET_PATH, runner=run
+        repo_with_target,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=run),
     )
     assert "semantic-check" in captured["args"]
 
@@ -152,8 +158,9 @@ def test_validation_failure_is_blocking_with_rollback(repo_with_target: Path) ->
     outcome = validation.validate_semantic_model(
         repo_with_target,
         target_path=TARGET_PATH,
-        runner=_fake_runner(1),
-        baseline=frozenset(),
+        context=validation.ValidationContext(
+            runner=_fake_runner(1), baseline=frozenset()
+        ),
     )
     assert outcome.blocking
     assert not outcome.passed
@@ -176,7 +183,9 @@ def test_guidance_cannot_be_forgotten() -> None:
 def test_failure_is_never_expressible_as_a_warning(repo_with_target: Path) -> None:
     """There is no warning level a script could ignore (FR-014)."""
     outcome = validation.validate_semantic_model(
-        repo_with_target, target_path=TARGET_PATH, runner=_fake_runner(1)
+        repo_with_target,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=_fake_runner(1)),
     )
     assert outcome.blocking is True
     assert outcome.passed is False
@@ -251,7 +260,9 @@ def test_runtime_reported_success_but_touched_nothing(tmp_path: Path) -> None:
     rather than as an applied change.
     """
     outcome = validation.validate_semantic_model(
-        tmp_path, target_path=TARGET_PATH, runner=_fake_runner(0)
+        tmp_path,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=_fake_runner(0)),
     )
     assert not outcome.passed
     assert validation.BLOCKER_READ_NOTHING in outcome.blockers
@@ -269,7 +280,9 @@ def test_validator_timeout_is_blocking_with_rollback(repo_with_target: Path) -> 
         raise subprocess.TimeoutExpired(cmd=list(args), timeout=1)
 
     outcome = validation.validate_semantic_model(
-        repo_with_target, target_path=TARGET_PATH, runner=stall
+        repo_with_target,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=stall),
     )
     assert outcome.blocking
     assert outcome.rollback_guidance
@@ -281,7 +294,9 @@ def test_validator_oserror_is_blocking(repo_with_target: Path) -> None:
         raise OSError("python not found")
 
     outcome = validation.validate_semantic_model(
-        repo_with_target, target_path=TARGET_PATH, runner=boom
+        repo_with_target,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=boom),
     )
     assert outcome.blocking
     assert validation.BLOCKER_VALIDATOR_ERROR in outcome.blockers
@@ -289,7 +304,9 @@ def test_validator_oserror_is_blocking(repo_with_target: Path) -> None:
 
 def test_outcome_carries_no_score(repo_with_target: Path) -> None:
     outcome = validation.validate_semantic_model(
-        repo_with_target, target_path=TARGET_PATH, runner=_fake_runner(0)
+        repo_with_target,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=_fake_runner(0)),
     )
     for name, value in vars(outcome).items():
         if isinstance(value, bool):
@@ -446,7 +463,9 @@ def test_validator_runs_the_active_interpreter_not_path_python(
         return subprocess.CompletedProcess(args=list(args), returncode=0)
 
     validation.validate_semantic_model(
-        repo_with_target, target_path=TARGET_PATH, runner=capture
+        repo_with_target,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=capture),
     )
 
     interpreter = seen["args"][0]
@@ -525,7 +544,10 @@ def test_a_target_inside_the_corpus_still_passes(tmp_path: Path) -> None:
     _git(tmp_path, "commit", "-q", "-m", "baseline", "--no-gpg-sign")
 
     outcome = validation.validate_semantic_model(
-        tmp_path, target_path=target_rel, backup_ref=None, baseline=frozenset()
+        tmp_path,
+        target_path=target_rel,
+        backup_ref=None,
+        context=validation.ValidationContext(baseline=frozenset()),
     )
 
     assert outcome.passed, f"a discoverable target was refused: {outcome.blockers}"
@@ -565,7 +587,9 @@ def test_validator_receives_an_absolute_repo_path(tmp_path: Path) -> None:
     os.chdir(tmp_path.parent)
     try:
         validation.validate_semantic_model(
-            relative, target_path=TARGET_PATH, runner=capture
+            relative,
+            target_path=TARGET_PATH,
+            context=validation.ValidationContext(runner=capture),
         )
     finally:
         os.chdir(previous)
@@ -647,9 +671,11 @@ def test_a_pre_existing_finding_does_not_block_the_write(
     outcome = validation.validate_semantic_model(
         repo_with_target,
         target_path=TARGET_PATH,
-        baseline=frozenset({_PRE_EXISTING}),
-        runner=_runner_printing(_PRE_EXISTING + "\n", 1),
-        examined=lambda _root, _artifact: True,
+        context=validation.ValidationContext(
+            runner=_runner_printing(_PRE_EXISTING + "\n", 1),
+            baseline=frozenset({_PRE_EXISTING}),
+            examined=lambda _root, _artifact: True,
+        ),
     )
 
     assert outcome.blocking is False, (
@@ -664,9 +690,11 @@ def test_a_finding_this_write_introduced_does_block(repo_with_target: Path) -> N
     outcome = validation.validate_semantic_model(
         repo_with_target,
         target_path=TARGET_PATH,
-        baseline=frozenset({_PRE_EXISTING}),
-        runner=_runner_printing(f"{_PRE_EXISTING}\n{_NEW}\n", 1),
-        examined=lambda _root, _artifact: True,
+        context=validation.ValidationContext(
+            runner=_runner_printing(f"{_PRE_EXISTING}\n{_NEW}\n", 1),
+            baseline=frozenset({_PRE_EXISTING}),
+            examined=lambda _root, _artifact: True,
+        ),
     )
 
     assert outcome.blocking is True
@@ -684,9 +712,11 @@ def test_an_unobtainable_baseline_blocks(repo_with_target: Path) -> None:
     outcome = validation.validate_semantic_model(
         repo_with_target,
         target_path=TARGET_PATH,
-        baseline=None,
-        runner=_runner_printing("", 0),
-        examined=lambda _root, _artifact: True,
+        context=validation.ValidationContext(
+            runner=_runner_printing("", 0),
+            baseline=None,
+            examined=lambda _root, _artifact: True,
+        ),
     )
 
     assert outcome.blocking is True
@@ -721,9 +751,11 @@ def test_a_nonzero_exit_with_no_parseable_finding_still_blocks(
     outcome = validation.validate_semantic_model(
         repo_with_target,
         target_path=TARGET_PATH,
-        baseline=frozenset(),
-        runner=_runner_printing("", 1),
-        examined=lambda _root, _artifact: True,
+        context=validation.ValidationContext(
+            runner=_runner_printing("", 1),
+            baseline=frozenset(),
+            examined=lambda _root, _artifact: True,
+        ),
     )
 
     assert outcome.blocking is True, "an unexplained non-zero exit did not block"
@@ -866,10 +898,12 @@ def test_the_binding_and_value_legs_actually_run_on_a_clean_semantic_pass(
     outcome = validation.validate_semantic_model(
         repo_with_target,
         target_path=TARGET_PATH,
-        baseline=frozenset(),
-        runner=_runner_printing("", 0),
-        examined=lambda _root, _artifact: True,
-        env={},
+        context=validation.ValidationContext(
+            runner=_runner_printing("", 0),
+            baseline=frozenset(),
+            examined=lambda _root, _artifact: True,
+            env={},
+        ),
     )
 
     skipped_checks = {check for check, _reason in outcome.checks_skipped}
@@ -889,10 +923,12 @@ def test_a_blocking_semantic_result_short_circuits_the_other_legs(
     outcome = validation.validate_semantic_model(
         repo_with_target,
         target_path=TARGET_PATH,
-        baseline=None,
-        runner=_runner_printing("", 0),
-        examined=lambda _root, _artifact: True,
-        env={},
+        context=validation.ValidationContext(
+            runner=_runner_printing("", 0),
+            baseline=None,
+            examined=lambda _root, _artifact: True,
+            env={},
+        ),
     )
 
     assert outcome.blocking is True

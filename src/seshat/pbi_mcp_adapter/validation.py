@@ -410,15 +410,39 @@ def _outcome_for(returncode: int, run: _ValidationRun) -> ValidationOutcome:
     )
 
 
+@dataclass(frozen=True)
+class ValidationContext:
+    """What a post-write validation is measured AGAINST, as one value.
+
+    Four seams that answer one question -- "how is this run wired, and what
+    does it measure itself against?" -- travelling together rather than as four
+    more keyword arguments. Three arrived with issues #661/#663; ``runner``
+    joined them so the signature stays inside the argument-count gate.
+
+    Every field defaults, so a caller with nothing to compare against passes
+    nothing: ``ValidationContext()``.
+    """
+
+    #: Findings that existed BEFORE the mutation. ``None`` means the baseline
+    #: could not be captured, which is a blocker -- never an empty baseline.
+    baseline: frozenset[str] | None = None
+    #: The validator subprocess. Injectable so tests drive every branch without
+    #: spawning a real one.
+    runner: object = None
+    #: The examined-the-target proof. ``None`` uses the real check; overridden
+    #: only so tests can reach the baseline branches without building a
+    #: discoverable TMDL corpus. The proof itself is never weakened.
+    examined: object = None
+    #: Environment consulted for a data leg. ``None`` means ``os.environ``.
+    env: Mapping[str, str] | None = None
+
+
 def validate_semantic_model(
     repo_root: Path,
     *,
     target_path: str,
     backup_ref: str | None = None,
-    runner: object = None,
-    baseline: frozenset[str] | None = None,
-    examined: object = None,
-    env: Mapping[str, str] | None = None,
+    context: ValidationContext | None = None,
 ) -> ValidationOutcome:
     """Validate the touched semantic model offline, after a write.
 
@@ -439,6 +463,9 @@ def validate_semantic_model(
     # string from inside the repository and validate a different or nonexistent
     # directory -- reporting a good mutation as a validation failure and telling
     # the operator to roll it back (Codex review, PR #659).
+    measured = context if context is not None else ValidationContext()
+    baseline, runner = measured.baseline, measured.runner
+    examined, env = measured.examined, measured.env
     root = Path(repo_root).resolve()
     artifact = root / target_path
     checks_run = ("seshat semantic-check --require-inputs",)
