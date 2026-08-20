@@ -17,25 +17,33 @@ import pytest
 pytestmark = pytest.mark.unit
 
 
-def _project(
-    root: Path,
-    *,
-    source_map: bool = False,
-    pbip: bool = False,
-    dbt: bool = False,
-    dagster: bool = False,
-    unreadable_source_map: bool = False,
-) -> Path:
-    """A project tree carrying exactly the declared evidence."""
+_EVIDENCE = frozenset({"source_map", "pbip", "dbt", "dagster", "unreadable_source_map"})
+
+_READABLE_MAP = "meta:\n  table_id: sales\n  source_system: kaggle_retail\n"
+_UNREADABLE_MAP = "meta:\n  source_system: [unclosed\n"
+
+
+def _project(root: Path, *evidence: str) -> Path:
+    """A project tree carrying exactly the declared evidence.
+
+    Evidence is named positionally rather than by keyword so the builder stays
+    within the arity budget. Unknown tokens raise: a silent typo would build the
+    wrong tree and leave the assertion passing for the wrong reason.
+    """
+    unknown = sorted(set(evidence) - _EVIDENCE)
+    assert not unknown, f"unknown evidence: {unknown}"
+    declared = set(evidence)
+    source_map = "source_map" in declared
+    pbip = "pbip" in declared
+    dbt = "dbt" in declared
+    dagster = "dagster" in declared
+    unreadable = "unreadable_source_map" in declared
+
     (root / ".seshat").mkdir(parents=True, exist_ok=True)
-    if source_map or unreadable_source_map:
+    if source_map or unreadable:
         table = root / "mappings" / "sales"
         table.mkdir(parents=True)
-        body = (
-            "meta:\n  table_id: sales\n  source_system: kaggle_retail\n"
-            if not unreadable_source_map
-            else "meta:\n  source_system: [unclosed\n"
-        )
+        body = _UNREADABLE_MAP if unreadable else _READABLE_MAP
         (table / "source-map.yaml").write_text(body, encoding="utf-8")
     if pbip:
         (root / "powerbi").mkdir()
@@ -67,7 +75,7 @@ def test_declared_source_makes_database_connectivity_required(tmp_path: Path) ->
     """T009 (FR-001, FR-008): the reason must cite the artifact consulted."""
     from seshat.integrations.derivation import derive
 
-    plan = derive(_project(tmp_path, source_map=True))
+    plan = derive(_project(tmp_path, "source_map"))
     row = _row(plan, "database-connectivity")
     assert row.strength == "required"
     assert "source-map.yaml" in row.reason
@@ -77,7 +85,7 @@ def test_a_pbip_project_makes_powerbi_integration_required(tmp_path: Path) -> No
     """T010 (FR-001)."""
     from seshat.integrations.derivation import derive
 
-    row = _row(derive(_project(tmp_path, pbip=True)), "powerbi-integration")
+    row = _row(derive(_project(tmp_path, "pbip")), "powerbi-integration")
     assert row.strength == "required"
 
 
@@ -85,7 +93,7 @@ def test_no_pbip_means_powerbi_integration_is_not_required(tmp_path: Path) -> No
     """T011 (US1 AS3): no declared destination, no required destination."""
     from seshat.integrations.derivation import derive
 
-    row = _row(derive(_project(tmp_path, source_map=True)), "powerbi-integration")
+    row = _row(derive(_project(tmp_path, "source_map")), "powerbi-integration")
     assert row.strength != "required"
 
 
@@ -93,11 +101,11 @@ def test_a_committed_dbt_project_drives_transformation_engine(tmp_path: Path) ->
     """T012 (US1 AS1): present -> needed; absent -> not-required, cited."""
     from seshat.integrations.derivation import derive
 
-    present = _row(derive(_project(tmp_path / "a", dbt=True)), "transformation-engine")
+    present = _row(derive(_project(tmp_path / "a", "dbt")), "transformation-engine")
     assert present.strength in {"required", "recommended"}
 
     absent = _row(
-        derive(_project(tmp_path / "b", source_map=True)), "transformation-engine"
+        derive(_project(tmp_path / "b", "source_map")), "transformation-engine"
     )
     assert absent.strength == "not-required"
     # The reason must cite what was looked for WITHOUT naming the provider: an
@@ -117,7 +125,7 @@ def test_absent_orchestration_is_not_required_not_undetermined(tmp_path: Path) -
     """
     from seshat.integrations.derivation import derive
 
-    row = _row(derive(_project(tmp_path, source_map=True)), "orchestration")
+    row = _row(derive(_project(tmp_path, "source_map")), "orchestration")
     assert row.strength == "not-required"
     assert row.undetermined_evidence is None
 
@@ -131,8 +139,8 @@ def test_projects_of_different_shape_derive_different_sets(tmp_path: Path) -> No
     """T014 (SC-002): a test that passes for both shapes would prove nothing."""
     from seshat.integrations.derivation import derive
 
-    bi = derive(_project(tmp_path / "bi", source_map=True, pbip=True))
-    plain = derive(_project(tmp_path / "plain", source_map=True))
+    bi = derive(_project(tmp_path / "bi", "source_map", "pbip"))
+    plain = derive(_project(tmp_path / "plain", "source_map"))
 
     bi_strengths = {r.capability.id: r.strength for r in bi.rows}
     plain_strengths = {r.capability.id: r.strength for r in plain.rows}
@@ -143,7 +151,7 @@ def test_a_derived_set_is_never_every_capability_required(tmp_path: Path) -> Non
     """T015 (SC-002): the union-of-everything default is what this replaces."""
     from seshat.integrations.derivation import derive
 
-    plan = derive(_project(tmp_path, source_map=True))
+    plan = derive(_project(tmp_path, "source_map"))
     assert not all(row.strength == "required" for row in plan.rows)
 
 
@@ -151,7 +159,7 @@ def test_derivation_is_repeatable_on_unchanged_evidence(tmp_path: Path) -> None:
     """T016 (FR-003)."""
     from seshat.integrations.derivation import derive
 
-    root = _project(tmp_path, source_map=True, pbip=True)
+    root = _project(tmp_path, "source_map", "pbip")
     first = [(r.capability.id, r.strength, r.reason) for r in derive(root).rows]
     second = [(r.capability.id, r.strength, r.reason) for r in derive(root).rows]
     assert first == second
@@ -178,7 +186,7 @@ def test_unreadable_evidence_is_undetermined_never_required(tmp_path: Path) -> N
     from seshat.integrations.derivation import derive
 
     row = _row(
-        derive(_project(tmp_path, unreadable_source_map=True)), "database-connectivity"
+        derive(_project(tmp_path, "unreadable_source_map")), "database-connectivity"
     )
     assert row.strength != "required"
     assert row.undetermined_evidence is not None
@@ -197,7 +205,7 @@ def test_every_row_carries_a_strength_and_a_reason(tmp_path: Path) -> None:
     """T021/T022 (FR-007, FR-008, SC-003): zero rows lack either."""
     from seshat.integrations.derivation import STRENGTHS, derive
 
-    for row in derive(_project(tmp_path, source_map=True, pbip=True)).rows:
+    for row in derive(_project(tmp_path, "source_map", "pbip")).rows:
         assert row.strength in STRENGTHS
         assert row.reason.strip()
 
@@ -218,7 +226,7 @@ def test_the_normal_rendering_names_no_provider_package(tmp_path: Path) -> None:
     }
     assert coordinates, "no catalog coordinates found - the assertion would be vacuous"
 
-    rendered = render_text(derive(_project(tmp_path, source_map=True, pbip=True)))
+    rendered = render_text(derive(_project(tmp_path, "source_map", "pbip")))
     for coordinate in coordinates:
         assert coordinate not in rendered, coordinate
     for token in ("pip install", "npm install", "uvx", "@microsoft/"):
@@ -327,13 +335,13 @@ def test_undetermined_is_reachable_and_not_over_reachable(tmp_path: Path) -> Non
 
     # Reachable: an artifact that exists but cannot be parsed.
     unreadable = _row(
-        derive(_project(tmp_path / "bad", unreadable_source_map=True)),
+        derive(_project(tmp_path / "bad", "unreadable_source_map")),
         "database-connectivity",
     )
     assert unreadable.undetermined_evidence is not None
 
     # NOT over-reachable: capabilities the project simply is not using.
-    plain = derive(_project(tmp_path / "plain", source_map=True))
+    plain = derive(_project(tmp_path / "plain", "source_map"))
     for capability_id in ("transformation-engine", "orchestration"):
         row = _row(plain, capability_id)
         assert row.strength == "not-required", capability_id

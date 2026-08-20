@@ -471,6 +471,21 @@ _MARK = {
 }
 
 
+def _status_line(row: SetupPlanRow, width: int) -> str:
+    """One aligned status row: mark, capability name, readiness label."""
+    mark = "+" if row.satisfied else _MARK[row.strength]
+    label = "Ready" if row.satisfied else row.strength.replace("-", " ").title()
+    return f"  {mark} {row.capability.name:<{width}}  {label}"
+
+
+def _reason_lines(row: SetupPlanRow) -> list[str]:
+    """The reason for one capability, plus its undetermined-evidence note."""
+    lines = [f"  {row.capability.name}: {row.reason}"]
+    if row.undetermined_evidence:
+        lines.append(f"    undetermined -- needs {row.undetermined_evidence}")
+    return lines
+
+
 def render_text(plan: SetupPlan) -> str:
     """The normal presentation: capability names and reasons, no package names.
 
@@ -480,14 +495,10 @@ def render_text(plan: SetupPlan) -> str:
     lines = ["Project Setup", ""]
     width = max(len(row.capability.name) for row in plan.rows)
     for row in plan.rows:
-        mark = "+" if row.satisfied else _MARK[row.strength]
-        label = "Ready" if row.satisfied else row.strength.replace("-", " ").title()
-        lines.append(f"  {mark} {row.capability.name:<{width}}  {label}")
+        lines.append(_status_line(row, width))
     lines.append("")
     for row in plan.rows:
-        lines.append(f"  {row.capability.name}: {row.reason}")
-        if row.undetermined_evidence:
-            lines.append(f"    undetermined -- needs {row.undetermined_evidence}")
+        lines.extend(_reason_lines(row))
     lines.append("")
     count = plan.needs_setup
     lines.append(
