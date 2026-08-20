@@ -29,10 +29,16 @@ from seshat.pbi_mcp import preflight
 # one field (US4 / T037) without re-inventing the whole record.
 STUB_SERVER_NAME = "powerbi-modeling-mcp"
 STUB_SERVER_VERSION = "0.0.0-preview"
+# The tools the REAL server advertises, probed 2026-08-20 against
+# @microsoft/powerbi-modeling-mcp@0.5.0-beta.12. The previous values --
+# list_tables / list_measures / update_measure -- do not exist on the vendor
+# binary at all, so every test asserting against them proved only that the code
+# agreed with an invention (#660). Cross-checked by
+# test_pbi_mcp_vendor_ops.test_the_probed_tool_set_is_closed_and_complete.
 STUB_TOOLS: tuple[str, ...] = (
-    "list_tables",
-    "list_measures",
-    "update_measure",
+    "connection_operations",
+    "measure_operations",
+    "database_operations",
 )
 
 # Deterministic: never ``datetime.now()`` in a fixture, or the artifact differs

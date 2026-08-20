@@ -266,8 +266,15 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
     # actually changed. The target path and operation come from the VERDICT --
     # there is no parameter by which to substitute another.
     before = _snapshot(root)
+    # ``mcp_runner`` keeps its name as the injection seam, but at #660 its
+    # CONTRACT changed: it is now a session factory (``**kwargs -> McpSession``),
+    # not a subprocess invoker, because the runtime is an MCP stdio server rather
+    # than a one-shot CLI. Callers injecting a test double must supply a session.
     result = runner.invoke(
-        verdict, repo_root=root, read_only=False, runner=plan.mcp_runner
+        verdict,
+        repo_root=root,
+        read_only=False,
+        session_factory=plan.mcp_runner,
     )
 
     if not result.succeeded:

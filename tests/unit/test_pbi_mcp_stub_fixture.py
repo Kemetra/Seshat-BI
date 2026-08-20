@@ -84,3 +84,17 @@ def test_stub_transport_can_simulate_an_unavailable_runtime() -> None:
     transport = StubTransport(fail_with=preflight.RuntimeUnavailable("no runtime"))
     with pytest.raises(preflight.RuntimeUnavailable):
         transport.describe()
+
+
+def test_stub_tools_are_all_real_vendor_tools():
+    """A stub naming tools the vendor does not expose proves nothing.
+
+    Third recurrence of the invented-fixture class in this repo: the previous
+    values were list_tables / list_measures / update_measure, none of which the
+    vendor has. Pinned against the shipped vocabulary so a drift breaks loudly.
+    """
+    from seshat.pbi_mcp_adapter import vendor_ops
+    from tests.unit import _pbi_mcp_stub
+
+    unknown = set(_pbi_mcp_stub.STUB_TOOLS) - vendor_ops.VENDOR_TOOLS
+    assert unknown == set(), f"stub names non-existent vendor tools: {unknown}"
