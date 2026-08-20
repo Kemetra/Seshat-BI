@@ -49,6 +49,22 @@ class SetupPlanRow:
     satisfied: bool = False
     undetermined_evidence: str | None = None
     blocker: str | None = None
+    declined: bool = False
+
+    @property
+    def needs_action(self) -> bool:
+        """Outstanding work: needed, not satisfied, and not declined away.
+
+        A declined capability is NOT outstanding -- that is the point of recording
+        the decline (FR-009). A declined REQUIRED capability is still a blocker,
+        which `SetupPlan.blocked` reports separately; it is simply not proposed
+        again as if newly discovered.
+        """
+        return (
+            self.strength in {"required", "recommended"}
+            and not self.satisfied
+            and not self.declined
+        )
 
 
 @dataclass(frozen=True)
@@ -57,11 +73,16 @@ class SetupPlan:
 
     @property
     def needs_setup(self) -> int:
-        return sum(
-            1
-            for row in self.rows
-            if row.strength in {"required", "recommended"} and not row.satisfied
-        )
+        return sum(1 for row in self.rows if row.needs_action)
+
+    @property
+    def blockers(self) -> tuple[str, ...]:
+        return tuple(row.blocker for row in self.rows if row.blocker)
+
+    @property
+    def blocked(self) -> bool:
+        """True when the project cannot be represented as set up (FR-010)."""
+        return bool(self.blockers)
 
 
 DATABASE_CONNECTIVITY = Capability("database-connectivity", "Database Connectivity")
@@ -204,6 +225,71 @@ def _orchestration(root: Path) -> SetupPlanRow:
     )
 
 
+# A decline is a human choice about project SCOPE, so it lives in committed text
+# for the same reason a provisioning approval does (#671): a decline supplied at
+# runtime would let the caller silently suppress a capability the project
+# demonstrably needs.
+CAPABILITY_DECLINES_RELPATH = "contracts/capability-declines.yaml"
+
+
+def _declined_ids(root: Path) -> frozenset[str]:
+    """Capability ids a human has declined, from committed text.
+
+    Fails CLOSED in the safe direction: an absent, unreadable, or malformed file
+    declines NOTHING. Failing open would suppress every capability the project
+    needs while rendering a clean-looking plan.
+    """
+    path = root / CAPABILITY_DECLINES_RELPATH
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return frozenset()
+
+    import yaml  # lazy: keeps module import dependency-light
+
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return frozenset()
+    if not isinstance(data, dict):
+        return frozenset()
+    rows = data.get("declines")
+    if not isinstance(rows, list):
+        return frozenset()
+    return frozenset(
+        str(row["capability"])
+        for row in rows
+        if isinstance(row, dict) and row.get("capability")
+    )
+
+
+def _apply_decline(row: SetupPlanRow) -> SetupPlanRow:
+    """Mark a row declined, and raise a blocker if it was REQUIRED.
+
+    The strength is NOT downgraded. Relabelling a required capability `optional`
+    to silence the blocker would make the plan self-consistent and wrong: the
+    strength comes from project evidence, and a human declining it does not change
+    the evidence (FR-010).
+    """
+    blocker = None
+    if row.strength == "required":
+        blocker = (
+            f"{row.capability.name} is required by this project "
+            f"({row.reason}) but has been declined in "
+            f"{CAPABILITY_DECLINES_RELPATH}; remove the decline or change the "
+            "project so the capability is no longer needed"
+        )
+    return SetupPlanRow(
+        capability=row.capability,
+        strength=row.strength,
+        reason=row.reason,
+        satisfied=row.satisfied,
+        undetermined_evidence=row.undetermined_evidence,
+        blocker=blocker,
+        declined=True,
+    )
+
+
 def derive(root: Path) -> SetupPlan:
     """The capabilities this project needs, from its committed evidence.
 
@@ -212,14 +298,169 @@ def derive(root: Path) -> SetupPlan:
     same plan.
     """
     root = Path(root)
-    return SetupPlan(
-        rows=(
-            _database_connectivity(root),
-            _powerbi_integration(root),
-            _transformation_engine(root),
-            _orchestration(root),
-        )
+    declined = _declined_ids(root)
+    rows = (
+        _database_connectivity(root),
+        _powerbi_integration(root),
+        _transformation_engine(root),
+        _orchestration(root),
     )
+    resolved = []
+    for row in rows:
+        components = CAPABILITY_COMPONENTS.get(row.capability.id, ())
+        satisfied = bool(components) and all(
+            _component_present(root, cid) for cid in components
+        )
+        if satisfied:
+            row = SetupPlanRow(
+                capability=row.capability,
+                strength=row.strength,
+                reason=row.reason,
+                satisfied=True,
+                undetermined_evidence=row.undetermined_evidence,
+                blocker=row.blocker,
+                declined=row.declined,
+            )
+        if row.capability.id in declined:
+            row = _apply_decline(row)
+        resolved.append(row)
+    return SetupPlan(rows=tuple(resolved))
+
+
+# Which catalog components satisfy each capability. The IDS are the catalog's,
+# verified against `PROFILES` by test -- this is a mapping, not a second registry
+# (FR-011): it adds no component, no version, and no coordinate of its own. A
+# catalog entry added to one of these profiles reaches the technical detail with no
+# change to the user-facing journey (FR-020).
+CAPABILITY_COMPONENTS: dict[str, tuple[str, ...]] = {
+    DATABASE_CONNECTIVITY.id: ("connectorx",),
+    POWERBI_INTEGRATION.id: ("powerbi-modeling-mcp", "fabric-skills"),
+    TRANSFORMATION_ENGINE.id: ("dbt-core", "dbt-postgres"),
+    ORCHESTRATION.id: ("dagster", "seshat-dagster-adapter"),
+}
+
+
+@dataclass(frozen=True)
+class ProviderDetail:
+    """One official component that satisfies a capability. Catalog-sourced."""
+
+    component_id: str
+    channel: str
+    role: str
+    verification_basis: str
+
+
+@dataclass(frozen=True)
+class CapabilityDetail:
+    """The technical evidence behind one capability -- on request only (FR-013)."""
+
+    capability_id: str
+    providers: tuple[ProviderDetail, ...]
+    selected: str = ""
+    selection_basis: str = ""
+
+
+def _component_present(root: Path, component_id: str) -> bool:
+    """Whether the discovery surface reports this component installed.
+
+    Routed through `installed_ref` rather than an install RESULT: a successful
+    install is not evidence of readiness (FR-019). Seam kept small so a test can
+    substitute it.
+    """
+    from seshat.integrations.discovery import installed_ref
+
+    try:
+        return installed_ref(root, component_id) is not None
+    except Exception:
+        return False
+
+
+def technical_detail(plan: SetupPlan) -> tuple[CapabilityDetail, ...]:
+    """Provider identity, version state and verification basis, per capability.
+
+    Every field is read from the integration catalog; nothing is restated here.
+    This is the ADVANCED path -- the normal rendering never shows it (FR-012).
+    """
+    from seshat.integrations.catalog import PROFILES
+
+    known = {c.id: c for rows in PROFILES.values() for c in rows}
+    details: list[CapabilityDetail] = []
+    for row in plan.rows:
+        component_ids = CAPABILITY_COMPONENTS.get(row.capability.id, ())
+        providers = tuple(
+            ProviderDetail(
+                component_id=cid,
+                channel=known[cid].channel,
+                role=known[cid].role,
+                verification_basis=(
+                    "required payload paths declared in the catalog"
+                    if known[cid].required_paths
+                    else "package metadata or MCP registration"
+                ),
+            )
+            for cid in component_ids
+            if cid in known
+        )
+        selected = providers[0].component_id if providers else ""
+        details.append(
+            CapabilityDetail(
+                capability_id=row.capability.id,
+                providers=providers,
+                selected=selected,
+                selection_basis=(
+                    "first catalog-declared provider for this capability"
+                    if len(providers) > 1
+                    else ""
+                ),
+            )
+        )
+    return tuple(details)
+
+
+def render_json(plan: SetupPlan) -> str:
+    """Machine-readable status for an agent (FR-015).
+
+    Carries strength, satisfaction, the reason, and any blocker or undetermined
+    marker -- enough to answer what is needed, what is satisfied, what is missing,
+    why something is recommended, and the next safe action, WITHOUT exposing
+    provider internals. Provider detail is `technical_detail`, on request.
+    """
+    import json
+
+    payload = {
+        "needs_setup": plan.needs_setup,
+        "blocked": plan.blocked,
+        "blockers": list(plan.blockers),
+        "capabilities": [
+            {
+                "id": row.capability.id,
+                "name": row.capability.name,
+                "strength": row.strength,
+                "reason": row.reason,
+                "satisfied": row.satisfied,
+                "declined": row.declined,
+                "undetermined_evidence": row.undetermined_evidence,
+                "blocker": row.blocker,
+            }
+            for row in plan.rows
+        ],
+    }
+    return json.dumps(payload, indent=2, sort_keys=True)
+
+
+def requested_outside_need(
+    plan: SetupPlan, requested: tuple[str, ...]
+) -> tuple[str, ...]:
+    """Requested capability ids the project does not actually need (FR-006).
+
+    Reported, never promoted: asking for a capability does not make it required.
+    """
+    needed = {
+        row.capability.id
+        for row in plan.rows
+        if row.strength in {"required", "recommended"}
+    }
+    return tuple(cap for cap in requested if cap not in needed)
 
 
 _MARK = {

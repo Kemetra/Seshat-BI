@@ -313,3 +313,28 @@ def test_a_parsing_source_map_with_no_declaration_is_absence_not_undetermined(
     row = _row(derive(tmp_path), "database-connectivity")
     assert row.strength == "not-required"
     assert row.undetermined_evidence is None
+
+
+def test_undetermined_is_reachable_and_not_over_reachable(tmp_path: Path) -> None:
+    """T042: the marker must fire on unreadable evidence and ONLY on that.
+
+    Two halves in one test on purpose -- they are the same claim. If
+    `undetermined` also fired for a merely-unused capability, `not-required` would
+    be unreachable and US1 AS1 untestable; if it never fired, FR-005 would be
+    unenforced and thin evidence would silently become a strength.
+    """
+    from seshat.integrations.derivation import derive
+
+    # Reachable: an artifact that exists but cannot be parsed.
+    unreadable = _row(
+        derive(_project(tmp_path / "bad", unreadable_source_map=True)),
+        "database-connectivity",
+    )
+    assert unreadable.undetermined_evidence is not None
+
+    # NOT over-reachable: capabilities the project simply is not using.
+    plain = derive(_project(tmp_path / "plain", source_map=True))
+    for capability_id in ("transformation-engine", "orchestration"):
+        row = _row(plain, capability_id)
+        assert row.strength == "not-required", capability_id
+        assert row.undetermined_evidence is None, capability_id
