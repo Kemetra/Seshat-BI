@@ -34,20 +34,15 @@ No live DB provisioning, no automated ingestion code, no orchestrator integratio
 unless explicitly requested. Add the seam, not the implementation.
 
 <!-- SPECKIT START -->
-Active plan: `specs/154-secure-provisioning-approval/plan.md` (issue #671 — the
-provisioning-approval trust boundary, ratified 2026-08-20).
-**NOT YET IMPLEMENTED.** `seshat integrations setup --apply --yes` currently treats an
-agent-supplied CLI flag as approval for installing external software; `_approved()` in
-`src/seshat/cli/commands/integrations.py` returns True for a namespace an agent builds
-itself. The fix moves authority to a committed, named-human approval read at HEAD.
-Read `analysis.md` before touching it: R1 is already settled (`.seshat/integrations/` is
-gitignored, so the artifact lives at `contracts/provisioning-approvals.yaml`), and
-**T033 corrects `tests/unit/test_integrations_setup.py:321`, which currently asserts the
-bypass returns exit 0** — keeping that test green would silently defeat the fix.
-Spec 153 (capability-oriented setup) is implementation-blocked until this lands; its
-FR-018 boundary is permanent regardless. Amends spec 144 FR-010 (one clause).
-Previous plan: `specs/149-pbi-mcp-write-adapter/` — MERGED (PR #659); open follow-ups
-#658 (version pin), #661 (binding/value checks), #663 (post-write check gaps).
+Active plan: `specs/149-pbi-mcp-write-adapter/plan.md` (F016 slice 5 -- the approval-gated
+Power BI MCP write adapter, ratified 2026-08-18). Implementation MERGED (#659); open
+follow-ups #658 (version pin), #661 (binding/value checks), #663 (post-write check gaps).
+**Spec 154 (issue #671) is COMPLETE** -- `seshat integrations setup --apply` now requires a
+committed named-human `governance` approval in `contracts/provisioning-approvals.yaml`,
+read at HEAD. `--apply` is intent; `--yes` only suppresses the prompt; neither authorizes.
+See `specs/154-secure-provisioning-approval/` (all 49 tasks done) and its `quickstart.md`.
+That unblocks **spec 153** (capability-oriented setup), whose FR-018 boundary -- the weak
+approval must never be inherited -- stays permanent.
 <!-- SPECKIT END -->
 <!-- SESHAT-KIT START -->
 **Seshat BI kit router** (v0.2.0) -- generated from `.seshat/kit-source.yaml`; do not edit here.
