@@ -171,6 +171,80 @@ def _redact_and_tail(text: str, limit: int) -> str:
     return scrubbed if len(scrubbed) <= limit else scrubbed[-limit:]
 
 
+def _refused(output: str, *blockers: str) -> RunResult:
+    """A refusal decided BEFORE the runtime is launched.
+
+    Every such result shares `mutation_attempted=False`, and that is the
+    property worth centralising: nothing has run, so nothing can have been
+    half-written. A refusal that reported True would send the operator hunting
+    for damage that cannot exist.
+    """
+    return RunResult(
+        exit_code=1,
+        output=output,
+        mutation_attempted=False,
+        blockers=blockers,
+    )
+
+
+def _authorized_call(verdict: GateVerdict) -> tuple[str, str, str] | RunResult:
+    """Resolve the verdict into the (tool, operation, target) it authorizes.
+
+    Every precondition that can refuse the run lives here, so :func:`invoke`
+    reads as launch-and-converse rather than a wall of guard clauses. Returning
+    a `RunResult` means refused; a tuple means cleared.
+
+    The target and operation are read from the VERDICT, never from parameters --
+    that is the containment property: a verdict cleared for one target cannot be
+    replayed against another.
+    """
+    if not verdict.cleared:
+        return _refused(
+            "refused: the write gate is not cleared",
+            BLOCKER_GATE_NOT_CLEARED,
+            *verdict.blockers,
+        )
+
+    target_path = verdict.authorized_path
+    operation_id = verdict.authorized_operation
+    if target_path is None or not operation_id:  # pragma: no cover
+        return _refused(
+            "refused: the verdict names no authorized target or operation",
+            BLOCKER_GATE_NOT_CLEARED,
+        )
+
+    # The allowlist stores a (tool, operation) PAIR because the vendor
+    # dispatches on both. An unknown half is refused before anything launches.
+    try:
+        tool, operation = vendor_ops.parse_operation_id(operation_id)
+    except vendor_ops.UnknownVendorOperation as exc:
+        return _refused(f"refused: {exc}", BLOCKER_UNKNOWN_OPERATION)
+
+    # LOUD refusal, not a hollow success. The server documents Create/Update as
+    # requiring a `Definitions` block; issued from a verb alone they mutate
+    # nothing, so executing one would report success for a no-op -- and after
+    # #660's other fixes this path is REACHABLE, where before it was not.
+    #
+    # This adapter is forbidden to invent the definition (spec.md: "the adapter
+    # never invents the definition") and the `approved_definitions[]` record
+    # that would supply one is deferred to a companion spec. So the honest
+    # answer is a refusal naming the missing input, never a run that certifies
+    # nothing happened (issue #660 re-review, C2).
+    if vendor_ops.requires_payload(tool, operation):
+        return _refused(
+            (
+                f"refused: {tool}.{operation} requires an approved definition "
+                "payload. This adapter never invents a definition, and no "
+                "approved_definitions record supplies one (FR-011b, deferred "
+                "to a companion spec). Executing it would report success for "
+                "a no-op."
+            ),
+            BLOCKER_PAYLOAD_UNAVAILABLE,
+        )
+
+    return tool, operation, str(target_path)
+
+
 def invoke(
     verdict: GateVerdict,
     *,
@@ -197,61 +271,10 @@ def invoke(
     the ``ExportToTmdlFolder`` flush, every downstream check validates stale files
     and passes -- certifying a write that never happened.
     """
-    if not verdict.cleared:
-        return RunResult(
-            exit_code=1,
-            output="refused: the write gate is not cleared",
-            mutation_attempted=False,
-            blockers=(BLOCKER_GATE_NOT_CLEARED, *verdict.blockers),
-        )
-
-    # Read from the verdict. `cleared` guarantees both are populated.
-    target_path = verdict.authorized_path
-    operation_id = verdict.authorized_operation
-    if (
-        target_path is None or not operation_id
-    ):  # pragma: no cover - cleared implies both
-        return RunResult(
-            exit_code=1,
-            output="refused: the verdict names no authorized target or operation",
-            mutation_attempted=False,
-            blockers=(BLOCKER_GATE_NOT_CLEARED,),
-        )
-
-    # The allowlist stores a (tool, operation) PAIR because the vendor dispatches
-    # on both. An unknown half is refused before anything is launched.
-    try:
-        tool, operation = vendor_ops.parse_operation_id(operation_id)
-    except vendor_ops.UnknownVendorOperation as exc:
-        return RunResult(
-            exit_code=1,
-            output=f"refused: {exc}",
-            mutation_attempted=False,
-            blockers=(BLOCKER_UNKNOWN_OPERATION,),
-        )
-
-    # LOUD refusal, not a hollow success. The server documents Create/Update as
-    # requiring a `Definitions` block; issued from a verb alone they mutate
-    # nothing, so executing one would report success for a no-op -- and after
-    # #660's other fixes this path is REACHABLE, where before it was not.
-    #
-    # This adapter is forbidden to invent the definition (spec.md: "the adapter
-    # never invents the definition") and the `approved_definitions[]` record that
-    # would supply one is deferred to a companion spec. So the honest answer is a
-    # refusal naming the missing input, never a run that certifies nothing
-    # happened (issue #660 re-review, C2).
-    if vendor_ops.requires_payload(tool, operation):
-        return RunResult(
-            exit_code=1,
-            output=(
-                f"refused: {tool}.{operation} requires an approved definition "
-                "payload. This adapter never invents a definition, and no "
-                "approved_definitions record supplies one (FR-011b, deferred to a "
-                "companion spec). Executing it would report success for a no-op."
-            ),
-            mutation_attempted=False,
-            blockers=(BLOCKER_PAYLOAD_UNAVAILABLE,),
-        )
+    resolved = _authorized_call(verdict)
+    if isinstance(resolved, RunResult):
+        return resolved
+    tool, operation, target_path = resolved
 
     argv = build_argv(read_only=read_only)
     # The standing prohibition, re-checked on the argv actually about to run.
@@ -264,18 +287,16 @@ def invoke(
     try:
         live = factory(argv=argv, cwd=Path(repo_root))
     except (OSError, session.SessionError):
-        return RunResult(
-            exit_code=1,
-            output="the vendor runtime could not be launched (is npx on PATH?)",
-            mutation_attempted=False,
-            blockers=(BLOCKER_RUNTIME_MISSING,),
+        return _refused(
+            "the vendor runtime could not be launched (is npx on PATH?)",
+            BLOCKER_RUNTIME_MISSING,
         )
 
     return _converse(
         live,
         tool=tool,
         operation=operation,
-        target_path=str(target_path),
+        target_path=target_path,
     )
 
 
@@ -291,6 +312,81 @@ def _trace(outcome: "protocol.ToolOutcome") -> str:
     return f"vendor error: {outcome.error}" if outcome.error else ""
 
 
+@dataclass
+class _Exchange:
+    """What one vendor conversation needs to know about itself.
+
+    A bundle rather than six positional seams: the tool, the verb, the folder
+    they act on, and whether that verb writes travel together for the whole
+    exchange.
+
+    NOT frozen, and `attempted` is why. It is set to True BEFORE the operation
+    call is issued, so that if the vendor hangs or dies mid-write the caller's
+    exception handler can still see that a mutation was in flight. Returning the
+    flag only on a normal return loses exactly the case that matters: an
+    indeterminate, possibly half-written artifact would be reported as "nothing
+    was attempted", sending the operator away without checking for damage.
+    """
+
+    tool: str
+    operation: str
+    target_path: str
+    writes: bool
+    attempted: bool = False
+
+
+def _exchange(
+    live: session.McpSession,
+    spec: _Exchange,
+    transcript: list[str],
+) -> tuple[list[str], bool]:
+    """The three vendor calls, in order. Returns (blockers, attempted).
+
+    Split from :func:`_converse` so the session lifecycle and exception
+    dispatch live in one function and the protocol sequence in another.
+
+    **A write is THREE calls and the third is what makes it real** -- bind the
+    folder, run the operation, flush to disk. Appends to `transcript` in place
+    so a caller that aborts mid-sequence still reports what already happened.
+    """
+    connected = live.call(
+        "connection_operations",
+        {"operation": "ConnectFolder", "folderPath": spec.target_path},
+    )
+    transcript.append(_trace(connected))
+    if not connected.ok:
+        # Nothing was attempted: the bind failed, so no operation was issued.
+        return [BLOCKER_VENDOR_REFUSED], False
+
+    blockers: list[str] = []
+    # BEFORE the call, never after: a stall here is indeterminate, and the
+    # caller reads this flag from the exception path.
+    spec.attempted = spec.writes
+    outcome = live.call(spec.tool, {"operation": spec.operation})
+    transcript.append(_trace(outcome))
+    if not outcome.ok:
+        blockers.append(BLOCKER_VENDOR_REFUSED)
+    elif spec.writes and outcome.read_only_hint is True:
+        # Cross-check OUR classification against the vendor's own per-call
+        # annotation. Disagreement means one of us is wrong about whether model
+        # state changed, so claim nothing.
+        blockers.append(BLOCKER_READONLY_VIOLATION)
+
+    # THE FLUSH. Only on a write, and only if the operation held: an export
+    # after a failed operation would rewrite the whole folder for nothing.
+    # Without this the bytes on disk never change (#660).
+    if spec.writes and not blockers:
+        flushed = live.call(
+            "database_operations",
+            {"operation": "ExportToTmdlFolder", "tmdlFolderPath": spec.target_path},
+        )
+        transcript.append(_trace(flushed))
+        if not flushed.ok:
+            blockers.append(BLOCKER_FLUSH_FAILED)
+
+    return blockers, spec.attempted
+
+
 def _converse(
     live: session.McpSession,
     *,
@@ -303,59 +399,34 @@ def _converse(
     Split out of :func:`invoke` so the precondition checks and the conversation
     are each small enough to read whole.
     """
-    # Classified against THIS tool, not globally: a verb evidenced as a read
-    # under one tool says nothing about another (re-review H4).
-    writes = vendor_ops.is_write(operation, tool)
+    spec = _Exchange(
+        tool=tool,
+        operation=operation,
+        target_path=target_path,
+        # Classified against THIS tool, not globally: a verb evidenced as a read
+        # under one tool says nothing about another (re-review H4).
+        writes=vendor_ops.is_write(operation, tool),
+    )
     transcript: list[str] = []
     blockers: list[str] = []
     attempted = False
     try:
         live.handshake()
-
-        # 1. Bind the folder. Stateful and named: everything after this call
-        #    operates on the connection it established.
-        connected = live.call(
-            "connection_operations",
-            {"operation": "ConnectFolder", "folderPath": target_path},
-        )
-        transcript.append(_trace(connected))
-        if not connected.ok:
+        blockers, attempted = _exchange(live, spec, transcript)
+        if blockers == [BLOCKER_VENDOR_REFUSED] and not attempted:
+            # The bind itself failed, so the transcript is the whole story.
             return RunResult(
                 exit_code=1,
                 output=_redact_and_tail("\n".join(transcript), TAIL_CHARS),
                 mutation_attempted=False,
                 blockers=(BLOCKER_VENDOR_REFUSED,),
             )
-
-        # 2. The authorized operation.
-        attempted = writes
-        outcome = live.call(tool, {"operation": operation})
-        transcript.append(_trace(outcome))
-        if not outcome.ok:
-            blockers.append(BLOCKER_VENDOR_REFUSED)
-        elif writes and outcome.read_only_hint is True:
-            # Cross-check OUR classification against the vendor's own per-call
-            # annotation. Disagreement means one of us is wrong about whether
-            # model state changed, so claim nothing.
-            blockers.append(BLOCKER_READONLY_VIOLATION)
-
-        # 3. THE FLUSH. Only on a write, and only if the operation held: an
-        #    export after a failed operation would rewrite the whole folder for
-        #    nothing. Without this the bytes on disk never change (#660).
-        if writes and not blockers:
-            flushed = live.call(
-                "database_operations",
-                {"operation": "ExportToTmdlFolder", "tmdlFolderPath": target_path},
-            )
-            transcript.append(_trace(flushed))
-            if not flushed.ok:
-                blockers.append(BLOCKER_FLUSH_FAILED)
     except session.SessionStalled as exc:
         # A hung child: indeterminate, the artifact may be half-written.
         return RunResult(
             exit_code=TIMEOUT_EXIT_CODE,
             output=_redact_and_tail("\n".join([*transcript, str(exc)]), TAIL_CHARS),
-            mutation_attempted=attempted,
+            mutation_attempted=spec.attempted,
             blockers=(BLOCKER_RUNTIME_STALLED,),
         )
     except session.SessionError as exc:
@@ -366,7 +437,7 @@ def _converse(
         return RunResult(
             exit_code=1,
             output=_redact_and_tail("\n".join([*transcript, str(exc)]), TAIL_CHARS),
-            mutation_attempted=attempted,
+            mutation_attempted=spec.attempted,
             blockers=(BLOCKER_RUNTIME_UNEXPLAINED,),
         )
     except (OSError, ValueError) as exc:  # UnicodeDecodeError is a ValueError
@@ -380,7 +451,7 @@ def _converse(
             output=_redact_and_tail(
                 "\n".join([*transcript, f"{type(exc).__name__}: {exc}"]), TAIL_CHARS
             ),
-            mutation_attempted=attempted,
+            mutation_attempted=spec.attempted,
             blockers=(BLOCKER_RUNTIME_UNEXPLAINED,),
         )
     finally:
@@ -391,6 +462,6 @@ def _converse(
         output=_redact_and_tail(
             "\n".join(part for part in transcript if part), TAIL_CHARS
         ),
-        mutation_attempted=attempted,
+        mutation_attempted=spec.attempted,
         blockers=tuple(blockers),
     )

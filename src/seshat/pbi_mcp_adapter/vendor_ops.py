@@ -702,6 +702,21 @@ class UnknownVendorOperation(ValueError):
     """The allowlist named a tool or operation the vendor does not expose."""
 
 
+def _split_operation_id(operation_id: str) -> tuple[str, str]:
+    """The SYNTAX half: a dotted pair, or a refusal.
+
+    Separated from the authorization half in :func:`parse_operation_id` so that
+    "is this well-formed?" and "is this permitted?" are distinct questions. The
+    pre-#660 single-token form fails here, before any allowlist is consulted.
+    """
+    tool, separator, operation = operation_id.partition(".")
+    if not separator or not operation:
+        raise UnknownVendorOperation(
+            f"{operation_id!r} is not a <tool>.<operation> pair"
+        )
+    return tool, operation
+
+
 def parse_operation_id(operation_id: str) -> tuple[str, str]:
     """Split the dotted pair and validate the verb AGAINST THAT TOOL.
 
@@ -712,11 +727,7 @@ def parse_operation_id(operation_id: str) -> tuple[str, str]:
     Validating the halves independently would authorize the cross-product, so the
     verb is checked against the named tool's own evidenced set (re-review H4).
     """
-    tool, separator, operation = operation_id.partition(".")
-    if not separator or not operation:
-        raise UnknownVendorOperation(
-            f"{operation_id!r} is not a <tool>.<operation> pair"
-        )
+    tool, operation = _split_operation_id(operation_id)
     if tool not in VENDOR_TOOLS:
         raise UnknownVendorOperation(f"unknown vendor tool: {tool!r}")
     known = TOOL_OPERATIONS.get(tool)
