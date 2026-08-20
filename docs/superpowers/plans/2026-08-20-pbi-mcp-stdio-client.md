@@ -56,8 +56,38 @@ needs the shape, copy it from here verbatim.
   `powerbi/RetailStoreSales.SemanticModel`. The `[INFO] Authentication mode:
   InteractiveBrowser` stderr banner is the DEFAULT auth mode for the live path; it
   did not block the folder path.
-- **Connection is stateful and named.** A write is therefore a TWO-call sequence
-  on ONE session: `ConnectFolder`, then the operation. The gate must authorize both.
+- **Connection is stateful and named.** A write is therefore a multi-call sequence
+  on ONE session. The gate must authorize the whole sequence, not one call.
+- **A WRITE DOES NOT PERSIST WITHOUT AN EXPLICIT FLUSH.** Measured on a scratchpad
+  copy with `--readwrite`: `ConnectFolder` → `measure_operations {"operation":
+  "Update", "definitions":[{"name":"TotalSales","tableName":"gold fct_sales_rss",
+  "formatString":"#,0.000"}]}` returned `isError: false`, stderr logged
+  `IsWrite=True` — and **ZERO files changed on disk**. The vendor mutates an
+  IN-MEMORY tabular model. Persistence requires a third call:
+  `database_operations {"operation":"ExportToTmdlFolder","tmdlFolderPath":"<same
+  folder>"}`, after which the `formatString: #,0.000` edit was present in
+  `definition/tables/gold fct_sales_rss.tmdl`.
+
+  **This is the single most important fact in this plan.** A two-call sequence
+  reports success, leaves the bytes untouched, and `semantic-check` then validates
+  UNCHANGED files and passes — certifying a write that never happened. That is the
+  vacuous pass FR-013 exists to prevent, and it is exactly the seam #661 flags.
+
+- **The flush rewrites the WHOLE model folder, not just the target's file.**
+  `ExportToTmdlFolder` reported `fileCount: 11` and every one of the 11 TMDL files
+  changed hash, including tables the operation never mentioned (dimension tables,
+  `relationships.tmdl`, `model.tmdl`, `cultures/en-US.tmdl`). Any out-of-scope
+  change detection MUST treat the whole `definition/` tree as in-scope for a write,
+  or it will block every legitimate apply. Coordinate with #663.
+- **`readOnlyHint` is PER-CALL, not a static tool annotation.** Same tool, two
+  values: `measure_operations.list` → `true`, `measure_operations.update` →
+  `false`. So the cross-check in Task 4 is sound. **But it tracks MODEL-STATE
+  mutation, not disk writes**: `database_operations.exporttotmdlfolder` reported
+  `readOnlyHint: true` while rewriting 11 files. Never use it as a disk-write oracle.
+- **`ConnectFolder` resolves the `definition` level itself.** Passing
+  `<name>.SemanticModel` yielded `ConnectionName=TMDL-<...>\.SemanticModel\definition`
+  and `tablesLoaded: 6, measuresLoaded: 5`. Passing either level works; pass what
+  the allowlist holds and do not synthesize a suffix.
 - **Every result carries `_meta.annotations.readOnlyHint`** (a bool) and
   `isError`. `connection_operations.connectfolder` and `measure_operations.list`
   both reported `readOnlyHint: true`.
@@ -826,6 +856,17 @@ Two fail-closed rules:
   mutation that never happened.
 * An unrecognised operation verb counts as a WRITE. Guessing read-only on an
   unknown verb is the fail-open direction, and this gate exists to prevent it.
+
+**Why the connection and flush verbs sit in ``WRITE_OPERATIONS`` even though the
+vendor annotates them ``readOnlyHint: true``.** Measured 2026-08-20:
+``connection_operations.connectfolder`` and
+``database_operations.exporttotmdlfolder`` both report ``readOnlyHint: true``, yet
+the export rewrote all 11 TMDL files. The vendor's hint tracks MODEL-STATE
+mutation; this vocabulary tracks "may this verb be issued without a cleared write
+gate". Those are different questions, and for the gate's purpose the flush is
+unambiguously a write. The two classifications are allowed to disagree; the runner
+therefore applies the ``readOnlyHint`` cross-check ONLY to the authorized
+operation, never to the connect or flush calls it issues itself.
 """
 
 from __future__ import annotations
@@ -940,7 +981,13 @@ git commit -m "feat: model the vendor's (tool, operation) pair vocabulary (#660)
   `target_path`/`operation_id` params); `invoke(verdict, *, repo_root, read_only=False,
   session_factory=None) -> RunResult`; new blocker
   `BLOCKER_VENDOR_REFUSED = "PBIMCP-RUN-05"`;
-  `BLOCKER_READONLY_VIOLATION = "PBIMCP-RUN-06"`.
+  `BLOCKER_READONLY_VIOLATION = "PBIMCP-RUN-06"`;
+  `BLOCKER_UNKNOWN_OPERATION = "PBIMCP-RUN-07"`;
+  `BLOCKER_FLUSH_FAILED = "PBIMCP-RUN-08"`.
+
+**The write sequence is THREE calls, not two:** `ConnectFolder` →
+`<tool>/<operation>` → `database_operations/ExportToTmdlFolder`. The third is what
+makes the write real; see "Verified vendor facts". A read-only operation skips it.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1006,9 +1053,14 @@ def test_build_argv_no_longer_invents_target_or_operation_flags():
     assert argv[:3] == ["npx", "--yes", runner.VENDOR_PACKAGE]
 
 
-def test_invoke_connects_the_folder_before_the_operation(tmp_path, gate_verdict):
-    """The vendor connection is stateful: ConnectFolder must come first."""
-    sess = RecordingSession([_ok(read_only=True), _ok(read_only=False)])
+def test_a_write_connects_operates_then_FLUSHES(tmp_path, gate_verdict):
+    """Three calls, in order. The flush is what makes the write real.
+
+    Measured 2026-08-20: Update alone returns isError:false and changes ZERO
+    bytes on disk. Without ExportToTmdlFolder the whole governance stack
+    certifies a write that never happened.
+    """
+    sess = RecordingSession([_ok(read_only=True), _ok(read_only=False), _ok(read_only=True)])
     verdict = gate_verdict(
         path=str(tmp_path / "m.SemanticModel"),
         operation="measure_operations.Update",
@@ -1017,11 +1069,42 @@ def test_invoke_connects_the_folder_before_the_operation(tmp_path, gate_verdict)
         verdict, repo_root=tmp_path, session_factory=lambda **_: sess
     )
     assert sess.handshaken is True
-    assert [t for t, _ in sess.calls] == ["connection_operations", "measure_operations"]
+    assert [t for t, _ in sess.calls] == [
+        "connection_operations",
+        "measure_operations",
+        "database_operations",
+    ]
     assert sess.calls[0][1]["operation"] == "ConnectFolder"
     assert sess.calls[1][1]["operation"] == "Update"
+    assert sess.calls[2][1]["operation"] == "ExportToTmdlFolder"
+    # The flush must target the SAME folder that was connected.
+    assert sess.calls[2][1]["tmdlFolderPath"] == sess.calls[0][1]["folderPath"]
     assert result.succeeded is True
     assert sess.closed is True
+
+
+def test_a_read_only_operation_does_NOT_flush(tmp_path, gate_verdict):
+    """Nothing changed in memory, so exporting would rewrite 11 files for nothing."""
+    sess = RecordingSession([_ok(read_only=True), _ok(read_only=True)])
+    verdict = gate_verdict(operation="measure_operations.List")
+    runner.invoke(verdict, repo_root=tmp_path, session_factory=lambda **_: sess)
+    assert [t for t, _ in sess.calls] == ["connection_operations", "measure_operations"]
+
+
+def test_a_failed_flush_is_a_blocker_and_never_reports_success(tmp_path, gate_verdict):
+    """The operation succeeded in memory but did not reach disk: NOT materialized."""
+    bad_flush = protocol.ToolOutcome(
+        ok=False, read_only_hint=None, payload=None, raw_text="", error="export failed"
+    )
+    sess = RecordingSession([_ok(read_only=True), _ok(read_only=False), bad_flush])
+    verdict = gate_verdict(operation="measure_operations.Update")
+    result = runner.invoke(
+        verdict, repo_root=tmp_path, session_factory=lambda **_: sess
+    )
+    assert result.succeeded is False
+    assert runner.BLOCKER_FLUSH_FAILED in result.blockers
+    # The in-memory mutation DID happen, so this is indeterminate, not "no write".
+    assert result.mutation_attempted is True
 
 
 def test_invoke_refuses_an_uncleared_gate_without_starting_a_session(tmp_path,
@@ -1239,16 +1322,34 @@ def invoke(
                 blockers=(BLOCKER_VENDOR_REFUSED,),
             )
 
-        attempted = vendor_ops.is_write(operation)
+        is_write = vendor_ops.is_write(operation)
+        attempted = is_write
         outcome = sess.call(tool, {"operation": operation})
         transcript.append(outcome.raw_text)
 
         if not outcome.ok:
             blockers.append(BLOCKER_VENDOR_REFUSED)
         # Cross-check OUR classification against the vendor's own annotation.
-        # Disagreement means one of us is wrong about whether state changed.
-        if vendor_ops.is_write(operation) and outcome.read_only_hint is True:
+        # Per-call, verified: update -> false, list -> true. Disagreement means
+        # one of us is wrong about whether MODEL STATE changed.
+        elif is_write and outcome.read_only_hint is True:
             blockers.append(BLOCKER_READONLY_VIOLATION)
+
+        # THE FLUSH. A write mutates an in-memory model only; without this the
+        # TMDL bytes are unchanged and every downstream check validates stale
+        # files and passes. Verified 2026-08-20. Only on a write, and only if
+        # the operation itself succeeded -- exporting after a failed operation
+        # would rewrite all 11 files for no reason.
+        if is_write and not blockers:
+            flushed = sess.call(
+                "database_operations",
+                {"operation": "ExportToTmdlFolder", "tmdlFolderPath": str(target_path)},
+            )
+            transcript.append(flushed.raw_text)
+            if not flushed.ok:
+                # The in-memory mutation happened but never reached disk.
+                # Indeterminate, never a success.
+                blockers.append(BLOCKER_FLUSH_FAILED)
     except session.SessionError as exc:
         return RunResult(
             exit_code=TIMEOUT_EXIT_CODE,
@@ -1274,6 +1375,7 @@ existing ones (~line 53), plus `BLOCKER_UNKNOWN_OPERATION = "PBIMCP-RUN-07"`:
 BLOCKER_VENDOR_REFUSED = "PBIMCP-RUN-05"
 BLOCKER_READONLY_VIOLATION = "PBIMCP-RUN-06"
 BLOCKER_UNKNOWN_OPERATION = "PBIMCP-RUN-07"
+BLOCKER_FLUSH_FAILED = "PBIMCP-RUN-08"
 ```
 
 ```python
@@ -1288,6 +1390,10 @@ BLOCKER_UNKNOWN_OPERATION = "PBIMCP-RUN-07"
     BLOCKER_UNKNOWN_OPERATION: (
         "the allowlist named a tool or operation the vendor does not expose; "
         "no invocation was attempted"
+    ),
+    BLOCKER_FLUSH_FAILED: (
+        "the operation mutated the in-memory model but ExportToTmdlFolder failed, "
+        "so the change never reached disk; indeterminate, never a success"
     ),
 ```
 
@@ -1413,11 +1519,26 @@ rewrite it to the two-call sequence. Mark the old wording as corrected by the pr
 rather than deleting the history — this repo distinguishes frozen records from live
 guidance.
 
-- [ ] **Step 3: Update the allowlist operation-id format**
+- [ ] **Step 3: Update the allowlist operation-id format -- AS ITS OWN COMMIT**
 
 The allowlist's `operations` entries become `"<tool>.<operation>"`. Update
 `templates/pbi-mcp-adapter-contract.md` and any committed allowlist fixture.
 Grep for existing values first: `grep -rn 'operations:' --include='*.yaml' . | grep -i pbi`
+
+**Commit this separately from the docs changes.** The allowlist is a GATE INPUT,
+and delegated authority excludes quietly mutating approved gate inputs. The change
+is forced by vendor reality (the old single-token form encoded a CLI flag that does
+not exist), so make it -- but in a commit whose message states exactly that, so the
+owner can review the moved boundary on its own:
+
+```bash
+git add templates/pbi-mcp-adapter-contract.md <allowlist fixtures>
+git commit -m "fix!: allowlist operations become <tool>.<operation> pairs (#660)
+
+The pre-#660 single-token form encoded --operation, a CLI flag the vendor does
+not expose. The vendor dispatches on a tool AND an operation, so an approval must
+name both. This changes a gate input and is therefore called out separately."
+```
 
 - [ ] **Step 4: Fix the stale SPECKIT block**
 
