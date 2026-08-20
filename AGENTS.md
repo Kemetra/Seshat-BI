@@ -85,10 +85,14 @@ wiring -- the authoring sibling of `retail-govern`, which interprets rule findin
 - Repo rules (secrets, PBIP, Windows): `CLAUDE.md`.
 <!-- SPECKIT START -->
 Active plan: `specs/149-pbi-mcp-write-adapter/plan.md` (F016 slice 5 — the approval-gated
-Power BI MCP write adapter, authorized by ADR 0018, ratified 2026-08-18). Spec, plan,
-research, data model, CLI contract and quickstart are authored; **no implementation code
-exists yet**. Read `research.md` before writing any of it — R4 and R5 correct two natural
-but wrong assumptions about `gitutil.run_subprocess` and `redaction_core`.
+Power BI MCP write adapter, authorized by ADR 0018, ratified 2026-08-18).
+**Implementation MERGED** (PR #659, 2026-08-19) in `src/seshat/pbi_mcp_adapter/`
+— gate, evidence, validation, drift and orchestration are built and tested.
+Read `research.md` before touching it: R4/R5 correct two natural but wrong assumptions
+about `gitutil.run_subprocess` and `redaction_core`, and **R8 records that the vendor is
+an MCP stdio server whose writes need an explicit `ExportToTmdlFolder` flush** — without
+it the bytes on disk never change (#660). Open follow-ups: #657 (per-run evidence),
+#658 (version pin), #661 (binding/value checks), #663 (post-write check gaps).
 <!-- SPECKIT END -->
 <!-- SESHAT-KIT START -->
 **Seshat BI kit router** (v0.2.0) -- generated from `.seshat/kit-source.yaml`; do not edit here.

@@ -313,3 +313,37 @@ def test_a_ref_that_lacks_the_target_is_not_a_backup(committed_repo: Path) -> No
         check=True,
     ).stdout.strip()
     assert not gate._ref_holds_target(committed_repo, orphan, f"models/{TARGET}.tmdl")
+
+
+def test_containment_survives_the_folder_widening(tmp_path: Path) -> None:
+    """C1 widened is_file() -> exists(). Containment must be UNCHANGED.
+
+    Widening what KIND of path may be named must not widen WHERE it may point.
+    """
+    root = tmp_path / "repo"
+    (root / "Sales.SemanticModel").mkdir(parents=True)
+    (root / "Sales.SemanticModel" / "x.tmdl").write_text("table x", encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "evil.tmdl").write_text("nope", encoding="utf-8")
+
+    def _clears(path: str) -> tuple[bool, tuple[str, ...]]:
+        entry = gate.AllowlistEntry(
+            target_id="t", path=path, operations=("measure_operations.List",)
+        )
+        return gate._path_blockers(root, entry)
+
+    # The widening: a FOLDER now clears, as does a file.
+    assert _clears("Sales.SemanticModel") == (True, ())
+    assert _clears("Sales.SemanticModel/x.tmdl") == (True, ())
+
+    # Containment: every escape still refused, and for ESCAPING not absence.
+    for escape in ("../outside/evil.tmdl", "../outside", str(outside)):
+        cleared, blockers = _clears(escape)
+        assert cleared is False, escape
+        assert gate.BLOCKER_TARGET_ESCAPES_REPO in blockers, escape
+
+    # An absent target is still absent, not silently cleared by exists().
+    cleared, blockers = _clears("Nope.SemanticModel")
+    assert cleared is False
+    assert gate.BLOCKER_TARGET_ABSENT in blockers

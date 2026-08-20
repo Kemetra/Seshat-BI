@@ -540,7 +540,17 @@ def _path_blockers(
         # Checked BEFORE existence: an escaping path must be refused for escaping,
         # not incidentally because the file happened to be absent.
         return False, (BLOCKER_TARGET_ESCAPES_REPO,)
-    if not contained.is_file():
+    # A file OR a directory. The vendor runtime binds a TMDL *folder*
+    # (`connection_operations/ConnectFolder`) and flushes the whole folder back
+    # (`database_operations/ExportToTmdlFolder`), so a write target is legitimately
+    # a `*.SemanticModel` directory -- verified against the real binary
+    # (research.md R8). Requiring `is_file()` made the two branches mutually
+    # exclusive: a file target cleared the gate and could not be connected, while
+    # a folder target could be connected and never cleared (issue #660 review C1).
+    #
+    # Containment is unchanged and still enforced above: widening what KIND of
+    # path may be named does not widen WHERE it may point.
+    if not contained.exists():
         return False, (BLOCKER_TARGET_ABSENT,)
     return True, ()
 

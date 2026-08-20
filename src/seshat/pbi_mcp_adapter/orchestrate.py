@@ -132,9 +132,21 @@ def _effect_blockers(
     changed = {
         rel for rel in set(before) | set(after) if before.get(rel) != after.get(rel)
     }
-    if target not in changed:
+
+    # A FOLDER target legitimately changes many files. `ExportToTmdlFolder`
+    # rewrites the entire model directory -- measured at 11 TMDL files, including
+    # tables the operation never named (research.md R8). Scoping a folder write to
+    # one path would report BLOCKER_OUT_OF_SCOPE_CHANGE on every real apply
+    # (issue #660 review H1), so for a folder the authorized scope is its subtree.
+    #
+    # This does NOT widen a file target: a file authorizes exactly itself, and
+    # anything outside the declared subtree is still out of scope either way.
+    prefix = target if target.endswith("/") else target + "/"
+    in_scope = {rel for rel in changed if rel == target or rel.startswith(prefix)}
+
+    if not in_scope:
         found.append(BLOCKER_TARGET_UNCHANGED)
-    if changed - {target}:
+    if changed - in_scope:
         found.append(BLOCKER_OUT_OF_SCOPE_CHANGE)
     return tuple(found)
 
@@ -266,8 +278,15 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
     # actually changed. The target path and operation come from the VERDICT --
     # there is no parameter by which to substitute another.
     before = _snapshot(root)
+    # ``mcp_runner`` keeps its name as the injection seam, but at #660 its
+    # CONTRACT changed: it is now a session factory (``**kwargs -> McpSession``),
+    # not a subprocess invoker, because the runtime is an MCP stdio server rather
+    # than a one-shot CLI. Callers injecting a test double must supply a session.
     result = runner.invoke(
-        verdict, repo_root=root, read_only=False, runner=plan.mcp_runner
+        verdict,
+        repo_root=root,
+        read_only=False,
+        session_factory=plan.mcp_runner,
     )
 
     if not result.succeeded:
@@ -298,7 +317,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
             exit_code=EXIT_VALIDATION_FAILED,
             outcome="failed",
             tool=runner.VENDOR_PACKAGE,
-            mutation_attempted=True,
+            mutation_attempted=result.mutation_attempted,
             blockers=effect_blockers,
             rollback_guidance=guidance,
         )
@@ -315,7 +334,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
             exit_code=EXIT_VALIDATION_FAILED,
             outcome="failed",
             tool=runner.VENDOR_PACKAGE,
-            mutation_attempted=True,
+            mutation_attempted=result.mutation_attempted,
             blockers=outcome.blockers,
             rollback_guidance=outcome.rollback_guidance or guidance,
             checks_run=outcome.checks_run,
@@ -327,7 +346,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
         exit_code=EXIT_OK,
         outcome="materialized",
         tool=runner.VENDOR_PACKAGE,
-        mutation_attempted=True,
+        mutation_attempted=result.mutation_attempted,
         checks_run=outcome.checks_run,
         validation_failed=outcome.failed,
     )

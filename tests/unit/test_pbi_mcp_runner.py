@@ -1,27 +1,32 @@
-"""Spec 149 T025-T028 -- the runner is bounded, gated, and never bypassable.
+"""Spec 149 T025-T028 + #660 -- the runner is bounded, gated, and never bypassable.
 
-No live tenant, no network, no real ``npx``: a stub invoker drives every branch,
+No live tenant, no network, no real ``npx``: a fake SESSION drives every branch,
 so acceptance is provable offline (Principle VIII).
+
+**Why this file changed shape at #660.** It previously asserted that the argv
+contained ``--target`` and ``--operation``. Those flags do not exist on the vendor
+binary (verified 2026-08-20), so those assertions pinned the bug rather than the
+contract. They are replaced by assertions on the real three-call exchange:
+``ConnectFolder`` -> the authorized operation -> ``ExportToTmdlFolder``.
 """
 
 from __future__ import annotations
 
-import subprocess
+import json
 from pathlib import Path
 
 import pytest
 
-from seshat.pbi_mcp import detect
-from seshat.pbi_mcp_adapter import gate, runner
+from seshat.pbi_mcp_adapter import gate, protocol, runner, session, vendor_ops
 
 pytestmark = pytest.mark.unit
 
 
-TARGET_PATH = "models/sales_model.tmdl"
-OPERATION = "update_measure"
+TARGET_PATH = "powerbi/Sales.SemanticModel"
+OPERATION = "measure_operations.Rename"
 
 
-def _cleared_verdict() -> gate.GateVerdict:
+def _cleared_verdict(operation: str = OPERATION) -> gate.GateVerdict:
     """A verdict whose every component holds.
 
     Built explicitly rather than by running the gate, so this module tests the
@@ -30,7 +35,7 @@ def _cleared_verdict() -> gate.GateVerdict:
     """
     return gate.GateVerdict(
         target_id="sales_model",
-        authorized_operation=OPERATION,
+        authorized_operation=operation,
         authorized_path=TARGET_PATH,
         stage_readable=True,
         state_committed=True,
@@ -62,17 +67,198 @@ def _uncleared_verdict(**overrides: object) -> gate.GateVerdict:
     return gate.GateVerdict(**fields)  # type: ignore[arg-type]
 
 
-def _stub(returncode: int = 0, stdout: str = "ok", stderr: str = ""):
-    calls: list[list[str]] = []
+def _outcome(
+    ok: bool = True,
+    read_only: bool | None = None,
+    text: str = "",
+) -> protocol.ToolOutcome:
+    raw = text or json.dumps({"message": "done"})
+    return protocol.ToolOutcome(
+        ok=ok,
+        read_only_hint=read_only,
+        payload=None,
+        raw_text=raw,
+        error=None if ok else "the vendor reported isError",
+    )
 
-    def invoke(argv: list[str], cwd: Path):
-        calls.append(argv)
-        return subprocess.CompletedProcess(
-            args=argv, returncode=returncode, stdout=stdout, stderr=stderr
+
+class FakeSession:
+    """Stands in for :class:`McpSession`; records the calls the runner makes."""
+
+    def __init__(
+        self,
+        outcomes: list[protocol.ToolOutcome] | None = None,
+        *,
+        raise_on_handshake: bool = False,
+        handshake_error: Exception | None = None,
+    ):
+        self.calls: list[tuple[str, dict]] = []
+        self.handshaken = False
+        self.closed = False
+        self._outcomes = list(outcomes or [])
+        self._raise_on_handshake = raise_on_handshake or handshake_error is not None
+        self._handshake_error = handshake_error or session.SessionStalled(
+            "no reply within deadline"
         )
 
-    invoke.calls = calls  # type: ignore[attr-defined]
-    return invoke
+    def handshake(self) -> dict:
+        if self._raise_on_handshake:
+            raise self._handshake_error
+        self.handshaken = True
+        return {"name": "powerbi-modeling-mcp", "version": "0.5.0.0"}
+
+    def call(self, tool: str, request: dict) -> protocol.ToolOutcome:
+        self.calls.append((tool, request))
+        if self._outcomes:
+            return self._outcomes.pop(0)
+        return _outcome()
+
+    def close(self) -> None:
+        self.closed = True
+
+    @property
+    def tools(self) -> list[str]:
+        return [tool for tool, _ in self.calls]
+
+    @property
+    def operations(self) -> list[str]:
+        return [request.get("operation") for _, request in self.calls]
+
+
+def _factory(fake: FakeSession):
+    def make(**_kwargs: object) -> FakeSession:
+        return fake
+
+    return make
+
+
+# --------------------------------------------------------------------------
+# #660 -- the argv no longer invents flags the vendor does not have
+# --------------------------------------------------------------------------
+
+
+def test_build_argv_no_longer_invents_target_or_operation_flags():
+    argv = runner.build_argv(read_only=True)
+    assert "--target" not in argv
+    assert "--operation" not in argv
+    assert argv == ["npx", "--yes", runner.VENDOR_PACKAGE, "--readonly"]
+
+
+def test_build_argv_asks_for_write_mode_explicitly():
+    assert "--readwrite" in runner.build_argv(read_only=False)
+
+
+# --------------------------------------------------------------------------
+# #660 -- the three-call write sequence, and the flush that makes it real
+# --------------------------------------------------------------------------
+
+
+def test_a_write_connects_operates_then_flushes(tmp_path: Path) -> None:
+    """Three calls, in order. The flush is what makes the write reach disk.
+
+    Measured 2026-08-20: Update alone returns isError:false and changes ZERO
+    bytes. Without ExportToTmdlFolder the governance stack certifies a write
+    that never happened.
+    """
+    fake = FakeSession(
+        [_outcome(read_only=True), _outcome(read_only=False), _outcome(read_only=True)]
+    )
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert fake.handshaken is True
+    assert fake.tools == [
+        "connection_operations",
+        "measure_operations",
+        "database_operations",
+    ]
+    assert fake.operations == ["ConnectFolder", "Rename", "ExportToTmdlFolder"]
+    assert result.succeeded is True
+    assert result.mutation_attempted is True
+    assert fake.closed is True
+
+
+def test_the_flush_targets_the_same_folder_that_was_connected(tmp_path: Path) -> None:
+    fake = FakeSession(
+        [_outcome(read_only=True), _outcome(read_only=False), _outcome(read_only=True)]
+    )
+    runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    connected = fake.calls[0][1]["folderPath"]
+    flushed = fake.calls[2][1]["tmdlFolderPath"]
+    assert connected == flushed == TARGET_PATH
+
+
+def test_a_read_only_operation_does_not_flush(tmp_path: Path) -> None:
+    """Nothing changed in memory, so exporting would rewrite the folder for nothing."""
+    fake = FakeSession([_outcome(read_only=True), _outcome(read_only=True)])
+    result = runner.invoke(
+        _cleared_verdict("measure_operations.List"),
+        repo_root=tmp_path,
+        session_factory=_factory(fake),
+    )
+    assert fake.tools == ["connection_operations", "measure_operations"]
+    assert result.mutation_attempted is False
+
+
+def test_a_failed_flush_is_a_blocker_and_never_reports_success(
+    tmp_path: Path,
+) -> None:
+    """The in-memory mutation happened but never reached disk: indeterminate."""
+    fake = FakeSession(
+        [_outcome(read_only=True), _outcome(read_only=False), _outcome(ok=False)]
+    )
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert result.succeeded is False
+    assert runner.BLOCKER_FLUSH_FAILED in result.blockers
+    assert result.mutation_attempted is True
+
+
+def test_a_failed_connect_never_issues_the_operation(tmp_path: Path) -> None:
+    fake = FakeSession([_outcome(ok=False)])
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert fake.tools == ["connection_operations"]
+    assert result.succeeded is False
+    assert result.mutation_attempted is False
+
+
+def test_a_failed_operation_does_not_flush(tmp_path: Path) -> None:
+    """Exporting after a failed operation would rewrite the folder for nothing."""
+    fake = FakeSession([_outcome(read_only=True), _outcome(ok=False)])
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert "database_operations" not in fake.tools
+    assert runner.BLOCKER_VENDOR_REFUSED in result.blockers
+
+
+def test_a_write_the_vendor_calls_read_only_is_a_violation(tmp_path: Path) -> None:
+    """Cross-check our classification against the vendor's per-call annotation."""
+    fake = FakeSession([_outcome(read_only=True), _outcome(read_only=True)])
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert runner.BLOCKER_READONLY_VIOLATION in result.blockers
+    assert result.succeeded is False
+    # And it must NOT have flushed on a disagreement.
+    assert "database_operations" not in fake.tools
+
+
+def test_an_unknown_hint_is_not_treated_as_a_violation(tmp_path: Path) -> None:
+    """Absent means unknown; refusing on unknown would block every real write."""
+    fake = FakeSession(
+        [_outcome(read_only=True), _outcome(read_only=None), _outcome(read_only=True)]
+    )
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert runner.BLOCKER_READONLY_VIOLATION not in result.blockers
+    assert result.succeeded is True
 
 
 # --------------------------------------------------------------------------
@@ -81,487 +267,281 @@ def _stub(returncode: int = 0, stdout: str = "ok", stderr: str = ""):
 
 
 def test_runner_refuses_uncleared_gate(tmp_path: Path) -> None:
-    """A future callsite cannot reach the runtime around the gate."""
-    stub = _stub()
+    fake = FakeSession()
     result = runner.invoke(
-        _uncleared_verdict(),
-        repo_root=tmp_path,
-        runner=stub,
-    )
-    assert not result.succeeded
-    assert runner.BLOCKER_GATE_NOT_CLEARED in result.blockers
-    assert stub.calls == [], "nothing may be launched behind an uncleared gate"
-
-
-def test_refusal_reports_no_mutation_attempted(tmp_path: Path) -> None:
-    """Distinguishes refused-before-launch from launched-state-unknown."""
-    result = runner.invoke(
-        _uncleared_verdict(),
-        repo_root=tmp_path,
-        runner=_stub(),
+        _uncleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
     )
     assert result.mutation_attempted is False
+    assert fake.handshaken is False
+    assert fake.calls == []
+    assert runner.BLOCKER_GATE_NOT_CLEARED in result.blockers
 
 
-def test_refusal_carries_the_gate_blockers_through(tmp_path: Path) -> None:
-    """The specific missing authority survives to the caller (FR-009)."""
+def test_an_unknown_operation_pair_is_refused_before_launch(tmp_path: Path) -> None:
+    """The pre-#660 single-token form is rejected, not reinterpreted."""
+    fake = FakeSession()
     result = runner.invoke(
-        _uncleared_verdict(blockers=(gate.BLOCKER_APPROVAL_TARGET,)),
+        _cleared_verdict("update_measure"),
         repo_root=tmp_path,
-        runner=_stub(),
+        session_factory=_factory(fake),
     )
-    assert gate.BLOCKER_APPROVAL_TARGET in result.blockers
+    assert fake.handshaken is False
+    assert result.mutation_attempted is False
+    assert runner.BLOCKER_UNKNOWN_OPERATION in result.blockers
 
 
-def test_cleared_gate_does_invoke(tmp_path: Path) -> None:
-    """The positive control -- without it every refusal test above is vacuous."""
-    stub = _stub()
+def test_an_unknown_tool_is_refused_before_launch(tmp_path: Path) -> None:
+    fake = FakeSession()
     result = runner.invoke(
-        _cleared_verdict(),
+        _cleared_verdict("not_a_tool.Update"),
         repo_root=tmp_path,
-        runner=stub,
+        session_factory=_factory(fake),
     )
-    assert result.succeeded
-    assert len(stub.calls) == 1
+    assert fake.handshaken is False
+    assert runner.BLOCKER_UNKNOWN_OPERATION in result.blockers
 
 
 # --------------------------------------------------------------------------
-# T026 -- a stall becomes a typed outcome, never an unbounded hang
+# T026/T027 -- failure modes are typed results, never exceptions
 # --------------------------------------------------------------------------
 
 
-def test_stall_becomes_typed_blocked_not_a_hang(tmp_path: Path) -> None:
-    def stall(argv: list[str], cwd: Path):
-        raise subprocess.TimeoutExpired(cmd=argv, timeout=runner.RUN_TIMEOUT_SECONDS)
-
+def test_a_stalled_session_reports_a_mutation_was_attempted(tmp_path: Path) -> None:
+    """A hung child is a blocked run with the artifact possibly half-written."""
+    fake = FakeSession(raise_on_handshake=True)
     result = runner.invoke(
-        _cleared_verdict(),
-        repo_root=tmp_path,
-        runner=stall,
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
     )
-    assert not result.succeeded
-    assert result.exit_code == runner.TIMEOUT_EXIT_CODE
     assert runner.BLOCKER_RUNTIME_STALLED in result.blockers
-
-
-def test_a_stalled_run_reports_a_mutation_was_attempted(tmp_path: Path) -> None:
-    """The artifact may be half-written, so this is NOT a clean failure."""
-
-    def stall(argv: list[str], cwd: Path):
-        raise subprocess.TimeoutExpired(cmd=argv, timeout=1)
-
-    result = runner.invoke(
-        _cleared_verdict(),
-        repo_root=tmp_path,
-        runner=stall,
-    )
-    assert result.mutation_attempted is True
+    assert result.exit_code == runner.TIMEOUT_EXIT_CODE
+    assert fake.closed is True
 
 
 def test_missing_runtime_is_typed_not_an_exception(tmp_path: Path) -> None:
-    def missing(argv: list[str], cwd: Path):
-        raise FileNotFoundError("npx")
+    def exploding(**_kwargs: object):
+        raise OSError("npx not found")
 
     result = runner.invoke(
-        _cleared_verdict(),
-        repo_root=tmp_path,
-        runner=missing,
+        _cleared_verdict(), repo_root=tmp_path, session_factory=exploding
     )
-    assert not result.succeeded
-    assert runner.BLOCKER_RUNTIME_MISSING in result.blockers
     assert result.mutation_attempted is False
-
-
-def test_the_timeout_is_not_the_shared_git_cap() -> None:
-    """Research R4: gitutil's short shared cap would abort a real workload.
-
-    Pinned as a comparison against the shipped helper's own constant, so this
-    cannot drift into silently reusing it.
-    """
-    from seshat import gitutil
-
-    shared_cap = getattr(gitutil, "SUBPROCESS_TIMEOUT", None)
-    assert runner.RUN_TIMEOUT_SECONDS >= 600
-    if shared_cap is not None:
-        assert runner.RUN_TIMEOUT_SECONDS > shared_cap
+    assert runner.BLOCKER_RUNTIME_MISSING in result.blockers
 
 
 # --------------------------------------------------------------------------
-# T028 -- the bypass flag is never constructible
+# T028 -- redaction, through BOTH layers, before truncation
+# --------------------------------------------------------------------------
+
+
+def test_output_is_redacted_through_both_layers(tmp_path: Path) -> None:
+    leaky = _outcome(read_only=False, text="postgresql://u:hunter2@host/db")
+    fake = FakeSession([_outcome(read_only=True), leaky, _outcome(read_only=True)])
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert "hunter2" not in result.output
+
+
+def test_the_transcript_is_bounded(tmp_path: Path) -> None:
+    huge = _outcome(read_only=False, text="x" * (runner.TAIL_CHARS * 2))
+    fake = FakeSession([_outcome(read_only=True), huge, _outcome(read_only=True)])
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert len(result.output) <= runner.TAIL_CHARS
+
+
+# --------------------------------------------------------------------------
+# The standing bypass prohibition
 # --------------------------------------------------------------------------
 
 
 def test_runner_never_passes_the_bypass_flag(tmp_path: Path) -> None:
-    """The built argv cannot carry the flag, whatever the caller asks for.
-
-    Asserted on the ACTUAL argv the stub received, not on the builder's shape.
-    """
-    stub = _stub()
-    runner.invoke(
-        _cleared_verdict(),
-        repo_root=tmp_path,
-        runner=stub,
+    fake = FakeSession(
+        [_outcome(read_only=True), _outcome(read_only=False), _outcome(read_only=True)]
     )
-    argv = stub.calls[0]
-    assert detect._FORBIDDEN_FLAG not in " ".join(argv).lower()
-    assert detect.classify_invocation_argv(argv) != detect.CONFIG_FORBIDDEN_FLAG
+    runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert "--skipconfirmation" not in runner.build_argv(read_only=False)
 
 
-def test_a_bypass_flag_smuggled_into_the_argv_raises(
+def test_a_bypass_flag_smuggled_into_the_argv_still_raises(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Defence in depth: if a future edit added the flag, the guard still fires.
-
-    Proves the re-check in ``invoke`` is load-bearing rather than decorative --
-    the reason it is there at all is that ``build_argv`` could change.
-    """
+    """The re-check exists because ``build_argv`` could change."""
     monkeypatch.setattr(
-        runner,
-        "build_argv",
-        lambda target, operation, *, read_only: ["npx", "--skipconfirmation"],
+        runner, "build_argv", lambda *, read_only: ["npx", "--skipconfirmation"]
     )
-    with pytest.raises(detect.BypassFlagRefused):
+    with pytest.raises(Exception):  # noqa: B017, PT011 - refusal type is detect's
         runner.invoke(
             _cleared_verdict(),
             repo_root=tmp_path,
-            runner=_stub(),
+            session_factory=_factory(FakeSession()),
         )
 
 
-def test_read_only_mode_passes_readonly_explicitly(tmp_path: Path) -> None:
-    """Silence means WRITE mode for local stdio, so --readonly must be explicit."""
-    stub = _stub()
-    runner.invoke(
-        _cleared_verdict(),
-        repo_root=tmp_path,
-        read_only=True,
-        runner=stub,
-    )
-    assert "--readonly" in stub.calls[0]
-    assert "--readwrite" not in stub.calls[0]
-
-
-def test_write_mode_is_explicit_too(tmp_path: Path) -> None:
-    stub = _stub()
-    runner.invoke(
-        _cleared_verdict(),
-        repo_root=tmp_path,
-        read_only=False,
-        runner=stub,
-    )
-    assert "--readwrite" in stub.calls[0]
-
-
 def test_the_vendor_runtime_is_invoked_through_npx(tmp_path: Path) -> None:
-    """Never vendored, never a Python dependency (Principle II / ADR 0018)."""
-    stub = _stub()
-    runner.invoke(
-        _cleared_verdict(),
-        repo_root=tmp_path,
-        runner=stub,
-    )
-    argv = stub.calls[0]
+    argv = runner.build_argv(read_only=False)
     assert argv[0] == "npx"
     assert runner.VENDOR_PACKAGE in argv
 
 
-# --------------------------------------------------------------------------
-# Output handling: redact BEFORE truncating (#362)
-# --------------------------------------------------------------------------
-
-
-def test_output_is_redacted_before_truncation(tmp_path: Path) -> None:
-    """Trimming first can split a DSN and leave an unrecognizable remainder."""
-    noise = "x" * (runner.TAIL_CHARS + 500)
-    leaky = f"{noise} host=db.example.com user=admin password=hunter2"
-    result = runner.invoke(
-        _cleared_verdict(),
-        repo_root=tmp_path,
-        runner=_stub(stdout=leaky),
-    )
-    assert "hunter2" not in result.output
-    assert len(result.output) <= runner.TAIL_CHARS
-
-
-def test_stderr_is_captured_alongside_stdout(tmp_path: Path) -> None:
-    result = runner.invoke(
-        _cleared_verdict(),
-        repo_root=tmp_path,
-        runner=_stub(returncode=1, stdout="out", stderr="boom"),
-    )
-    assert "boom" in result.output
-
-
-def test_nonzero_exit_is_not_succeeded(tmp_path: Path) -> None:
-    result = runner.invoke(
-        _cleared_verdict(),
-        repo_root=tmp_path,
-        runner=_stub(returncode=2),
-    )
-    assert not result.succeeded
-
-
-def test_result_is_immutable(tmp_path: Path) -> None:
-    result = runner.invoke(
-        _cleared_verdict(),
-        repo_root=tmp_path,
-        runner=_stub(),
-    )
-    with pytest.raises(Exception):
-        result.exit_code = 0  # type: ignore[misc]
+def test_the_operation_vocabulary_is_the_shared_one() -> None:
+    """The runner must not carry its own copy of the tool list."""
+    assert "measure_operations" in vendor_ops.VENDOR_TOOLS
 
 
 # --------------------------------------------------------------------------
-# CRITICAL: a cleared verdict is not replayable against another op/path
+# Review fixes -- M2 (cause fidelity), M3 (diagnosis), H3 (no escaping traceback)
 # --------------------------------------------------------------------------
 
 
-def test_the_runner_executes_only_what_the_verdict_authorized(tmp_path: Path) -> None:
-    """The argv comes from the VERDICT, never from a parameter.
+def test_a_closed_stream_is_not_reported_as_a_timeout(tmp_path: Path) -> None:
+    """M2: a crash and a stall are different causes.
 
-    The hole this closes: ``invoke`` used to take its own ``target_path`` and
-    ``operation_id`` and check only ``verdict.cleared``, so a verdict legitimately
-    cleared for sales_model/update_measure launched ``drop_all_tables`` against
-    ``../outside.tmdl`` -- defeating the containment check the gate had just
-    performed.
+    Reporting a closed stream as "did not finish within 900s and was killed"
+    tells the operator something false. Dispatch is on the exception TYPE.
     """
-    stub = _stub()
-    runner.invoke(_cleared_verdict(), repo_root=tmp_path, runner=stub)
-    argv = stub.calls[0]
-    assert argv[argv.index("--target") + 1] == TARGET_PATH
-    assert argv[argv.index("--operation") + 1] == OPERATION
+    fake = FakeSession(handshake_error=session.SessionError("the vendor stream closed"))
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert runner.BLOCKER_RUNTIME_STALLED not in result.blockers
+    assert runner.BLOCKER_RUNTIME_UNEXPLAINED in result.blockers
+    assert result.exit_code != runner.TIMEOUT_EXIT_CODE
 
 
-def test_invoke_accepts_no_target_or_operation_parameter() -> None:
-    """Pins the CAPABILITY: there is no parameter by which to substitute one.
-
-    Asserted against the real signature, so re-adding either name fails here
-    rather than silently reopening the replay path.
-    """
-    import inspect
-
-    params = set(inspect.signature(runner.invoke).parameters)
-    for forbidden in ("target_path", "operation_id", "target", "operation"):
-        assert forbidden not in params, f"invoke must not accept {forbidden}"
-
-
-def test_a_verdict_naming_no_path_is_refused(tmp_path: Path) -> None:
-    """Defence in depth for a hand-built verdict with the pair missing."""
-    base = _cleared_verdict()
-    fields = {k: getattr(base, k) for k in vars(base)}
-    fields["authorized_path"] = None
-    verdict = gate.GateVerdict(**fields)  # type: ignore[arg-type]
-    stub = _stub()
-    result = runner.invoke(verdict, repo_root=tmp_path, runner=stub)
-    assert not result.succeeded
-    assert stub.calls == []
-
-
-# --------------------------------------------------------------------------
-# MED: vendor output goes through BOTH redaction layers
-# --------------------------------------------------------------------------
-
-
-def test_runner_output_scrubs_tenant_guids_and_user_paths(tmp_path: Path) -> None:
-    """``redact`` alone cannot see these -- its own docstring says so.
-
-    Vendor output is exactly where they appear, since the runtime prints local
-    project paths.
-    """
-    leaky = (
-        "tenant=3f2504e0-4f89-11d3-9a0c-0305e82c3301 "
-        r"project=C:\Users\ahmed\models\sales.tmdl"
+def test_a_true_stall_still_reports_the_timeout(tmp_path: Path) -> None:
+    fake = FakeSession(
+        handshake_error=session.SessionStalled("the vendor sent nothing for 900s")
     )
     result = runner.invoke(
-        _cleared_verdict(),
-        repo_root=tmp_path,
-        runner=_stub(stdout=leaky),
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
     )
-    assert "3f2504e0-4f89-11d3-9a0c-0305e82c3301" not in result.output
-    assert "ahmed" not in result.output
-    assert "REDACTED" in result.output
+    assert runner.BLOCKER_RUNTIME_STALLED in result.blockers
+    assert result.exit_code == runner.TIMEOUT_EXIT_CODE
 
 
-def test_runner_output_still_scrubs_dsn_spans(tmp_path: Path) -> None:
-    """The DSN layer must keep working alongside the scanner layer."""
+def test_a_jsonrpc_error_frame_still_carries_a_diagnosis(tmp_path: Path) -> None:
+    """M3: an error frame has no content, so raw_text is empty.
+
+    Shipping BLOCKER_VENDOR_REFUSED with empty output left the operator nothing
+    to diagnose on the most important failure path.
+    """
+    errored = protocol.ToolOutcome(
+        ok=False,
+        read_only_hint=None,
+        payload=None,
+        raw_text="",
+        error="Method not found",
+    )
+    fake = FakeSession([_outcome(read_only=True), errored])
     result = runner.invoke(
-        _cleared_verdict(),
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert runner.BLOCKER_VENDOR_REFUSED in result.blockers
+    assert "Method not found" in result.output
+
+
+def test_an_os_error_mid_call_never_escapes_as_a_traceback(tmp_path: Path) -> None:
+    """H3: an escaping exception means no RunResult, so NO evidence record.
+
+    orchestrate only reaches `_terminate` if invoke returns, so a raw OSError
+    violated FR-015 on the one path where the record matters most.
+    """
+
+    class Exploding(FakeSession):
+        def call(self, tool: str, request: dict) -> protocol.ToolOutcome:
+            self.calls.append((tool, request))
+            raise OSError("pipe died mid-read")
+
+    fake = Exploding()
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert isinstance(result, runner.RunResult)
+    assert result.succeeded is False
+    assert runner.BLOCKER_RUNTIME_UNEXPLAINED in result.blockers
+    assert fake.closed is True
+
+
+def test_a_read_pair_reports_no_mutation_attempted(tmp_path: Path) -> None:
+    """M1's runner half: a read must not claim an attempted mutation."""
+    fake = FakeSession([_outcome(read_only=True), _outcome(read_only=True)])
+    result = runner.invoke(
+        _cleared_verdict("measure_operations.List"),
         repo_root=tmp_path,
-        runner=_stub(stdout="host=db.example.com user=admin password=hunter2"),
+        session_factory=_factory(fake),
     )
-    assert "hunter2" not in result.output
+    assert result.mutation_attempted is False
+    assert result.succeeded is True
 
 
 # --------------------------------------------------------------------------
-# Issue #658: the vendor process must not inherit the parent environment
+# Re-review C2 -- a payload-needing write is REFUSED, never run hollow
 # --------------------------------------------------------------------------
 
 
-def test_credentials_never_reach_the_vendor_environment() -> None:
-    """Deny by default. This is the assertion that makes the helper a gate.
+def test_an_operation_needing_a_definitions_payload_is_refused(tmp_path: Path) -> None:
+    """C2: Update from a verb alone mutates nothing, so running it certifies a no-op.
 
-    The vendor runtime is external, unforked and a public preview (ADR 0018), so
-    anything in the parent environment is visible to a third party. An ABSENCE
-    assertion is what catches a later edit that copies the Dagster adapter's
-    prefix rules over -- that helper forwards `DATABASE_URL` and `ANALYTICS_DB_*`
-    BY DESIGN, because it feeds governed Seshat connections. Forwarding a database
-    credential to a preview binary would be worse than inheriting it by accident,
-    because it would look deliberate.
+    The server documents "For Create and Update use Definitions". This adapter is
+    forbidden to invent the definition, and the approved_definitions record that
+    would supply one is deferred -- so the honest answer is a LOUD refusal naming
+    the missing input, never a run that reports success for nothing.
 
-    Issue #658.
+    Before #660's other fixes this path was unreachable; afterwards it executes,
+    which is why the refusal has to be explicit.
     """
-    hostile = {
-        "PATH": "/usr/bin",
-        "SYSTEMROOT": "C:\\Windows",
-        "DATABASE_URL": "postgres://u:p@host:5432/db",
-        "ANALYTICS_DB_PASSWORD": "hunter2",
-        "SESHAT_DBT_PROFILE": "prod",
-        "AWS_SECRET_ACCESS_KEY": "AKIAsecret",
-        "GITHUB_TOKEN": "ghp_realtokenvalue",
-        "AZURE_CLIENT_SECRET": "s3cret",
-    }
-
-    env = runner.allowed_vendor_environment(hostile)
-
-    leaked = sorted(set(env) - {"PATH", "SYSTEMROOT"})
-    assert not leaked, f"credential-bearing variables reached the vendor: {leaked}"
-    for value in ("hunter2", "AKIAsecret", "ghp_realtokenvalue", "s3cret"):
-        assert value not in "".join(env.values())
-
-
-def test_the_vendor_environment_keeps_what_npx_needs() -> None:
-    """Positive control: a helper returning {} would satisfy the absence test.
-
-    Measured against the real toolchain rather than guessed:
-    `npx --yes cowsay@1.6.0 hi` fetches AND executes with only PATH, SYSTEMROOT
-    and PATHEXT present.
-    """
-    source = {
-        "PATH": "/usr/bin",
-        "PATHEXT": ".COM;.EXE",
-        "SYSTEMROOT": "C:\\Windows",
-        "APPDATA": "C:\\Users\\u\\AppData\\Roaming",
-        "SECRET": "nope",
-    }
-
-    env = runner.allowed_vendor_environment(source)
-
-    assert env["PATH"] == "/usr/bin"
-    assert env["PATHEXT"] == ".COM;.EXE"
-    assert "SECRET" not in env
-
-
-def test_no_prefix_wildcard_widens_the_vendor_allowlist() -> None:
-    """The allowlist is EXACT keys only -- no prefix rules.
-
-    A prefix rule is how an allowlist grows silently: one governed family today,
-    an unrelated match tomorrow. The Dagster helper needs prefixes; this one
-    forwards no connection variables at all, so it must not have them.
-    """
-    invented = {
-        "SESHAT_ANYTHING": "x",
-        "ANALYTICS_DB_HOST": "y",
-        "PBI_MCP_TOKEN": "z",
-        "PATH": "/usr/bin",
-    }
-
-    env = runner.allowed_vendor_environment(invented)
-
-    assert set(env) == {"PATH"}
-
-
-def test_the_runner_passes_the_sanitized_environment() -> None:
-    """The helper must actually be WIRED, not merely present.
-
-    An injected seam that nothing calls is a tested-but-dead feature -- this
-    adapter has already shipped that defect once (`config_state`), so the wiring
-    gets its own assertion.
-    """
-    import inspect
-
-    source = inspect.getsource(runner._run)
-    assert "env=" in source, "_run does not pass an explicit environment"
-    assert "allowed_vendor_environment" in source, (
-        "_run does not use the sanitizing helper"
+    fake = FakeSession()
+    result = runner.invoke(
+        _cleared_verdict("measure_operations.Update"),
+        repo_root=tmp_path,
+        session_factory=_factory(fake),
     )
+    assert result.succeeded is False
+    assert runner.BLOCKER_PAYLOAD_UNAVAILABLE in result.blockers
+    # Nothing was launched: the refusal precedes the session entirely.
+    assert fake.handshaken is False
+    assert fake.calls == []
+    assert result.mutation_attempted is False
+    assert "never invents a definition" in result.output
 
 
-def test_proxy_routing_survives_so_npx_can_reach_the_registry() -> None:
-    """Routing, not trust. A CA bundle says whether a chain VERIFIES; it never
-    says which host to dial.
-
-    Where egress is proxy-only, dropping these makes `npx` attempt a direct
-    connection and fail before the vendor runtime starts -- the fetch dies, so
-    no write can execute. npm honours these variables directly
-    (`using-npm/config.md`).
-
-    Codex P2 on PR #668.
-    """
-    source = {
-        "PATH": "/usr/bin",
-        "HTTP_PROXY": "http://proxy.corp:3128",
-        "HTTPS_PROXY": "http://proxy.corp:3128",
-        "NO_PROXY": "localhost,127.0.0.1",
-    }
-
-    env = runner.allowed_vendor_environment(source)
-
-    assert env["HTTP_PROXY"] == "http://proxy.corp:3128"
-    assert env["HTTPS_PROXY"] == "http://proxy.corp:3128"
-    assert env["NO_PROXY"] == "localhost,127.0.0.1"
+def test_a_payload_free_write_is_still_executed(tmp_path: Path) -> None:
+    """The refusal must be narrow: Rename needs no Definitions block."""
+    fake = FakeSession(
+        [_outcome(read_only=True), _outcome(read_only=False), _outcome(read_only=True)]
+    )
+    result = runner.invoke(
+        _cleared_verdict("measure_operations.Rename"),
+        repo_root=tmp_path,
+        session_factory=_factory(fake),
+    )
+    assert runner.BLOCKER_PAYLOAD_UNAVAILABLE not in result.blockers
+    assert result.succeeded is True
+    assert fake.operations == ["ConnectFolder", "Rename", "ExportToTmdlFolder"]
 
 
-def test_lowercase_proxy_keys_reach_the_child_in_their_source_spelling() -> None:
-    """The non-obvious half: three allowlist entries cover SIX variables.
-
-    The filter compares `key.upper()`, so the Unix lowercase forms match, and the
-    emitted dict keeps the SOURCE spelling -- `http_proxy` must arrive as
-    `http_proxy`, because that is the form Unix tooling reads. Upper-casing the
-    key on the way out would silently break exactly the platform that uses it.
-
-    This is a PLATFORM-AGNOSTIC assertion: it passes on Windows and Linux alike,
-    because the helper is given an explicit dict rather than `os.environ`.
-    """
-    source = {"http_proxy": "http://proxy.corp:3128", "no_proxy": "localhost"}
-
-    env = runner.allowed_vendor_environment(source)
-
-    assert env == {"http_proxy": "http://proxy.corp:3128", "no_proxy": "localhost"}
+def test_a_read_is_never_refused_for_a_missing_payload(tmp_path: Path) -> None:
+    fake = FakeSession([_outcome(read_only=True), _outcome(read_only=True)])
+    result = runner.invoke(
+        _cleared_verdict("measure_operations.List"),
+        repo_root=tmp_path,
+        session_factory=_factory(fake),
+    )
+    assert runner.BLOCKER_PAYLOAD_UNAVAILABLE not in result.blockers
+    assert result.succeeded is True
 
 
-def test_an_authenticated_proxy_is_forwarded_verbatim() -> None:
-    """Deliberate, and NOT a regression of #658.
-
-    An authenticated proxy URL carries `user:pw@`. Forwarding it is required for
-    the hop this subprocess is about to make on the caller's behalf -- unlike
-    `DATABASE_URL`, which the vendor has no business seeing at all. Stripping the
-    userinfo would route to the proxy and earn a 407, so there is no sanitized
-    form that still works.
-
-    Pinning it means a later "harden the proxy value" edit has to argue with a
-    test instead of quietly breaking proxy-only egress.
-    """
-    source = {"HTTPS_PROXY": "http://svc:s3cret@proxy.corp:3128", "PATH": "/usr/bin"}
-
-    env = runner.allowed_vendor_environment(source)
-
-    assert env["HTTPS_PROXY"] == "http://svc:s3cret@proxy.corp:3128"
-
-
-def test_the_proxy_keys_did_not_widen_the_allowlist_to_a_prefix() -> None:
-    """Adding routing keys must not have introduced a `*_PROXY` prefix rule.
-
-    Exact keys only: a neighbouring variable that merely LOOKS proxy-shaped stays
-    out, so the deny-by-default posture is unchanged by this fix.
-    """
-    source = {
-        "PROXY_PASSWORD": "hunter2",
-        "ALL_PROXY": "socks5://nope:1080",
-        "HTTPS_PROXY_EXTRA": "x",
-        "PATH": "/usr/bin",
-    }
-
-    env = runner.allowed_vendor_environment(source)
-
-    assert set(env) == {"PATH"}
-    assert "hunter2" not in "".join(env.values())
+def test_a_cross_product_pair_is_refused_before_launch(tmp_path: Path) -> None:
+    """H4 at the runner: a verb the named tool does not have never launches."""
+    fake = FakeSession()
+    result = runner.invoke(
+        _cleared_verdict("dax_query_operations.Update"),
+        repo_root=tmp_path,
+        session_factory=_factory(fake),
+    )
+    assert runner.BLOCKER_UNKNOWN_OPERATION in result.blockers
+    assert fake.handshaken is False

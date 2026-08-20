@@ -1,0 +1,211 @@
+# Adversarial review — the #660 stdio client (branch `fix/660-mcp-stdio-client`)
+
+**Date**: 2026-08-20 · **Verdict**: BLOCK — **all findings now addressed, see Disposition** · **Reviewer**: adversarial external agent (Opus),
+findings independently re-verified against the tree before acceptance.
+
+The three new modules (`protocol.py`, `session.py`, `vendor_ops.py`) are sound and the vendor
+protocol diagnosis is correct. But the write path **still cannot execute end to end**, for a
+reason the original issue did not name. 432 tests pass because no test exercises the runner
+against the *gate's* path contract — the defect sits in the seam between two individually
+correct components.
+
+## CRITICAL — accepted, blocking
+
+### C1 — The runner sends a FILE path where the vendor requires a FOLDER
+
+- `gate.py:543` — `if not contained.is_file(): return False, (BLOCKER_TARGET_ABSENT,)`
+- `runner.py:276` — `{"operation": "ConnectFolder", "folderPath": target_path}`
+- `runner.py:305` — `{"operation": "ExportToTmdlFolder", "tmdlFolderPath": target_path}`
+
+Two exhaustive, mutually exclusive branches:
+
+| Allowlist holds | Gate | Vendor |
+|---|---|---|
+| a **file** (`models/x.tmdl` — what `is_file()` requires, what every fixture uses) | clears | `ConnectFolder` fails: it needs a directory |
+| a **folder** (`X.SemanticModel/`) | `BLOCKER_TARGET_ABSENT` — never clears | would work |
+
+Independently confirmed: the probe that established the protocol passed a **directory**
+(`powerbi/RetailStoreSales.SemanticModel`), and the server resolved `…/definition` itself.
+The client was built against the probe and never checked against the gate. **The issue's
+premise — "no real write can execute" — survives this fix.**
+
+Fixing it is a decision, not a patch: either the allowlist declares folder targets (and
+`_path_blockers` accepts a directory, which widens what "contained target" means for a
+**gate input**), or the runner derives the model folder from the file path (inventing a
+path the approval never named). Both need an owner ruling.
+
+### C2 — The authorized operation is issued with no parameters — but this is a RATIFIED DEFERRAL, not a new defect
+
+`runner.py:289` sends `{"operation": operation}` only. The probe's real write was
+`{"operation":"Update","definitions":[{"name":"TotalSales","tableName":"…","formatString":"#,0.000"}]}`.
+A bare `Update` mutates nothing, and `GateVerdict` (`gate.py:150-172`) has no payload field.
+
+**This must NOT be "fixed" by synthesising a payload.** `spec.md:165` — "the adapter never
+invents the definition"; `spec.md:228` — the `approved_definitions[]` block is
+**"Unblocked by: a companion spec"**. Supplying `definitions` from anywhere but an approved
+record is the same fail-open as T012b's invented hash. The correct disposition is to keep the
+deferral and make it **loud**: refuse a write whose operation needs a payload we do not have,
+rather than issuing a no-op that reports success.
+
+## HIGH — accepted
+
+- **H1 — the effect check blocks every legitimate write.** `orchestrate._effect_blockers`
+  (lines 122-139) is unmodified. R8 item 5 — added by this very PR — records that the flush
+  rewrites all 11 TMDL files. Proved: target + 11 siblings changed → `PBIMCP-EFF-02` →
+  `outcome="failed"`. The moment C1 is fixed, this blocks every apply. Coordinate with #663.
+- **H2 — the per-call deadline is not enforced during a blocking read.** `session.py:95`
+  checks `time.monotonic()` *before* the blocking `read_line()`; no `select`, thread, or
+  socket timeout. A chatty server hits the bound; a **silent** one blocks forever
+  (reproduced: `deadline_seconds=2` still blocked at 6.0s). `runner.py:17-18`'s "a run with
+  no bound can hang forever" is therefore a prose over-claim.
+- **H3 — a non-`SessionError` exception escapes `invoke`, so FR-015 is violated.**
+  `SubprocessTransport.read_line` (`session.py:183`) does not wrap `OSError`;
+  `_converse` catches only `SessionError`. Reproduced: an `OSError` mid-read escaped as a
+  traceback — no `RunResult`, so orchestrate never reaches `_terminate` and writes **no
+  evidence record**.
+- **H4 — 69 of 103 operation verbs have no probe evidence, and the docstring claims they do.**
+  `vendor_ops.py:66-69` says "DERIVED from the 21 probed tool descriptions". Only
+  `measure_operations`' 9 verbs are actually documented in the captures. `READ_OPERATIONS`
+  contains `ExportTMDL`, `ExportTMSL`, `ExportJSON` — unsourced, and from the same verb family
+  as `ExportToTmdlFolder`, which the PR proved rewrites 11 files while self-reporting
+  `readOnlyHint: true`. A mutating verb misfiled as a read gets `attempted=False`, **no
+  cross-check, no flush, `succeeded=True`**. The cited cross-check test asserts a tool COUNT
+  plus six spot-checks; it does not constrain the verb enums at all.
+- **H5 — `stderr=PIPE` with no reader.** `session.py:167`. `stderr_text()` has zero production
+  callers. Once the ~64KB buffer fills, the child blocks on stderr while we block on stdout.
+  The vendor is known to be chatty there (`IsWrite=…`, `ConnectionName=…`). This repo's known
+  "tested code, zero callers" class.
+
+## MEDIUM — accepted
+
+- **M1 — `orchestrate` hardcodes `mutation_attempted=True`** (lines 308, 325, 337), discarding
+  the runner's value. Reproduced with `measure_operations.List`: runner says False, evidence
+  asserts True, and rollback guidance is emitted for a run that attempted nothing. Missed
+  because `test_pbi_mcp_orchestrate.py:25` defines only an `Update` pair — there is no
+  orchestrate-level read-pair test.
+- **M2 — every `SessionError` maps to exit 124 / `RUNTIME_STALLED`** (`runner.py:312-315`). An
+  impostor-server refusal is reported as "did not finish within 900s and was killed".
+- **M3 — `outcome.error` is never surfaced.** On a JSON-RPC error frame `raw_text` is `""`, so
+  `BLOCKER_VENDOR_REFUSED` ships with empty output — no diagnosis on the most important
+  failure path.
+
+## Attacked and found SOUND
+
+- The flush guard `if writes and not blockers` — no suppression path; `blockers` is
+  function-local with two adjacent append sites.
+- `SubprocessTransport.__init__` — `Popen` is the last statement; no child leak.
+- Redaction — correct order (`redact` → `SECRET_PATTERNS` → slice); DSN, tenant GUID and
+  Windows user path all scrubbed live.
+- Markers — all four new test files carry `pytestmark = pytest.mark.unit`.
+- Mutation testing — four mutants each fail tests (flush deleted: 14 fail; `is_write`→False:
+  19 fail; cross-check deleted: 1; deadline check deleted: 1).
+- No unmigrated single-token operation ids survive in `docs/`, `specs/`, or `contracts/`.
+
+## Disposition — resolved 2026-08-20
+
+Every finding is closed. Full unit lane: **5873 passed, 0 failed**.
+
+| Finding | Resolution |
+|---|---|
+| **C1** | Ruled: the allowlist declares the **FOLDER**. `_path_blockers` now accepts a directory (`exists()` not `is_file()`), containment unchanged. Rejected deriving the folder from a file path — that invents a path the approval never named. **Swept all four readers**, not just the gate. |
+| **C2** | **Stays deferred** by ratified decision (`spec.md:165`, `:228`). Supplying `definitions` from anywhere but an approved record is the fail-open the spec forbids. Tracked for the companion spec. |
+| **H1** | `_effect_blockers` treats a folder target's subtree as in-scope; an escape outside it is still refused. Pinned in both directions. |
+| **H2** | Reads moved to a daemon thread + queue, so the deadline binds a **silent** server. Verified: a sleep-forever child raises at 3.0s (previously blocked indefinitely). |
+| **H3** | `read_line` wraps `OSError`; `_converse` catches `OSError`/`ValueError`/`UnicodeDecodeError`. An escaping exception meant no evidence record (FR-015). |
+| **H4** | Eight unevidenced `Get*`/`List*` verbs REMOVED from `READ_OPERATIONS` so they fail closed. The docstring now states its provenance exactly, and a test pins the read set to the 30 server-evidenced verbs. |
+| **H5** | A second daemon thread drains stderr into a bounded buffer. Verified: 300KB of stderr no longer delays the stdout line. |
+| **M1** | `orchestrate` derives `mutation_attempted` from the runner. A read-pair test at orchestrate level was the missing coverage. |
+| **M2** | New `SessionStalled` subclass; dispatch is on the TYPE, never on message substrings. |
+| **M3** | `_trace` records `outcome.error` when a JSON-RPC error frame leaves `raw_text` empty. |
+
+### Found while verifying, beyond the review
+
+**The launcher was never resolved.** `build_argv` emitted a bare `npx`, but on Windows that is
+`npx.cmd` and `Popen(shell=False)` does not apply PATHEXT — so **every real run** reported
+`BLOCKER_RUNTIME_MISSING` while 444 unit tests passed, because all of them inject a session
+factory and none executes the argv. Now resolved via `shutil.which`.
+
+This is the review's own lesson one level deeper: the tests could not see it, and neither could
+the reviewer. Only running the shipped runner against the real vendor exposed it.
+
+### End-to-end verification against the REAL vendor
+
+- **Read** (`measure_operations.List`, folder target): `succeeded=True`,
+  `mutation_attempted=False`, no flush issued, **0 bytes changed**.
+- **Write** (`database_operations.ExportToTmdlFolder`): executed and **changed 11 files** —
+  and `succeeded=False` with `PBIMCP-RUN-06`, because that verb self-reports
+  `readOnlyHint: true` while writing. The cross-check caught the vendor contradicting itself
+  and refused to claim success. Fail-closed, on real data.
+- Redaction confirmed live: a session GUID in the transcript was scrubbed to
+  `[REDACTED:GUID …]`.
+
+---
+
+# Re-review round 2 (2026-08-20) — BLOCK, then addressed
+
+The first disposition above was **incomplete**, and the re-review was right to block it.
+
+## What I got wrong
+
+**C2 — I closed the row without the remedy that made the deferral acceptable.** The review
+said: keep the deferral, *and* make it **loud**. I cited `spec.md:165`/`:228`, wrote "stays
+deferred", and shipped no refusal. Fixing C1 converted that path from unreachable to
+reachable, so `measure_operations.Update` executed and returned `succeeded=True` having
+mutated nothing — a self-certifying no-op, the exact class this repo keeps hitting.
+
+Now refused before launch with `PBIMCP-RUN-09`. The condition is the **server's own
+statement**, not my inference: the tool descriptions say *"For Create and Update use
+Definitions"*, and `vendor_ops.requires_payload` is derived from that clause. `Rename`,
+`Delete` and `Move` need no `Definitions` block and still execute — the refusal is narrow.
+
+**H4 — I fixed the symptom and left the mechanism.** I trimmed eight unevidenced read verbs
+but kept a **flat** verb set, and `parse_operation_id` validated tool and verb
+*independently* — authorizing the whole cross-product. The vocabulary is now **per tool**:
+20 of 21 tools publish a `Supported operations:` list, **220 evidenced pairs**; the 21st
+(`partition_operations`) publishes none and therefore authorizes **nothing**. `is_write`
+takes the tool.
+
+## Where the re-review was wrong
+
+Its H4 example named three pairs. Only one was a real hole:
+
+| Pair | Verdict |
+|---|---|
+| `table_operations.ExportTMSL` | **Real hole** — now refused |
+| `database_operations.ExportTMDL` | **Genuinely evidenced** under that tool; accepting it is correct |
+| `trace_operations.ExportJSON` | **Genuinely evidenced**; accepting it is correct |
+
+My original extraction regex required `. Use the` after the operations list, which silently
+dropped 7 tools whose descriptions continue differently (`measure_operations` among them).
+The *class* the reviewer identified was real and serious; two of its three examples were
+not. Verified pair-by-pair against the probe before changing anything.
+
+## Also closed this round
+
+- **M2's remaining half** — the session-layer deadline raised a bare `SessionError`, so a
+  chatty-overrun stall reported "failed without naming a cause". Both timeout sites now
+  raise `SessionStalled`.
+- **Prose contradiction** — `protocol.py` claimed malformed frames are "never skipped"
+  while its only consumer skips them. The claim now says what the code does, and why that
+  is safe (id-correlation plus a bounded read), instead of asserting a guarantee it inverts.
+- **LOW** — the stdout queue is bounded at 4096 lines with a non-blocking EOF sentinel
+  (an unbounded queue fed by a chatty server was a memory-exhaustion path); the redundant
+  `UnicodeDecodeError` is dropped.
+
+## Verification this round
+
+- **5888 unit tests pass**, 0 failed. `ruff check` + `ruff format --check src tests scripts`
+  clean. P2 commit-subject gate clean over the range.
+- **Both new guards falsified**: neutering the payload refusal or restoring independent
+  half-validation fails 4 tests.
+- **H2/H5 re-measured** after the queue bound: a silent server raises at 3.0s; 300KB of
+  stderr does not delay the stdout line.
+- **Live vendor re-checked**: a read still succeeds, reports `attempted=False`, and changes
+  **0 bytes**.
+
+## Standing limitation, stated plainly
+
+No committed test executes the real vendor — by design (Principle VIII, offline acceptance).
+The launcher defect proved what that costs: 444 tests passed while every real run failed at
+process launch. The live checks in this document are **manual, one-off evidence**, not a
+regression guard. An opt-in smoke test is worth filing as follow-up.

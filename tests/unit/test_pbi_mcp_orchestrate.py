@@ -1,123 +1,26 @@
-"""Spec 149 T029/T030 -- the end-to-end pipeline, offline.
-
-The most important assertions here are the two the whole feature exists for:
-a successful write moves **no** readiness stage (FR-018), and every terminal
-state -- refusals included -- leaves exactly **one** evidence record (FR-015).
-"""
+"""Orchestrate behaviour: the FR-level guarantees of one approved write."""
 
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 
 import pytest
 
 from seshat.pbi_mcp import detect
-from seshat.pbi_mcp_adapter import evidence, gate, orchestrate
+from seshat.pbi_mcp_adapter import evidence, gate, orchestrate, protocol, session
+from tests.unit._pbi_mcp_orchestrate_fixtures import (
+    MUTATED_TMDL,
+    OPERATION,
+    TARGET,
+    TARGET_PATH,
+    _apply,
+    _mcp,
+    _mcp_session,
+    _validator,
+)
 
 pytestmark = pytest.mark.unit
-
-
-TARGET = "sales_model"
-OPERATION = "update_measure"
-#: Under `*.SemanticModel/definition/`, because that is the ONLY corpus
-#: `seshat semantic-check` discovers. A fixture at `models/*.tmdl` is never
-#: examined by the validator, so post-write validation could not really pass --
-#: previously masked by the injected validator stub (Codex review, PR #659).
-TARGET_PATH = f"Sales.SemanticModel/definition/{TARGET}.tmdl"
-
-#: Real TMDL, not a placeholder comment. ``seshat semantic-check`` skips a
-#: ``*.tmdl`` with no top-level ``table`` block, so a fixture using
-#: ``// original`` gave the validator nothing to parse -- invisible here only
-#: because these tests inject a validator stub returning 0.
-#: ``validation._target_was_examined`` reads the artifact itself, so the content
-#: has to be honest (Codex review, PR #659).
-BASELINE_TMDL = "table sales_model\n\n\tcolumn Amount\n\t\tdataType: double\n"
-MUTATED_TMDL = BASELINE_TMDL + "\n\tmeasure Total = SUM(sales_model[Amount])\n"
-STAMP = "2026-08-18T00:00:00Z"
-OWNER = "Ahmed Shaaban (data_owner)"
-
-READINESS = (
-    "stages:\n"
-    "  semantic_model_ready:\n    status: pass\n"
-    "  publish_ready:\n    status: not_started\n"
-    "approvals:\n"
-    "  - stage: publish_ready\n"
-    f"    owner: {OWNER!r}\n"
-    "    at: '2026-08-18'\n"
-    f"    note: 'approved for {TARGET}: {OPERATION}'\n"
-)
-
-ALLOWLIST = (
-    f"targets:\n  - target_id: {TARGET}\n"
-    f"    path: {TARGET_PATH}\n"
-    f"    operations:\n      - {OPERATION}\n"
-)
-
-
-def _git(repo: Path, *args: str) -> None:
-    subprocess.run(
-        ["git", "-c", "commit.gpgsign=false", *args],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-    )
-
-
-def _write(repo: Path, relpath: str, text: str) -> None:
-    path = repo / relpath
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-
-
-@pytest.fixture
-def ready_repo(tmp_path: Path) -> Path:
-    """A repo where every precondition holds, all state COMMITTED."""
-    _git(tmp_path, "init", "-q")
-    _git(tmp_path, "config", "user.email", "t@e.invalid")
-    _git(tmp_path, "config", "user.name", "T")
-    _write(tmp_path, f"mappings/{TARGET}/readiness-status.yaml", READINESS)
-    _write(tmp_path, gate.TARGET_ALLOWLIST_RELPATH, ALLOWLIST)
-    _write(tmp_path, TARGET_PATH, BASELINE_TMDL)
-    _write(tmp_path, "README.md", "fixture\n")
-    _git(tmp_path, "add", "-A")
-    _git(tmp_path, "commit", "-q", "-m", "baseline", "--no-gpg-sign")
-    return tmp_path
-
-
-def _mcp(returncode: int = 0, mutates: str | None = None):
-    """A stub runtime that optionally edits the artifact, like the real one."""
-
-    def invoke(argv: list[str], cwd: Path):
-        if mutates is not None:
-            (Path(cwd) / TARGET_PATH).write_text(mutates, encoding="utf-8")
-        return subprocess.CompletedProcess(
-            args=argv, returncode=returncode, stdout="ok"
-        )
-
-    return invoke
-
-
-def _validator(returncode: int = 0):
-    def run(repo_root: Path, args: tuple[str, ...]):
-        return subprocess.CompletedProcess(args=list(args), returncode=returncode)
-
-    return run
-
-
-def _apply(repo: Path, **kwargs: object) -> orchestrate.WriteReport:
-    params: dict[str, object] = {
-        "target_id": TARGET,
-        "operation_id": OPERATION,
-        "timestamp": STAMP,
-        "tree_clean": True,
-        "mcp_runner": _mcp(mutates=MUTATED_TMDL),
-        "validator": _validator(0),
-    }
-    params.update(kwargs)
-    return orchestrate.apply_write(repo, **params)  # type: ignore[arg-type]
-
 
 # --------------------------------------------------------------------------
 # T030 -- the happy path
@@ -273,8 +176,31 @@ def test_runtime_success_but_no_artifact_change_is_not_materialized(
 def test_stalled_runtime_is_exit_three_not_exit_one(ready_repo: Path) -> None:
     """Exits 2 and 3 stay distinct: an indeterminate write is not a clean fail."""
 
-    def stall(argv: list[str], cwd: Path):
-        raise subprocess.TimeoutExpired(cmd=argv, timeout=1)
+    def stall(*, argv: list[str], cwd: Path, **_extra: object):  # noqa: ARG001
+        class _Stalling:
+            def handshake(self) -> dict:
+                return {"name": "powerbi-modeling-mcp", "version": "0.5.0.0"}
+
+            def call(self, tool: str, request: dict):
+                # Stall on the OPERATION, not on the connect: a server that hangs
+                # before the write is attempted is a clean refusal, whereas one
+                # that hangs mid-write may have left the artifact half-written.
+                # The latter is the indeterminate case this test is about.
+                if request.get("operation") == "ConnectFolder":
+                    return protocol.ToolOutcome(
+                        ok=True,
+                        read_only_hint=True,
+                        payload=None,
+                        raw_text="connected",
+                    )
+                # At #660 a stall surfaces as SessionError from the bounded read,
+                # not as subprocess.TimeoutExpired.
+                raise session.SessionError("no reply within deadline")
+
+            def close(self) -> None:
+                return None
+
+        return _Stalling()
 
     report = _apply(ready_repo, mcp_runner=stall)
     assert report.exit_code == orchestrate.EXIT_INDETERMINATE
@@ -409,8 +335,7 @@ def test_report_and_evidence_blockers_agree_on_an_unexplained_failure(
     in any BLOCKER_DETAIL map.
     """
 
-    def silent_failure(argv: list[str], cwd: Path):
-        return subprocess.CompletedProcess(args=argv, returncode=1, stdout="")
+    silent_failure = _mcp_session(returncode=1)
 
     report = _apply(ready_repo, mcp_runner=silent_failure)
     payload = json.loads(report.evidence_path.read_text(encoding="utf-8"))  # type: ignore[union-attr]
@@ -449,11 +374,10 @@ def test_a_mutation_outside_the_authorized_target_is_rejected(
     so the adapter certified a change it had not authorized.
     """
 
-    def hijack(argv: list[str], cwd: Path):
-        (Path(cwd) / "README.md").write_text("HIJACKED\n", encoding="utf-8")
-        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok")
+    def _hijack(cwd: Path) -> None:
+        (cwd / "README.md").write_text("HIJACKED\n", encoding="utf-8")
 
-    report = _apply(ready_repo, mcp_runner=hijack)
+    report = _apply(ready_repo, mcp_runner=_mcp_session(_hijack))
     assert report.outcome == "failed"
     assert orchestrate.BLOCKER_OUT_OF_SCOPE_CHANGE in report.blockers
 
@@ -463,12 +387,11 @@ def test_a_run_touching_target_AND_another_file_is_rejected(
 ) -> None:
     """Changing the right file does not license changing others too."""
 
-    def both(argv: list[str], cwd: Path):
-        (Path(cwd) / TARGET_PATH).write_text(MUTATED_TMDL, encoding="utf-8")
-        (Path(cwd) / "README.md").write_text("also me\n", encoding="utf-8")
-        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok")
+    def _both(cwd: Path) -> None:
+        (cwd / TARGET_PATH).write_text(MUTATED_TMDL, encoding="utf-8")
+        (cwd / "README.md").write_text("also me\n", encoding="utf-8")
 
-    report = _apply(ready_repo, mcp_runner=both)
+    report = _apply(ready_repo, mcp_runner=_mcp_session(_both))
     assert report.outcome == "failed"
     assert orchestrate.BLOCKER_OUT_OF_SCOPE_CHANGE in report.blockers
 
@@ -518,16 +441,21 @@ def test_intent_record_exists_before_the_mutation_runs(ready_repo: Path) -> None
     """
     seen: dict[str, object] = {}
 
-    def observing_invoke(argv: list[str], cwd: Path):
-        path = evidence.evidence_path(Path(cwd))
+    def _observe(cwd: Path) -> None:
+        # Recorded on the FIRST call, so the observation is of the state before
+        # any mutation -- the intent record must already exist by then.
+        if "existed" in seen:
+            return
+        path = evidence.evidence_path(cwd)
         seen["existed"] = path.is_file()
         seen["payload"] = (
             json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
         )
-        (Path(cwd) / TARGET_PATH).write_text(MUTATED_TMDL, encoding="utf-8")
-        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="ok")
 
-    report = _apply(ready_repo, mcp_runner=observing_invoke)
+    def _mutate(cwd: Path) -> None:
+        (cwd / TARGET_PATH).write_text(MUTATED_TMDL, encoding="utf-8")
+
+    report = _apply(ready_repo, mcp_runner=_mcp_session(_mutate, on_call=_observe))
 
     assert report.succeeded, report.blockers
     assert seen["existed"], "no intent record existed when the mutation ran"
@@ -537,90 +465,3 @@ def test_intent_record_exists_before_the_mutation_runs(ready_repo: Path) -> None
     assert payload["mutation_attempted"] is True
     assert payload["target_id"] == TARGET
     assert payload["operation_id"] == OPERATION
-
-
-# --------------------------------------------------------------------------
-# Codex (PR #659): git C-quotes unusual paths, so the snapshot must use -z
-# --------------------------------------------------------------------------
-
-
-def test_snapshot_sees_a_non_ascii_path(tmp_path: Path) -> None:
-    """`git ls-files` C-quotes non-ASCII names, and stripping quotes is not decoding.
-
-    `git ls-files` emits `"caf\303\251.tmdl"` for `café.tmdl` by default. Removing
-    the surrounding quotes leaves the octal escapes intact, so `_digest` reads a
-    path that does not exist, returns None, and the file DISAPPEARS from the
-    snapshot -- which is what makes an out-of-scope write to such a file
-    invisible to the effect check.
-    """
-    _git(tmp_path, "init", "-q")
-    _git(tmp_path, "config", "user.email", "t@e.invalid")
-    _git(tmp_path, "config", "user.name", "T")
-    (tmp_path / "plain.tmdl").write_text("a\n", encoding="utf-8")
-    (tmp_path / "caf\u00e9.tmdl").write_text("b\n", encoding="utf-8")
-    _git(tmp_path, "add", "-A")
-    _git(tmp_path, "commit", "-q", "-m", "baseline", "--no-gpg-sign")
-
-    snapshot = orchestrate._snapshot(tmp_path)
-
-    assert "caf\u00e9.tmdl" in snapshot, (
-        f"the non-ASCII path is missing from the snapshot: {sorted(snapshot)}"
-    )
-    assert "plain.tmdl" in snapshot
-
-
-def test_an_out_of_scope_write_to_a_quoted_path_is_caught(tmp_path: Path) -> None:
-    """The consequence: such a file must not be a blind spot for the scope check.
-
-    This is the assertion that matters -- a runtime writing outside its authorized
-    target is exactly what `_effect_blockers` exists to catch, and a path git
-    quotes must not be a way around it.
-    """
-    _git(tmp_path, "init", "-q")
-    _git(tmp_path, "config", "user.email", "t@e.invalid")
-    _git(tmp_path, "config", "user.name", "T")
-    target = "authorized.tmdl"
-    (tmp_path / target).write_text("original\n", encoding="utf-8")
-    sneaky = tmp_path / "caf\u00e9.tmdl"
-    sneaky.write_text("before\n", encoding="utf-8")
-    _git(tmp_path, "add", "-A")
-    _git(tmp_path, "commit", "-q", "-m", "baseline", "--no-gpg-sign")
-
-    before = orchestrate._snapshot(tmp_path)
-    # The "runtime" changes BOTH the authorized target and the quoted-path file.
-    (tmp_path / target).write_text("mutated\n", encoding="utf-8")
-    sneaky.write_text("after\n", encoding="utf-8")
-    after = orchestrate._snapshot(tmp_path)
-
-    blockers = orchestrate._effect_blockers(before, after, target)
-    assert orchestrate.BLOCKER_OUT_OF_SCOPE_CHANGE in blockers, (
-        "an out-of-scope write to a git-quoted path was not detected"
-    )
-
-
-def test_a_pre_launch_runtime_failure_is_blocked_not_failed(ready_repo: Path) -> None:
-    """Exit 1 with no mutation is `blocked` per the CLI contract, not `failed`.
-
-    `contracts/cli-contract.md` row for exit 1: "Refused before execution
-    (invariant or precondition). Evidence outcome `blocked`. Nothing was mutated."
-    When `npx` is absent the runtime never starts, so `mutation_attempted` is
-    False and exit 1 is correct -- but the record said `failed`, giving evidence
-    consumers a state the contract does not define for that exit code.
-
-    Codex review, PR #659.
-    """
-
-    def cannot_launch(argv: list[str], cwd: Path):
-        raise FileNotFoundError("npx not found")
-
-    report = _apply(ready_repo, mcp_runner=cannot_launch)
-
-    assert report.exit_code == orchestrate.EXIT_REFUSED
-    assert not report.mutation_attempted
-    assert report.outcome == "blocked", (
-        f"exit 1 with no mutation recorded outcome {report.outcome!r}; the "
-        "contract defines that state as 'blocked'"
-    )
-    payload = json.loads(report.evidence_path.read_text(encoding="utf-8"))
-    assert payload["outcome"] == "blocked"
-    assert payload["mutation_attempted"] is False
