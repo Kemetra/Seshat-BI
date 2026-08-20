@@ -84,14 +84,19 @@ wiring -- the authoring sibling of `retail-govern`, which interprets rule findin
 - Roadmap: `docs/roadmap/roadmap.md`. Architecture: `docs/architecture/`.
 - Repo rules (secrets, PBIP, Windows): `CLAUDE.md`.
 <!-- SPECKIT START -->
-Active plan: `specs/149-pbi-mcp-write-adapter/plan.md` (F016 slice 5 — the approval-gated
-Power BI MCP write adapter, authorized by ADR 0018, ratified 2026-08-18).
-**Implementation MERGED** (PR #659, 2026-08-19) in `src/seshat/pbi_mcp_adapter/`
-— gate, evidence, validation, drift and orchestration are built and tested.
-Read `research.md` before touching it: R4/R5 correct two natural but wrong assumptions
-about `gitutil.run_subprocess` and `redaction_core`, and **R8 records that the vendor is
-an MCP stdio server whose writes need an explicit `ExportToTmdlFolder` flush** — without
-it the bytes on disk never change (#660). Open follow-ups: #657 (per-run evidence),
+Active plan: `specs/154-secure-provisioning-approval/plan.md` (issue #671 — the
+provisioning-approval trust boundary, ratified 2026-08-20).
+**NOT YET IMPLEMENTED.** `seshat integrations setup --apply --yes` currently treats an
+agent-supplied CLI flag as approval for installing external software; `_approved()` in
+`src/seshat/cli/commands/integrations.py` returns True for a namespace an agent builds
+itself. The fix moves authority to a committed, named-human approval read at HEAD.
+Read `analysis.md` before touching it: R1 is already settled (`.seshat/integrations/` is
+gitignored, so the artifact lives at `contracts/provisioning-approvals.yaml`), and
+**T033 corrects `tests/unit/test_integrations_setup.py:321`, which currently asserts the
+bypass returns exit 0** — keeping that test green would silently defeat the fix.
+Spec 153 (capability-oriented setup) is implementation-blocked until this lands; its
+FR-018 boundary is permanent regardless. Amends spec 144 FR-010 (one clause).
+Previous plan: `specs/149-pbi-mcp-write-adapter/` — MERGED (PR #659); open follow-ups
 #658 (version pin), #661 (binding/value checks), #663 (post-write check gaps).
 <!-- SPECKIT END -->
 <!-- SESHAT-KIT START -->
