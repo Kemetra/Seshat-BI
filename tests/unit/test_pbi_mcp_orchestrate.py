@@ -851,3 +851,30 @@ def test_a_folder_write_that_changes_nothing_is_not_materialized(
     report = _apply(_folder_repo(ready_repo), mcp_runner=_mcp_session())
     assert orchestrate.BLOCKER_TARGET_UNCHANGED in report.blockers
     assert report.succeeded is False
+
+
+def test_a_prefix_sharing_sibling_is_NOT_admitted_as_in_scope() -> None:
+    """Subtree scoping must not become a prefix match.
+
+    `Sales.SemanticModel.backup/x.tmdl` shares a string prefix with the target
+    but is a DIFFERENT directory. Admitting it would be a scope escape the old
+    exact-match comparison did not have -- a regression introduced by the H1 fix.
+    """
+    target = "Sales.SemanticModel"
+    for stray in (
+        "Sales.SemanticModel.backup/x.tmdl",
+        "Sales.SemanticModelOther/y.tmdl",
+        "Sales.SemanticModel2/z.tmdl",
+    ):
+        blockers = orchestrate._effect_blockers({stray: "old"}, {stray: "new"}, target)
+        assert orchestrate.BLOCKER_OUT_OF_SCOPE_CHANGE in blockers, stray
+
+
+def test_a_file_target_still_authorizes_exactly_itself() -> None:
+    """Widening for folders must not loosen a file target."""
+    target = "Sales.SemanticModel/definition/x.tmdl"
+    sibling = "Sales.SemanticModel/definition/y.tmdl"
+    blockers = orchestrate._effect_blockers(
+        {target: "a", sibling: "a"}, {target: "b", sibling: "b"}, target
+    )
+    assert orchestrate.BLOCKER_OUT_OF_SCOPE_CHANGE in blockers
