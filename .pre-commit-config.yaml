@@ -10,3 +10,11 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+        stages: [pre-commit]
+      - id: retail-commit-message
+        name: retail check (commit message governance)
+        entry: retail check --commit-msg-file
+        language: system
+        pass_filenames: true
+        always_run: true
+        stages: [commit-msg]

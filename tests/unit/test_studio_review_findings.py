@@ -11,6 +11,7 @@ marked done.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -426,6 +427,7 @@ def test_credential_rules_do_not_corrupt_innocent_governed_text(
 # --------------------------------------------------------------------------- #
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows junction semantics")
 def test_a_junction_escaping_the_root_is_refused(tmp_path: Path) -> None:
     """Finding 9: all 74 Phase 2 tests passed with the containment check DELETED.
 

@@ -58,7 +58,7 @@ For an existing Seshat installation, preserve the installed application and
 inject the exact numerical environment:
 
 ```text
-pipx inject seshat-bi --force "numpy==2.5.1" "scipy==1.18.0" "statsmodels==0.14.6"
+pipx inject seshat-bi --force "numpy==2.5.2" "scipy==1.18.0" "statsmodels==0.14.6"
 pipx inject seshat-bi --force "ruptures==1.1.10"
 ```
 

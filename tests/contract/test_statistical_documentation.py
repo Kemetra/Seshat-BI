@@ -230,12 +230,11 @@ def test_install_docs_publish_exact_pinned_statistics_commands() -> None:
     support = _text("docs/install/support-matrix.md")
 
     assert 'pipx install "seshat-bi[stats]"' in user
-    for pin in (
-        '"numpy==2.5.1"',
-        '"scipy==1.18.0"',
-        '"statsmodels==0.14.6"',
-        '"ruptures==1.1.10"',
-    ):
+    project = tomllib.loads(_text("pyproject.toml"))
+    extras = project["project"]["optional-dependencies"]
+    governed_pins = extras["stats"] + extras["stats-change"]
+    for requirement in governed_pins:
+        pin = f'"{requirement}"'
         assert pin in user
         assert pin in agent
     assert ".[dev,stats,stats-change]" in developer
