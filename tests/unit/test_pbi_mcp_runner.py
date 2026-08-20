@@ -90,16 +90,20 @@ class FakeSession:
         outcomes: list[protocol.ToolOutcome] | None = None,
         *,
         raise_on_handshake: bool = False,
+        handshake_error: Exception | None = None,
     ):
         self.calls: list[tuple[str, dict]] = []
         self.handshaken = False
         self.closed = False
         self._outcomes = list(outcomes or [])
-        self._raise_on_handshake = raise_on_handshake
+        self._raise_on_handshake = raise_on_handshake or handshake_error is not None
+        self._handshake_error = handshake_error or session.SessionStalled(
+            "no reply within deadline"
+        )
 
     def handshake(self) -> dict:
         if self._raise_on_handshake:
-            raise session.SessionError("the vendor stream closed")
+            raise self._handshake_error
         self.handshaken = True
         return {"name": "powerbi-modeling-mcp", "version": "0.5.0.0"}
 
@@ -386,3 +390,89 @@ def test_the_vendor_runtime_is_invoked_through_npx(tmp_path: Path) -> None:
 def test_the_operation_vocabulary_is_the_shared_one() -> None:
     """The runner must not carry its own copy of the tool list."""
     assert "measure_operations" in vendor_ops.VENDOR_TOOLS
+
+
+# --------------------------------------------------------------------------
+# Review fixes -- M2 (cause fidelity), M3 (diagnosis), H3 (no escaping traceback)
+# --------------------------------------------------------------------------
+
+
+def test_a_closed_stream_is_not_reported_as_a_timeout(tmp_path: Path) -> None:
+    """M2: a crash and a stall are different causes.
+
+    Reporting a closed stream as "did not finish within 900s and was killed"
+    tells the operator something false. Dispatch is on the exception TYPE.
+    """
+    fake = FakeSession(handshake_error=session.SessionError("the vendor stream closed"))
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert runner.BLOCKER_RUNTIME_STALLED not in result.blockers
+    assert runner.BLOCKER_RUNTIME_UNEXPLAINED in result.blockers
+    assert result.exit_code != runner.TIMEOUT_EXIT_CODE
+
+
+def test_a_true_stall_still_reports_the_timeout(tmp_path: Path) -> None:
+    fake = FakeSession(
+        handshake_error=session.SessionStalled("the vendor sent nothing for 900s")
+    )
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert runner.BLOCKER_RUNTIME_STALLED in result.blockers
+    assert result.exit_code == runner.TIMEOUT_EXIT_CODE
+
+
+def test_a_jsonrpc_error_frame_still_carries_a_diagnosis(tmp_path: Path) -> None:
+    """M3: an error frame has no content, so raw_text is empty.
+
+    Shipping BLOCKER_VENDOR_REFUSED with empty output left the operator nothing
+    to diagnose on the most important failure path.
+    """
+    errored = protocol.ToolOutcome(
+        ok=False,
+        read_only_hint=None,
+        payload=None,
+        raw_text="",
+        error="Method not found",
+    )
+    fake = FakeSession([_outcome(read_only=True), errored])
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert runner.BLOCKER_VENDOR_REFUSED in result.blockers
+    assert "Method not found" in result.output
+
+
+def test_an_os_error_mid_call_never_escapes_as_a_traceback(tmp_path: Path) -> None:
+    """H3: an escaping exception means no RunResult, so NO evidence record.
+
+    orchestrate only reaches `_terminate` if invoke returns, so a raw OSError
+    violated FR-015 on the one path where the record matters most.
+    """
+
+    class Exploding(FakeSession):
+        def call(self, tool: str, request: dict) -> protocol.ToolOutcome:
+            self.calls.append((tool, request))
+            raise OSError("pipe died mid-read")
+
+    fake = Exploding()
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert isinstance(result, runner.RunResult)
+    assert result.succeeded is False
+    assert runner.BLOCKER_RUNTIME_UNEXPLAINED in result.blockers
+    assert fake.closed is True
+
+
+def test_a_read_pair_reports_no_mutation_attempted(tmp_path: Path) -> None:
+    """M1's runner half: a read must not claim an attempted mutation."""
+    fake = FakeSession([_outcome(read_only=True), _outcome(read_only=True)])
+    result = runner.invoke(
+        _cleared_verdict("measure_operations.List"),
+        repo_root=tmp_path,
+        session_factory=_factory(fake),
+    )
+    assert result.mutation_attempted is False
+    assert result.succeeded is True

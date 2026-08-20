@@ -305,7 +305,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
             exit_code=EXIT_VALIDATION_FAILED,
             outcome="failed",
             tool=runner.VENDOR_PACKAGE,
-            mutation_attempted=True,
+            mutation_attempted=result.mutation_attempted,
             blockers=effect_blockers,
             rollback_guidance=guidance,
         )
@@ -322,7 +322,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
             exit_code=EXIT_VALIDATION_FAILED,
             outcome="failed",
             tool=runner.VENDOR_PACKAGE,
-            mutation_attempted=True,
+            mutation_attempted=result.mutation_attempted,
             blockers=outcome.blockers,
             rollback_guidance=outcome.rollback_guidance or guidance,
             checks_run=outcome.checks_run,
@@ -334,7 +334,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
         exit_code=EXIT_OK,
         outcome="materialized",
         tool=runner.VENDOR_PACKAGE,
-        mutation_attempted=True,
+        mutation_attempted=result.mutation_attempted,
         checks_run=outcome.checks_run,
         validation_failed=outcome.failed,
     )

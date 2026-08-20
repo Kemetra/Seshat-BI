@@ -720,3 +720,35 @@ def test_a_pre_launch_runtime_failure_is_blocked_not_failed(ready_repo: Path) ->
     payload = json.loads(report.evidence_path.read_text(encoding="utf-8"))
     assert payload["outcome"] == "blocked"
     assert payload["mutation_attempted"] is False
+
+
+# --------------------------------------------------------------------------
+# Review M1 -- the evidence record must not assert a mutation that never happened
+# --------------------------------------------------------------------------
+
+
+def test_a_read_pair_records_no_mutation_attempted(ready_repo: Path) -> None:
+    """M1: orchestrate hardcoded mutation_attempted=True, discarding the runner.
+
+    An allowlisted READ pair attempts nothing, issues no flush, and must not
+    drive rollback guidance -- the evidence record asserting True for such a run
+    tells an auditor a mutation was tried when none was.
+
+    Missed before because this module defined only an `Update` pair.
+    """
+    read_operation = "measure_operations.List"
+    read_allowlist = ALLOWLIST.replace(OPERATION, read_operation)
+    _write(ready_repo, gate.TARGET_ALLOWLIST_RELPATH, read_allowlist)
+    readiness = READINESS.replace(OPERATION, read_operation)
+    _write(ready_repo, f"mappings/{TARGET}/readiness-status.yaml", readiness)
+    _git(ready_repo, "add", "-A")
+    _git(ready_repo, "commit", "-q", "-m", "read pair", "--no-gpg-sign")
+
+    report = _apply(
+        ready_repo,
+        operation_id=read_operation,
+        mcp_runner=_mcp_session(),
+    )
+    assert report.mutation_attempted is False, report.blockers
+    payload = json.loads(report.evidence_path.read_text(encoding="utf-8"))
+    assert payload["mutation_attempted"] is False

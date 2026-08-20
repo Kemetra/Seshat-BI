@@ -21,7 +21,9 @@ public registry; if something else answers, refuse rather than issue writes to i
 
 from __future__ import annotations
 
+import queue
 import subprocess
+import threading
 import time
 from pathlib import Path
 from typing import Any, Protocol
@@ -33,6 +35,7 @@ __all__ = [
     "EXPECTED_SERVER_NAME",
     "McpSession",
     "SessionError",
+    "SessionStalled",
     "SubprocessTransport",
     "Transport",
 ]
@@ -46,6 +49,17 @@ DEFAULT_DEADLINE_SECONDS = 900
 
 class SessionError(RuntimeError):
     """The session could not be established or a call could not be completed."""
+
+
+class SessionStalled(SessionError):
+    """The vendor produced no reply within the deadline.
+
+    A DISTINCT type rather than a message the caller string-matches: a stall is
+    indeterminate (the artifact may be half-written, exit 124), while a closed
+    stream or a refused handshake is a different cause that must not be reported
+    as "did not finish within 900s and was killed" (review M2). Classifying on
+    substrings would let a reworded message silently change governance behaviour.
+    """
 
 
 class Transport(Protocol):
@@ -146,18 +160,49 @@ class McpSession:
 
 
 class SubprocessTransport:
-    """The real transport: npx over dedicated pipes.
+    """The real transport: npx over dedicated pipes, with a REAL read deadline.
 
     ``stdin=PIPE`` is required (we speak to the child) and is NOT the #322
     defect, which was an INHERITED stdin. The pipe here is ours alone.
+
+    Three properties this class exists to guarantee, each a review finding
+    (issue #660 review, H2/H3/H5):
+
+    **The deadline binds even when the server says nothing.** A naive
+    ``readline()`` under a "check the clock, then block" loop bounds a *chatty*
+    server and not a *silent* one -- the case that actually matters. Reads
+    therefore happen on a daemon thread feeding a queue, and ``read_line`` waits
+    on the QUEUE with a timeout. A hung vendor now raises instead of hanging the
+    process, which is what makes ``runner``'s "a run with no bound can hang
+    forever" docstring true rather than aspirational.
+
+    **Stderr is drained continuously.** The vendor is chatty there (auth mode,
+    ``ConnectionName=``, ``IsWrite=``). With ``stderr=PIPE`` and no reader, the
+    child blocks writing once the ~64KB buffer fills, while we block reading
+    stdout -- a deadlock with no timeout to break it. A second daemon thread
+    drains it into a bounded buffer.
+
+    **Every OS-level failure becomes a SessionError.** A raw ``OSError`` escaping
+    a read reached ``invoke``'s caller as a traceback, so no ``RunResult`` was
+    built and orchestrate wrote NO evidence record -- violating FR-015 on the one
+    path where a record matters most.
     """
+
+    #: Cap on retained stderr. Bounded because vendor output is untrusted.
+    STDERR_LIMIT = 64_000
 
     def __init__(
         self,
         argv: list[str],
         cwd: Path,
         env: dict[str, str] | None = None,
+        *,
+        read_timeout: float = DEFAULT_DEADLINE_SECONDS,
     ) -> None:
+        self._read_timeout = read_timeout
+        self._closed = False
+        self._stdout_q: queue.Queue[bytes | None] = queue.Queue()
+        self._stderr_parts: list[bytes] = []
         self._proc = subprocess.Popen(  # noqa: S603 - fixed argv shape, no shell
             argv,
             cwd=cwd,
@@ -167,6 +212,35 @@ class SubprocessTransport:
             stderr=subprocess.PIPE,
             shell=False,
         )
+        self._readers = [
+            threading.Thread(target=self._pump_stdout, daemon=True),
+            threading.Thread(target=self._pump_stderr, daemon=True),
+        ]
+        for reader in self._readers:
+            reader.start()
+
+    def _pump_stdout(self) -> None:
+        """Feed complete lines into the queue; ``None`` marks end of stream."""
+        stream = self._proc.stdout
+        try:
+            if stream is not None:
+                for raw in stream:
+                    self._stdout_q.put(raw)
+        except (OSError, ValueError):  # pragma: no cover - stream torn down
+            pass
+        finally:
+            self._stdout_q.put(None)
+
+    def _pump_stderr(self) -> None:
+        """Drain stderr so a full pipe buffer can never block the child."""
+        stream = self._proc.stderr
+        try:
+            if stream is not None:
+                while chunk := stream.read(4096):
+                    if sum(map(len, self._stderr_parts)) < self.STDERR_LIMIT:
+                        self._stderr_parts.append(chunk)
+        except (OSError, ValueError):  # pragma: no cover - stream torn down
+            pass
 
     def write(self, data: bytes) -> None:
         if self._proc.stdin is None:  # pragma: no cover - PIPE always present
@@ -174,20 +248,36 @@ class SubprocessTransport:
         try:
             self._proc.stdin.write(data)
             self._proc.stdin.flush()
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             raise SessionError(f"the vendor stdin closed: {exc}") from exc
 
     def read_line(self) -> bytes:
-        if self._proc.stdout is None:  # pragma: no cover - PIPE always present
+        """One line, or ``b""`` at end of stream. Raises past the deadline.
+
+        Waits on the QUEUE rather than the pipe, so the timeout is enforced
+        against a server that never writes anything at all.
+        """
+        try:
+            item = self._stdout_q.get(timeout=self._read_timeout)
+        except queue.Empty:
+            raise SessionStalled(
+                f"the vendor sent nothing for {self._read_timeout}s"
+            ) from None
+        if item is None:
+            # End of stream. Re-post so later reads agree rather than blocking.
+            self._stdout_q.put(None)
             return b""
-        return self._proc.stdout.readline()
+        return item
 
     def terminate(self) -> None:
         """Close stdin, then terminate, then kill. Never leaks the child."""
+        if self._closed:
+            return
+        self._closed = True
         try:
             if self._proc.stdin and not self._proc.stdin.closed:
                 self._proc.stdin.close()
-        except OSError:  # pragma: no cover - best-effort teardown
+        except (OSError, ValueError):  # pragma: no cover - best-effort teardown
             pass
         try:
             self._proc.terminate()
@@ -195,17 +285,10 @@ class SubprocessTransport:
         except (OSError, subprocess.TimeoutExpired):  # pragma: no cover
             try:
                 self._proc.kill()
-            except OSError:
+                self._proc.wait(timeout=5)
+            except (OSError, subprocess.TimeoutExpired):
                 pass
 
     def stderr_text(self) -> str:
-        """Whatever the child has written to stderr so far, non-blocking-ish.
-
-        Only read after termination: reading a live pipe here would block.
-        """
-        if self._proc.stderr is None:  # pragma: no cover - PIPE always present
-            return ""
-        try:
-            return self._proc.stderr.read().decode("utf-8", errors="replace")
-        except (OSError, ValueError):  # pragma: no cover
-            return ""
+        """The drained stderr so far. Safe to call while the child is live."""
+        return b"".join(self._stderr_parts).decode("utf-8", errors="replace")

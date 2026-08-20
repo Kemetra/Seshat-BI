@@ -63,10 +63,20 @@ VENDOR_TOOLS: frozenset[str] = frozenset(
     }
 )
 
-#: Verbs that do not mutate model state, DERIVED from the 21 probed tool
-#: descriptions (2026-08-20) rather than hand-curated: a hand-written subset
-#: rejected legitimate operations like ``AddMeasures``. Everything not listed
-#: here is treated as a write.
+#: Verbs that do not mutate model state.
+#:
+#: PROVENANCE, stated exactly (issue #660 review, H4): every verb here appears in
+#: the ``Supported operations:`` sentence of a tool description returned by
+#: ``tools/list`` on 2026-08-20 -- 13 of the 21 tools publish such a list, 80
+#: distinct verbs in total. Verbs seen ONLY in a tool's parameter documentation
+#: are deliberately NOT listed as reads: an unevidenced verb misfiled here would
+#: skip the write-path treatment entirely (no readOnlyHint cross-check, no flush,
+#: ``succeeded=True``), which is the fail-OPEN direction. Absent from this set,
+#: they fail closed instead -- see :func:`is_write`.
+#:
+#: Widening this set requires evidence from the server, not inference from a
+#: name: ``database_operations.ExportToTmdlFolder`` looks like a read, reports
+#: ``readOnlyHint: true``, and rewrites 11 files.
 READ_OPERATIONS: frozenset[str] = frozenset(
     {
         "CheckStatusOfRefreshWithAPI",
@@ -79,20 +89,13 @@ READ_OPERATIONS: frozenset[str] = frozenset(
         "GetColumnGroups",
         "GetColumns",
         "GetConnection",
-        "GetDetailsByLCID",
-        "GetDetailsByName",
-        "GetEffectivePermissions",
         "GetGroup",
         "GetHierarchies",
         "GetItems",
         "GetMeasures",
-        "GetPermissions",
-        "GetSchema",
         "GetStats",
         "GetStatus",
         "GetTables",
-        "GetValidDetails",
-        "GetValidNames",
         "Help",
         "List",
         "ListActive",
@@ -104,15 +107,19 @@ READ_OPERATIONS: frozenset[str] = frozenset(
         "ListItems",
         "ListLocalInstances",
         "ListMeasures",
-        "ListPermissions",
         "ListTables",
         "Validate",
     }
 )
 
-#: The mutating verbs, same derivation. ``ConnectFolder`` and
-#: ``ExportToTmdlFolder`` are here for the GATE's purposes -- see the module
-#: docstring on why this deliberately disagrees with the vendor's own hint.
+#: The mutating verbs. Membership here is ADVISORY -- :func:`is_write` keys off
+#: absence from ``READ_OPERATIONS``, so an unlisted verb is already treated as a
+#: write. This set therefore also carries verbs known only from parameter
+#: documentation: listing a write is safe in a way listing a read is not.
+#:
+#: ``ConnectFolder`` and ``ExportToTmdlFolder`` are here for the GATE's purposes
+#: -- see the module docstring on why this deliberately disagrees with the
+#: vendor's own ``readOnlyHint``.
 WRITE_OPERATIONS: frozenset[str] = frozenset(
     {
         "Activate",

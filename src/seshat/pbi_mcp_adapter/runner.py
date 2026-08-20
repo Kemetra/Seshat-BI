@@ -36,7 +36,7 @@ from pathlib import Path
 
 from seshat.pbi_mcp.detect import VENDOR_PACKAGE, refuse_if_bypass_flag
 from seshat.pbi_mcp.scan import SECRET_PATTERNS
-from seshat.pbi_mcp_adapter import session, vendor_ops
+from seshat.pbi_mcp_adapter import protocol, session, vendor_ops
 from seshat.pbi_mcp_adapter.evidence import redact
 from seshat.pbi_mcp_adapter.gate import GateVerdict
 
@@ -250,6 +250,18 @@ def invoke(
     )
 
 
+def _trace(outcome: "protocol.ToolOutcome") -> str:
+    """What to record for one call: the payload, or the error if there is none.
+
+    A JSON-RPC error frame carries no ``content``, so ``raw_text`` is empty --
+    which shipped ``BLOCKER_VENDOR_REFUSED`` with no diagnosis on the single most
+    important failure path (review M3).
+    """
+    if outcome.raw_text:
+        return outcome.raw_text
+    return f"vendor error: {outcome.error}" if outcome.error else ""
+
+
 def _converse(
     live: session.McpSession,
     *,
@@ -275,7 +287,7 @@ def _converse(
             "connection_operations",
             {"operation": "ConnectFolder", "folderPath": target_path},
         )
-        transcript.append(connected.raw_text)
+        transcript.append(_trace(connected))
         if not connected.ok:
             return RunResult(
                 exit_code=1,
@@ -287,7 +299,7 @@ def _converse(
         # 2. The authorized operation.
         attempted = writes
         outcome = live.call(tool, {"operation": operation})
-        transcript.append(outcome.raw_text)
+        transcript.append(_trace(outcome))
         if not outcome.ok:
             blockers.append(BLOCKER_VENDOR_REFUSED)
         elif writes and outcome.read_only_hint is True:
@@ -304,15 +316,41 @@ def _converse(
                 "database_operations",
                 {"operation": "ExportToTmdlFolder", "tmdlFolderPath": target_path},
             )
-            transcript.append(flushed.raw_text)
+            transcript.append(_trace(flushed))
             if not flushed.ok:
                 blockers.append(BLOCKER_FLUSH_FAILED)
-    except session.SessionError as exc:
+    except session.SessionStalled as exc:
+        # A hung child: indeterminate, the artifact may be half-written.
         return RunResult(
             exit_code=TIMEOUT_EXIT_CODE,
             output=_redact_and_tail("\n".join([*transcript, str(exc)]), TAIL_CHARS),
             mutation_attempted=attempted,
             blockers=(BLOCKER_RUNTIME_STALLED,),
+        )
+    except session.SessionError as exc:
+        # A closed stream or a refused handshake is NOT a stall. Reporting it as
+        # "did not finish within 900s and was killed" tells the operator
+        # something false about what happened (review M2). Dispatch is on the
+        # TYPE, never on the message text.
+        return RunResult(
+            exit_code=1,
+            output=_redact_and_tail("\n".join([*transcript, str(exc)]), TAIL_CHARS),
+            mutation_attempted=attempted,
+            blockers=(BLOCKER_RUNTIME_UNEXPLAINED,),
+        )
+    except (OSError, ValueError, UnicodeDecodeError) as exc:
+        # NEVER let this escape as a traceback (review H3). An exception leaving
+        # `invoke` means no RunResult, so `orchestrate` never reaches `_terminate`
+        # and writes NO evidence record -- violating FR-015 on the one path where
+        # the record matters most. Indeterminate, because the artifact may be
+        # half-written.
+        return RunResult(
+            exit_code=1,
+            output=_redact_and_tail(
+                "\n".join([*transcript, f"{type(exc).__name__}: {exc}"]), TAIL_CHARS
+            ),
+            mutation_attempted=attempted,
+            blockers=(BLOCKER_RUNTIME_UNEXPLAINED,),
         )
     finally:
         live.close()

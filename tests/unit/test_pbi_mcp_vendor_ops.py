@@ -92,14 +92,81 @@ def test_the_vocabulary_covers_the_real_operation_names():
         "CreateItems",
         "UpdateTables",
         "ListColumns",
-        "GetSchema",
         "MarkAsDateTable",
         "ReorderLevels",
     ):
         assert name in known, f"{name} is a real vendor operation but unclassified"
+    # `GetSchema` is deliberately NOT asserted here: it is unevidenced, so it is
+    # absent from READ_OPERATIONS and fails closed. See
+    # test_unevidenced_read_looking_verbs_fail_closed.
 
 
 def test_the_vocabulary_is_large_enough_to_be_derived_not_guessed():
     """A tiny set is the signature of hand-curation; the real surface is ~100."""
     total = len(vendor_ops.READ_OPERATIONS | vendor_ops.WRITE_OPERATIONS)
-    assert total >= 100, f"only {total} verbs classified -- did the derivation regress?"
+    assert total >= 90, f"only {total} verbs classified -- did the derivation regress?"
+
+
+def test_unevidenced_read_looking_verbs_fail_closed():
+    """H4: a Get*/List* verb with no server evidence must NOT count as a read.
+
+    Misfiling a mutating verb as a read is the fail-OPEN direction: it skips the
+    readOnlyHint cross-check AND the flush, then reports succeeded=True. These
+    eight appear only in parameter documentation, never in a `tools/list`
+    description, so they are deliberately absent from READ_OPERATIONS.
+    """
+    for verb in (
+        "GetSchema",
+        "GetPermissions",
+        "GetEffectivePermissions",
+        "GetDetailsByName",
+        "GetDetailsByLCID",
+        "GetValidNames",
+        "GetValidDetails",
+        "ListPermissions",
+    ):
+        assert verb not in vendor_ops.READ_OPERATIONS, f"{verb} fails OPEN"
+        assert vendor_ops.is_write(verb) is True, f"{verb} must be treated as a write"
+
+
+def test_every_read_verb_is_server_evidenced():
+    """The READ set is the safety-critical one; keep it to what the server said.
+
+    The 30 verbs below are exactly those appearing in a `Supported operations:`
+    sentence from `tools/list` on 2026-08-20. If a future edit adds one, this
+    fails until the probe evidence is refreshed alongside it.
+    """
+    evidenced = {
+        "CheckStatusOfRefreshWithAPI",
+        "ExportJSON",
+        "ExportTMDL",
+        "ExportTMSL",
+        "Fetch",
+        "Find",
+        "Get",
+        "GetColumnGroups",
+        "GetColumns",
+        "GetConnection",
+        "GetGroup",
+        "GetHierarchies",
+        "GetItems",
+        "GetMeasures",
+        "GetStats",
+        "GetStatus",
+        "GetTables",
+        "Help",
+        "List",
+        "ListActive",
+        "ListColumnGroups",
+        "ListColumns",
+        "ListConnections",
+        "ListGroups",
+        "ListHierarchies",
+        "ListItems",
+        "ListLocalInstances",
+        "ListMeasures",
+        "ListTables",
+        "Validate",
+    }
+    unsourced = vendor_ops.READ_OPERATIONS - evidenced
+    assert unsourced == set(), f"read verbs with no server evidence: {unsourced}"
