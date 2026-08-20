@@ -28,6 +28,7 @@ Three review findings shaped this module:
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
@@ -241,21 +242,38 @@ def _redact_payload(payload: dict[str, object]) -> tuple[str, ...]:
     applied: set[str] = set()
 
     def scrub(value: object) -> object:
+        """Scrub one value, recursing through every container shape we emit.
+
+        The container branches are delegated so this stays one decision per
+        line: ``checks_skipped`` added dicts-inside-lists (issue #661), and a
+        walker that grew a branch per shape would drift past the complexity
+        gate exactly where it must stay easy to audit.
+        """
         if isinstance(value, str):
             cleaned, labels = scrub_secret_shaped(value)
             applied.update(labels)
             return cleaned
-        if isinstance(value, list):
-            return [scrub(item) for item in value]
-        if isinstance(value, tuple):
-            return tuple(scrub(item) for item in value)
-        if isinstance(value, dict):
-            return {key: scrub(item) for key, item in value.items()}
-        return value
+        return _scrub_container(value, scrub)
 
     for key, value in list(payload.items()):
         payload[key] = scrub(value)
     return tuple(sorted(applied))
+
+
+def _scrub_container(value: object, scrub: Callable[[object], object]) -> object:
+    """Rebuild a container with every member scrubbed, preserving its type.
+
+    A non-container is returned unchanged. Type is preserved rather than
+    normalized to a list because the payload is compared byte-for-byte between
+    runs, and a tuple silently becoming a list would change the rendered JSON.
+    """
+    if isinstance(value, list):
+        return [scrub(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(scrub(item) for item in value)
+    if isinstance(value, dict):
+        return {key: scrub(item) for key, item in value.items()}
+    return value
 
 
 def render(record: RunEvidence) -> str:

@@ -471,35 +471,28 @@ def validate_semantic_model(
             blockers=(BLOCKER_VALIDATOR_ERROR,),
         )
 
-    semantic = _outcome_for(
-        completed.returncode,
-        _ValidationRun(
-            root,
-            artifact,
-            target_path,
-            backup_ref,
-            checks_run,
-            baseline,
-            completed.stdout or "",
-            examined,
-        ),
+    run = _ValidationRun(
+        root,
+        artifact,
+        target_path,
+        backup_ref,
+        checks_run,
+        baseline,
+        completed.stdout or "",
+        examined,
     )
+    semantic = _outcome_for(completed.returncode, run)
     if semantic.blocking:
         # Terminal. Running further validators against an artifact already known
         # bad adds noise, not information -- and the operator's next move is the
         # rollback this outcome already carries.
         return semantic
-    return _merged_with_other_legs(
-        semantic, root, artifact, target_path, backup_ref, env
-    )
+    return _merged_with_other_legs(semantic, run, env)
 
 
 def _merged_with_other_legs(
     semantic: ValidationOutcome,
-    root: Path,
-    artifact: Path,
-    target_path: str,
-    backup_ref: str | None,
+    run: _ValidationRun,
     env: Mapping[str, str] | None,
 ) -> ValidationOutcome:
     """Fold the binding and value legs into a clean semantic result (FR-013).
@@ -507,10 +500,12 @@ def _merged_with_other_legs(
     Both legs report `(checks_run, failures, skipped)`, so a leg that could not
     run contributes a REASON rather than silence.
     """
-    model_dir = _model_dir_for(artifact)
-    bind_run, bind_failed, bind_skipped = validate_bindings_for(root, model_dir)
+    model_dir = _model_dir_for(run.artifact)
+    bind_run, bind_failed, bind_skipped = validate_bindings_for(
+        run.repo_root, model_dir
+    )
     value_run, value_failed, value_skipped = validate_value_for(
-        root, env=os.environ if env is None else env
+        run.repo_root, env=os.environ if env is None else env
     )
 
     failed = (*semantic.failed, *bind_failed, *value_failed)
@@ -519,7 +514,7 @@ def _merged_with_other_legs(
         artifacts_examined=semantic.artifacts_examined,
         failed=failed,
         rollback_guidance=(
-            rollback_guidance_for(target_path, backup_ref) if failed else ()
+            rollback_guidance_for(run.target_path, run.backup_ref) if failed else ()
         ),
         blockers=(BLOCKER_VALIDATION_FAILED,) if failed else (),
         checks_skipped=(*semantic.checks_skipped, *bind_skipped, *value_skipped),
