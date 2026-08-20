@@ -124,7 +124,7 @@ Never treat 3 as 1. A clean failure and a possibly-corrupted artifact are differ
 ## Evidence
 
 Every run -- success, failure, and refusal -- writes exactly one record to
-`.seshat/pbi-mcp-write-evidence.json`: what ran, in which mode, against which target, when,
+`.seshat/pbi-mcp-write-evidence.json` (latest run; every earlier run is retained in the append-only `.seshat/pbi-mcp-write-evidence.jsonl`): what ran, in which mode, against which target, when,
 and how it ended. The record carries a fixed authority label (`derived-evidence-only`), typed
 blockers, and **no numeric, maturity, or confidence score** of any kind.
 

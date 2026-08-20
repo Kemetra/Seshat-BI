@@ -77,7 +77,12 @@ def test_evidence_written_on_the_refusal_path(tmp_path: Path) -> None:
 
 
 def test_exactly_one_record_per_run(tmp_path: Path) -> None:
-    """finalize REPLACES rather than appending -- one record, not a log."""
+    """finalize REPLACES rather than appending -- the LATEST file is one record.
+
+    Issue #657 added an append-only history sibling, so this asserts the
+    latest-run artifact specifically rather than globbing the directory: the
+    glob now legitimately matches the history file too.
+    """
     evidence.write_intent(
         tmp_path,
         evidence.RunIdentity(
@@ -89,8 +94,8 @@ def test_exactly_one_record_per_run(tmp_path: Path) -> None:
         ),
     )
     evidence.finalize(tmp_path, _record())
-    written = list((tmp_path / ".seshat").glob("pbi-mcp-write-evidence*"))
-    assert len(written) == 1
+    payload = json.loads(evidence.evidence_path(tmp_path).read_text("utf-8"))
+    assert payload["outcome"] == "materialized"
 
 
 def test_a_refusal_record_must_name_a_blocker() -> None:
@@ -263,7 +268,7 @@ def test_evidence_writes_only_its_own_artifact(tmp_path: Path) -> None:
     after = {
         p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*") if p.is_file()
     }
-    assert after - before == {evidence.ARTIFACT_RELPATH}
+    assert after - before == {evidence.ARTIFACT_RELPATH, evidence.HISTORY_RELPATH}
 
 
 # --------------------------------------------------------------------------
@@ -486,3 +491,99 @@ def test_a_pre_mutation_record_still_refuses(tmp_path: Path) -> None:
                 blockers=(f"tenant {GUID_REF}",),
             ),
         )
+
+
+# --------------------------------------------------------------------------
+# Issue #657 -- per-run durable history alongside the fixed latest record.
+# --------------------------------------------------------------------------
+
+
+def _identity(**kwargs: object) -> evidence.RunIdentity:
+    params: dict[str, object] = {
+        "tool": "powerbi-modeling-mcp",
+        "mode": "readwrite",
+        "target_id": "sales_model",
+        "operation_id": "update_measure",
+        "timestamp": STAMP,
+    }
+    params.update(kwargs)
+    return evidence.RunIdentity(**params)  # type: ignore[arg-type]
+
+
+def _history_lines(root: Path) -> list[dict]:
+    text = evidence.history_path(root).read_text("utf-8")
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+
+def test_two_consecutive_runs_leave_two_retrievable_records(tmp_path: Path) -> None:
+    """The defect in #657: a second run replaced the first run's only trace.
+
+    The latest-run file still holds exactly one record; history holds both.
+    """
+    evidence.finalize(tmp_path, _record(operation_id="first_op"))
+    evidence.finalize(tmp_path, _record(operation_id="second_op"))
+
+    operations = [line["operation_id"] for line in _history_lines(tmp_path)]
+    assert operations == ["first_op", "second_op"]
+
+
+def test_an_intent_record_survives_the_run_that_overwrites_it(tmp_path: Path) -> None:
+    """`write_intent` exists for crash durability; history must retain it.
+
+    `finalize` atomically replaces the latest file, so without history the
+    `deferred` intent -- the only proof of what was being attempted -- is gone.
+    """
+    evidence.write_intent(tmp_path, _identity())
+    evidence.finalize(tmp_path, _record())
+
+    outcomes = [line["outcome"] for line in _history_lines(tmp_path)]
+    assert outcomes == ["deferred", "materialized"]
+
+
+def test_history_is_append_only_and_never_rewrites_earlier_lines(
+    tmp_path: Path,
+) -> None:
+    """An audit log that can be rewritten is not evidence."""
+    evidence.finalize(tmp_path, _record(operation_id="first_op"))
+    first = evidence.history_path(tmp_path).read_bytes()
+
+    evidence.finalize(tmp_path, _record(operation_id="second_op"))
+    after = evidence.history_path(tmp_path).read_bytes()
+
+    assert after.startswith(first), "an earlier history line was rewritten"
+
+
+def test_a_traversing_target_id_cannot_escape_the_governed_root(
+    tmp_path: Path,
+) -> None:
+    """`target_id` is caller-supplied, so it must never steer the path."""
+    evidence.finalize(tmp_path, _record(target_id="../../../etc/passwd"))
+
+    written = evidence.history_path(tmp_path)
+    assert written.is_file()
+    assert written.resolve().is_relative_to((tmp_path / ".seshat").resolve())
+
+
+def test_history_lines_carry_no_secret_shaped_value(tmp_path: Path) -> None:
+    """History is a new output surface, so it needs BOTH redaction layers."""
+    evidence.finalize(
+        tmp_path,
+        _record(
+            target_id="workspace 6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+            blockers=("host=db.example.com password=hunter2",),
+        ),
+    )
+    text = evidence.history_path(tmp_path).read_text("utf-8")
+    assert "6f9619ff-8b86-d011-b42d-00cf4fc964ff" not in text
+    assert "hunter2" not in text
+
+
+def test_the_latest_record_file_still_holds_exactly_one_record(
+    tmp_path: Path,
+) -> None:
+    """History adds retention; it does not turn the latest file into a log."""
+    evidence.finalize(tmp_path, _record(operation_id="first_op"))
+    evidence.finalize(tmp_path, _record(operation_id="second_op"))
+
+    payload = json.loads(evidence.evidence_path(tmp_path).read_text("utf-8"))
+    assert payload["operation_id"] == "second_op"

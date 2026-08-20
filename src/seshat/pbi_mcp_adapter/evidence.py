@@ -51,6 +51,18 @@ SCHEMA_VERSION = 1
 ARTIFACT_NAME = "pbi-mcp-write-evidence"
 ARTIFACT_RELPATH = ".seshat/pbi-mcp-write-evidence.json"
 
+#: The append-only history sibling (issue #657). The latest-run file above is
+#: atomically REPLACED every run, so before this existed a second run destroyed
+#: the first run's only trace -- including the ``deferred`` intent record that
+#: exists precisely so a crashed run stays attributable.
+#:
+#: JSONL rather than per-run files so the two consumers that must name this
+#: artifact by a FIXED literal keep working: the CLI emits a fixed repo-relative
+#: path (a per-run path is absolute whenever ``--repo`` is, which leaked the
+#: operator's home directory -- PR #659), and the git-cleanliness probe excludes
+#: the adapter's own artifacts by exact match.
+HISTORY_RELPATH = ".seshat/pbi-mcp-write-evidence.jsonl"
+
 #: The redaction placeholder.
 REDACTED = "[REDACTED]"
 
@@ -266,6 +278,33 @@ def evidence_path(repo_root: Path) -> Path:
     return Path(repo_root) / ARTIFACT_RELPATH
 
 
+def history_path(repo_root: Path) -> Path:
+    return Path(repo_root) / HISTORY_RELPATH
+
+
+def _append_history(repo_root: Path, text: str) -> None:
+    """Append one already-rendered record to the history log.
+
+    ``text`` is the output of :func:`render`, so it has already been through
+    BOTH redaction layers -- this adds no new redaction path of its own, which
+    is what keeps a ``redact``-only leak impossible on this surface.
+
+    The record is collapsed to a single line and opened in append mode: a short
+    line written with one ``write`` call is what makes concurrent runs
+    interleave whole records rather than corrupt each other. Never rewrites an
+    existing line -- an audit log that can be rewritten is not evidence.
+
+    The path is built from FIXED constants only; no caller-supplied value
+    (``target_id`` above all) ever reaches it, so there is nothing to traverse
+    with.
+    """
+    path = history_path(repo_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(json.loads(text), sort_keys=True, separators=(",", ":"))
+    with path.open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write(line + "\n")
+
+
 @dataclass(frozen=True)
 class RunIdentity:
     """Who/what/when a run is about -- bundled so callers pass ONE thing.
@@ -311,7 +350,9 @@ def write_intent(repo_root: Path, identity: RunIdentity) -> Path:
         blockers=("PBIMCP-EV-01",),
     )
     path = evidence_path(repo_root)
-    _write_atomically(path, render(record))
+    text = render(record)
+    _write_atomically(path, text)
+    _append_history(repo_root, text)
     return path
 
 
@@ -322,7 +363,9 @@ def finalize(repo_root: Path, record: RunEvidence) -> Path:
     per run, and a refusal is a run.
     """
     path = evidence_path(repo_root)
-    _write_atomically(path, render(record))
+    text = render(record)
+    _write_atomically(path, text)
+    _append_history(repo_root, text)
     return path
 
 

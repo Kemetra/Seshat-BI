@@ -249,7 +249,7 @@ def _probe_tree_clean(repo_root: Path) -> bool | None:
     project will not carry this repo's ignore rules.
     """
     from seshat.gitstate import run_git
-    from seshat.pbi_mcp_adapter.evidence import ARTIFACT_RELPATH
+    from seshat.pbi_mcp_adapter.evidence import ARTIFACT_RELPATH, HISTORY_RELPATH
 
     try:
         # `--untracked-files=all` is required: the default collapses untracked
@@ -260,10 +260,18 @@ def _probe_tree_clean(repo_root: Path) -> bool | None:
         return None
     if status.returncode != 0:
         return None
-    ours = ARTIFACT_RELPATH.replace("\\", "/")
+    # BOTH of the adapter's own artifacts (issue #657). Excluding only the
+    # latest-run file made the append-only history read as a foreign untracked
+    # file, so a second `plan-write` was refused for git-safety on a dirty state
+    # this adapter created itself -- caught by
+    # `test_plan_write_twice_still_sees_a_clean_tree`.
+    ours = {
+        ARTIFACT_RELPATH.replace("\\", "/"),
+        HISTORY_RELPATH.replace("\\", "/"),
+    }
     for line in status.stdout.splitlines():
         entry = line[3:].strip().strip('"').replace("\\", "/")
-        if entry and entry != ours:
+        if entry and entry not in ours:
             return False
     return True
 
