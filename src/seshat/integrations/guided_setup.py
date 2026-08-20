@@ -327,35 +327,51 @@ def render_text(scope: DerivedScope, statuses: tuple[CapabilityStatus, ...]) -> 
     """
     width = max(len(status.name) for status in statuses)
     lines = ["Project Setup", ""]
-    for status in statuses:
-        mark = _MARK[status.proposed_action]
-        lines.append(f"  {mark} {status.name:<{width}}  {_status_label(status)}")
+    lines.extend(_status_line(status, width) for status in statuses)
     lines.append("")
     for status in statuses:
-        lines.append(f"  {status.name}: {status.reason}")
-        if status.blocker:
-            lines.append(f"    blocked -- {status.blocker}")
-        if status.next_action:
-            lines.append(f"    next -- {status.next_action}")
+        lines.extend(_reason_lines(status))
     lines.append("")
-    count = sum(1 for status in statuses if status.needs_setup)
-    noun = "capability" if count == 1 else "capabilities"
-    lines.append(
-        f"Proposed changes: {count} {noun}"
-        if count
-        else "Proposed changes: none -- nothing to do"
-    )
-    for capability_id in scope.unsupported:
-        lines.append(
-            f"  unsupported: {capability_id} is needed but no catalog component "
-            "satisfies it"
-        )
-    for capability_id in scope.outside_need:
-        lines.append(
-            f"  outside derived need: {capability_id} was requested but this "
-            "project's evidence does not need it"
-        )
+    lines.append(_summary_line(statuses))
+    lines.extend(_scope_notes(scope))
     return "\n".join(lines)
+
+
+def _status_line(status: CapabilityStatus, width: int) -> str:
+    mark = _MARK[status.proposed_action]
+    return f"  {mark} {status.name:<{width}}  {_status_label(status)}"
+
+
+def _reason_lines(status: CapabilityStatus) -> list[str]:
+    """The reason for one capability, plus its blocker and next action."""
+    lines = [f"  {status.name}: {status.reason}"]
+    if status.blocker:
+        lines.append(f"    blocked -- {status.blocker}")
+    if status.next_action:
+        lines.append(f"    next -- {status.next_action}")
+    return lines
+
+
+def _summary_line(statuses: tuple[CapabilityStatus, ...]) -> str:
+    count = sum(1 for status in statuses if status.needs_setup)
+    if not count:
+        return "Proposed changes: none -- nothing to do"
+    return f"Proposed changes: {count} {'capability' if count == 1 else 'capabilities'}"
+
+
+def _scope_notes(scope: DerivedScope) -> list[str]:
+    """The two things a reader must not have to infer from a silent plan."""
+    notes = [
+        f"  unsupported: {capability_id} is needed but no catalog component "
+        "satisfies it"
+        for capability_id in scope.unsupported
+    ]
+    notes.extend(
+        f"  outside derived need: {capability_id} was requested but this "
+        "project's evidence does not need it"
+        for capability_id in scope.outside_need
+    )
+    return notes
 
 
 def render_json(scope: DerivedScope, statuses: tuple[CapabilityStatus, ...]) -> str:
@@ -497,24 +513,43 @@ def _component_verdicts(root, outcome) -> dict[str, str]:
     return verdicts
 
 
+_UNVERIFIED_ACTION = (
+    "the install reported success but verification does not confirm it; "
+    "re-run setup and inspect the component's technical evidence"
+)
+
+
+def _discovery_action(component_ids: tuple[str, ...], outcome) -> str:
+    """The discovery surface's own next action for one of these components."""
+    for result in outcome.discovery:
+        if result.component in component_ids and result.needs_action:
+            return result.next_action or "; ".join(result.blockers)
+    return ""
+
+
+def _row_action(component_ids: tuple[str, ...], outcome) -> str:
+    """The failing install row's own detail for one of these components."""
+    for row in outcome.rows:
+        if row.component in component_ids and row.needs_action:
+            return row.detail
+    return ""
+
+
 def _next_action_for(state: str, component_ids: tuple[str, ...], outcome) -> str:
     """The one safe next action for a capability that is not ready.
 
     Taken from the owning surface's own wording where it has one -- a discovery
     result's `next_action`, or the failing row's detail -- rather than invented
-    here, so the advice a user acts on is the advice the control plane gives.
+    here, so the advice a user acts on is the advice the control plane gives. The
+    fallback is used only when neither surface said anything, which is the
+    installed-but-unverified case.
     """
     if state == READY:
         return ""
-    for result in outcome.discovery:
-        if result.component in component_ids and result.needs_action:
-            return result.next_action or "; ".join(result.blockers)
-    for row in outcome.rows:
-        if row.component in component_ids and row.needs_action:
-            return row.detail
     return (
-        "the install reported success but verification does not confirm it; "
-        "re-run setup and inspect the component's technical evidence"
+        _discovery_action(component_ids, outcome)
+        or _row_action(component_ids, outcome)
+        or _UNVERIFIED_ACTION
     )
 
 

@@ -25,43 +25,62 @@ def _code_only(module) -> str:
     obvious "fix" is to delete the documentation. Stripping prose keeps the
     assertion about code, which is what it was always meant to be about.
     """
-    import ast
-    import io
-    import tokenize
-
     source = _source(module)
-    tree = ast.parse(source)
-    docstring_lines: set[int] = set()
-    for node in ast.walk(tree):
-        if not isinstance(
-            node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef
-        ):
-            continue
-        body = getattr(node, "body", [])
-        if not body or not isinstance(body[0], ast.Expr):
-            continue
-        value = body[0].value
-        if isinstance(value, ast.Constant) and isinstance(value.value, str):
-            docstring_lines.update(range(value.lineno, (value.end_lineno or 0) + 1))
-
+    skip = _docstring_lines(source)
+    cuts = _comment_cuts(source)
     # Rebuilt LINE BY LINE, keeping the original layout. Joining tokens instead
     # would break every multi-token phrase apart -- "subprocess.run" becomes
     # three tokens -- so each forbidden-token assertion would pass whether or not
     # the call site was there. `test_the_prose_stripper_leaves_the_code_intact`
     # exists because that is exactly what the first version of this helper did.
+    return "\n".join(
+        line[: cuts[number]] if number in cuts else line
+        for number, line in enumerate(source.splitlines(), start=1)
+        if number not in skip
+    )
+
+
+def _docstring_lines(source: str) -> set[int]:
+    """Line numbers occupied by a module, class, or function docstring."""
+    import ast
+
+    lines: set[int] = set()
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(
+            node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef
+        ):
+            continue
+        value = _first_constant(node)
+        if value is not None:
+            lines.update(range(value.lineno, (value.end_lineno or 0) + 1))
+    return lines
+
+
+def _first_constant(node):
+    """The node's leading string constant, when it has one."""
+    import ast
+
+    body = getattr(node, "body", [])
+    if not body or not isinstance(body[0], ast.Expr):
+        return None
+    value = body[0].value
+    if isinstance(value, ast.Constant) and isinstance(value.value, str):
+        return value
+    return None
+
+
+def _comment_cuts(source: str) -> dict[int, int]:
+    """Per line, the column where its first comment starts."""
+    import io
+    import tokenize
+
     cuts: dict[int, int] = {}
     for token in tokenize.generate_tokens(io.StringIO(source).readline):
         if token.type != tokenize.COMMENT:
             continue
         line, column = token.start
         cuts[line] = min(column, cuts.get(line, column))
-
-    kept = []
-    for number, line in enumerate(source.splitlines(), start=1):
-        if number in docstring_lines:
-            continue
-        kept.append(line[: cuts[number]] if number in cuts else line)
-    return "\n".join(kept)
+    return cuts
 
 
 def _catalog_tokens() -> set[str]:

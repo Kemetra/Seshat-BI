@@ -569,11 +569,7 @@ def apply(
     # The lock records what LANDED, and only after the installs above returned.
     # A run in which nothing installed writes nothing, so a failed apply leaves
     # the previous lock byte-for-byte intact.
-    if installed:
-        document = build_lock(label, _now(), installed)
-        if derived:
-            document = _carry_forward(root, document)
-        outcome.lock_written = write_lock(root, document)
+    outcome.lock_written = _record_lock(root, label, installed, derived=derived)
     outcome.discovery.extend(
         inspect_official_skills(
             root,
@@ -607,6 +603,28 @@ def verified_present(root: Path, item: Component) -> bool:
     chosen a different environment for it.
     """
     return any(_is_installed(root, item, profile) for profile in PROFILE_NAMES)
+
+
+def _record_lock(
+    root: Path,
+    label: str,
+    installed: list[tuple[str, str, str, Resolution]],
+    *,
+    derived: bool,
+) -> Path | None:
+    """Write the lock for what LANDED, or None when nothing did.
+
+    A run in which nothing installed writes nothing, so a failed apply leaves the
+    previous lock byte-for-byte intact. Extracted from `apply` so the derived-only
+    carry-forward is a call rather than a nested branch inside an already long
+    function.
+    """
+    if not installed:
+        return None
+    document = build_lock(label, _now(), installed)
+    if derived:
+        document = _carry_forward(root, document)
+    return write_lock(root, document)
 
 
 def _carry_forward(root: Path, document: dict) -> dict:

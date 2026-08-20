@@ -216,19 +216,32 @@ run-level result, and the reinstall count separately.
   this feature touches pass with zero failures. CI on 3.13 is the authority for the
   full sweep.
 - [x] **T051** `seshat check` exit 0.
-- [x] **T052** **NOT MEASURED -- limitation stated, not papered over.** No
-  CodeScene token or CLI is available in this container (the same blocker spec 153
-  T046 recorded). **No code-health verdict is claimed.**
-  What WAS measured objectively: `guided_setup.py` is 548 lines with its longest
-  function at 40 lines (AST-checked); `cli/commands/integrations.py` is 257 lines,
-  longest new function 56 (`_derived_main`, ~49 excluding its docstring).
-  `installer.py` grew to **829 lines, ~29 over the ~800-line guideline** spec 153
-  held itself to -- flagged rather than hidden. The three additions there
-  (`_env_profile`, `verified_present`, `_carry_forward`) are install-state concerns
-  and belong beside `_is_installed`; moving them into the bridge would have put
-  install-state logic behind the bridge's own "no second verifier" contract test.
-  Splitting `installer.py` is a reasonable follow-up, and is not this feature's
-  scope to decide.
+- [x] **T052** **MEASURED BY CI, and the findings were fixed rather than
+  suppressed.** No CodeScene token or CLI is available in this container (the same
+  blocker spec 153 T046 recorded), so the first push claimed no verdict -- then the
+  PR check produced one, failing two gates with four real findings, every one in
+  code this feature wrote:
+  `guided_setup._next_action_for` (Complex Method, cc 9; Bumpy Road, 2 nested
+  blocks), `guided_setup.render_text` (Complex Method, cc 9),
+  `test_guided_setup_bridge._code_only` (Complex Method, cc 12; Bumpy Road, 3
+  blocks), and `installer.apply` (Bumpy Road, 2 blocks -- health 9.00 -> 8.88,
+  a regression this feature introduced by nesting the lock write).
+  Each was fixed by extraction, not by clicking Suppress: the two-loop fallback
+  chain became `_discovery_action` / `_row_action`; the renderer became
+  `_status_line` / `_reason_lines` / `_summary_line` / `_scope_notes`; the prose
+  stripper became `_docstring_lines` / `_first_constant` / `_comment_cuts`; and the
+  lock write moved out of `apply` into `_record_lock`, removing the nesting this
+  feature added.
+  Measured after: `guided_setup.py` longest function 37 lines (was 40),
+  `_code_only` 23 (was 37), `installer.apply` 85 (was 89) with the nested block
+  gone. **`installer.py` is now 847 lines, ~47 over the ~800-line guideline** --
+  it grew while its flagged complexity fell, and that trade is stated rather than
+  hidden. Splitting the file is a reasonable follow-up and is not this feature's
+  call.
+  The four additions in `installer.py` (`_env_profile`, `verified_present`,
+  `_record_lock`, `_carry_forward`) are install-state concerns and belong beside
+  `_is_installed`; moving them into the bridge would have put install-state logic
+  behind the bridge's own "no second verifier" contract test.
 - [x] **T053** Diff contains no unrelated file, and no committed provisioning
   approval or decline is added by this feature.
 
