@@ -246,6 +246,17 @@ assert preflight reports a blocker rather than proceeding.
 - **FR-015**: The adapter MUST write a derived run-evidence record — what ran, in which mode,
   against which target, when, and with what result — on **both** the success and failure
   paths.
+- **FR-015a** *(issue #657)*: Every record MUST be retained. The latest run stays readable at
+  the fixed `.seshat/pbi-mcp-write-evidence.json`; each record — including the pre-mutation
+  `deferred` intent — is also appended to `.seshat/pbi-mcp-write-evidence.jsonl`, which is
+  append-only and MUST NOT rewrite an earlier line. Before this, a second run replaced the
+  first run's only trace.
+- **FR-015b** *(issue #657, decided)*: A **pre-gate bypass refusal writes no record**, and this
+  is deliberate rather than incidental. `refuse_if_bypass_flag` fires before a run identity
+  exists, so a record there would attribute a run that never started; the refusal is instead
+  loud on stderr with a non-zero exit. FR-015's "every run" therefore means every run that
+  reached the gate. Any future change here MUST supply a real run identity rather than
+  synthesize one.
 - **FR-016**: The evidence record MUST mirror the existing run-evidence shape: a fixed
   authority label and typed blockers.
 - **FR-017**: The evidence record MUST NOT contain any numeric, maturity, or confidence

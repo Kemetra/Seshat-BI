@@ -44,8 +44,11 @@ def test_successful_write_leaves_exactly_one_evidence_record(
 ) -> None:
     report = _apply(ready_repo)
     assert report.evidence_path is not None
-    records = list((ready_repo / ".seshat").glob("pbi-mcp-write-evidence*"))
-    assert len(records) == 1
+    # The LATEST-run artifact carries exactly one record: `finalize` replaced the
+    # `deferred` intent rather than accumulating. Asserted against the file
+    # itself rather than a directory glob, which since issue #657 legitimately
+    # also matches the append-only history sibling.
+    assert report.evidence_path.name == "pbi-mcp-write-evidence.json"
     payload = json.loads(report.evidence_path.read_text(encoding="utf-8"))
     assert payload["outcome"] == "materialized"
     assert payload["mutation_attempted"] is True
