@@ -35,8 +35,12 @@ unless explicitly requested. Add the seam, not the implementation.
 
 <!-- SPECKIT START -->
 Active plan: `specs/149-pbi-mcp-write-adapter/plan.md` (F016 slice 5 -- the approval-gated
-Power BI MCP write adapter, ratified 2026-08-18). Implementation MERGED (#659); open
-follow-ups #658 (version pin), #661 (binding/value checks), #663 (post-write check gaps).
+Power BI MCP write adapter, ratified 2026-08-18). Implementation MERGED (#659), and the
+post-write validation follow-ups are now CLOSED: #657 evidence retention (#670), #663
+ignored-file scope + lossless git read (#672), #661 + #663 target-scoped validation
+(#674), #658 runtime-version recording + npx floor (#679). The only remaining piece of
+#658 is the version PIN, blocked until Microsoft publishes a non-prerelease (measured
+2026-08-20: only `0.5.0-beta.*` exist).
 **Spec 154 (issue #671) is COMPLETE** -- `seshat integrations setup --apply` now requires a
 committed named-human `governance` approval in `contracts/provisioning-approvals.yaml`,
 read at HEAD. `--apply` is intent; `--yes` only suppresses the prompt; neither authorizes.
