@@ -132,52 +132,48 @@ def _load_committed(repo_root: Path) -> tuple[dict | None, str | None]:
     return data, None
 
 
-def evaluate(repo_root: Path, components: tuple[str, ...]) -> ApprovalVerdict:
-    """Whether a committed named-human approval authorizes provisioning ``components``.
+def _read_refusal(refusal: str, relpath: str) -> ApprovalVerdict:
+    """The verdict for a refusal raised while READING the artifact."""
+    remedy = {
+        "absent": _record(relpath),
+        "uncommitted": (
+            f"commit {relpath} -- the gate reads HEAD, so an uncommitted "
+            "approval authorizes nothing"
+        ),
+        "unparseable": f"repair the YAML in {relpath}",
+    }[refusal]
+    return ApprovalVerdict(False, refusal, remedy)
 
-    Returns ``authorized=True`` only when ONE committed row is shape-valid, is
-    keyed to the provisioning stage, carries the ``governance`` authority class,
-    is not revoked, and names every requested component. Two narrower rows never
-    combine into a wider authority: that would grant an authority no human
-    recorded (the ``_authorizing_approval`` rule from the Power BI write gate).
 
-    Every other outcome refuses. There is no code path in which a caller-supplied
-    value produces ``authorized=True``.
+def _revoked(relpath: str) -> ApprovalVerdict:
+    return ApprovalVerdict(
+        False, "revoked", f"the approval in {relpath} was revoked; record a new one"
+    )
+
+
+def _governance_rows(rows: list[dict]) -> tuple[list[dict], ApprovalVerdict | None]:
+    """Rows that are shape-valid AND carry the provisioning authority class.
+
+    Two filters, two distinct refusals: shape validity is delegated to the one
+    canonical validator, but that validator accepts ANY of the five authority
+    classes -- so the class check is this gate's own, and conflating them would
+    report a wrong-class approval as merely malformed.
     """
     relpath = PROVISIONING_APPROVALS_RELPATH
-    data, refusal = _load_committed(repo_root)
-    if refusal is not None:
-        remedy = {
-            "absent": _record(relpath),
-            "uncommitted": (
-                f"commit {relpath} -- the gate reads HEAD, so an uncommitted "
-                "approval authorizes nothing"
-            ),
-            "unparseable": f"repair the YAML in {relpath}",
-        }[refusal]
-        return ApprovalVerdict(False, refusal, remedy)
-
-    assert data is not None  # the refusal branch above covers the None case
-    rows = _rows(data)
-    if not rows:
-        return ApprovalVerdict(False, "absent", _record(relpath))
-
-    requested = frozenset(components)
     shape_valid = [row for row in rows if approval_is_shape_valid(row)]
     if not shape_valid:
-        return ApprovalVerdict(
+        return [], ApprovalVerdict(
             False,
             "invalid_shape",
             f"correct the approval in {relpath}: {_shape_hint()}",
         )
-
     governed = [
         row
         for row in shape_valid
         if _authority_class(str(row.get("owner", ""))) == PROVISIONING_AUTHORITY
     ]
     if not governed:
-        return ApprovalVerdict(
+        return [], ApprovalVerdict(
             False,
             "wrong_authority",
             (
@@ -186,38 +182,60 @@ def evaluate(repo_root: Path, components: tuple[str, ...]) -> ApprovalVerdict:
                 "external software"
             ),
         )
+    return governed, None
 
+
+def _scope_verdict(governed: list[dict], requested: frozenset[str]) -> ApprovalVerdict:
+    """The verdict once authority is established and only scope remains.
+
+    A row must cover the request ON ITS OWN: two narrower approvals never combine
+    into a wider authority no human recorded (the ``_authorizing_approval`` rule
+    from the Power BI write gate).
+    """
+    relpath = PROVISIONING_APPROVALS_RELPATH
     covering = [row for row in governed if requested <= _components(row)]
-    if not covering:
-        live = [row for row in governed if not row.get("revoked")]
-        if not live:
-            return ApprovalVerdict(
-                False,
-                "revoked",
-                f"the approval in {relpath} was revoked; record a new one",
-            )
-        approved = sorted(set().union(*(_components(row) for row in live)))
-        return ApprovalVerdict(
-            False,
-            "scope_mismatch",
-            (
-                f"requested {sorted(requested)} but the committed approval covers "
-                f"{approved}; a new approval must name every requested component"
-            ),
-        )
-
     live_covering = [row for row in covering if not row.get("revoked")]
-    if not live_covering:
+    if live_covering:
         return ApprovalVerdict(
-            False,
-            "revoked",
-            f"the approval in {relpath} was revoked; record a new one",
+            True, "authorized", "", owner=str(live_covering[0].get("owner", ""))
         )
+    if covering:
+        return _revoked(relpath)
 
-    winner = live_covering[0]
+    live = [row for row in governed if not row.get("revoked")]
+    if not live:
+        return _revoked(relpath)
+    approved = sorted(set().union(*(_components(row) for row in live)))
     return ApprovalVerdict(
-        True,
-        "authorized",
-        "",
-        owner=str(winner.get("owner", "")),
+        False,
+        "scope_mismatch",
+        (
+            f"requested {sorted(requested)} but the committed approval covers "
+            f"{approved}; a new approval must name every requested component"
+        ),
     )
+
+
+def evaluate(repo_root: Path, components: tuple[str, ...]) -> ApprovalVerdict:
+    """Whether a committed named-human approval authorizes provisioning ``components``.
+
+    Returns ``authorized=True`` only when ONE committed row is shape-valid, is
+    keyed to the provisioning stage, carries the ``governance`` authority class,
+    is not revoked, and names every requested component.
+
+    Every other outcome refuses. There is no code path in which a caller-supplied
+    value produces ``authorized=True``.
+    """
+    data, refusal = _load_committed(repo_root)
+    if refusal is not None:
+        return _read_refusal(refusal, PROVISIONING_APPROVALS_RELPATH)
+
+    assert data is not None  # the refusal branch above covers the None case
+    rows = _rows(data)
+    if not rows:
+        return ApprovalVerdict(False, "absent", _record(PROVISIONING_APPROVALS_RELPATH))
+
+    governed, blocked = _governance_rows(rows)
+    if blocked is not None:
+        return blocked
+    return _scope_verdict(governed, frozenset(components))
