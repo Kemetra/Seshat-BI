@@ -4,7 +4,12 @@
 
 **Created**: 2026-08-20
 
-**Status**: Draft
+**Status**: ratified -- Ahmed Shaaban, 2026-08-20
+
+**Status history**: Draft -- 2026-08-20; ratified the same day after both owner
+decisions (approval location/authority, approval lifetime) were ruled and
+propagated. Implementation of the #671 fix is permitted from this point; spec 153
+implementation remains blocked until that fix lands.
 
 **Input**: Issue #671 -- `seshat integrations setup --apply --yes` treats an
 agent-supplied CLI flag as approval for installing external software. Converge the
