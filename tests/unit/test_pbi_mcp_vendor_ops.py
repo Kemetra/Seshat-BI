@@ -32,21 +32,31 @@ def test_all_twenty_one_tools_are_named():
 def test_the_operation_map_is_per_tool_not_a_flat_set():
     """H4: a flat set + independent validation authorizes the cross-product."""
     assert isinstance(vendor_ops.TOOL_OPERATIONS, dict)
-    assert len(vendor_ops.TOOL_OPERATIONS) == 20
+    assert len(vendor_ops.TOOL_OPERATIONS) == 21
     assert set(vendor_ops.TOOL_OPERATIONS) <= vendor_ops.VENDOR_TOOLS
 
 
-def test_a_tool_with_no_evidenced_list_authorizes_nothing():
+def test_an_unmapped_tool_authorizes_nothing():
     """An absent entry must never read as 'anything goes'.
 
-    `partition_operations` publishes no `Supported operations:` sentence, so no
-    pair naming it can be derived -- and it must therefore be refused, not waved
-    through.
+    Every one of the 21 tools IS mapped now -- an earlier round wrongly excluded
+    `partition_operations` because its description uses "Use the Operation
+    parameter to specify:" rather than "Supported operations:". The fail-closed
+    behaviour for a genuinely unmapped tool is still the invariant worth pinning,
+    so it is asserted against a synthetic name.
     """
-    assert "partition_operations" in vendor_ops.VENDOR_TOOLS
-    assert "partition_operations" not in vendor_ops.TOOL_OPERATIONS
+    assert set(vendor_ops.TOOL_OPERATIONS) == set(vendor_ops.VENDOR_TOOLS)
+    assert vendor_ops.is_write("List", "not_a_mapped_tool") is True
+    assert vendor_ops.requires_payload("not_a_mapped_tool", "Create") is False
     with pytest.raises(vendor_ops.UnknownVendorOperation):
-        vendor_ops.parse_operation_id("partition_operations.Create")
+        vendor_ops.parse_operation_id("not_a_mapped_tool.Create")
+
+
+def test_partition_operations_is_mapped_and_its_writes_need_a_payload():
+    """It publishes its verbs via the OTHER phrasing; both are now read."""
+    assert "partition_operations" in vendor_ops.TOOL_OPERATIONS
+    assert "Create" in vendor_ops.TOOL_OPERATIONS["partition_operations"].all_verbs
+    assert vendor_ops.requires_payload("partition_operations", "Update") is True
 
 
 # --------------------------------------------------------------------------
@@ -120,7 +130,7 @@ def test_a_verb_read_under_one_tool_is_not_assumed_read_under_another():
 
 
 def test_an_unmapped_tool_makes_every_verb_a_write():
-    assert vendor_ops.is_write("List", "partition_operations") is True
+    assert vendor_ops.is_write("List", "no_such_tool") is True
 
 
 def test_the_flush_verb_is_a_write_for_gate_purposes():
@@ -153,7 +163,7 @@ def test_a_payload_free_write_is_not_refused():
 
 def test_requires_payload_is_false_for_an_unmapped_tool():
     """No evidence of a payload requirement; the pair is refused earlier anyway."""
-    assert vendor_ops.requires_payload("partition_operations", "Create") is False
+    assert vendor_ops.requires_payload("no_such_tool", "Create") is False
 
 
 # --------------------------------------------------------------------------
@@ -178,7 +188,7 @@ def test_no_export_to_folder_verb_is_ever_classified_as_a_read():
 def test_the_evidence_is_broad_enough_to_be_derived_not_guessed():
     """A tiny map is the signature of hand-curation; the real surface is ~220."""
     pairs = sum(len(v.all_verbs) for v in vendor_ops.TOOL_OPERATIONS.values())
-    assert pairs >= 200, f"only {pairs} pairs -- did the derivation regress?"
+    assert pairs >= 230, f"only {pairs} pairs -- did the derivation regress?"
 
 
 def test_the_real_operation_names_are_present_under_their_own_tools():

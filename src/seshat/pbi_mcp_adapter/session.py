@@ -117,7 +117,7 @@ class McpSession:
                 # the caller distinguishes the two by TYPE. Raising the base class
                 # here reported a stall as "failed without naming a cause"
                 # (re-review M2, the half that remained open).
-                raise SessionError(
+                raise SessionStalled(
                     f"no reply to request {request_id} within {self._deadline}s"
                 )
             line = self._transport.read_line()
@@ -303,7 +303,8 @@ class SubprocessTransport:
         try:
             item = self._stdout_q.get(timeout=self._read_timeout)
         except queue.Empty:
-            raise SessionError(
+            # The TIMEOUT type, so the runner reports a stall as a stall (M2).
+            raise SessionStalled(
                 f"the vendor sent nothing for {self._read_timeout}s"
             ) from None
         if item is None:

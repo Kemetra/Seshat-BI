@@ -7,6 +7,9 @@ server so the sequencing rules are pinned without a live run.
 from __future__ import annotations
 
 import json
+import sys
+import time
+from pathlib import Path
 
 import pytest
 
@@ -145,12 +148,49 @@ def test_close_terminates_the_transport():
     assert transport.terminated is True
 
 
-def test_a_deadline_of_zero_raises_instead_of_looping_forever():
-    """The bound is real: a server that never replies must not hang the run."""
+def test_a_deadline_of_zero_raises_the_STALLED_type_not_the_base():
+    """The bound is real -- AND its type carries the cause (review M2).
+
+    Asserting `SessionError` here could not distinguish a stall from a crash, so
+    reverting both timeout sites to the base class left every test green while the
+    runner reported a timeout as "failed without naming a cause".
+    """
     transport = FakeTransport([_init_reply()])
     sess = session.McpSession(transport, deadline_seconds=0)
-    with pytest.raises(session.SessionError):
+    with pytest.raises(session.SessionStalled):
         sess.handshake()
+
+
+def test_a_closed_stream_raises_the_BASE_type_not_stalled():
+    """The other side of M2: a crash must NOT be reported as a timeout."""
+    transport = FakeTransport([_init_reply()])
+    sess = session.McpSession(transport)
+    sess.handshake()
+    with pytest.raises(session.SessionError) as caught:
+        sess.call("measure_operations", {"operation": "List"})
+    assert not isinstance(caught.value, session.SessionStalled)
+
+
+def test_an_impostor_server_raises_the_BASE_type_not_stalled():
+    transport = FakeTransport([_init_reply(name="evil-impostor")])
+    sess = session.McpSession(transport)
+    with pytest.raises(session.SessionError) as caught:
+        sess.handshake()
+    assert not isinstance(caught.value, session.SessionStalled)
+
+
+def test_the_transport_read_timeout_also_raises_STALLED(tmp_path: Path) -> None:
+    """Both timeout sites, not just the session one (review M2)."""
+    child = tmp_path / "silent.py"
+    child.write_text(chr(10).join(["import time", "time.sleep(60)"]), encoding="utf-8")
+    transport = session.SubprocessTransport(
+        [sys.executable, "-u", str(child)], tmp_path, read_timeout=2
+    )
+    try:
+        with pytest.raises(session.SessionStalled):
+            transport.read_line()
+    finally:
+        transport.terminate()
 
 
 # --------------------------------------------------------------------------
@@ -180,3 +220,69 @@ def test_an_unresolvable_launcher_passes_through_unchanged():
 
 def test_resolve_launcher_tolerates_an_empty_argv():
     assert session.resolve_launcher([]) == []
+
+
+def test_the_stdout_queue_is_bounded():
+    """An unbounded queue fed by a chatty server is a memory-exhaustion path."""
+    assert isinstance(session.MAX_QUEUED_LINES, int)
+    assert 0 < session.MAX_QUEUED_LINES <= 100_000
+
+
+def test_a_full_queue_cannot_deadlock_teardown(tmp_path: Path) -> None:
+    """The bound must not trade a memory risk for a hang.
+
+    The pump thread blocks on ``put()`` once the queue is full. Teardown must
+    still complete, or a server that outruns the reader hangs the process for
+    ever. Driven with a REAL subprocess that emits far more lines than the bound,
+    of which we read only a handful -- so the queue is genuinely full and the pump
+    is genuinely blocked when ``terminate()`` is called.
+    """
+    child = tmp_path / "flood.py"
+    lines = [
+        "import json",
+        "import sys",
+        "import time",
+        f"for i in range({session.MAX_QUEUED_LINES * 3}):",
+        '    sys.stdout.write(json.dumps({"id": i}) + "\\n")',
+        "sys.stdout.flush()",
+        "time.sleep(30)",
+    ]
+    child.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    transport = session.SubprocessTransport(
+        [sys.executable, "-u", str(child)], tmp_path, read_timeout=10
+    )
+    try:
+        for _ in range(5):
+            transport.read_line()
+        time.sleep(2)  # let the pump fill the queue and block on put()
+
+        started = time.monotonic()
+        transport.terminate()
+        assert time.monotonic() - started < 20, "terminate() blocked on a full queue"
+
+        # A read after teardown must not hang either.
+        started = time.monotonic()
+        try:
+            transport.read_line()
+        except session.SessionStalled:
+            pass
+        assert time.monotonic() - started < 15, "read_line() hung after terminate()"
+    finally:
+        transport.terminate()
+
+
+def test_the_pump_threads_are_daemons(tmp_path: Path) -> None:
+    """A non-daemon pump blocked on a full queue would prevent interpreter exit."""
+    child = tmp_path / "quiet.py"
+    child.write_text(
+        "\n".join(["import time", "time.sleep(5)"]) + "\n", encoding="utf-8"
+    )
+    transport = session.SubprocessTransport(
+        [sys.executable, "-u", str(child)], tmp_path, read_timeout=1
+    )
+    try:
+        assert transport._readers, "no pump threads were started"
+        for reader in transport._readers:
+            assert reader.daemon is True
+    finally:
+        transport.terminate()

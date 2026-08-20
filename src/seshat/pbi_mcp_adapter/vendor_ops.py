@@ -9,36 +9,38 @@ A flat set plus independent validation of each half authorizes the whole
 cross-product, so a verb evidenced under one tool would be accepted for every
 tool. Classified as a read, an operation gets no ``readOnlyHint`` cross-check, no
 flush, and ``succeeded=True`` -- and ``Export*`` is the exact family this repo
-proved rewrites 11 files while self-reporting ``readOnlyHint: true``. Per-tool
-membership closes that: a verb is accepted only for a tool the server showed it
-under.
+proved rewrites 11 files while self-reporting ``readOnlyHint: true``.
 
-Three fail-closed rules:
+Two fail-closed rules:
 
 * An unknown tool, or a verb not evidenced FOR THAT TOOL, RAISES. ``npx`` starts
   whatever the registry resolves; a pair that silently became a no-op would
   report success for a mutation that never happened.
-* **A tool with no evidenced operation list permits NOTHING.** One of the 21
-  (``partition_operations``) publishes no ``Supported operations:`` sentence, so
-  it is absent here and every pair naming it is refused. An absent entry must
-  never read as "anything goes".
 * Any verb not in a tool's READ set is treated as a WRITE. Guessing read-only is
   the fail-open direction, and this gate exists to prevent it.
 
-PROVENANCE, stated exactly: every pair below appears in the ``Supported
-operations:`` sentence of that tool's own description, returned by ``tools/list``
-against ``@microsoft/powerbi-modeling-mcp@0.5.0-beta.12`` on 2026-08-20 -- 20 of
-21 tools publish such a list, **220 (tool, verb) pairs**. Verbs seen only in a
-tool's parameter documentation are deliberately EXCLUDED: an unevidenced verb
-admitted as a read is the fail-open direction.
+PROVENANCE -- and it is CHECKABLE, not asserted. Every entry below is derived from
+``tests/fixtures/pbi_mcp/vendor_tools_0.5.0-beta.12.json``, a committed capture of
+``tools/list`` against ``@microsoft/powerbi-modeling-mcp@0.5.0-beta.12``
+(``serverInfo.version`` 0.5.0.0) taken 2026-08-20.
+``test_pbi_mcp_vendor_ops`` re-derives this map from that fixture and fails on any
+drift, so a reader can falsify the claim instead of trusting it. 21 tools, **233
+(tool, verb) pairs**.
 
-``needs_payload`` is likewise the SERVER's own statement, from the
-"For Create and Update use Definitions" clause in the same descriptions. Those
-operations cannot be executed from a verb alone -- see :func:`requires_payload`
-and the ``approved_definitions[]`` deferral in ``spec.md``.
+Operation lists are read from EITHER phrasing the server uses -- ``Supported
+operations:`` or ``Use the Operation parameter to specify:``. Matching only the
+first silently dropped 7 tools, and an earlier round shipped that gap.
 
-Widening this map requires evidence from the server, not inference from a name:
-``database_operations.ExportToTmdlFolder`` looks like a read, reports
+``needs_payload`` is derived the same way, and likewise phrasing-agnostically:
+the server states the requirement as "For Create and Update use Definitions",
+"Use Definitions for Create and Update operations", AND "For ... operations,
+provide Definitions". Keying on one phrasing missed three tools and let a hollow
+no-op execute (re-review round 3, CRITICAL). Those operations cannot be executed
+from a verb alone -- see :func:`requires_payload` and the
+``approved_definitions[]`` deferral in ``spec.md``.
+
+Widening this map requires refreshing the fixture from the server, not inference
+from a name: ``database_operations.ExportToTmdlFolder`` looks like a read, reports
 ``readOnlyHint: true``, and rewrote all 11 TMDL files (research.md R8).
 """
 
@@ -271,6 +273,12 @@ TOOL_OPERATIONS: dict[str, _Verbs] = {
                 "Update",
             }
         ),
+        needs_payload=frozenset(
+            {
+                "Create",
+                "Update",
+            }
+        ),
     ),
     "measure_operations": _Verbs(
         reads=frozenset(
@@ -350,6 +358,14 @@ TOOL_OPERATIONS: dict[str, _Verbs] = {
                 "UpdateParameter",
             }
         ),
+        needs_payload=frozenset(
+            {
+                "Create",
+                "CreateParameter",
+                "Update",
+                "UpdateParameter",
+            }
+        ),
     ),
     "object_translation_operations": _Verbs(
         reads=frozenset(
@@ -366,6 +382,41 @@ TOOL_OPERATIONS: dict[str, _Verbs] = {
                 "Get",
                 "Help",
                 "List",
+                "Update",
+            }
+        ),
+    ),
+    "partition_operations": _Verbs(
+        reads=frozenset(
+            {
+                "CheckStatusOfRefreshWithAPI",
+                "ExportTMDL",
+                "ExportTMSL",
+                "Get",
+                "Help",
+                "List",
+            }
+        ),
+        all_verbs=frozenset(
+            {
+                "CancelRefreshWithAPI",
+                "CheckStatusOfRefreshWithAPI",
+                "Create",
+                "Delete",
+                "ExportTMDL",
+                "ExportTMSL",
+                "Get",
+                "Help",
+                "List",
+                "RefreshWithAPI",
+                "RefreshWithXMLA",
+                "Rename",
+                "Update",
+            }
+        ),
+        needs_payload=frozenset(
+            {
+                "Create",
                 "Update",
             }
         ),
@@ -434,6 +485,12 @@ TOOL_OPERATIONS: dict[str, _Verbs] = {
                 "Get",
                 "Help",
                 "List",
+                "Update",
+            }
+        ),
+        needs_payload=frozenset(
+            {
+                "Create",
                 "Update",
             }
         ),
@@ -664,8 +721,11 @@ def parse_operation_id(operation_id: str) -> tuple[str, str]:
         raise UnknownVendorOperation(f"unknown vendor tool: {tool!r}")
     known = TOOL_OPERATIONS.get(tool)
     if known is None:
+        # Unreachable while all 21 tools are mapped, and deliberately kept: a
+        # future capture that cannot derive a tool's verbs must refuse it, never
+        # wave it through. An absent entry is not "anything goes".
         raise UnknownVendorOperation(
-            f"{tool!r} publishes no evidenced operation list, so it authorizes "
+            f"{tool!r} has no evidenced operation list, so it authorizes "
             "nothing; refusing rather than guessing"
         )
     if operation not in known.all_verbs:
