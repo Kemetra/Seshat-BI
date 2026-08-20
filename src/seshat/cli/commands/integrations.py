@@ -40,11 +40,39 @@ def _prompted(rendered: str) -> bool:
     return confirm("Install these integrations now? [y/N]: ")
 
 
-def _approved(args: Namespace, rendered: str) -> bool:
-    """Whether an install was explicitly approved.
+def _authorized(root: Path, components: tuple[str, ...]) -> tuple[bool, str]:
+    """Whether a COMMITTED named-human approval authorizes provisioning.
 
-    `--apply` is the request. `--yes` confirms it without a prompt. `--yes`
-    alone is NOT a request: it returns False here, and the run stays a plan.
+    Split from `_approved` deliberately: intent and authority are different
+    questions, and only this one may say yes. Returns `(authorized, next_action)`.
+    """
+    from seshat.integrations.approval import evaluate
+
+    verdict = evaluate(root, components)
+    return verdict.authorized, verdict.next_action
+
+
+def _requested_components(outcome: object) -> tuple[str, ...]:
+    """The component ids the plan would install, in recorded order.
+
+    Derived from the plan, never from argv: the scope an approval is matched
+    against must not be something the caller can assert.
+    """
+    rows = getattr(outcome, "rows", ()) or ()
+    return tuple(str(getattr(row, "component", "")) for row in rows)
+
+
+def _approved(args: Namespace, rendered: str) -> bool:
+    """Whether the operator has REQUESTED an install (intent only).
+
+    This answers intent, NOT authority. `--apply` is the request; `--yes`
+    suppresses the prompt; `--yes` alone is not a request. None of these
+    authorizes anything -- authorization is `_authorized()`, which reads a
+    committed named-human approval at HEAD.
+
+    Before spec 154 this function's True return WAS the authorization, so an
+    agent-built `Namespace(apply=True, yes=True)` installed software with no
+    human involved (issue #671). Intent is now necessary and never sufficient.
     """
     if not getattr(args, "apply", False):
         return False
@@ -97,6 +125,16 @@ def integrations_main(args: Namespace) -> int:
         return 2
 
     if _approved(args, render_text(outcome)):
+        # Intent is established. Authority is a separate question, and only a
+        # committed named-human approval answers it (spec 154, issue #671).
+        authorized, next_action = _authorized(root, _requested_components(outcome))
+        if not authorized:
+            print(
+                "error: provisioning needs a committed named-human approval -- "
+                f"{next_action}",
+                file=sys.stderr,
+            )
+            return 2
         if resolvers is None:
             # Installing needs exact coordinates, and only --refresh resolves
             # them. Refusing here is what stops an --apply from falling back to

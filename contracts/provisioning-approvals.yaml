@@ -1,0 +1,49 @@
+# Provisioning approvals (spec 154 / issue #671).
+#
+# The committed record of which named human authorized installing which external
+# components. `seshat integrations setup --apply` reads THIS file from HEAD and
+# refuses without a covering row.
+#
+# WHY THIS IS A COMMITTED FILE, NOT A CLI FLAG
+# -------------------------------------------
+# Before spec 154 the approval was `--apply --yes`: an agent constructing its own
+# argument namespace supplied the very signal that authorized it. A precondition
+# the caller supplies is not a gate. So the path is fixed in code as
+# `seshat.integrations.approval.PROVISIONING_APPROVALS_RELPATH`, read from HEAD
+# via `gitstate.committed_text`, and no flag can redirect it -- an uncommitted
+# edit is invisible to the gate. This mirrors
+# contracts/pbi-mcp-write-targets.yaml, which makes the same argument for the
+# Power BI write allowlist.
+#
+# SHAPE
+#   approvals:
+#     - stage: provisioning          # the keying token; not a readiness stage
+#       owner: "<Person Name> (governance)"
+#       at: "<YYYY-MM-DD>"
+#       components: [<component ids from the integration catalog>]
+#       note: "<optional: why>"
+#       revoked: true                # optional: withdraws this row's authority
+#
+# RULES THE GATE ENFORCES
+#   * `owner` must be a named human WITH an authority class -- a bare role token
+#     ("governance"), a name with no class ("Ahmed Shaaban"), or a role posing as
+#     the name is refused. Validated by the ONE canonical definition,
+#     `seshat.rules.readiness_status.approval_is_shape_valid` (issue #487).
+#   * the authority class must be `governance` -- the project-governance
+#     authority for external environment/tool changes. Note that the canonical
+#     validator accepts any of the five classes, so this check is the gate's own.
+#   * ONE row must name EVERY requested component. Two narrower rows never
+#     combine into a wider authority no human recorded.
+#   * a superset row authorizes a subset request; adding a component id not on
+#     the row is a material scope change and refuses.
+#   * the approval is STANDING, not single-use: a retry after a partial failure
+#     or a repeat run of the same scope needs no new approval. Age alone never
+#     expires it -- `at:` is audit metadata, not a clock.
+#   * an approval authorizes; it does not verify. A component still is not
+#     "ready" until the existing verification and discovery surfaces say so.
+#
+# Adding a row here is a reviewed, committed human decision. The agent may not
+# write it: recording an approval is a named-human action (Constitution
+# Principle V), and this gate only ever READS.
+
+approvals: []

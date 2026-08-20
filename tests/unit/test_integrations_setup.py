@@ -16,6 +16,7 @@ import pytest
 
 from seshat import gitutil, integrations_setup
 from seshat.cli.commands.integrations import integrations_main
+from seshat.integrations.approval import ApprovalVerdict
 from seshat.integrations.compat import BASELINE_PINS
 from seshat.integrations.installer import ComponentPlan, SetupOutcome
 from seshat.integrations_setup import (
@@ -280,8 +281,14 @@ def test_cli_apply_without_refresh_fails_closed(
         lambda *a, **k: pytest.fail("apply ran without exact resolvers"),
     )
 
+    # Spec 154 (#671): the approval gate now runs BEFORE the exact-resolver
+    # check, so an unapproved run is refused for want of authority rather than
+    # for want of `--refresh`. Both are fail-closed at exit 2; the message
+    # differs. The `--refresh` refusal itself is asserted under a valid committed
+    # approval by test_apply_without_refresh_still_refuses_for_exact_pins in
+    # test_integrations_cli_approval.py.
     assert integrations_main(_args(root, apply=True, yes=True)) == 2
-    assert "needs --refresh" in capsys.readouterr().err
+    assert "committed named-human approval" in capsys.readouterr().err
 
 
 def test_cli_yes_alone_never_enables_apply(
@@ -318,6 +325,26 @@ def test_cli_refresh_apply_delegates_to_canonical_pipeline(
         lambda *a, **k: calls.append("apply") or _canonical_outcome(status="installed"),
     )
 
+    # Spec 154 (#671) CORRECTION. This assertion previously read:
+    #     assert integrations_main(_args(root, refresh=True, apply=True, yes=True)) == 0
+    #     assert calls == ["plan", "apply"]
+    # which encoded the defect as expected behaviour: `--apply --yes` is a
+    # namespace an AGENT builds for itself, so the old assertion demanded that
+    # provisioning run with no human involved. Keeping it green would have
+    # silently defeated the fix, so it asserts the secure form instead: without a
+    # committed approval the pipeline plans and STOPS.
+    assert integrations_main(_args(root, refresh=True, apply=True, yes=True)) == 2
+    assert calls == ["plan"]
+
+    # And with a committed named-human approval, the delegation this test exists
+    # to prove still happens.
+    monkeypatch.setattr(
+        "seshat.integrations.approval.evaluate",
+        lambda *a, **k: ApprovalVerdict(
+            True, "authorized", "", owner="A B (governance)"
+        ),
+    )
+    calls.clear()
     assert integrations_main(_args(root, refresh=True, apply=True, yes=True)) == 0
     assert calls == ["plan", "apply"]
 
