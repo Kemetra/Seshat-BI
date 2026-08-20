@@ -5,8 +5,13 @@
 **Prerequisite SATISFIED**: issue #671 landed (`b456577c`). FR-018 remains a
 permanent boundary.
 
-**Spec status**: Draft. Planning and tasks may proceed; IMPLEMENTATION requires
-owner ratification first.
+**Spec status**: ratified -- Ahmed Shaaban, 2026-08-20. Implementation permitted.
+
+**Progress**: slice 1 (derivation + strength + normal rendering) is BUILT and
+green -- 19 tests, `pytest -m unit` 6213 passed. 15 tasks remain: decline
+handling (T023-T025, T027), satisfied-state (T019), the technical-evidence path
+(T029-T033), catalog extensibility (T039), and the T040/T042 verification sweeps.
+Nothing here is marked done that was not seen RED then GREEN.
 
 TDD order: the failing test comes before the code. A task is done only when its
 test was seen RED, then GREEN.
@@ -29,7 +34,7 @@ test was seen RED, then GREEN.
 
 ## Phase 1 -- Design
 
-- [ ] **T007** `data-model.md`: `Capability`, `RequirementStrength` (four values),
+- [x] **T007** `data-model.md`: `Capability`, `RequirementStrength` (four values),
   `DerivationEvidence`, `SetupPlanRow`, `SetupPlan`. Record that `undetermined`
   is an evidence marker, NOT a fifth strength.
 - [ ] **T008** `quickstart.md`: the two US1 projects rendering different derived
@@ -37,37 +42,37 @@ test was seen RED, then GREEN.
 
 ## Phase 2 -- Derivation (US1, P1)
 
-- [ ] **T009** [RED] A project with a source-map declaring a source system ->
+- [x] **T009** [RED] A project with a source-map declaring a source system ->
   Database Connectivity `required`, reason naming that file. (FR-001, FR-008)
-- [ ] **T010** [RED] A project with a `.pbip` -> Power BI Integration `required`,
+- [x] **T010** [RED] A project with a `.pbip` -> Power BI Integration `required`,
   reason naming the artifact. (FR-001)
-- [ ] **T011** [RED] A project with NO `.pbip` -> Power BI Integration is not
+- [x] **T011** [RED] A project with NO `.pbip` -> Power BI Integration is not
   `required`. (US1 AS3)
-- [ ] **T012** [RED] A committed `dbt_project.yml` -> Transformation Engine
+- [x] **T012** [RED] A committed `dbt_project.yml` -> Transformation Engine
   derived from its presence; absent -> `not-required`, reason naming what was
   looked for and not found. (US1 AS1, FR-008)
-- [ ] **T013** [RED] `orchestration/dagster/` absent -> Orchestration
+- [x] **T013** [RED] `orchestration/dagster/` absent -> Orchestration
   `not-required` -- NOT `undetermined`. Absence with a citable basis is a finding.
   (US1 AS1)
-- [ ] **T014** [RED] Two projects of DIFFERENT shape -> different derived sets.
+- [x] **T014** [RED] Two projects of DIFFERENT shape -> different derived sets.
   A test that passes for both shapes proves nothing. (SC-002)
-- [ ] **T015** [RED] The derived set is never the union of all curated profiles.
+- [x] **T015** [RED] The derived set is never the union of all curated profiles.
   (SC-002)
-- [ ] **T016** [RED] Same evidence twice -> identical set and strengths. (FR-003)
-- [ ] **T017** [RED] Derivation makes no network call and writes nothing --
+- [x] **T016** [RED] Same evidence twice -> identical set and strengths. (FR-003)
+- [x] **T017** [RED] Derivation makes no network call and writes nothing --
   asserted on the module source and by running against a read-only fixture.
   (FR-004)
-- [ ] **T018** [RED] Unreadable/contradictory evidence (a `source-map.yaml` that
+- [x] **T018** [RED] Unreadable/contradictory evidence (a `source-map.yaml` that
   exists but will not parse) -> `undetermined` naming the missing evidence, NEVER
   defaulted to `required`. (FR-005)
 - [ ] **T019** [RED] A capability already satisfied is reported satisfied and
   proposed for no change. (US1 AS4)
-- [ ] **T020** [GREEN] Implement derivation.
+- [x] **T020** [GREEN] Implement derivation.
 
 ## Phase 3 -- Requirement strength (US2, P2)
 
-- [ ] **T021** [RED] Every row carries exactly one of the four values. (FR-007)
-- [ ] **T022** [RED] Every row carries a reason citing project evidence; zero
+- [x] **T021** [RED] Every row carries exactly one of the four values. (FR-007)
+- [x] **T022** [RED] Every row carries a reason citing project evidence; zero
   rows lack one. (FR-008, SC-003)
 - [ ] **T023** [RED] Declining a `recommended` capability leaves remaining work
   able to proceed, and the decline is recorded so a later run does not re-propose
@@ -77,13 +82,13 @@ test was seen RED, then GREEN.
   downgrade the strength to make the blocker disappear. (FR-010)
 - [ ] **T025** [RED] An agent-requested capability outside derived need is
   reported as outside derived need, never promoted to `required`. (FR-006)
-- [ ] **T026** [RED] `undetermined` is NOT one of the four strengths -- assert the
+- [x] **T026** [RED] `undetermined` is NOT one of the four strengths -- assert the
   strength vocabulary has exactly four members. (FR-007)
 - [ ] **T027** [GREEN] Implement strength + decline recording.
 
 ## Phase 4 -- Presentation (US3, P3)
 
-- [ ] **T028** [RED] The normal rendering contains no package, MCP, npm, or
+- [x] **T028** [RED] The normal rendering contains no package, MCP, npm, or
   runtime identifier and no install command. **Non-vacuous**: build the forbidden
   set from the catalog's own `coordinate` values at test time, not a hardcoded
   list that silently stops matching when the catalog changes. (FR-012, SC-004)
@@ -101,19 +106,19 @@ test was seen RED, then GREEN.
 
 ## Phase 5 -- Boundaries (the FRs that keep this a delta)
 
-- [ ] **T034** [RED] **FR-018 as a real test, not a comment**: assert this
+- [x] **T034** [RED] **FR-018 as a real test, not a comment**: assert this
   feature's modules contain no approval decision, no `--yes`-style boolean
   authorization, and that authorization is the #671 gate's outcome. The weak model
   must be structurally un-inheritable even though it no longer exists.
-- [ ] **T035** [RED] No second installer, resolver, verifier, or state store:
+- [x] **T035** [RED] No second installer, resolver, verifier, or state store:
   assert the feature's modules perform no install, no version resolution, and no
   lock write. (FR-017)
-- [ ] **T036** [RED] No second capability registry: assert
+- [x] **T036** [RED] No second capability registry: assert
   `docs/capabilities/capabilities.yaml` and the integration catalog are READ, and
   that no new capability list is authored. (FR-011)
-- [ ] **T037** [RED] Satisfaction never rests on install success -- it comes from
+- [x] **T037** [RED] Satisfaction never rests on install success -- it comes from
   the discovery/verification surface. (FR-019)
-- [ ] **T038** [RED] `DEFAULT_PROFILE` is unchanged and profiles still work:
+- [x] **T038** [RED] `DEFAULT_PROFILE` is unchanged and profiles still work:
   derivation is an ADDITIONAL basis, not a replacement default (FR-002, and spec
   144 FR-006 protects the exported constant's value).
 - [ ] **T039** [RED] Adding a capability/provider to the catalog changes the
@@ -124,20 +129,20 @@ test was seen RED, then GREEN.
 - [ ] **T040** Non-vacuity sweep: for each negative assertion, break the evidence
   and confirm the test FAILS. **Commit before poking**, so the restore cannot
   discard work.
-- [ ] **T041** Platform-vacuity: no assertion keyed to a Windows literal -- CI is
+- [x] **T041** Platform-vacuity: no assertion keyed to a Windows literal -- CI is
   Linux.
 - [ ] **T042** Prove `undetermined` is reachable AND not over-reachable: it fires
   on unreadable evidence and does NOT fire merely because a capability is unused.
 
 ## Phase 7 -- Gates
 
-- [ ] **T043** `ruff format --check src/ tests/` and `ruff check src/ tests/`.
-- [ ] **T044** `pytest -m unit` green. CI's unit job runs WITHOUT app extras.
-- [ ] **T045** `seshat check` exit 0.
+- [x] **T043** `ruff format --check src/ tests/` and `ruff check src/ tests/`.
+- [x] **T044** `pytest -m unit` green. CI's unit job runs WITHOUT app extras.
+- [x] **T045** `seshat check` exit 0.
 - [ ] **T046** Measure changed files with `cs review` if the CodeScene CLI is
   available; refactor a flagged function rather than suppressing. Note it was NOT
   installed during spec 154's build -- verify before claiming a health result.
-- [ ] **T047** Diff contains no unrelated file.
+- [x] **T047** Diff contains no unrelated file.
 
 ## Out of scope
 
