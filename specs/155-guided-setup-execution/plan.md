@@ -71,7 +71,7 @@ Three facts from Phase 0 shape this and are easy to get wrong:
 - **The bridge must NOT live in `derivation.py`.** Two shipped spec-153 tests read
   that file as source text and assert it contains no `apply_profile(`,
   `write_lock(`, `install(`, `approved`, `authorize`, `--yes` call site. Those
-  assertions are the mechanical proof of spec 153's FR-017/FR-018 boundaries.
+  assertions are the mechanical proof of spec 153 FR-017 and spec 153 FR-018.
   A bridge placed there turns them red; a separate module keeps both specs
   testable.
 - **A derived scope installs into each component's OWN base profile environment**,
@@ -170,6 +170,10 @@ refusal text and the not-ready-after-install case shown rather than described.
 - `not-required`, declined, satisfied, `optional`, and `undetermined` capabilities
   contribute nothing. (FR-003, FR-004)
 - A declined `required` capability blocks and keeps its strength. (FR-005)
+- A needed capability with no catalog component is reported unsupported -- never
+  dropped, never satisfied. (FR-023)
+- An all-satisfied project reports "no change proposed" and demands no approval.
+  (FR-024)
 - Same evidence + catalog + declines + discovery state -> same ordered scope.
   (FR-006)
 - No argv value widens the scope. (FR-007)
@@ -220,7 +224,12 @@ refusal text and the not-ready-after-install case shown rather than described.
    to install nothing for it -- through the injected runner, so the assertion is on
    behavior rather than on a log line.
 7. **Determinism must be asserted on order**, not just membership.
-8. **The boundary invariants get contract tests**, including the one that keeps
+8. **Reachability is its own assertion.** FR-001 is the requirement this feature
+   exists for, and it is satisfied only when the derived plan is obtainable through
+   the normal CLI journey -- not when a library function exists. Assert the journey,
+   and assert the derived path's exit codes distinguish "needs setup" from "nothing
+   to do" (US1 AS7).
+9. **The boundary invariants get contract tests**, including the one that keeps
    `derivation.py` free of execution call sites -- if this feature ever edits that
    file, spec 153's proof should fail loudly.
 

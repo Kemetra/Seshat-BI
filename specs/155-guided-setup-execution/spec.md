@@ -253,7 +253,9 @@ is already satisfied and requires no new approval.
   a capability with undetermined evidence, and an `optional` capability MUST each
   contribute nothing to it.
 - **FR-004**: A capability the existing discovery surface reports satisfied MUST
-  contribute no install action, while remaining visible in the plan as satisfied.
+  remain VISIBLE in the plan, reported as satisfied with its verification basis
+  available. (Its exclusion from the change set follows from FR-003; this
+  requirement is the visibility obligation that exclusion alone would not give.)
 - **FR-005**: A declined `required` capability MUST leave the plan blocked: the
   capability keeps its `required` strength, remains listed, is not silently omitted
   or downgraded, and the blocker MUST carry a next action. A blocked plan MUST NOT
@@ -268,6 +270,12 @@ is already satisfied and requires no new approval.
 - **FR-008**: Producing the plan MUST write nothing and MUST NOT contact the
   network; coordinate resolution and installation MUST remain behind the existing
   explicit network and write affordances.
+- **FR-023**: A capability that needs action but projects to no catalog component
+  MUST be reported as unsupported, naming the missing coverage. It MUST NOT be
+  silently dropped from the plan, and MUST NOT be reported satisfied.
+- **FR-024**: When every needed capability is already satisfied, the plan MUST
+  report that no change is proposed, and MUST NOT demand an approval or refuse for
+  want of one. An empty proposed scope is a valid outcome, not a refusal.
 
 **Presentation and machine-readable status (stage 8)**
 
@@ -439,7 +447,7 @@ is already satisfied and requires no new approval.
 
 - **Spec 153** (capability-oriented setup) -- stages 1-3: derivation, requirement
   strength, declines, satisfied state, the capability-to-component projection, and
-  the capability-oriented and machine-readable plan surfaces. Its FR-018 boundary
+  the capability-oriented and machine-readable plan surfaces. Spec 153 FR-018
   (never define, weaken, or substitute for provisioning authorization) binds this
   spec too and is not retired by spec 154 having landed.
 - **Spec 154** (secure provisioning approval) -- stage 5: the committed named-human
@@ -447,10 +455,10 @@ is already satisfied and requires no new approval.
   rule, and its standing-until-scope-change lifetime.
 - **Spec 144** (integration control plane) -- stages 6-8: catalog membership,
   resolver, compatibility policy, installer, isolation, lock/state recording, and
-  rendering. Its FR-006 (exported symbols remain importable), its unamended FR-010
-  clauses (flags, exit codes, JSON shape, workspace validation, catalog-backed
-  routing), and its FR-011 (existing lock and compatibility contracts stay green)
-  all constrain this spec.
+  rendering. Spec 144 FR-006 (exported symbols remain importable), the unamended
+  clauses of spec 144 FR-010 (flags, exit codes, JSON shape, workspace validation,
+  catalog-backed routing), and spec 144 FR-011 (existing lock and compatibility
+  contracts stay green) all constrain this spec.
 - **Spec 148** (official skill discovery) -- the obtained / activated /
   discoverable facts that decide satisfaction and post-execution readiness.
 - **Specs 143, 145, 146, 147, 150** -- official-first provider authority, intent

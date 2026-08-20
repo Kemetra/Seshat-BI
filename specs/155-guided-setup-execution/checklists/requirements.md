@@ -34,6 +34,15 @@
 Every item passes. Three things a reviewer should check deliberately rather than
 take on trust:
 
+- **`/speckit.analyze` found one CRITICAL gap, now closed.** FR-001 -- that derived
+  selection be reachable in the normal journey rather than only as a library call --
+  had zero task coverage, which is precisely the requirement this feature exists
+  for. T027a/T027b now assert and build the CLI path. The same pass promoted two
+  edge cases to requirements (FR-023 unsupported capability, FR-024 all-satisfied
+  project) so the tasks covering them cite a requirement instead of a bullet, added
+  the derived path's exit-code assertion (T028a), qualified cross-spec FR references
+  that a coverage sweep was scoring as this spec's, and closed the SC-003/SC-004
+  citation gaps. FR count 22 -> 24; task count 53 -> 56.
 - **One requirement was merged during validation, deliberately.** A separate FR
   listing the caller-controlled signals that confer no authority restated spec
   154's FR-005/006/008. It was folded into FR-012, keeping only the clause this

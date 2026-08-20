@@ -10,7 +10,7 @@ approval and the shipped derived plan; it re-implements neither.
 implementation phases below wait on ratification, per this repo's practice of not
 building against an unratified spec.
 
-**Progress**: Phase 0 and Phase 1 done (10 of 53). Implementation not started.
+**Progress**: Phase 0 and Phase 1 done (10 of 56). Implementation not started.
 
 TDD order: the failing test comes before the code. A task is done only when its
 test was seen RED, then GREEN. Nothing is marked done that was not observed.
@@ -28,7 +28,8 @@ test was seen RED, then GREEN. Nothing is marked done that was not observed.
   component's own base-profile env and invents no isolation target. This is what
   makes reuse (FR-018) achievable rather than aspirational.
 - [x] **T003** R2b -- lock merging is DERIVED-ONLY. Symmetric merging would change
-  the profile path's observable behavior, which spec 144 FR-010/FR-011 protect; it
+  the profile path's observable behavior, which spec 144 FR-010 and spec 144
+  FR-011 protect; it
   is owner decision 3's escalation, not a silent choice.
 - [x] **T004** R3 -- CLI shape. Settled: an additive opt-in selector on the
   existing `seshat integrations setup` verb. `--profile` keeps its choices and
@@ -51,8 +52,8 @@ test was seen RED, then GREEN. Nothing is marked done that was not observed.
   declines, or approval move.
 - [x] **T009** `quickstart.md`: the five-step journey with the refusal text and the
   installed-but-not-verified case shown, not described.
-- [x] **T010** `plan.md`: design invariants mapped one-to-one to FR-002..FR-022,
-  verification strategy, and the five known risks.
+- [x] **T010** `plan.md`: one design invariant per functional requirement from
+  FR-002 onward, the verification strategy, and the five known risks.
 
 ## Phase 2 -- Projection and the proposed change set (US1, P1)
 
@@ -65,18 +66,21 @@ test was seen RED, then GREEN. Nothing is marked done that was not observed.
 - [ ] **T013** [RED] A `not-required` capability contributes zero components, and
   the exclusion reason is recorded as `not-required`. (FR-003, US1 AS1, B)
 - [ ] **T014** [RED] A declined `recommended` capability contributes zero
-  components and does not stop the remaining scope being proposed. (FR-003, US1
-  AS4, D)
+  components and does not stop the remaining scope being proposed.
+  (FR-003, US1 AS4, SC-004, D)
 - [ ] **T015** [RED] A declined `required` capability leaves the plan blocked, keeps
-  strength `required`, stays listed, and carries a next action. (FR-005, US1 AS5, E)
+  strength `required`, stays listed, and carries a next action.
+  (FR-005, US1 AS5, SC-004, E)
 - [ ] **T016** [RED] A satisfied capability contributes zero install actions while
-  still rendering as satisfied. (FR-004, US1 AS3, C)
+  still rendering as satisfied, with its verification basis reachable.
+  (FR-004, US1 AS3, SC-003, C)
 - [ ] **T017** [RED] An `optional` capability is presented and contributes nothing.
   (FR-003, owner decision 2)
 - [ ] **T018** [RED] A capability with `undetermined` evidence contributes nothing,
   and the missing evidence is named. (FR-003)
 - [ ] **T019** [RED] A needed capability projecting to no catalog component is
-  reported `unsupported` -- never dropped, never reported satisfied. (edge case)
+  reported `unsupported`, naming the missing coverage -- never dropped, never
+  reported satisfied. (FR-023)
 - [ ] **T020** [RED] Every exclusion carries WHICH reason it was. A test that only
   counts components cannot tell a correct exclusion from an accidental one.
 - [ ] **T021** [RED] Determinism, asserted on ORDER as well as membership: the same
@@ -97,8 +101,19 @@ test was seen RED, then GREEN. Nothing is marked done that was not observed.
   resolved coordinate/version, and verification basis, each sourced from the
   control plane rather than recomputed. (FR-010, SC-001)
 - [ ] **T027** [GREEN] Implement both presentations in `guided_setup.py`.
-- [ ] **T028** [RED] The empty-but-unblocked scope renders "nothing to do" and
-  demands no approval. (edge case)
+- [ ] **T027a** [RED] The derived plan is reachable through the NORMAL journey:
+  invoking `seshat integrations setup` with the derived selector produces the
+  capability-oriented plan, in `tests/unit/test_guided_setup_cli.py`. A library
+  function that no CLI path reaches does not satisfy this -- today the derived plan
+  has no consumer outside its own unit tests, which is the gap. (FR-001)
+- [ ] **T027b** [GREEN] Wire the derived selection path in
+  `src/seshat/cli/commands/integrations.py` so planning is reachable without
+  `--apply`. (FR-001)
+- [ ] **T028** [RED] The empty-but-unblocked scope renders "nothing to do", demands
+  no approval, and does not refuse for want of one. (FR-024)
+- [ ] **T028a** [RED] The derived path's EXIT CODES distinguish "needs setup" from
+  "nothing to do". T023 asserts the run is write-free and network-free and T047
+  covers the profile path's codes; neither covers this one. (US1 AS7)
 
 **Independent test for US1**: plan two projects of different shape and prove the
 proposed scopes differ, that every exclusion is attributable, that the rendering
@@ -149,7 +164,9 @@ execute, execute -- with every caller-controlled signal present each time.
   is untouched. (FR-017, US3 AS2, SC-009, J)
 - [ ] **T042** [RED] A retry of a materially unchanged approved scope reinstalls
   zero already-satisfied components -- asserted on the runner's calls -- and
-  requires no new approval. (FR-018, US3 AS3, SC-010, K)
+  requires no new approval. "Materially unchanged" is spec 154's definition, read
+  from that spec; this feature MUST NOT re-derive a local one.
+  (FR-018, US3 AS3, SC-010, K)
 - [ ] **T043** [RED] A narrower derived apply after a broader profile-based run
   preserves the out-of-scope entries in the existing state record and does not
   label the derived scope as a curated profile. (FR-019, US3 AS4, SC-011)
@@ -193,7 +210,9 @@ run-level result, and the reinstall count separately.
 ## Dependencies
 
 - Phase 2 (US1) depends only on Phases 0-1. It is the MVP: a read-only,
-  capability-oriented change plan that installs nothing.
+  capability-oriented change plan that installs nothing. T027a/T027b (reachability)
+  are part of that MVP, not a later polish step: without them the plan is a library
+  call, which is what FR-001 exists to rule out.
 - Phase 3 (US2) depends on Phase 2 producing the scope an approval binds to.
 - Phase 4 (US3) depends on Phase 3 producing an execution to report on.
 - Phase 5 can run alongside Phases 2-4; T046 is most useful written early, since it
@@ -207,6 +226,8 @@ run-level result, and the reinstall count separately.
 - T025/T026 (presentation) are independent of T011-T023 (scope) once `DerivedScope`
   exists.
 - T029-T035 are independent of one another; each builds its own approval fixture.
+- T027a and T028a both exercise the CLI path and are best written together, after
+  T024 exists and before T036 adds execution.
 - T046-T048 touch different test files and are fully parallel.
 
 ## Implementation strategy

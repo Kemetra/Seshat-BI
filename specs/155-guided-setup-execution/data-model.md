@@ -62,6 +62,17 @@ Rules:
   vocabulary, matching what the compatibility facade already does -- reading only
   install rows would render an unverified component as done.
 
+## Spec entity -> design type
+
+The spec's Key Entities map onto the types above rather than introducing parallel
+ones, so a reader does not have to guess which is which:
+
+| Spec entity | Design type |
+|---|---|
+| Derived provisioning scope | `DerivedScope` |
+| Proposed change set | the user-facing projection of `DerivedScope` (its rows plus the per-capability `proposed_action` on `CapabilityStatus`); no separate type |
+| Guided setup result | `GuidedSetupResult` |
+
 ## Referenced, not redefined
 
 - **Capability, requirement strength, derived plan, the capability-to-component
