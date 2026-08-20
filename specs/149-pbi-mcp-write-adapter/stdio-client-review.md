@@ -1,6 +1,6 @@
 # Adversarial review — the #660 stdio client (branch `fix/660-mcp-stdio-client`)
 
-**Date**: 2026-08-20 · **Verdict**: BLOCK · **Reviewer**: adversarial external agent (Opus),
+**Date**: 2026-08-20 · **Verdict**: BLOCK — **all findings now addressed, see Disposition** · **Reviewer**: adversarial external agent (Opus),
 findings independently re-verified against the tree before acceptance.
 
 The three new modules (`protocol.py`, `session.py`, `vendor_ops.py`) are sound and the vendor
@@ -101,8 +101,40 @@ rather than issuing a no-op that reports success.
   19 fail; cross-check deleted: 1; deadline check deleted: 1).
 - No unmigrated single-token operation ids survive in `docs/`, `specs/`, or `contracts/`.
 
-## Disposition
+## Disposition — resolved 2026-08-20
 
-The branch is **not** merge-ready and the PR is not opened. C1 and H1 need an owner ruling on
-the folder-vs-file target contract (a gate input). C2 stays deferred by ratified decision but
-must become a loud refusal. H2/H3/H5/M1-M3 are ordinary defects fixable without a ruling.
+Every finding is closed. Full unit lane: **5873 passed, 0 failed**.
+
+| Finding | Resolution |
+|---|---|
+| **C1** | Ruled: the allowlist declares the **FOLDER**. `_path_blockers` now accepts a directory (`exists()` not `is_file()`), containment unchanged. Rejected deriving the folder from a file path — that invents a path the approval never named. **Swept all four readers**, not just the gate. |
+| **C2** | **Stays deferred** by ratified decision (`spec.md:165`, `:228`). Supplying `definitions` from anywhere but an approved record is the fail-open the spec forbids. Tracked for the companion spec. |
+| **H1** | `_effect_blockers` treats a folder target's subtree as in-scope; an escape outside it is still refused. Pinned in both directions. |
+| **H2** | Reads moved to a daemon thread + queue, so the deadline binds a **silent** server. Verified: a sleep-forever child raises at 3.0s (previously blocked indefinitely). |
+| **H3** | `read_line` wraps `OSError`; `_converse` catches `OSError`/`ValueError`/`UnicodeDecodeError`. An escaping exception meant no evidence record (FR-015). |
+| **H4** | Eight unevidenced `Get*`/`List*` verbs REMOVED from `READ_OPERATIONS` so they fail closed. The docstring now states its provenance exactly, and a test pins the read set to the 30 server-evidenced verbs. |
+| **H5** | A second daemon thread drains stderr into a bounded buffer. Verified: 300KB of stderr no longer delays the stdout line. |
+| **M1** | `orchestrate` derives `mutation_attempted` from the runner. A read-pair test at orchestrate level was the missing coverage. |
+| **M2** | New `SessionStalled` subclass; dispatch is on the TYPE, never on message substrings. |
+| **M3** | `_trace` records `outcome.error` when a JSON-RPC error frame leaves `raw_text` empty. |
+
+### Found while verifying, beyond the review
+
+**The launcher was never resolved.** `build_argv` emitted a bare `npx`, but on Windows that is
+`npx.cmd` and `Popen(shell=False)` does not apply PATHEXT — so **every real run** reported
+`BLOCKER_RUNTIME_MISSING` while 444 unit tests passed, because all of them inject a session
+factory and none executes the argv. Now resolved via `shutil.which`.
+
+This is the review's own lesson one level deeper: the tests could not see it, and neither could
+the reviewer. Only running the shipped runner against the real vendor exposed it.
+
+### End-to-end verification against the REAL vendor
+
+- **Read** (`measure_operations.List`, folder target): `succeeded=True`,
+  `mutation_attempted=False`, no flush issued, **0 bytes changed**.
+- **Write** (`database_operations.ExportToTmdlFolder`): executed and **changed 11 files** —
+  and `succeeded=False` with `PBIMCP-RUN-06`, because that verb self-reports
+  `readOnlyHint: true` while writing. The cross-check caught the vendor contradicting itself
+  and refused to claim success. Fail-closed, on real data.
+- Redaction confirmed live: a session GUID in the transcript was scrubbed to
+  `[REDACTED:GUID …]`.
