@@ -23,13 +23,25 @@
 #     - target_id: <declared identity used as --target>
 #       path: <repo-relative path to the artifact>
 #       operations:                      # the closed set approved for THIS target
-#         - <operation_id used as --operation>
+#         - <vendor_tool>.<Operation>    # e.g. measure_operations.Update
+#
+# OPERATION IDS ARE (tool, operation) PAIRS -- corrected 2026-08-20 (issue #660).
+# The vendor runtime is an MCP stdio server exposing 21 coarse dispatcher tools,
+# each taking a `request` object whose `operation` field selects the action. It
+# has no `--operation` flag; the pre-#660 single-token form encoded a CLI flag
+# that never existed. Both halves are validated against the probed vendor surface
+# in `pbi_mcp_adapter.vendor_ops`, and an unknown tool OR operation is refused
+# before the runtime is launched.
+#
+# Write operations additionally require an `ExportToTmdlFolder` flush to reach
+# disk -- the adapter issues that itself and it must NOT be listed here as a
+# separately approved operation (see research.md R8).
 #
 # `target_id` is matched as a WHOLE TOKEN against the approval note, so an entry
 # named `sales_model` is not authorized by an approval naming `sales_model_v2`
 # (or vice versa). Keep ids distinct under that rule.
 #
-# `operations` is how FR-011a/FR-011c are enforced: the requested `--operation` is
+# `operations` is how FR-011a/FR-011c are enforced: the requested operation is
 # RESOLVED against this set rather than accepted as free-form input, and an
 # operation listed under one target does not authorize another. An entry that
 # OMITS `operations` permits nothing -- a missing key must never read as
