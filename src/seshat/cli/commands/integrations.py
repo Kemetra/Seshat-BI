@@ -15,6 +15,12 @@ Three gates, each independent, and none of them implied by another:
 prompt, no banner -- so a consumer can pipe it straight into a parser. That also
 means JSON mode never prompts: a machine has no answer to give.
 
+`--derived` is a fourth, ORTHOGONAL concern (spec 155). It changes WHAT is
+selected -- the components this project's committed evidence needs, instead of a
+curated profile -- and changes nothing about whether coordinates are resolved,
+whether anything is written, or who may authorize it. The profile default is
+untouched: `DEFAULT_PROFILE` keeps its value and `--profile` keeps its behavior.
+
 `--repo` is validated rather than trusted, exactly as `seshat mcp` validates it:
 this verb writes into `.seshat/integrations/`, and a directory that is not a
 Seshat workspace is refused by name instead of being seeded with one.
@@ -84,6 +90,96 @@ def _approved(args: Namespace, rendered: str) -> bool:
     return _prompted(rendered)
 
 
+def _derived_main(args: Namespace, root: Path) -> int:
+    """The guided journey: derived scope -> committed approval -> installer.
+
+    Planning is always safe and always available. Execution is reached only with
+    explicit intent AND a committed named-human approval covering the exact
+    derived scope; a blocked plan is refused before authority is even consulted,
+    because a blocker is about the project's evidence rather than about who may
+    act on it.
+    """
+    from seshat.integrations import guided_setup
+
+    as_json = getattr(args, "as_json", False)
+    scope = guided_setup.derive_scope(root)
+    readiness: dict[str, str] = {}
+    next_actions: dict[str, str] = {}
+
+    # Order is the requirement, not a detail: a blocked plan MUST NOT execute
+    # whatever an approval says, so authority is not even consulted for one. A
+    # gate asked a question it must ignore the answer to is a gate that will one
+    # day be believed.
+    authorized, next_action = (
+        _authorized(root, scope.component_ids)
+        if scope.proposes_change and not scope.blocked
+        else (False, "")
+    )
+
+    if _approved(args, "") and not scope.blocked and scope.proposes_change:
+        if not authorized:
+            print(
+                "error: provisioning needs a committed named-human approval -- "
+                f"{next_action}",
+                file=sys.stderr,
+            )
+            return 2
+        outcome = _derived_apply(args, root, scope)
+        if outcome is None:
+            return 2
+        readiness, next_actions = guided_setup.readiness_from(root, scope, outcome)
+
+    statuses = guided_setup.capability_statuses(
+        scope,
+        approval_met=authorized,
+        readiness=readiness,
+        next_actions=next_actions,
+    )
+    print(
+        guided_setup.render_json(scope, statuses)
+        if as_json
+        else guided_setup.render_text(scope, statuses)
+    )
+    if scope.blocked:
+        # A blocker is not a failure to run; it is work a human must do. It shares
+        # the "needs action" exit code rather than the usage-error one.
+        print(f"blocked: {scope.blockers[0]}", file=sys.stderr)
+        return 1
+    return 1 if _derived_needs_action(scope, readiness) else 0
+
+
+def _derived_needs_action(outcome_scope, readiness: dict[str, str]) -> bool:
+    """Whether anything is still outstanding for the derived scope."""
+    from seshat.integrations import guided_setup
+
+    if readiness:
+        return any(state != guided_setup.READY for state in readiness.values())
+    return outcome_scope.proposes_change
+
+
+def _derived_apply(args: Namespace, root: Path, scope) -> object | None:
+    """Delegate the authorized scope to the existing installer, or refuse."""
+    from seshat.integrations.catalog import UnknownProfile, component
+    from seshat.integrations_setup import apply_profile, live_resolvers
+
+    if not getattr(args, "refresh", False):
+        print(
+            "error: --apply needs --refresh so every component resolves to an "
+            "exact version, tag, or commit before anything is installed",
+            file=sys.stderr,
+        )
+        return None
+    try:
+        return apply_profile(
+            root,
+            components=tuple(component(cid) for cid in scope.component_ids),
+            resolvers=live_resolvers(),
+        )
+    except UnknownProfile as exc:  # pragma: no cover - scope is catalog-derived
+        print(f"error: {exc}", file=sys.stderr)
+        return None
+
+
 def _workspace(repo: str) -> Path | None:
     from seshat.workspace_root import WorkspaceRootError, resolve_workspace_root
 
@@ -107,6 +203,9 @@ def integrations_main(args: Namespace) -> int:
     root = _workspace(args.repo)
     if root is None:
         return 2
+
+    if getattr(args, "derived", False):
+        return _derived_main(args, root)
 
     profile = getattr(args, "profile", None) or DEFAULT_PROFILE
     as_json = getattr(args, "as_json", False)

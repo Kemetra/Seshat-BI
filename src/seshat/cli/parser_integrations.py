@@ -35,6 +35,15 @@ def add_integrations_parser(sub: argparse._SubParsersAction) -> None:
         ),
     )
     setup.add_argument(
+        "--derived",
+        action="store_true",
+        help=(
+            "select the components this project's committed evidence actually "
+            "needs, instead of a curated profile; the plan is capability-oriented "
+            "and installs nothing without a committed named-human approval"
+        ),
+    )
+    setup.add_argument(
         "--refresh",
         action="store_true",
         help=(
