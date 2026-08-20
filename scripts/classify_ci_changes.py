@@ -37,20 +37,36 @@ _CONTRACTS_ONLY = ChangeDepth(code_changed=False, contracts_required=True)
 _FULL_SUITE = ChangeDepth(code_changed=True, contracts_required=True)
 
 
+def _is_issue_template(path: str, suffix: str) -> bool:
+    if not path.startswith(".github/issue_template/"):
+        return False
+    return suffix == ".md"
+
+
+def _is_doc_asset(path: str, suffix: str) -> bool:
+    if not path.startswith("docs/"):
+        return False
+    return suffix in _DOC_ASSET_SUFFIXES
+
+
+def _is_doc_text(path: str, suffix: str) -> bool:
+    if not path.startswith("docs/"):
+        return False
+    return suffix in _DOC_TEXT_SUFFIXES
+
+
 def _classify_path(raw_path: str) -> ChangeDepth:
     path = raw_path.replace("\\", "/").lstrip("/").lower()
     suffix = Path(path).suffix
 
     if path == ".github/pull_request_template.md":
         return _METADATA_ONLY
-    if path.startswith(".github/issue_template/"):
-        if suffix == ".md":
-            return _METADATA_ONLY
-    if path.startswith("docs/"):
-        if suffix in _DOC_ASSET_SUFFIXES:
-            return _METADATA_ONLY
-        if suffix in _DOC_TEXT_SUFFIXES:
-            return _CONTRACTS_ONLY
+    if _is_issue_template(path, suffix):
+        return _METADATA_ONLY
+    if _is_doc_asset(path, suffix):
+        return _METADATA_ONLY
+    if _is_doc_text(path, suffix):
+        return _CONTRACTS_ONLY
     if path in _ROOT_CONTRACT_DOCS:
         return _CONTRACTS_ONLY
     return _FULL_SUITE
