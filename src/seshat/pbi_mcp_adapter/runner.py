@@ -30,7 +30,8 @@ going through the orchestration entry.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import os
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -145,9 +146,99 @@ def build_argv(*, read_only: bool) -> list[str]:
     ]
 
 
+#: The ONLY variables forwarded to the vendor process.
+#:
+#: Deny by default, EXACT keys, and deliberately no prefix rules. Measured rather
+#: than guessed: `npx --yes cowsay@1.6.0 hi` fetches AND executes a real package
+#: with only these present, so nothing here is speculative and nothing is missing
+#: for the general `npx` case.
+#:
+#: This is a SIBLING of `dagster_adapter.environment.allowed_child_environment`,
+#: not a reuse of it. That helper forwards `DATABASE_URL`, `ANALYTICS_DB_*` and
+#: `PYTHONPATH` by design, because it feeds a governed Seshat connection to our own
+#: code. The vendor runtime is external, unforked and a public preview (ADR 0018) --
+#: handing it a database credential would be worse than inheriting one by accident,
+#: because it would look deliberate.
+_VENDOR_ENV_KEYS = frozenset(
+    {
+        # Executable resolution.
+        "PATH",
+        "PATHEXT",
+        "COMSPEC",
+        # Windows runtime.
+        "SYSTEMROOT",
+        "WINDIR",
+        # npm/npx cache and config discovery, so repeat runs reuse the cache
+        # rather than re-downloading (and stay quiet about it).
+        "APPDATA",
+        "LOCALAPPDATA",
+        "USERPROFILE",
+        "HOME",
+        # Scratch space for the package extract.
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        # TLS trust: whether the certificate chain VERIFIES. These do not say
+        # which host to connect to -- that is the routing block below, and
+        # conflating the two is what left a proxy-only network unable to fetch.
+        "SSL_CERT_FILE",
+        "REQUESTS_CA_BUNDLE",
+        "NODE_EXTRA_CA_CERTS",
+        # Proxy ROUTING, so `npx` reaches the registry at all where egress is
+        # proxy-only. npm honours these directly (`using-npm/config.md`), and
+        # without them the fetch attempts a direct connection and fails before
+        # the vendor runtime ever starts.
+        #
+        # These are forwarded VERBATIM, including any `user:pw@` userinfo. That
+        # is deliberate and is not a hole in #658: an authenticated proxy is the
+        # credential for the network hop this subprocess is about to make on the
+        # caller's behalf, unlike `DATABASE_URL`, which the vendor has no business
+        # seeing at all. Stripping the userinfo would not be safer -- it would
+        # route to the proxy and earn a 407, so there is no sanitized form that
+        # still works. Deny-by-default with exact keys is intact; this adds three
+        # named keys, not a parsing rule.
+        #
+        # Three entries cover six variables: the filter compares `key.upper()`,
+        # so the Unix lowercase forms match, and the emitted dict keeps the
+        # SOURCE spelling so `http_proxy` reaches the child as `http_proxy`.
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "NO_PROXY",
+    }
+)
+
+
+def allowed_vendor_environment(source: Mapping[str, str]) -> dict[str, str]:
+    """The least-privilege environment for the vendor runtime.
+
+    Everything not in :data:`_VENDOR_ENV_KEYS` is dropped -- including every
+    credential-bearing variable that happens to be set in the parent for unrelated
+    reasons. Comparison is case-insensitive because Windows environment keys are.
+
+    Note what is NOT forwarded and why it matters: no `DATABASE_URL`, no
+    `ANALYTICS_DB_*`, no `SESHAT_*`, no cloud or token variables. The vendor needs
+    none of them, and this adapter never passes a credential to it -- the Power BI
+    connection is the vendor's own concern, discovered from the local Desktop
+    session, not something Seshat hands over.
+    """
+    return {
+        key: value for key, value in source.items() if key.upper() in _VENDOR_ENV_KEYS
+    }
+
+
 def _default_session_factory(*, argv: list[str], cwd: Path) -> session.McpSession:
-    """The real session. Kept tiny so tests can substitute a fake wholesale."""
-    transport = session.SubprocessTransport(argv, cwd)
+    """The real session. Kept tiny so tests can substitute a fake wholesale.
+
+    The EXPLICIT environment is the #658 guard, carried across #660's move from
+    a one-shot `subprocess.run` to a long-lived stdio session. The transport
+    spawns the vendor either way, so the allowlist has to be applied HERE or the
+    child silently inherits all ~97 parent variables again -- credentials
+    included. `SubprocessTransport` no longer accepts an implicit inherit, so
+    forgetting this is a TypeError rather than a quiet leak.
+    """
+    transport = session.SubprocessTransport(
+        argv, cwd, allowed_vendor_environment(os.environ)
+    )
     return session.McpSession(transport, deadline_seconds=RUN_TIMEOUT_SECONDS)
 
 

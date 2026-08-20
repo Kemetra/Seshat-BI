@@ -7,6 +7,7 @@ server so the sequencing rules are pinned without a live run.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -69,6 +70,17 @@ def _ok_reply(request_id: int, message: str, read_only: bool = True) -> dict:
             "_meta": {"annotations": {"readOnlyHint": read_only}},
         },
     }
+
+
+def _child_env() -> dict[str, str]:
+    """The ambient environment, explicitly.
+
+    These children are `sys.executable` running a local script -- not the vendor
+    -- so they need a working Python environment rather than the vendor
+    allowlist. `SubprocessTransport` requires `env` precisely so that choice is
+    stated at the call site instead of defaulting to an inherit (#658).
+    """
+    return dict(os.environ)
 
 
 def test_handshake_sends_initialize_then_the_initialized_notification():
@@ -184,7 +196,7 @@ def test_the_transport_read_timeout_also_raises_STALLED(tmp_path: Path) -> None:
     child = tmp_path / "silent.py"
     child.write_text(chr(10).join(["import time", "time.sleep(60)"]), encoding="utf-8")
     transport = session.SubprocessTransport(
-        [sys.executable, "-u", str(child)], tmp_path, read_timeout=2
+        [sys.executable, "-u", str(child)], tmp_path, _child_env(), read_timeout=2
     )
     try:
         with pytest.raises(session.SessionStalled):
@@ -249,7 +261,7 @@ def test_a_full_queue_cannot_deadlock_teardown(tmp_path: Path) -> None:
     ]
     child.write_text("\n".join(lines) + "\n", encoding="utf-8")
     transport = session.SubprocessTransport(
-        [sys.executable, "-u", str(child)], tmp_path, read_timeout=10
+        [sys.executable, "-u", str(child)], tmp_path, _child_env(), read_timeout=10
     )
     try:
         for _ in range(5):
@@ -278,7 +290,7 @@ def test_the_pump_threads_are_daemons(tmp_path: Path) -> None:
         "\n".join(["import time", "time.sleep(5)"]) + "\n", encoding="utf-8"
     )
     transport = session.SubprocessTransport(
-        [sys.executable, "-u", str(child)], tmp_path, read_timeout=1
+        [sys.executable, "-u", str(child)], tmp_path, _child_env(), read_timeout=1
     )
     try:
         assert transport._readers, "no pump threads were started"

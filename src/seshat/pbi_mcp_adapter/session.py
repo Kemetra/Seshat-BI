@@ -227,10 +227,22 @@ class SubprocessTransport:
         self,
         argv: list[str],
         cwd: Path,
-        env: dict[str, str] | None = None,
+        env: dict[str, str],
         *,
         read_timeout: float = DEFAULT_DEADLINE_SECONDS,
     ) -> None:
+        """Spawn the child with an EXPLICIT environment.
+
+        ``env`` is REQUIRED, deliberately. It defaulted to ``None``, which
+        ``Popen`` reads as "inherit the whole parent environment" -- so a caller
+        that simply forgot the argument handed the external vendor preview every
+        variable in the parent, credentials included, and #658's allowlist was
+        bypassed in silence. A required parameter turns that omission into a
+        TypeError at the call site instead of a leak at runtime.
+
+        A caller that genuinely wants the ambient environment passes
+        ``dict(os.environ)`` and says so.
+        """
         self._read_timeout = read_timeout
         self._closed = False
         # BOUNDED: vendor output is untrusted, and an unbounded queue fed faster
