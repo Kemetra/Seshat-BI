@@ -215,7 +215,11 @@ crashed mid-run and left a fix reverted under its own new docstring).
 
 ## Sequencing
 
-This branch is cut from `main` at `b024443e`, which does not yet include PR #672
-(open, green). #672 modifies `orchestrate.py` (`_snapshot` / `_list_files`), so a
-conflict there is expected. Rebase onto `main` once #672 merges rather than
-resolving it at PR time.
+This branch is **rebased onto `663-git-read-and-ignored-scope`** (PR #672, open and
+green), not onto `main`. #672 rewrites `_snapshot` / `_list_files` in
+`orchestrate.py` — the same function this slice extends — so building on top of it
+avoids the conflict rather than resolving it twice.
+
+Consequence: **#672 must merge before this one.** If #672 is ever abandoned, this
+branch needs re-basing onto `main` and the baseline-capture hook re-sited against
+the older `_snapshot`.
