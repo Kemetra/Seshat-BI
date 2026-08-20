@@ -28,6 +28,7 @@ Three review findings shaped this module:
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
@@ -118,6 +119,10 @@ class RunEvidence:
     mutation_attempted: bool
     blockers: tuple[str, ...] = field(default_factory=tuple)
     rollback_guidance: tuple[str, ...] = field(default_factory=tuple)
+    #: (check, reason) for every validator that did NOT run. A record showing
+    #: only what passed invites a reader to assume everything was checked
+    #: (issue #661).
+    checks_skipped: tuple[tuple[str, str], ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         if self.outcome not in OUTCOMES:
@@ -149,6 +154,10 @@ class RunEvidence:
             "mutation_attempted": self.mutation_attempted,
             "blockers": [redact(blocker) for blocker in self.blockers],
             "rollback_guidance": [redact(line) for line in self.rollback_guidance],
+            "checks_skipped": [
+                {"check": redact(check), "reason": redact(reason)}
+                for check, reason in self.checks_skipped
+            ],
         }
 
 
@@ -162,10 +171,27 @@ def _payload_strings(payload: dict[str, object]) -> list[tuple[str, str]]:
         if isinstance(value, str):
             found.append((key, value))
         elif isinstance(value, list):
+            found.extend(_list_strings(key, value))
+    return found
+
+
+def _list_strings(key: str, value: list) -> list[tuple[str, str]]:
+    """Strings inside a list, including those one level down in a dict.
+
+    ``checks_skipped`` serializes as a list of ``{check, reason}`` objects, and
+    a scan that only saw top-level strings would let a secret in a reason reach
+    the record unscanned -- the same fail-open shape as scanning only the
+    rendered JSON.
+    """
+    found: list[tuple[str, str]] = []
+    for index, item in enumerate(value):
+        if isinstance(item, str):
+            found.append((f"{key}[{index}]", item))
+        elif isinstance(item, dict):
             found.extend(
-                (f"{key}[{index}]", item)
-                for index, item in enumerate(value)
-                if isinstance(item, str)
+                (f"{key}[{index}].{sub_key}", sub_value)
+                for sub_key, sub_value in item.items()
+                if isinstance(sub_value, str)
             )
     return found
 
@@ -216,19 +242,38 @@ def _redact_payload(payload: dict[str, object]) -> tuple[str, ...]:
     applied: set[str] = set()
 
     def scrub(value: object) -> object:
+        """Scrub one value, recursing through every container shape we emit.
+
+        The container branches are delegated so this stays one decision per
+        line: ``checks_skipped`` added dicts-inside-lists (issue #661), and a
+        walker that grew a branch per shape would drift past the complexity
+        gate exactly where it must stay easy to audit.
+        """
         if isinstance(value, str):
             cleaned, labels = scrub_secret_shaped(value)
             applied.update(labels)
             return cleaned
-        if isinstance(value, list):
-            return [scrub(item) for item in value]
-        if isinstance(value, tuple):
-            return tuple(scrub(item) for item in value)
-        return value
+        return _scrub_container(value, scrub)
 
     for key, value in list(payload.items()):
         payload[key] = scrub(value)
     return tuple(sorted(applied))
+
+
+def _scrub_container(value: object, scrub: Callable[[object], object]) -> object:
+    """Rebuild a container with every member scrubbed, preserving its type.
+
+    A non-container is returned unchanged. Type is preserved rather than
+    normalized to a list because the payload is compared byte-for-byte between
+    runs, and a tuple silently becoming a list would change the rendered JSON.
+    """
+    if isinstance(value, list):
+        return [scrub(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(scrub(item) for item in value)
+    if isinstance(value, dict):
+        return {key: scrub(item) for key, item in value.items()}
+    return value
 
 
 def render(record: RunEvidence) -> str:

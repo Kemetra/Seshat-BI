@@ -205,6 +205,29 @@ refusal -- writes exactly one score-free evidence record to
 `.seshat/pbi-mcp-write-evidence.json` (the latest run) plus an append-only history at `.seshat/pbi-mcp-write-evidence.jsonl` that retains every earlier run, with an intent record landed *before* the
 mutation so a crash still leaves a trace.
 
+### What post-write validation checks
+
+| Validator | Runs when | On failure |
+|-----------|-----------|------------|
+| `semantic-check --require-inputs` | always | blocks with rollback guidance -- but only for findings THIS write introduced |
+| `pbir-validate-bindings` | a report's `definition.pbir` names the mutated model | blocks when a binding is unresolved |
+| `value-check` | a metric contract pins an expected value **and** a data leg resolves | blocks on a value outside tolerance |
+
+The semantic corpus is repo-wide and cannot be narrowed (`semantic-check` anchors
+discovery on the git toplevel and refuses a subdirectory), so findings are attributed by
+diffing against a baseline captured *before* the mutation. Findings that already existed
+are reported in `checks_skipped` with their reason and do **not** block: rolling this write
+back cannot fix an error in a model it never touched.
+
+Two fail-closed rules keep that diff trustworthy. A baseline that could not be captured is
+a blocker (`PBIMCP-VAL-04`), never an empty baseline. And a non-zero validator exit the
+baseline cannot attribute still blocks -- narrowing blame must never launder an unexplained
+failure into a pass.
+
+A validator that could not run -- no data leg, an unreadable `definition.pbir`, a crashed
+validator -- is likewise recorded with its reason. **An empty `checks_skipped` means nothing
+was skipped, not that nothing was checked.**
+
 ### Known blocked scope
 
 **FR-011b** (verifying the definition against a content hash recorded at approval time)
