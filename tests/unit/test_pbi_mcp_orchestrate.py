@@ -22,7 +22,13 @@ pytestmark = pytest.mark.unit
 TARGET = "sales_model"
 #: A (tool, operation) PAIR, per #660: the vendor dispatches on both, and the
 #: pre-#660 single token encoded a `--operation` CLI flag that never existed.
-OPERATION = "measure_operations.Update"
+#:
+#: `Rename`, not `Update`: the server documents Create/Update as requiring a
+#: `Definitions` payload, which this adapter is forbidden to invent, so those
+#: pairs are REFUSED with PBIMCP-RUN-09 (re-review C2). `Rename` uses
+#: `RenameDefinitions` and is a genuine write needing no approved definition, so
+#: it exercises the connect/operate/flush path honestly.
+OPERATION = "measure_operations.Rename"
 #: Under `*.SemanticModel/definition/`, because that is the ONLY corpus
 #: `seshat semantic-check` discovers. A fixture at `models/*.tmdl` is never
 #: examined by the validator, so post-write validation could not really pass --
@@ -116,7 +122,7 @@ def _mcp(returncode: int = 0, mutates: str | None = None):
                 ok=ok,
                 # The vendor annotates per call: reads/connect/flush true, the
                 # mutating operation false.
-                read_only_hint=operation != "Update",
+                read_only_hint=operation != "Rename",
                 payload=None,
                 raw_text="ok",
                 error=None if ok else "the vendor reported isError",
@@ -155,7 +161,7 @@ def _mcp_session(on_flush=None, *, returncode: int = 0, on_call=None):
             ok = returncode == 0
             return protocol.ToolOutcome(
                 ok=ok,
-                read_only_hint=operation != "Update",
+                read_only_hint=operation != "Rename",
                 payload=None,
                 raw_text="ok" if ok else "",
                 error=None if ok else "the vendor reported isError",

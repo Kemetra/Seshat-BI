@@ -63,6 +63,7 @@ BLOCKER_VENDOR_REFUSED = "PBIMCP-RUN-05"
 BLOCKER_READONLY_VIOLATION = "PBIMCP-RUN-06"
 BLOCKER_UNKNOWN_OPERATION = "PBIMCP-RUN-07"
 BLOCKER_FLUSH_FAILED = "PBIMCP-RUN-08"
+BLOCKER_PAYLOAD_UNAVAILABLE = "PBIMCP-RUN-09"
 
 BLOCKER_DETAIL: dict[str, str] = {
     BLOCKER_GATE_NOT_CLEARED: (
@@ -89,6 +90,11 @@ BLOCKER_DETAIL: dict[str, str] = {
     BLOCKER_FLUSH_FAILED: (
         "the operation mutated the in-memory model but the TMDL export failed, "
         "so the change never reached disk; indeterminate, never a success"
+    ),
+    BLOCKER_PAYLOAD_UNAVAILABLE: (
+        "the operation requires an approved definition payload, which this "
+        "adapter is forbidden to invent and no approved_definitions record "
+        "supplies; refused rather than executed as a no-op"
     ),
     BLOCKER_RUNTIME_UNEXPLAINED: (
         "the vendor runtime failed without naming a cause; treated as "
@@ -224,6 +230,29 @@ def invoke(
             blockers=(BLOCKER_UNKNOWN_OPERATION,),
         )
 
+    # LOUD refusal, not a hollow success. The server documents Create/Update as
+    # requiring a `Definitions` block; issued from a verb alone they mutate
+    # nothing, so executing one would report success for a no-op -- and after
+    # #660's other fixes this path is REACHABLE, where before it was not.
+    #
+    # This adapter is forbidden to invent the definition (spec.md: "the adapter
+    # never invents the definition") and the `approved_definitions[]` record that
+    # would supply one is deferred to a companion spec. So the honest answer is a
+    # refusal naming the missing input, never a run that certifies nothing
+    # happened (issue #660 re-review, C2).
+    if vendor_ops.requires_payload(tool, operation):
+        return RunResult(
+            exit_code=1,
+            output=(
+                f"refused: {tool}.{operation} requires an approved definition "
+                "payload. This adapter never invents a definition, and no "
+                "approved_definitions record supplies one (FR-011b, deferred to a "
+                "companion spec). Executing it would report success for a no-op."
+            ),
+            mutation_attempted=False,
+            blockers=(BLOCKER_PAYLOAD_UNAVAILABLE,),
+        )
+
     argv = build_argv(read_only=read_only)
     # The standing prohibition, re-checked on the argv actually about to run.
     # Belt and braces: build_argv cannot add the flag, but a future edit could.
@@ -274,7 +303,9 @@ def _converse(
     Split out of :func:`invoke` so the precondition checks and the conversation
     are each small enough to read whole.
     """
-    writes = vendor_ops.is_write(operation)
+    # Classified against THIS tool, not globally: a verb evidenced as a read
+    # under one tool says nothing about another (re-review H4).
+    writes = vendor_ops.is_write(operation, tool)
     transcript: list[str] = []
     blockers: list[str] = []
     attempted = False
@@ -338,7 +369,7 @@ def _converse(
             mutation_attempted=attempted,
             blockers=(BLOCKER_RUNTIME_UNEXPLAINED,),
         )
-    except (OSError, ValueError, UnicodeDecodeError) as exc:
+    except (OSError, ValueError) as exc:  # UnicodeDecodeError is a ValueError
         # NEVER let this escape as a traceback (review H3). An exception leaving
         # `invoke` means no RunResult, so `orchestrate` never reaches `_terminate`
         # and writes NO evidence record -- violating FR-015 on the one path where

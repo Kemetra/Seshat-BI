@@ -48,6 +48,10 @@ EXPECTED_SERVER_NAME = "powerbi-modeling-mcp"
 #: Sized for a model operation, not a git command (research R4).
 DEFAULT_DEADLINE_SECONDS = 900
 
+#: Ceiling on undrained stdout lines. Bounds memory against a chatty server
+#: without truncating anything: a full queue back-pressures the reader.
+MAX_QUEUED_LINES = 4096
+
 
 class SessionError(RuntimeError):
     """The session could not be established or a call could not be completed."""
@@ -109,7 +113,11 @@ class McpSession:
         started = time.monotonic()
         while True:
             if time.monotonic() - started > self._deadline:
-                raise SessionError(
+                # SessionStalled, not a bare SessionError: this IS a timeout, and
+                # the caller distinguishes the two by TYPE. Raising the base class
+                # here reported a stall as "failed without naming a cause"
+                # (re-review M2, the half that remained open).
+                raise SessionStalled(
                     f"no reply to request {request_id} within {self._deadline}s"
                 )
             line = self._transport.read_line()
@@ -225,7 +233,13 @@ class SubprocessTransport:
     ) -> None:
         self._read_timeout = read_timeout
         self._closed = False
-        self._stdout_q: queue.Queue[bytes | None] = queue.Queue()
+        # BOUNDED: vendor output is untrusted, and an unbounded queue fed faster
+        # than we drain is a memory-exhaustion path. A full queue back-pressures
+        # the pump thread, which back-pressures the child's stdout pipe -- the
+        # same flow control a plain blocking read would have had.
+        self._stdout_q: queue.Queue[bytes | None] = queue.Queue(
+            maxsize=MAX_QUEUED_LINES
+        )
         self._stderr_parts: list[bytes] = []
         self._proc = subprocess.Popen(  # noqa: S603 - fixed argv shape, no shell
             resolve_launcher(argv),
@@ -253,7 +267,12 @@ class SubprocessTransport:
         except (OSError, ValueError):  # pragma: no cover - stream torn down
             pass
         finally:
-            self._stdout_q.put(None)
+            # Never block on a full queue here: the sentinel must always land, or
+            # a reader waiting for EOF would wait forever.
+            try:
+                self._stdout_q.put_nowait(None)
+            except queue.Full:  # pragma: no cover - only when 4096 lines pending
+                pass
 
     def _pump_stderr(self) -> None:
         """Drain stderr so a full pipe buffer can never block the child."""

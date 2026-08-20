@@ -10,9 +10,17 @@ Three decisions carry the weight:
 assumed: it does NOT use LSP ``Content-Length`` headers. Getting this wrong
 produces a server that simply never replies, which reads like "no tools".
 
-**Malformed input raises.** A frame that cannot be parsed is never skipped:
-dropping it silently would let a write appear to proceed while its result
-vanished -- a fail-open dressed as resilience.
+**Malformed input raises HERE.** :func:`decode_frame` never returns a sentinel,
+so a caller cannot mistake an unparseable frame for an empty one.
+
+What the caller then does is its own decision, and ``session._await_id``
+deliberately SKIPS such a frame and keeps reading: the vendor writes
+human-readable log lines to the same stream, and treating a log line as a
+protocol violation would abort every real run. That is safe only because two
+other properties hold -- replies are matched by request id, so a skipped frame
+can never be mistaken for the reply we are waiting for, and the read is
+deadline-bounded, so skipping cannot loop forever. Neither this module nor its
+caller ever treats a malformed frame as a SUCCESSFUL result.
 
 **``readOnlyHint`` absent is ``None``, never ``False``.** The vendor self-declares
 whether a call mutated model state. Absent means UNKNOWN, and collapsing unknown

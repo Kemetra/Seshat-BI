@@ -23,7 +23,7 @@ pytestmark = pytest.mark.unit
 
 
 TARGET_PATH = "powerbi/Sales.SemanticModel"
-OPERATION = "measure_operations.Update"
+OPERATION = "measure_operations.Rename"
 
 
 def _cleared_verdict(operation: str = OPERATION) -> gate.GateVerdict:
@@ -172,7 +172,7 @@ def test_a_write_connects_operates_then_flushes(tmp_path: Path) -> None:
         "measure_operations",
         "database_operations",
     ]
-    assert fake.operations == ["ConnectFolder", "Update", "ExportToTmdlFolder"]
+    assert fake.operations == ["ConnectFolder", "Rename", "ExportToTmdlFolder"]
     assert result.succeeded is True
     assert result.mutation_attempted is True
     assert fake.closed is True
@@ -476,3 +476,72 @@ def test_a_read_pair_reports_no_mutation_attempted(tmp_path: Path) -> None:
     )
     assert result.mutation_attempted is False
     assert result.succeeded is True
+
+
+# --------------------------------------------------------------------------
+# Re-review C2 -- a payload-needing write is REFUSED, never run hollow
+# --------------------------------------------------------------------------
+
+
+def test_an_operation_needing_a_definitions_payload_is_refused(tmp_path: Path) -> None:
+    """C2: Update from a verb alone mutates nothing, so running it certifies a no-op.
+
+    The server documents "For Create and Update use Definitions". This adapter is
+    forbidden to invent the definition, and the approved_definitions record that
+    would supply one is deferred -- so the honest answer is a LOUD refusal naming
+    the missing input, never a run that reports success for nothing.
+
+    Before #660's other fixes this path was unreachable; afterwards it executes,
+    which is why the refusal has to be explicit.
+    """
+    fake = FakeSession()
+    result = runner.invoke(
+        _cleared_verdict("measure_operations.Update"),
+        repo_root=tmp_path,
+        session_factory=_factory(fake),
+    )
+    assert result.succeeded is False
+    assert runner.BLOCKER_PAYLOAD_UNAVAILABLE in result.blockers
+    # Nothing was launched: the refusal precedes the session entirely.
+    assert fake.handshaken is False
+    assert fake.calls == []
+    assert result.mutation_attempted is False
+    assert "never invents a definition" in result.output
+
+
+def test_a_payload_free_write_is_still_executed(tmp_path: Path) -> None:
+    """The refusal must be narrow: Rename needs no Definitions block."""
+    fake = FakeSession(
+        [_outcome(read_only=True), _outcome(read_only=False), _outcome(read_only=True)]
+    )
+    result = runner.invoke(
+        _cleared_verdict("measure_operations.Rename"),
+        repo_root=tmp_path,
+        session_factory=_factory(fake),
+    )
+    assert runner.BLOCKER_PAYLOAD_UNAVAILABLE not in result.blockers
+    assert result.succeeded is True
+    assert fake.operations == ["ConnectFolder", "Rename", "ExportToTmdlFolder"]
+
+
+def test_a_read_is_never_refused_for_a_missing_payload(tmp_path: Path) -> None:
+    fake = FakeSession([_outcome(read_only=True), _outcome(read_only=True)])
+    result = runner.invoke(
+        _cleared_verdict("measure_operations.List"),
+        repo_root=tmp_path,
+        session_factory=_factory(fake),
+    )
+    assert runner.BLOCKER_PAYLOAD_UNAVAILABLE not in result.blockers
+    assert result.succeeded is True
+
+
+def test_a_cross_product_pair_is_refused_before_launch(tmp_path: Path) -> None:
+    """H4 at the runner: a verb the named tool does not have never launches."""
+    fake = FakeSession()
+    result = runner.invoke(
+        _cleared_verdict("dax_query_operations.Update"),
+        repo_root=tmp_path,
+        session_factory=_factory(fake),
+    )
+    assert runner.BLOCKER_UNKNOWN_OPERATION in result.blockers
+    assert fake.handshaken is False
