@@ -26,39 +26,40 @@ _ROOT_CONTRACT_DOCS = {
 }
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class ChangeDepth:
     code_changed: bool
     contracts_required: bool
 
 
+_METADATA_ONLY = ChangeDepth(code_changed=False, contracts_required=False)
+_CONTRACTS_ONLY = ChangeDepth(code_changed=False, contracts_required=True)
+_FULL_SUITE = ChangeDepth(code_changed=True, contracts_required=True)
+
+
+def _classify_path(raw_path: str) -> ChangeDepth:
+    path = raw_path.replace("\\", "/").lstrip("/").lower()
+    suffix = Path(path).suffix
+
+    if path == ".github/pull_request_template.md":
+        return _METADATA_ONLY
+    if path.startswith(".github/issue_template/"):
+        if suffix == ".md":
+            return _METADATA_ONLY
+    if path.startswith("docs/"):
+        if suffix in _DOC_ASSET_SUFFIXES:
+            return _METADATA_ONLY
+        if suffix in _DOC_TEXT_SUFFIXES:
+            return _CONTRACTS_ONLY
+    if path in _ROOT_CONTRACT_DOCS:
+        return _CONTRACTS_ONLY
+    return _FULL_SUITE
+
+
 def classify_paths(paths: Iterable[str]) -> ChangeDepth:
-    normalized = [path.replace("\\", "/").lstrip("/") for path in paths if path]
-    if not normalized:
-        return ChangeDepth(code_changed=True, contracts_required=True)
-
-    contracts_required = False
-    for path in normalized:
-        lower = path.lower()
-        suffix = Path(lower).suffix
-
-        if lower == ".github/pull_request_template.md" or (
-            lower.startswith(".github/issue_template/") and suffix == ".md"
-        ):
-            continue
-        if lower.startswith("docs/") and suffix in _DOC_ASSET_SUFFIXES:
-            continue
-        if (
-            lower.startswith("docs/") and suffix in _DOC_TEXT_SUFFIXES
-        ) or lower in _ROOT_CONTRACT_DOCS:
-            contracts_required = True
-            continue
-
-        return ChangeDepth(code_changed=True, contracts_required=True)
-
-    return ChangeDepth(
-        code_changed=False,
-        contracts_required=contracts_required,
+    return max(
+        (_classify_path(path) for path in paths if path),
+        default=_FULL_SUITE,
     )
 
 

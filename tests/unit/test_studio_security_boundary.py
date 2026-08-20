@@ -19,7 +19,7 @@ The FastAPI request pipeline is exercised in T007's integration tests.
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -147,6 +147,14 @@ def test_traversal_and_absolute_references_are_refused(
 
     with pytest.raises(ValueError):
         config.resolve_contained_path(tmp_path, reference)
+
+
+def test_windows_drive_reference_is_absolute_under_posix_path_semantics() -> None:
+    """A Linux runner must reject an absolute Windows reference."""
+    from seshat.studio import config
+
+    reference = "C:/Windows/System32/config/SAM"
+    assert config._is_absolute_reference(reference, PurePosixPath(reference))
 
 
 def test_a_symlink_escaping_the_root_is_refused(tmp_path: Path) -> None:

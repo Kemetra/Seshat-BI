@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 #: Requesting port 0 makes the OS assign a free port (FR-003). Studio never picks a
 #: fixed port: a predictable port is a target, and a busy one is a failed launch.
@@ -157,7 +157,7 @@ def _is_absolute_reference(reference: str, candidate: Path) -> bool:
     drive-RELATIVE ``C:foo``, which ``is_absolute()`` reports as False), and a
     leading separator.
     """
-    if candidate.is_absolute() or candidate.drive:
+    if candidate.is_absolute() or candidate.drive or PureWindowsPath(reference).drive:
         return True
     return reference.startswith(("/", "\\"))
 
