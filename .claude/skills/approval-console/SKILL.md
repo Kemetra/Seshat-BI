@@ -34,6 +34,31 @@ chat is not an approval -- it cannot be reviewed, advance a gate, or be audited.
 > decision through to the committed `unresolved-questions.md` Resolution + the
 > `readiness-status.yaml` `approvals[]` slot -- it never authors the decision itself.
 
+### Project-scoped target: provisioning approvals (spec 154 / #671)
+
+Most approvals this console transcribes are PER-TABLE, into
+`mappings/<table>/readiness-status.yaml` `approvals[]`. One is PER-PROJECT:
+authorizing the installation of external software.
+
+- Target: **`contracts/provisioning-approvals.yaml`** -- never a per-table
+  readiness record. Provisioning authority is about the project's environment and
+  tooling, not one table's readiness, and the gate refuses a provisioning approval
+  found under a `mappings/<table>/` path.
+- Row shape: `stage: provisioning`, `owner: "<Person Name> (governance)"`,
+  `at: <YYYY-MM-DD>`, `components: [<ids>]`, optional `note`, optional
+  `revoked: true`.
+- Authority class is **`governance`** only -- the named human project-governance
+  authority for external environment/tool changes. A shape-valid `analyst` or
+  `data_owner` row is refused.
+- The decision must be COMMITTED. `seshat integrations setup --apply` reads the
+  file at HEAD, so an uncommitted transcription authorizes nothing -- which is the
+  protection: the party requesting the install cannot also supply the permission.
+
+Everything else about this skill's posture is unchanged: it transcribes a decision
+a named human supplied and never authors one. The provisioning gate
+(`seshat.integrations.approval`) only ever READS, so it cannot become a second
+write path.
+
 ### Core Authority it READS
 
 - `mappings/<table>/unresolved-questions.md` -- the Open-questions row a request packages
