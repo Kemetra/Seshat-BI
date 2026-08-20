@@ -289,10 +289,16 @@ def _append_history(repo_root: Path, text: str) -> None:
     BOTH redaction layers -- this adds no new redaction path of its own, which
     is what keeps a ``redact``-only leak impossible on this surface.
 
-    The record is collapsed to a single line and opened in append mode: a short
-    line written with one ``write`` call is what makes concurrent runs
-    interleave whole records rather than corrupt each other. Never rewrites an
-    existing line -- an audit log that can be rewritten is not evidence.
+    The record is collapsed to a single line and opened in append mode, so each
+    write lands after the existing content and never rewrites an earlier line:
+    an audit log that can be rewritten is not evidence.
+
+    This is NOT a concurrency guarantee. ``O_APPEND`` gives atomic
+    seek-then-write for a single ``write(2)`` on POSIX, but the Windows CRT's
+    ``_O_APPEND`` provides no cross-process atomicity -- and win32 is this
+    repo's primary platform. Concurrent runs against one repo remain an open
+    gap (`build-review.md`: "all runs share one evidence path"), untouched by
+    this change; the sequential retention property above is what is proved.
 
     The path is built from FIXED constants only; no caller-supplied value
     (``target_id`` above all) ever reaches it, so there is nothing to traverse
