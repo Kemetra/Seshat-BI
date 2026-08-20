@@ -177,3 +177,4 @@ src/seshat/studio/static/
 # were tracked, `plan-write` would dirty the tree it then reports as clean,
 # pushing the operator toward --backup-ref on a self-inflicted dirty state.
 .seshat/pbi-mcp-write-evidence.json
+.seshat/pbi-mcp-write-evidence.jsonl

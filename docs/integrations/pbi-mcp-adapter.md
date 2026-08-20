@@ -202,7 +202,7 @@ deliberately distinct.
 It advances no readiness stage, writes no `approvals[]` entry, defines nothing, and
 never vendors the runtime (`npx`, external and unforked). Every run -- including a
 refusal -- writes exactly one score-free evidence record to
-`.seshat/pbi-mcp-write-evidence.json`, with an intent record landed *before* the
+`.seshat/pbi-mcp-write-evidence.json` (the latest run) plus an append-only history at `.seshat/pbi-mcp-write-evidence.jsonl` that retains every earlier run, with an intent record landed *before* the
 mutation so a crash still leaves a trace.
 
 ### Known blocked scope
