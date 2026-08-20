@@ -4,7 +4,13 @@
 
 **Created**: 2026-08-20
 
-**Status**: Draft
+**Status**: ratified -- Ahmed Shaaban, 2026-08-20
+
+**Status history**: Draft -- 2026-08-20; ratified the same day, after its
+prerequisite (issue #671, the provisioning-approval trust boundary) landed on
+`main` as `b456577c`. Implementation is permitted from this point. FR-018 remains
+a permanent boundary: the weak provisioning approval must never be inherited,
+even though #671 removed it.
 
 **Input**: Official-first roadmap, capability-experience delta: let a user or agent
 describe the project and desired outcome, and have Seshat derive which
