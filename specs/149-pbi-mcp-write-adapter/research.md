@@ -207,3 +207,54 @@ nothing.
    target? Becomes an explicit validation rule, not implementer discretion.
 2. **Contract-template wording** (from R6) — `tools/powerbi-modeling-mcp/` vendoring language
    contradicts the ratified ADR. Owner-facing note; not edited here.
+
+---
+
+## R8 — CORRECTION: the runtime is an MCP **stdio server**, and a write needs an explicit flush
+
+**Added 2026-08-20, after the shipped code was found non-functional (issue #660).**
+
+R6 settled *how to launch* the runtime (`npx`, unforked) but never derived *how to speak to
+it*. The implementation assumed a one-shot CLI — `npx … --target <path> --operation <id>` with
+`stdin=DEVNULL` — and **those flags do not exist**. Nothing could ever be written.
+
+**Measured** against `@microsoft/powerbi-modeling-mcp@0.5.0-beta.12` (`serverInfo.version`
+`0.5.0.0`), Node v24.14.0 / npx 11.9.0:
+
+1. **Transport is newline-delimited JSON-RPC over stdin/stdout** — not LSP `Content-Length`
+   framing. Server logs go to stderr and are not protocol. Handshake is `initialize`
+   (`protocolVersion: "2025-06-18"`) then the `notifications/initialized` notification.
+2. **21 dispatcher tools**, each taking ONE nested `request` object whose `operation` field
+   selects the action. So an authorized write is a `(tool, operation)` **pair**; the
+   single-token `operation_id` encoded the flag that never existed. Allowlist entries become
+   `"<tool>.<operation>"`.
+3. **The file-based path works with no browser auth.** `connection_operations`
+   `{"operation":"ConnectFolder","folderPath":"<*.SemanticModel or its definition/>"}`
+   loaded the repo's real model (`tablesLoaded: 6, measuresLoaded: 5`). The
+   `[INFO] Authentication mode: InteractiveBrowser` stderr banner is the default for the
+   *live* path and did not block the folder path.
+4. **A write does NOT persist without an explicit flush — the most consequential finding.**
+   `ConnectFolder` → `measure_operations {"operation":"Update", …}` returned `isError: false`
+   with stderr `IsWrite=True`, and **zero files changed on disk**: the vendor mutates an
+   in-memory tabular model. Persistence requires a third call, `database_operations
+   {"operation":"ExportToTmdlFolder","tmdlFolderPath":"<same folder>"}`. Only then did the
+   edit appear in `definition/tables/…tmdl`.
+
+   Had the two-call shape shipped, `apply` would report `materialized`, `semantic-check`
+   would validate **unchanged** files and pass, and the whole gate would certify a write that
+   never happened — the vacuous pass FR-013 exists to prevent.
+5. **The flush rewrites the WHOLE model folder**: `fileCount: 11`, every TMDL file's hash
+   changed, including tables the operation never named. Out-of-scope-change detection must
+   treat `definition/` as in-scope for a write, or it blocks every legitimate apply
+   (coordinate with #663).
+6. **`readOnlyHint` is per-call, not a static tool annotation** (`measure_operations.list` →
+   `true`, `.update` → `false`), so it is usable as an independent cross-check on our own
+   write classification. **But it tracks model-state mutation, not disk writes**:
+   `database_operations.exporttotmdlfolder` reported `readOnlyHint: true` while rewriting 11
+   files. Never treat it as a disk-write oracle.
+
+**Consequence for F032**: the supported-version range may now legitimately move off
+`unknown` — the package is published and a smoke run passes. That advance is still an
+**owner call** and is deliberately not taken here.
+
+---
