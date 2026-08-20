@@ -143,10 +143,32 @@ _VENDOR_ENV_KEYS = frozenset(
         "TEMP",
         "TMP",
         "TMPDIR",
-        # TLS trust, so a corporate proxy chain still verifies.
+        # TLS trust: whether the certificate chain VERIFIES. These do not say
+        # which host to connect to -- that is the routing block below, and
+        # conflating the two is what left a proxy-only network unable to fetch.
         "SSL_CERT_FILE",
         "REQUESTS_CA_BUNDLE",
         "NODE_EXTRA_CA_CERTS",
+        # Proxy ROUTING, so `npx` reaches the registry at all where egress is
+        # proxy-only. npm honours these directly (`using-npm/config.md`), and
+        # without them the fetch attempts a direct connection and fails before
+        # the vendor runtime ever starts.
+        #
+        # These are forwarded VERBATIM, including any `user:pw@` userinfo. That
+        # is deliberate and is not a hole in #658: an authenticated proxy is the
+        # credential for the network hop this subprocess is about to make on the
+        # caller's behalf, unlike `DATABASE_URL`, which the vendor has no business
+        # seeing at all. Stripping the userinfo would not be safer -- it would
+        # route to the proxy and earn a 407, so there is no sanitized form that
+        # still works. Deny-by-default with exact keys is intact; this adds three
+        # named keys, not a parsing rule.
+        #
+        # Three entries cover six variables: the filter compares `key.upper()`,
+        # so the Unix lowercase forms match, and the emitted dict keeps the
+        # SOURCE spelling so `http_proxy` reaches the child as `http_proxy`.
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "NO_PROXY",
     }
 )
 

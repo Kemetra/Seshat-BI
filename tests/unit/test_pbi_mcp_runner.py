@@ -484,3 +484,84 @@ def test_the_runner_passes_the_sanitized_environment() -> None:
     assert "allowed_vendor_environment" in source, (
         "_run does not use the sanitizing helper"
     )
+
+
+def test_proxy_routing_survives_so_npx_can_reach_the_registry() -> None:
+    """Routing, not trust. A CA bundle says whether a chain VERIFIES; it never
+    says which host to dial.
+
+    Where egress is proxy-only, dropping these makes `npx` attempt a direct
+    connection and fail before the vendor runtime starts -- the fetch dies, so
+    no write can execute. npm honours these variables directly
+    (`using-npm/config.md`).
+
+    Codex P2 on PR #668.
+    """
+    source = {
+        "PATH": "/usr/bin",
+        "HTTP_PROXY": "http://proxy.corp:3128",
+        "HTTPS_PROXY": "http://proxy.corp:3128",
+        "NO_PROXY": "localhost,127.0.0.1",
+    }
+
+    env = runner.allowed_vendor_environment(source)
+
+    assert env["HTTP_PROXY"] == "http://proxy.corp:3128"
+    assert env["HTTPS_PROXY"] == "http://proxy.corp:3128"
+    assert env["NO_PROXY"] == "localhost,127.0.0.1"
+
+
+def test_lowercase_proxy_keys_reach_the_child_in_their_source_spelling() -> None:
+    """The non-obvious half: three allowlist entries cover SIX variables.
+
+    The filter compares `key.upper()`, so the Unix lowercase forms match, and the
+    emitted dict keeps the SOURCE spelling -- `http_proxy` must arrive as
+    `http_proxy`, because that is the form Unix tooling reads. Upper-casing the
+    key on the way out would silently break exactly the platform that uses it.
+
+    This is a PLATFORM-AGNOSTIC assertion: it passes on Windows and Linux alike,
+    because the helper is given an explicit dict rather than `os.environ`.
+    """
+    source = {"http_proxy": "http://proxy.corp:3128", "no_proxy": "localhost"}
+
+    env = runner.allowed_vendor_environment(source)
+
+    assert env == {"http_proxy": "http://proxy.corp:3128", "no_proxy": "localhost"}
+
+
+def test_an_authenticated_proxy_is_forwarded_verbatim() -> None:
+    """Deliberate, and NOT a regression of #658.
+
+    An authenticated proxy URL carries `user:pw@`. Forwarding it is required for
+    the hop this subprocess is about to make on the caller's behalf -- unlike
+    `DATABASE_URL`, which the vendor has no business seeing at all. Stripping the
+    userinfo would route to the proxy and earn a 407, so there is no sanitized
+    form that still works.
+
+    Pinning it means a later "harden the proxy value" edit has to argue with a
+    test instead of quietly breaking proxy-only egress.
+    """
+    source = {"HTTPS_PROXY": "http://svc:s3cret@proxy.corp:3128", "PATH": "/usr/bin"}
+
+    env = runner.allowed_vendor_environment(source)
+
+    assert env["HTTPS_PROXY"] == "http://svc:s3cret@proxy.corp:3128"
+
+
+def test_the_proxy_keys_did_not_widen_the_allowlist_to_a_prefix() -> None:
+    """Adding routing keys must not have introduced a `*_PROXY` prefix rule.
+
+    Exact keys only: a neighbouring variable that merely LOOKS proxy-shaped stays
+    out, so the deny-by-default posture is unchanged by this fix.
+    """
+    source = {
+        "PROXY_PASSWORD": "hunter2",
+        "ALL_PROXY": "socks5://nope:1080",
+        "HTTPS_PROXY_EXTRA": "x",
+        "PATH": "/usr/bin",
+    }
+
+    env = runner.allowed_vendor_environment(source)
+
+    assert set(env) == {"PATH"}
+    assert "hunter2" not in "".join(env.values())
