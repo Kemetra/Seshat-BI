@@ -138,3 +138,74 @@ the reviewer. Only running the shipped runner against the real vendor exposed it
   and refused to claim success. Fail-closed, on real data.
 - Redaction confirmed live: a session GUID in the transcript was scrubbed to
   `[REDACTED:GUID …]`.
+
+---
+
+# Re-review round 2 (2026-08-20) — BLOCK, then addressed
+
+The first disposition above was **incomplete**, and the re-review was right to block it.
+
+## What I got wrong
+
+**C2 — I closed the row without the remedy that made the deferral acceptable.** The review
+said: keep the deferral, *and* make it **loud**. I cited `spec.md:165`/`:228`, wrote "stays
+deferred", and shipped no refusal. Fixing C1 converted that path from unreachable to
+reachable, so `measure_operations.Update` executed and returned `succeeded=True` having
+mutated nothing — a self-certifying no-op, the exact class this repo keeps hitting.
+
+Now refused before launch with `PBIMCP-RUN-09`. The condition is the **server's own
+statement**, not my inference: the tool descriptions say *"For Create and Update use
+Definitions"*, and `vendor_ops.requires_payload` is derived from that clause. `Rename`,
+`Delete` and `Move` need no `Definitions` block and still execute — the refusal is narrow.
+
+**H4 — I fixed the symptom and left the mechanism.** I trimmed eight unevidenced read verbs
+but kept a **flat** verb set, and `parse_operation_id` validated tool and verb
+*independently* — authorizing the whole cross-product. The vocabulary is now **per tool**:
+20 of 21 tools publish a `Supported operations:` list, **220 evidenced pairs**; the 21st
+(`partition_operations`) publishes none and therefore authorizes **nothing**. `is_write`
+takes the tool.
+
+## Where the re-review was wrong
+
+Its H4 example named three pairs. Only one was a real hole:
+
+| Pair | Verdict |
+|---|---|
+| `table_operations.ExportTMSL` | **Real hole** — now refused |
+| `database_operations.ExportTMDL` | **Genuinely evidenced** under that tool; accepting it is correct |
+| `trace_operations.ExportJSON` | **Genuinely evidenced**; accepting it is correct |
+
+My original extraction regex required `. Use the` after the operations list, which silently
+dropped 7 tools whose descriptions continue differently (`measure_operations` among them).
+The *class* the reviewer identified was real and serious; two of its three examples were
+not. Verified pair-by-pair against the probe before changing anything.
+
+## Also closed this round
+
+- **M2's remaining half** — the session-layer deadline raised a bare `SessionError`, so a
+  chatty-overrun stall reported "failed without naming a cause". Both timeout sites now
+  raise `SessionStalled`.
+- **Prose contradiction** — `protocol.py` claimed malformed frames are "never skipped"
+  while its only consumer skips them. The claim now says what the code does, and why that
+  is safe (id-correlation plus a bounded read), instead of asserting a guarantee it inverts.
+- **LOW** — the stdout queue is bounded at 4096 lines with a non-blocking EOF sentinel
+  (an unbounded queue fed by a chatty server was a memory-exhaustion path); the redundant
+  `UnicodeDecodeError` is dropped.
+
+## Verification this round
+
+- **5888 unit tests pass**, 0 failed. `ruff check` + `ruff format --check src tests scripts`
+  clean. P2 commit-subject gate clean over the range.
+- **Both new guards falsified**: neutering the payload refusal or restoring independent
+  half-validation fails 4 tests.
+- **H2/H5 re-measured** after the queue bound: a silent server raises at 3.0s; 300KB of
+  stderr does not delay the stdout line.
+- **Live vendor re-checked**: a read still succeeds, reports `attempted=False`, and changes
+  **0 bytes**.
+
+## Standing limitation, stated plainly
+
+No committed test executes the real vendor — by design (Principle VIII, offline acceptance).
+The launcher defect proved what that costs: 444 tests passed while every real run failed at
+process launch. The live checks in this document are **manual, one-off evidence**, not a
+regression guard. An opt-in smoke test is worth filing as follow-up.
