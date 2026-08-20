@@ -34,19 +34,23 @@ No live DB provisioning, no automated ingestion code, no orchestrator integratio
 unless explicitly requested. Add the seam, not the implementation.
 
 <!-- SPECKIT START -->
-Active plan: `specs/149-pbi-mcp-write-adapter/plan.md` (F016 slice 5 -- the approval-gated
-Power BI MCP write adapter, ratified 2026-08-18). Implementation MERGED (#659), and the
-post-write validation follow-ups are now CLOSED: #657 evidence retention (#670), #663
-ignored-file scope + lossless git read (#672), #661 + #663 target-scoped validation
-(#674), #658 runtime-version recording + npx floor (#679). The only remaining piece of
-#658 is the version PIN, blocked until Microsoft publishes a non-prerelease (measured
-2026-08-20: only `0.5.0-beta.*` exist).
+Active plan: `specs/155-guided-setup-execution/plan.md` (guided setup execution -- the seam
+from spec 153's derived capability plan, through spec 154's committed named-human approval,
+to spec 144's existing installer). Specified 2026-08-20; Draft. Phases 0-1 (research and
+design) are done; the 43 implementation tasks wait on ratification. The bridge is a NEW
+module on purpose: two shipped spec-153 tests assert `derivation.py` holds no execution or
+approval call site.
+**Spec 153 (capability-oriented setup) is COMPLETE** -- derivation from committed evidence,
+requirement strength, declines, and the capability->component projection all ship.
+`DEFAULT_PROFILE` is untouched, and its FR-018 boundary -- never inherit the weak approval
+-- stays permanent.
 **Spec 154 (issue #671) is COMPLETE** -- `seshat integrations setup --apply` now requires a
 committed named-human `governance` approval in `contracts/provisioning-approvals.yaml`,
 read at HEAD. `--apply` is intent; `--yes` only suppresses the prompt; neither authorizes.
-See `specs/154-secure-provisioning-approval/` (all 49 tasks done) and its `quickstart.md`.
-That unblocks **spec 153** (capability-oriented setup), whose FR-018 boundary -- the weak
-approval must never be inherited -- stays permanent.
+**Spec 149 (F016 slice 5) is MERGED** (#659), with every post-write validation follow-up
+CLOSED: #657 (#670), #663 (#672), #661 + #663 (#674), #658 (#679). Its one remaining piece
+is the runtime-version PIN, blocked until Microsoft publishes a non-prerelease (measured
+2026-08-20: only `0.5.0-beta.*` exist).
 <!-- SPECKIT END -->
 <!-- SESHAT-KIT START -->
 **Seshat BI kit router** (v0.2.0) -- generated from `.seshat/kit-source.yaml`; do not edit here.
