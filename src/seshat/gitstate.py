@@ -19,7 +19,22 @@ from seshat.gitutil import GIT_HARDENING, run_subprocess
 
 
 def run_git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    """Run one hardened, read-only git command rooted at ``repo_root``."""
+    """Run one hardened, read-only git command rooted at ``repo_root``.
+
+    Decoded as UTF-8 with ``surrogateescape``, NOT with the locale codec
+    (issue #663). Git emits path bytes verbatim under ``-z``, so a tracked
+    filename holding a byte the locale codec cannot map -- Cyrillic ``Ё`` is
+    UTF-8 ``0xD0 0x81``, and ``0x81`` is undefined in cp1252 -- made the plain
+    ``text=True`` decode raise **inside subprocess's reader thread**. That
+    exception never reaches this caller: ``stdout`` comes back as ``None`` and
+    every consumer touching it dies on ``AttributeError``, which the callers'
+    ``except (OSError, RuntimeError)`` does not catch (measured, not assumed).
+
+    ``surrogateescape`` is lossless: undecodable bytes survive as surrogates and
+    re-encode unchanged, so a path round-trips even when it is not valid UTF-8.
+    Fixed centrally because the failure is in the decode itself -- a caller-side
+    recovery helper cannot run when there is no string to recover.
+    """
     command = [
         "git",
         *GIT_HARDENING,
@@ -32,6 +47,8 @@ def run_git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
         cwd=repo_root,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
         check=False,
         shell=False,
     )

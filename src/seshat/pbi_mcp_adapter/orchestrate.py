@@ -58,61 +58,95 @@ def _digest(path: Path) -> str | None:
 
 
 def _decode_git_path(reported: str) -> str:
-    """Recover a git-reported path that the locale codec mis-decoded.
+    """Deprecated no-op: ``run_git`` now decodes git output losslessly.
 
-    ``gitstate.run_git`` uses ``text=True`` with no explicit encoding, so git's
-    raw UTF-8 path bytes are decoded with the locale codec -- cp1252 on Windows,
-    which turns ``café.tmdl`` into ``cafÃ©.tmdl``. The mis-decoded name does not
-    resolve on disk, so ``_digest`` returns None and the file drops out of the
-    snapshot entirely.
+    This used to re-encode through the locale codec and re-decode as UTF-8, to
+    recover a path that ``text=True`` had mangled (``cafe.tmdl`` with an acute
+    accent arriving double-encoded). Issue #663 fixed the decode at the SOURCE
+    instead, because a byte the locale codec cannot map at all kills
+    subprocess's reader thread and leaves ``stdout`` as ``None`` -- there is
+    then no string left for this helper to recover.
 
-    Re-encoding through the same codec and decoding as UTF-8 recovers the
-    original. ``surrogateescape`` on both legs keeps it lossless for bytes the
-    locale codec cannot represent, and a name that was already correct round-trips
-    unchanged. Fixed here rather than in ``run_git``, whose ``text=True`` is shared
-    by eleven callers -- changing the encoding globally is a far wider blast radius
-    than this defect.
+    With the source fixed, this transform became ACTIVELY HARMFUL rather than
+    merely redundant: applied to already-correct UTF-8 it produced surrogates
+    (``caf\\udce9.tmdl``) matching nothing on disk, so the file dropped
+    of the snapshot -- the very defect it was written to prevent (measured by
+    two existing regression tests going red).
+
+    Kept as an identity function so those regression tests keep naming this
+    seam; delete once they assert against ``run_git`` directly.
     """
-    import locale
-
-    encoding = locale.getpreferredencoding(False)
-    try:
-        recovered = reported.encode(encoding, errors="surrogateescape").decode(
-            "utf-8", errors="surrogateescape"
-        )
-    except (UnicodeError, LookupError):
-        return reported
-    return recovered
+    return reported
 
 
-def _snapshot(repo_root: Path) -> dict[str, str]:
-    """Digest every tracked-or-untracked file, so an out-of-scope write is visible.
+def _evidence_relpaths() -> frozenset[str]:
+    """The adapter's OWN gitignored artifacts, by EXACT repo-relative path.
 
-    Uses git so ignored files (including this adapter's own evidence artifact) are
-    excluded -- otherwise the evidence write would itself look like scope creep.
+    Both are written mid-run, between the two snapshots, so both must be
+    excluded or every apply reports scope creep against itself. The history log
+    is append-only, so it provably DIFFERS across the mutation window (issue
+    #657) -- excluding only the latest-run file is not enough.
+
+    Exact paths, never a ``.seshat/`` prefix: a prefix would blind the scope
+    check to every other file under that directory, and
+    ``.seshat/some-other-artifact.json`` is a legitimate file a vendor run must
+    not touch unnoticed (measured). A prefix rule is a fail-open; this is a gate.
+    """
+    from seshat.pbi_mcp_adapter.evidence import ARTIFACT_RELPATH, HISTORY_RELPATH
+
+    return frozenset(
+        {
+            ARTIFACT_RELPATH.replace("\\", "/"),
+            HISTORY_RELPATH.replace("\\", "/"),
+        }
+    )
+
+
+def _list_files(repo_root: Path, *extra: str) -> list[str] | None:
+    """One ``ls-files`` listing, or None when git could not be read.
+
+    Fails CLOSED via None so the caller can tell "git listed nothing" apart from
+    "git could not be asked": an empty snapshot silently means "nothing
+    changed", which would hide every out-of-scope write.
     """
     from seshat.gitstate import run_git
 
     try:
-        listed = run_git(
-            repo_root, "ls-files", "-z", "--cached", "--others", "--exclude-standard"
-        )
+        listed = run_git(repo_root, "ls-files", "-z", "--cached", "--others", *extra)
     except (OSError, RuntimeError):
-        return {}
-    if listed.returncode != 0:
-        return {}
-    snapshot: dict[str, str] = {}
+        return None
+    if listed.returncode != 0 or listed.stdout is None:
+        return None
     # `-z` because git C-QUOTES any path with non-ASCII bytes, a newline, a quote
-    # or a backslash: `café.tmdl` arrives as `"caf\303\251.tmdl"`. Stripping the
+    # or a backslash: `cafe.tmdl` arrives as `"caf\\303\\251.tmdl"`. Stripping the
     # quotes is not decoding the escapes, so `_digest` read a nonexistent path,
-    # returned None, and the file VANISHED from the snapshot -- making an
-    # out-of-scope write to such a file invisible to the effect check, and an
-    # authorized target with such a name falsely "unchanged" (Codex review,
+    # returned None, and the file VANISHED from the snapshot (Codex review,
     # PR #659). NUL-delimited output is verbatim, so there is nothing to unquote.
-    for rel in listed.stdout.split("\0"):
-        if not rel:
+    return [rel for rel in listed.stdout.split("\0") if rel]
+
+
+def _snapshot(repo_root: Path) -> dict[str, str]:
+    """Digest every file a vendor run could touch, so scope creep is visible.
+
+    TWO listings unioned, because ``--ignored`` returns ONLY ignored files
+    rather than adding them to the default set (measured). Ignored files must be
+    enumerated: without them a run that changed the authorized target AND any
+    gitignored file reported ``materialized`` with no out-of-scope blocker
+    (issue #663).
+
+    The adapter's own evidence artifacts are then removed by exact path -- see
+    :func:`_evidence_relpaths`.
+    """
+    tracked = _list_files(repo_root, "--exclude-standard")
+    ignored = _list_files(repo_root, "--exclude-standard", "--ignored")
+    if tracked is None or ignored is None:
+        return {}
+    excluded = _evidence_relpaths()
+    snapshot: dict[str, str] = {}
+    for rel in [*tracked, *ignored]:
+        name = rel
+        if name.replace("\\", "/") in excluded:
             continue
-        name = _decode_git_path(rel)
         digest = _digest(repo_root / name)
         if digest is not None:
             snapshot[name] = digest
@@ -177,6 +211,7 @@ class WriteReport:
     mode: str = ""
     checks_run: tuple[str, ...] = ()
     validation_failed: tuple[str, ...] = ()
+    checks_skipped: tuple[tuple[str, str], ...] = ()
 
     @property
     def succeeded(self) -> bool:
@@ -202,6 +237,9 @@ class _Ending:
     #: path that never reached validation, which is honest: nothing was verified.
     checks_run: tuple[str, ...] = ()
     validation_failed: tuple[str, ...] = ()
+    #: Validators that did NOT run, with why. Carried alongside `checks_run` so
+    #: the record and the report cannot disagree about what was verified.
+    checks_skipped: tuple[tuple[str, str], ...] = ()
 
 
 def _terminate(
@@ -225,6 +263,7 @@ def _terminate(
         mutation_attempted=ending.mutation_attempted,
         blockers=ending.blockers,
         rollback_guidance=ending.rollback_guidance,
+        checks_skipped=ending.checks_skipped,
     )
     path = evidence.finalize(repo_root, record)
     return WriteReport(
@@ -238,6 +277,7 @@ def _terminate(
         mode=identity.mode,
         checks_run=ending.checks_run,
         validation_failed=ending.validation_failed,
+        checks_skipped=ending.checks_skipped,
     )
 
 
@@ -278,6 +318,11 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
     # actually changed. The target path and operation come from the VERDICT --
     # there is no parameter by which to substitute another.
     before = _snapshot(root)
+    # The finding baseline MUST be taken before the mutation: afterwards there is
+    # no way to tell a finding this write introduced from one that was already
+    # there, and the whole corpus is in scope (#663 gap 3). None here is not an
+    # empty baseline -- `validate_semantic_model` treats it as a blocker.
+    semantic_before = validation.semantic_baseline(root)
     # ``mcp_runner`` keeps its name as the injection seam, but at #660 its
     # CONTRACT changed: it is now a session factory (``**kwargs -> McpSession``),
     # not a subprocess invoker, because the runtime is an MCP stdio server rather
@@ -327,7 +372,9 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
         root,
         target_path=authorized_path,
         backup_ref=plan.backup_ref,
-        runner=plan.validator,
+        context=validation.ValidationContext(
+            runner=plan.validator, baseline=semantic_before
+        ),
     )
     if not outcome.passed:
         return terminal(
@@ -339,6 +386,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
             rollback_guidance=outcome.rollback_guidance or guidance,
             checks_run=outcome.checks_run,
             validation_failed=outcome.failed,
+            checks_skipped=outcome.checks_skipped,
         )
 
     # Applied AND confirmed by validation.
@@ -349,6 +397,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
         mutation_attempted=result.mutation_attempted,
         checks_run=outcome.checks_run,
         validation_failed=outcome.failed,
+        checks_skipped=outcome.checks_skipped,
     )
 
 

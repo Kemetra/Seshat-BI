@@ -98,7 +98,9 @@ def test_passed_requires_something_to_have_been_examined() -> None:
 def test_absent_artifact_reports_read_nothing_not_success(tmp_path: Path) -> None:
     """A write that produced no artifact is not a validated write."""
     outcome = validation.validate_semantic_model(
-        tmp_path, target_path=TARGET_PATH, runner=_fake_runner(0)
+        tmp_path,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=_fake_runner(0)),
     )
     assert not outcome.passed
     assert validation.BLOCKER_READ_NOTHING in outcome.blockers
@@ -117,7 +119,9 @@ def test_validator_is_invoked_with_require_inputs(repo_with_target: Path) -> Non
         return subprocess.CompletedProcess(args=list(args), returncode=0, stdout="")
 
     validation.validate_semantic_model(
-        repo_with_target, target_path=TARGET_PATH, runner=run
+        repo_with_target,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=run),
     )
     assert "--require-inputs" in captured["args"]
 
@@ -138,7 +142,9 @@ def test_validator_targets_the_semantic_model_family_not_the_report_family(
         return subprocess.CompletedProcess(args=list(args), returncode=0, stdout="")
 
     validation.validate_semantic_model(
-        repo_with_target, target_path=TARGET_PATH, runner=run
+        repo_with_target,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=run),
     )
     assert "semantic-check" in captured["args"]
 
@@ -150,7 +156,11 @@ def test_validator_targets_the_semantic_model_family_not_the_report_family(
 
 def test_validation_failure_is_blocking_with_rollback(repo_with_target: Path) -> None:
     outcome = validation.validate_semantic_model(
-        repo_with_target, target_path=TARGET_PATH, runner=_fake_runner(1)
+        repo_with_target,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(
+            runner=_fake_runner(1), baseline=frozenset()
+        ),
     )
     assert outcome.blocking
     assert not outcome.passed
@@ -173,7 +183,9 @@ def test_guidance_cannot_be_forgotten() -> None:
 def test_failure_is_never_expressible_as_a_warning(repo_with_target: Path) -> None:
     """There is no warning level a script could ignore (FR-014)."""
     outcome = validation.validate_semantic_model(
-        repo_with_target, target_path=TARGET_PATH, runner=_fake_runner(1)
+        repo_with_target,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=_fake_runner(1)),
     )
     assert outcome.blocking is True
     assert outcome.passed is False
@@ -248,7 +260,9 @@ def test_runtime_reported_success_but_touched_nothing(tmp_path: Path) -> None:
     rather than as an applied change.
     """
     outcome = validation.validate_semantic_model(
-        tmp_path, target_path=TARGET_PATH, runner=_fake_runner(0)
+        tmp_path,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=_fake_runner(0)),
     )
     assert not outcome.passed
     assert validation.BLOCKER_READ_NOTHING in outcome.blockers
@@ -266,7 +280,9 @@ def test_validator_timeout_is_blocking_with_rollback(repo_with_target: Path) -> 
         raise subprocess.TimeoutExpired(cmd=list(args), timeout=1)
 
     outcome = validation.validate_semantic_model(
-        repo_with_target, target_path=TARGET_PATH, runner=stall
+        repo_with_target,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=stall),
     )
     assert outcome.blocking
     assert outcome.rollback_guidance
@@ -278,7 +294,9 @@ def test_validator_oserror_is_blocking(repo_with_target: Path) -> None:
         raise OSError("python not found")
 
     outcome = validation.validate_semantic_model(
-        repo_with_target, target_path=TARGET_PATH, runner=boom
+        repo_with_target,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=boom),
     )
     assert outcome.blocking
     assert validation.BLOCKER_VALIDATOR_ERROR in outcome.blockers
@@ -286,7 +304,9 @@ def test_validator_oserror_is_blocking(repo_with_target: Path) -> None:
 
 def test_outcome_carries_no_score(repo_with_target: Path) -> None:
     outcome = validation.validate_semantic_model(
-        repo_with_target, target_path=TARGET_PATH, runner=_fake_runner(0)
+        repo_with_target,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=_fake_runner(0)),
     )
     for name, value in vars(outcome).items():
         if isinstance(value, bool):
@@ -300,7 +320,7 @@ def test_every_blocker_id_has_readable_detail() -> None:
         for name, value in vars(validation).items()
         if name.startswith("BLOCKER_") and isinstance(value, str)
     ]
-    assert len(ids) == 3
+    assert len(ids) == 4
     for blocker in ids:
         assert validation.BLOCKER_DETAIL.get(blocker)
         assert blocker.startswith("PBIMCP-VAL-")
@@ -443,7 +463,9 @@ def test_validator_runs_the_active_interpreter_not_path_python(
         return subprocess.CompletedProcess(args=list(args), returncode=0)
 
     validation.validate_semantic_model(
-        repo_with_target, target_path=TARGET_PATH, runner=capture
+        repo_with_target,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(runner=capture),
     )
 
     interpreter = seen["args"][0]
@@ -522,7 +544,10 @@ def test_a_target_inside_the_corpus_still_passes(tmp_path: Path) -> None:
     _git(tmp_path, "commit", "-q", "-m", "baseline", "--no-gpg-sign")
 
     outcome = validation.validate_semantic_model(
-        tmp_path, target_path=target_rel, backup_ref=None
+        tmp_path,
+        target_path=target_rel,
+        backup_ref=None,
+        context=validation.ValidationContext(baseline=frozenset()),
     )
 
     assert outcome.passed, f"a discoverable target was refused: {outcome.blockers}"
@@ -562,7 +587,9 @@ def test_validator_receives_an_absolute_repo_path(tmp_path: Path) -> None:
     os.chdir(tmp_path.parent)
     try:
         validation.validate_semantic_model(
-            relative, target_path=TARGET_PATH, runner=capture
+            relative,
+            target_path=TARGET_PATH,
+            context=validation.ValidationContext(runner=capture),
         )
     finally:
         os.chdir(previous)
@@ -575,3 +602,39 @@ def test_validator_receives_an_absolute_repo_path(tmp_path: Path) -> None:
     )
     # And the cwd handed to the runner must agree with it.
     assert Path(seen["cwd"]).resolve() == tmp_path.resolve()
+
+
+# --------------------------------------------------------------------------
+# Issue #661 -- a validator that did not run says so, and says why.
+# --------------------------------------------------------------------------
+
+
+def test_a_skipped_check_is_recorded_with_its_reason() -> None:
+    """Absence is never a pass: a check that did not run says so, and why."""
+    outcome = validation.ValidationOutcome(
+        checks_run=("seshat semantic-check --require-inputs",),
+        artifacts_examined=("Target.SemanticModel/definition/sales.tmdl",),
+        failed=(),
+        rollback_guidance=(),
+        blockers=(),
+        checks_skipped=(("value-check", "[PENDING LIVE PROFILE] no DSN resolved"),),
+    )
+
+    assert outcome.passed is True, "a recorded skip is not a failure"
+    assert outcome.blocking is False, "a recorded skip does not block"
+    assert outcome.checks_skipped == (
+        ("value-check", "[PENDING LIVE PROFILE] no DSN resolved"),
+    )
+
+
+def test_a_skip_must_carry_a_reason() -> None:
+    """A skip with no reason is indistinguishable from a check nobody ran."""
+    with pytest.raises(validation.ValidationInvalid):
+        validation.ValidationOutcome(
+            checks_run=("seshat semantic-check --require-inputs",),
+            artifacts_examined=("x.tmdl",),
+            failed=(),
+            rollback_guidance=(),
+            blockers=(),
+            checks_skipped=(("value-check", ""),),
+        )

@@ -235,9 +235,28 @@ assert preflight reports a blocker rather than proceeding.
 
 **Post-write validation**
 
-- **FR-013**: Every mutation MUST be followed by offline validation of the touched artifacts:
-  the `seshat check` R-family; binding validation where a report is in scope; and value
-  validation where an expected value exists and a data leg is available.
+- **FR-013**: Every mutation MUST be followed by offline validation of the touched
+  artifacts: `seshat semantic-check --require-inputs`; binding validation for every report
+  whose `definition.pbir` names the mutated model; and `seshat value-check` where a metric
+  contract pins an expected value and a data leg resolves.
+  *(Corrected, issue #661: this requirement previously named "the `seshat check` R-family".
+  That family is report-layer only — R1 iterates `*.Report/definition.pbir`, R2
+  `*.Report/definition/report.json` — while this feature mutates the semantic model
+  (TMDL), which neither corpus contains. The named validator would have examined zero
+  bytes of the thing that changed and reported clean.)*
+- **FR-013a**: Post-write semantic validation MUST block only on findings THIS write
+  introduced, measured against a baseline captured before the mutation. Pre-existing
+  findings MUST be reported and MUST NOT block: the corpus is repo-wide and cannot be
+  narrowed, and rolling this write back cannot fix an error in a model it never touched.
+- **FR-013b**: A baseline that could not be captured MUST be a blocker (`PBIMCP-VAL-04`),
+  never an empty baseline. An empty baseline makes every finding look new; a
+  silently-complete one makes every finding look pre-existing, hiding the regression the
+  check exists to catch. Equally, a non-zero validator exit that the baseline cannot
+  ATTRIBUTE MUST still block — the diff narrows blame and MUST NOT launder an unexplained
+  failure into a pass.
+- **FR-013c**: Every validator that did not run MUST be recorded with the reason it did
+  not run. Absence of a check is never a pass, and an unexplained skip is refused at
+  construction.
 - **FR-014**: A failed post-write validation MUST be a blocking finding accompanied by
   rollback guidance, never a warning.
 

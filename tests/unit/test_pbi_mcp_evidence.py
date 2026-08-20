@@ -587,3 +587,38 @@ def test_the_latest_record_file_still_holds_exactly_one_record(
 
     payload = json.loads(evidence.evidence_path(tmp_path).read_text("utf-8"))
     assert payload["operation_id"] == "second_op"
+
+
+# --------------------------------------------------------------------------
+# Issue #661 -- evidence must show what was NOT verified, with the reason.
+# --------------------------------------------------------------------------
+
+
+def test_a_skipped_check_reaches_the_record_with_its_reason(tmp_path: Path) -> None:
+    """A reader who cannot see the gaps over-trusts the record."""
+    record = _record(
+        checks_skipped=(("value-check", "[PENDING LIVE PROFILE] no data leg"),),
+    )
+    payload = json.loads(evidence.finalize(tmp_path, record).read_text("utf-8"))
+
+    assert payload["checks_skipped"] == [
+        {"check": "value-check", "reason": "[PENDING LIVE PROFILE] no data leg"}
+    ]
+
+
+def test_a_skip_reason_is_redacted_like_every_other_string(tmp_path: Path) -> None:
+    """A reason is an output surface, so BOTH redaction layers apply to it.
+
+    Nested inside a list of dicts, which the pre-JSON scanner did not previously
+    descend into -- a secret there would have reached the record unscanned.
+    """
+    record = _record(
+        mutation_attempted=True,
+        checks_skipped=(
+            ("value-check", "host=db.example.com password=hunter2 unreachable"),
+        ),
+    )
+    text = evidence.finalize(tmp_path, record).read_text("utf-8")
+
+    assert "hunter2" not in text
+    assert "db.example.com" not in text

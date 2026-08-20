@@ -21,13 +21,17 @@ The invalid states this type refuses to hold:
 
   * ``passed`` with ``artifacts_examined == ()``  -> nothing was read
   * ``failed`` with ``rollback_guidance == ()``   -> a failure nobody can undo
+  * a ``checks_skipped`` entry with an empty reason -> a skip nobody explained,
+    which reads exactly like a check nobody ran (issue #661)
 """
 
 from __future__ import annotations
 
+import os
 import shlex
 import subprocess
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -35,6 +39,7 @@ from pathlib import Path
 BLOCKER_VALIDATION_FAILED = "PBIMCP-VAL-01"
 BLOCKER_READ_NOTHING = "PBIMCP-VAL-02"
 BLOCKER_VALIDATOR_ERROR = "PBIMCP-VAL-03"
+BLOCKER_BASELINE_UNAVAILABLE = "PBIMCP-VAL-04"
 
 BLOCKER_DETAIL: dict[str, str] = {
     BLOCKER_VALIDATION_FAILED: "post-write validation reported findings",
@@ -43,6 +48,10 @@ BLOCKER_DETAIL: dict[str, str] = {
         "from an empty corpus is not a pass"
     ),
     BLOCKER_VALIDATOR_ERROR: "the validator could not be run to completion",
+    BLOCKER_BASELINE_UNAVAILABLE: (
+        "the pre-write finding baseline could not be captured, so a finding "
+        "cannot be attributed to this write; refusing rather than guessing"
+    ),
 }
 
 #: A stalled or failed validator must not read as clean, so the subprocess gets
@@ -70,11 +79,22 @@ class ValidationOutcome:
     failed: tuple[str, ...]
     rollback_guidance: tuple[str, ...]
     blockers: tuple[str, ...]
+    #: (check, reason) for every validator that did NOT run. Deliberately not a
+    #: bare list of names: a skip whose cause is unrecorded reads exactly like a
+    #: check nobody thought to run, which is the shape this module exists to
+    #: prevent. An empty tuple means "nothing was skipped", never "we did not
+    #: look" -- the same distinction ``checks_run`` already draws upstream.
+    checks_skipped: tuple[tuple[str, str], ...] = ()
 
     @property
     def _failure_lacks_guidance(self) -> bool:
         """A failure the operator cannot undo is not an actionable result."""
         return bool(self.failed) and not self.rollback_guidance
+
+    @property
+    def _skip_without_a_reason(self) -> bool:
+        """A skip nobody explained reads exactly like a check nobody ran."""
+        return any(not reason for _check, reason in self.checks_skipped)
 
     @property
     def _silence_without_a_read(self) -> bool:
@@ -90,6 +110,11 @@ class ValidationOutcome:
             raise ValidationInvalid(
                 "an outcome with no findings AND no artifacts examined must carry "
                 f"the {BLOCKER_READ_NOTHING} blocker: nothing was verified"
+            )
+        if self._skip_without_a_reason:
+            raise ValidationInvalid(
+                "a skipped check must name why it was skipped; an unexplained "
+                "skip is indistinguishable from a check that never ran"
             )
 
     @property
@@ -168,6 +193,47 @@ def _run_validator(
     )
 
 
+def _semantic_argv(root: Path) -> tuple[str, ...]:
+    """The validator command, shared by the baseline and post-write legs.
+
+    ``sys.executable``, never a bare ``python``: on the documented pipx install
+    -- or any system exposing only ``python3`` -- a bare ``python`` is absent or
+    lacks Seshat, so the validator would fail to start and every apply would
+    report a post-mutation validation failure for a write that was fine.
+    """
+    return (
+        sys.executable,
+        "-m",
+        "seshat.cli",
+        "semantic-check",
+        "--repo",
+        str(root),
+        "--require-inputs",
+    )
+
+
+def semantic_baseline(
+    repo_root: Path, *, runner: object = None
+) -> frozenset[str] | None:
+    """The finding set BEFORE the mutation, or None if it could not be taken.
+
+    None is NOT an empty set, and the difference is the whole point. An empty
+    baseline makes every finding look new -- noisy, but safe. A baseline that
+    silently captured everything makes every finding look pre-existing, which
+    hides the exact regression this check exists to catch. So the two stay
+    distinguishable and None is treated as a blocker by the caller.
+    """
+    from seshat.pbi_mcp_adapter.validation_plan import finding_lines
+
+    root = Path(repo_root).resolve()
+    invoke = runner if runner is not None else _run_validator
+    try:
+        completed = invoke(root, _semantic_argv(root))  # type: ignore[operator]
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    return finding_lines(completed.stdout)
+
+
 def _target_was_examined(repo_root: Path, artifact: Path) -> bool:
     """Whether ``semantic-check`` actually examined this artifact.
 
@@ -233,28 +299,96 @@ class _ValidationRun:
     target_path: str
     backup_ref: str | None
     checks_run: tuple[str, ...]
+    #: The pre-write finding set. None means it could not be captured, which is
+    #: a blocker -- never silently an empty baseline.
+    baseline: frozenset[str] | None = None
+    stdout: str = ""
+    #: Injection point for the examined-the-target proof. The DEFAULT is the real
+    #: check; tests override it to reach the baseline branches without building a
+    #: discoverable TMDL corpus. The proof itself is unchanged.
+    examined: object = None
+
+
+def _pre_existing_note(
+    returncode: int, pre_existing: frozenset[str]
+) -> tuple[tuple[str, str], ...]:
+    """A non-zero exit EXPLAINED by findings that predate this write.
+
+    Recorded as a skip-with-reason rather than dropped, and non-blocking --
+    rolling THIS write back cannot fix an error in a model it never touched
+    (issue #663 gap 3).
+
+    ``pre_existing`` must be non-empty for this to apply. Without it there is
+    nothing to attribute the exit to, and calling it pre-existing would both
+    launder a failing run into a pass and fabricate the reason why -- see
+    :func:`_unexplained_exit`.
+    """
+    if returncode == 0 or not pre_existing:
+        return ()
+    return (
+        (
+            "semantic-check",
+            f"exit {returncode} is explained by {len(pre_existing)} finding(s) "
+            "that predate this write; not attributable to it, so not blocking",
+        ),
+    )
 
 
 def _outcome_for(returncode: int, run: _ValidationRun) -> ValidationOutcome:
     """Turn one finished validator run into a verdict.
 
-    Split from :func:`validate_semantic_model` so invoking the validator and
-    judging its result read as two steps. Decides nothing about WHETHER to run --
-    it is handed a returncode and reports what that plus the artifact prove.
+    A non-zero exit is no longer sufficient to blame this write. The corpus is
+    repo-wide and cannot be narrowed, so an error in a model this write never
+    touched exits non-zero too. Only findings ABSENT from the baseline are
+    attributable (issue #663 gap 3).
     """
+    from seshat.pbi_mcp_adapter.validation_plan import finding_lines
+
     target_path, backup_ref = run.target_path, run.backup_ref
     checks_run, artifact = run.checks_run, run.artifact
-    if returncode != 0:
+
+    if run.baseline is None:
         return ValidationOutcome(
             checks_run=checks_run,
             artifacts_examined=(target_path,),
-            failed=(f"semantic-check exit {returncode}",),
+            failed=("the pre-write finding baseline was not captured",),
+            rollback_guidance=rollback_guidance_for(target_path, backup_ref),
+            blockers=(BLOCKER_BASELINE_UNAVAILABLE,),
+        )
+
+    current = finding_lines(run.stdout)
+    regressions = tuple(sorted(current - run.baseline))
+    if regressions:
+        return ValidationOutcome(
+            checks_run=checks_run,
+            artifacts_examined=(target_path,),
+            failed=regressions,
             rollback_guidance=rollback_guidance_for(target_path, backup_ref),
             blockers=(BLOCKER_VALIDATION_FAILED,),
         )
 
+    # A non-zero exit that the diff cannot ATTRIBUTE is still a failure. The
+    # baseline diff narrows blame; it must never become a way to launder an
+    # unexplained failing run into a pass.
+    explained_by = current & run.baseline
+    if returncode != 0 and not explained_by:
+        return ValidationOutcome(
+            checks_run=checks_run,
+            artifacts_examined=(target_path,),
+            failed=(
+                f"semantic-check exit {returncode} with no finding the baseline "
+                "can attribute; the failure is unexplained, so it is not "
+                "assumed pre-existing",
+            ),
+            rollback_guidance=rollback_guidance_for(target_path, backup_ref),
+            blockers=(BLOCKER_VALIDATION_FAILED,),
+        )
+
+    pre_existing = _pre_existing_note(returncode, explained_by)
+    proof = run.examined or _target_was_examined
+
     # Exit 0 is the validator's claim, not proof it looked at THIS file.
-    if not _target_was_examined(run.repo_root, artifact):
+    if not proof(run.repo_root, artifact):  # type: ignore[operator]
         return ValidationOutcome(
             checks_run=checks_run,
             artifacts_examined=(),
@@ -264,6 +398,7 @@ def _outcome_for(returncode: int, run: _ValidationRun) -> ValidationOutcome:
             ),
             rollback_guidance=rollback_guidance_for(target_path, backup_ref),
             blockers=(BLOCKER_READ_NOTHING,),
+            checks_skipped=pre_existing,
         )
     return ValidationOutcome(
         checks_run=checks_run,
@@ -271,7 +406,35 @@ def _outcome_for(returncode: int, run: _ValidationRun) -> ValidationOutcome:
         failed=(),
         rollback_guidance=(),
         blockers=(),
+        checks_skipped=pre_existing,
     )
+
+
+@dataclass(frozen=True)
+class ValidationContext:
+    """What a post-write validation is measured AGAINST, as one value.
+
+    Four seams that answer one question -- "how is this run wired, and what
+    does it measure itself against?" -- travelling together rather than as four
+    more keyword arguments. Three arrived with issues #661/#663; ``runner``
+    joined them so the signature stays inside the argument-count gate.
+
+    Every field defaults, so a caller with nothing to compare against passes
+    nothing: ``ValidationContext()``.
+    """
+
+    #: Findings that existed BEFORE the mutation. ``None`` means the baseline
+    #: could not be captured, which is a blocker -- never an empty baseline.
+    baseline: frozenset[str] | None = None
+    #: The validator subprocess. Injectable so tests drive every branch without
+    #: spawning a real one.
+    runner: object = None
+    #: The examined-the-target proof. ``None`` uses the real check; overridden
+    #: only so tests can reach the baseline branches without building a
+    #: discoverable TMDL corpus. The proof itself is never weakened.
+    examined: object = None
+    #: Environment consulted for a data leg. ``None`` means ``os.environ``.
+    env: Mapping[str, str] | None = None
 
 
 def validate_semantic_model(
@@ -279,7 +442,7 @@ def validate_semantic_model(
     *,
     target_path: str,
     backup_ref: str | None = None,
-    runner: object = None,
+    context: ValidationContext | None = None,
 ) -> ValidationOutcome:
     """Validate the touched semantic model offline, after a write.
 
@@ -300,6 +463,9 @@ def validate_semantic_model(
     # string from inside the repository and validate a different or nonexistent
     # directory -- reporting a good mutation as a validation failure and telling
     # the operator to roll it back (Codex review, PR #659).
+    measured = context if context is not None else ValidationContext()
+    baseline, runner = measured.baseline, measured.runner
+    examined, env = measured.examined, measured.env
     root = Path(repo_root).resolve()
     artifact = root / target_path
     checks_run = ("seshat semantic-check --require-inputs",)
@@ -320,15 +486,7 @@ def validate_semantic_model(
     # `python` is absent or lacks Seshat, so the validator would fail to start and
     # every apply would report a post-mutation validation failure with rollback
     # guidance for a write that was actually fine (Codex review, PR #659).
-    args = (
-        sys.executable,
-        "-m",
-        "seshat.cli",
-        "semantic-check",
-        "--repo",
-        str(root),
-        "--require-inputs",
-    )
+    args = _semantic_argv(root)
     try:
         completed = invoke(root, args)  # type: ignore[operator]
     except (subprocess.TimeoutExpired, OSError):
@@ -340,7 +498,172 @@ def validate_semantic_model(
             blockers=(BLOCKER_VALIDATOR_ERROR,),
         )
 
-    return _outcome_for(
-        completed.returncode,
-        _ValidationRun(root, artifact, target_path, backup_ref, checks_run),
+    run = _ValidationRun(
+        root,
+        artifact,
+        target_path,
+        backup_ref,
+        checks_run,
+        baseline,
+        completed.stdout or "",
+        examined,
     )
+    semantic = _outcome_for(completed.returncode, run)
+    if semantic.blocking:
+        # Terminal. Running further validators against an artifact already known
+        # bad adds noise, not information -- and the operator's next move is the
+        # rollback this outcome already carries.
+        return semantic
+    return _merged_with_other_legs(semantic, run, env)
+
+
+def _merged_with_other_legs(
+    semantic: ValidationOutcome,
+    run: _ValidationRun,
+    env: Mapping[str, str] | None,
+) -> ValidationOutcome:
+    """Fold the binding and value legs into a clean semantic result (FR-013).
+
+    Both legs report `(checks_run, failures, skipped)`, so a leg that could not
+    run contributes a REASON rather than silence.
+    """
+    model_dir = _model_dir_for(run.artifact)
+    bind_run, bind_failed, bind_skipped = validate_bindings_for(
+        run.repo_root, model_dir
+    )
+    value_run, value_failed, value_skipped = validate_value_for(
+        run.repo_root, env=os.environ if env is None else env
+    )
+
+    failed = (*semantic.failed, *bind_failed, *value_failed)
+    return ValidationOutcome(
+        checks_run=(*semantic.checks_run, *bind_run, *value_run),
+        artifacts_examined=semantic.artifacts_examined,
+        failed=failed,
+        rollback_guidance=(
+            rollback_guidance_for(run.target_path, run.backup_ref) if failed else ()
+        ),
+        blockers=(BLOCKER_VALIDATION_FAILED,) if failed else (),
+        checks_skipped=(*semantic.checks_skipped, *bind_skipped, *value_skipped),
+    )
+
+
+def _model_dir_for(artifact: Path) -> Path:
+    """The ``*.SemanticModel`` directory containing ``artifact``.
+
+    The target may be the model folder itself or a file inside it (research R8:
+    the vendor binds and flushes a whole folder), so walk up to the
+    ``.SemanticModel`` ancestor. With no such ancestor, fall back to the
+    artifact's own directory -- which simply pairs no reports.
+    """
+    for candidate in (artifact, *artifact.parents):
+        if candidate.name.endswith(".SemanticModel"):
+            return candidate
+    return artifact if artifact.is_dir() else artifact.parent
+
+
+def _real_binding_validator() -> object:
+    """The shipped validator, imported lazily so the stdlib-only chain stays clean."""
+    from seshat.pbir_validate_bindings import validate_bindings
+
+    return validate_bindings
+
+
+def validate_bindings_for(
+    repo_root: Path,
+    model_dir: Path,
+    *,
+    validator: object = None,
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, str], ...]]:
+    """Validate every report bound to ``model_dir``. Returns (run, failures, skipped).
+
+    Only ``status == "blocked"`` is a failure. A kind mismatch is the shipped
+    validator's WARNING class, so promoting it here would block writes the
+    report layer itself does not consider broken.
+
+    A validator that raises becomes a recorded SKIP, never an implicit pass: a
+    crashed check that reads clean is exactly the fail-open this module exists
+    to prevent.
+    """
+    from seshat.pbi_mcp_adapter.validation_plan import BINDING_CHECK, paired_reports
+
+    paired, skipped_pairs = paired_reports(repo_root, model_dir)
+    skipped = list(skipped_pairs)
+    if not paired:
+        skipped.append(
+            (
+                BINDING_CHECK,
+                "no report in this repository is bound to the mutated model, so "
+                "no binding check ran",
+            )
+        )
+        return (), (), tuple(skipped)
+
+    invoke = validator if validator is not None else _real_binding_validator()
+    checks_run: list[str] = []
+    failures: list[str] = []
+    for report_dir in paired:
+        try:
+            result = invoke(report_dir=report_dir, model_dir=model_dir)  # type: ignore[operator]
+        except Exception as exc:  # noqa: BLE001 - ANY validator error is a skip
+            skipped.append(
+                (
+                    BINDING_CHECK,
+                    f"{report_dir.name}: validator did not complete ({exc})",
+                )
+            )
+            continue
+        checks_run.append(f"{BINDING_CHECK} {report_dir.name}")
+        if getattr(result, "status", "") == "blocked":
+            failures.append(
+                f"{BINDING_CHECK} {report_dir.name}: "
+                f"{len(result.unresolved)} unresolved binding(s)"
+            )
+    return tuple(checks_run), tuple(failures), tuple(skipped)
+
+
+def validate_value_for(
+    repo_root: Path,
+    *,
+    env: Mapping[str, str],
+    runner: object = None,
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, str], ...]]:
+    """Recompute approved values live, or record loudly that we could not.
+
+    No data leg is a SKIP WITH A REASON, never silence and never a pass
+    (decision D2): the shipped ``retail validate`` posture is
+    ``[PENDING LIVE PROFILE]``, and "no data leg" must not read as "validated".
+
+    No DSN value is ever interpolated into a reason or a failure. Those strings
+    reach evidence and stdout, so only the PRESENCE of a data leg is ever
+    consulted -- never its content.
+    """
+    from seshat.pbi_mcp_adapter.validation_plan import VALUE_CHECK, dsn_is_available
+
+    if not dsn_is_available(env):
+        return (
+            (),
+            (),
+            (
+                (
+                    VALUE_CHECK,
+                    "[PENDING LIVE PROFILE] no data leg is configured, so approved "
+                    "values were not recomputed after this write",
+                ),
+            ),
+        )
+
+    root = Path(repo_root).resolve()
+    argv = (sys.executable, "-m", "seshat.cli", VALUE_CHECK, "--repo", str(root))
+    invoke = runner if runner is not None else _run_validator
+    try:
+        completed = invoke(root, argv)  # type: ignore[operator]
+    except (subprocess.TimeoutExpired, OSError):
+        return ((), (), ((VALUE_CHECK, "the value validator did not complete"),))
+    if completed.returncode != 0:
+        return (
+            (f"seshat {VALUE_CHECK}",),
+            (f"seshat {VALUE_CHECK} exit {completed.returncode}",),
+            (),
+        )
+    return ((f"seshat {VALUE_CHECK}",), (), ())
