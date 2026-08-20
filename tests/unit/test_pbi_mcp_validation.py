@@ -575,3 +575,39 @@ def test_validator_receives_an_absolute_repo_path(tmp_path: Path) -> None:
     )
     # And the cwd handed to the runner must agree with it.
     assert Path(seen["cwd"]).resolve() == tmp_path.resolve()
+
+
+# --------------------------------------------------------------------------
+# Issue #661 -- a validator that did not run says so, and says why.
+# --------------------------------------------------------------------------
+
+
+def test_a_skipped_check_is_recorded_with_its_reason() -> None:
+    """Absence is never a pass: a check that did not run says so, and why."""
+    outcome = validation.ValidationOutcome(
+        checks_run=("seshat semantic-check --require-inputs",),
+        artifacts_examined=("Target.SemanticModel/definition/sales.tmdl",),
+        failed=(),
+        rollback_guidance=(),
+        blockers=(),
+        checks_skipped=(("value-check", "[PENDING LIVE PROFILE] no DSN resolved"),),
+    )
+
+    assert outcome.passed is True, "a recorded skip is not a failure"
+    assert outcome.blocking is False, "a recorded skip does not block"
+    assert outcome.checks_skipped == (
+        ("value-check", "[PENDING LIVE PROFILE] no DSN resolved"),
+    )
+
+
+def test_a_skip_must_carry_a_reason() -> None:
+    """A skip with no reason is indistinguishable from a check nobody ran."""
+    with pytest.raises(validation.ValidationInvalid):
+        validation.ValidationOutcome(
+            checks_run=("seshat semantic-check --require-inputs",),
+            artifacts_examined=("x.tmdl",),
+            failed=(),
+            rollback_guidance=(),
+            blockers=(),
+            checks_skipped=(("value-check", ""),),
+        )

@@ -21,6 +21,8 @@ The invalid states this type refuses to hold:
 
   * ``passed`` with ``artifacts_examined == ()``  -> nothing was read
   * ``failed`` with ``rollback_guidance == ()``   -> a failure nobody can undo
+  * a ``checks_skipped`` entry with an empty reason -> a skip nobody explained,
+    which reads exactly like a check nobody ran (issue #661)
 """
 
 from __future__ import annotations
@@ -70,11 +72,22 @@ class ValidationOutcome:
     failed: tuple[str, ...]
     rollback_guidance: tuple[str, ...]
     blockers: tuple[str, ...]
+    #: (check, reason) for every validator that did NOT run. Deliberately not a
+    #: bare list of names: a skip whose cause is unrecorded reads exactly like a
+    #: check nobody thought to run, which is the shape this module exists to
+    #: prevent. An empty tuple means "nothing was skipped", never "we did not
+    #: look" -- the same distinction ``checks_run`` already draws upstream.
+    checks_skipped: tuple[tuple[str, str], ...] = ()
 
     @property
     def _failure_lacks_guidance(self) -> bool:
         """A failure the operator cannot undo is not an actionable result."""
         return bool(self.failed) and not self.rollback_guidance
+
+    @property
+    def _skip_without_a_reason(self) -> bool:
+        """A skip nobody explained reads exactly like a check nobody ran."""
+        return any(not reason for _check, reason in self.checks_skipped)
 
     @property
     def _silence_without_a_read(self) -> bool:
@@ -90,6 +103,11 @@ class ValidationOutcome:
             raise ValidationInvalid(
                 "an outcome with no findings AND no artifacts examined must carry "
                 f"the {BLOCKER_READ_NOTHING} blocker: nothing was verified"
+            )
+        if self._skip_without_a_reason:
+            raise ValidationInvalid(
+                "a skipped check must name why it was skipped; an unexplained "
+                "skip is indistinguishable from a check that never ran"
             )
 
     @property
