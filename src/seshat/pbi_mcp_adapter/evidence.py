@@ -123,6 +123,12 @@ class RunEvidence:
     #: only what passed invites a reader to assume everything was checked
     #: (issue #661).
     checks_skipped: tuple[tuple[str, str], ...] = field(default_factory=tuple)
+    #: The vendor build that actually ran, from the handshake's
+    #: ``serverInfo.version``. ``npx`` resolves a floating tag, so without this
+    #: the run is not merely unpinned but untraceable (issue #658). ``None``
+    #: when no handshake completed -- never a placeholder string, which a reader
+    #: would take for a measured value.
+    runtime_version: str | None = None
 
     def __post_init__(self) -> None:
         if self.outcome not in OUTCOMES:
@@ -158,6 +164,11 @@ class RunEvidence:
                 {"check": redact(check), "reason": redact(reason)}
                 for check, reason in self.checks_skipped
             ],
+            "runtime_version": (
+                redact(self.runtime_version)
+                if self.runtime_version is not None
+                else None
+            ),
         }
 
 

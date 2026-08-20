@@ -212,6 +212,9 @@ class WriteReport:
     checks_run: tuple[str, ...] = ()
     validation_failed: tuple[str, ...] = ()
     checks_skipped: tuple[tuple[str, str], ...] = ()
+    #: The vendor build that ran (issue #658); None if the runtime was never
+    #: reached.
+    runtime_version: str | None = None
 
     @property
     def succeeded(self) -> bool:
@@ -240,6 +243,9 @@ class _Ending:
     #: Validators that did NOT run, with why. Carried alongside `checks_run` so
     #: the record and the report cannot disagree about what was verified.
     checks_skipped: tuple[tuple[str, str], ...] = ()
+    #: The vendor build that ran, from the handshake (issue #658). None on every
+    #: path that never reached the runtime -- honestly, since none measured it.
+    runtime_version: str | None = None
 
 
 def _terminate(
@@ -264,6 +270,7 @@ def _terminate(
         blockers=ending.blockers,
         rollback_guidance=ending.rollback_guidance,
         checks_skipped=ending.checks_skipped,
+        runtime_version=ending.runtime_version,
     )
     path = evidence.finalize(repo_root, record)
     return WriteReport(
@@ -278,6 +285,7 @@ def _terminate(
         checks_run=ending.checks_run,
         validation_failed=ending.validation_failed,
         checks_skipped=ending.checks_skipped,
+        runtime_version=ending.runtime_version,
     )
 
 
@@ -302,6 +310,31 @@ class _Execution:
     mcp_runner: object
     validator: object
     terminal: object
+
+
+def _runtime_failure(result, terminal, guidance: tuple[str, ...]) -> WriteReport:
+    """Terminate a run whose runtime did not succeed.
+
+    A stalled or crashed runtime may have left the artifact half-written, so this
+    is indeterminate rather than a clean failure.
+
+    Either way the outcome is `blocked`, and the exit code carries the
+    difference. `cli-contract.md` defines exit 1 as "Refused before execution ...
+    Evidence outcome `blocked`. Nothing was mutated." and exit 3 as
+    indeterminate, also `blocked`. Recording `failed` for a runtime that never
+    launched (npx absent, say) gave evidence consumers a state the contract does
+    not define for exit 1 (Codex review, PR #659).
+    """
+    indeterminate = result.mutation_attempted
+    return terminal(
+        exit_code=EXIT_INDETERMINATE if indeterminate else EXIT_REFUSED,
+        outcome="blocked",
+        tool=runner.VENDOR_PACKAGE,
+        runtime_version=result.runtime_version,
+        mutation_attempted=result.mutation_attempted,
+        blockers=result.blockers or (runner.BLOCKER_RUNTIME_UNEXPLAINED,),
+        rollback_guidance=guidance,
+    )
 
 
 def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
@@ -335,24 +368,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
     )
 
     if not result.succeeded:
-        # A stalled or crashed runtime may have left the artifact half-written, so
-        # this is indeterminate rather than a clean failure.
-        #
-        # Either way the outcome is `blocked`, and the exit code carries the
-        # difference. `cli-contract.md` defines exit 1 as "Refused before
-        # execution ... Evidence outcome `blocked`. Nothing was mutated." and exit
-        # 3 as indeterminate, also `blocked`. Recording `failed` for a runtime
-        # that never launched (npx absent, say) gave evidence consumers a state
-        # the contract does not define for exit 1 (Codex review, PR #659).
-        indeterminate = result.mutation_attempted
-        return terminal(
-            exit_code=EXIT_INDETERMINATE if indeterminate else EXIT_REFUSED,
-            outcome="blocked",
-            tool=runner.VENDOR_PACKAGE,
-            mutation_attempted=result.mutation_attempted,
-            blockers=result.blockers or (runner.BLOCKER_RUNTIME_UNEXPLAINED,),
-            rollback_guidance=guidance,
-        )
+        return _runtime_failure(result, terminal, guidance)
 
     # Did the run do what it was authorized to do? A no-op and an out-of-scope
     # mutation both previously reported `materialized`.
@@ -362,6 +378,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
             exit_code=EXIT_VALIDATION_FAILED,
             outcome="failed",
             tool=runner.VENDOR_PACKAGE,
+            runtime_version=result.runtime_version,
             mutation_attempted=result.mutation_attempted,
             blockers=effect_blockers,
             rollback_guidance=guidance,
@@ -381,6 +398,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
             exit_code=EXIT_VALIDATION_FAILED,
             outcome="failed",
             tool=runner.VENDOR_PACKAGE,
+            runtime_version=result.runtime_version,
             mutation_attempted=result.mutation_attempted,
             blockers=outcome.blockers,
             rollback_guidance=outcome.rollback_guidance or guidance,
@@ -394,6 +412,7 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
         exit_code=EXIT_OK,
         outcome="materialized",
         tool=runner.VENDOR_PACKAGE,
+        runtime_version=result.runtime_version,
         mutation_attempted=result.mutation_attempted,
         checks_run=outcome.checks_run,
         validation_failed=outcome.failed,

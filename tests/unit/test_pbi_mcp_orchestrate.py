@@ -626,3 +626,18 @@ def test_a_pre_existing_finding_elsewhere_does_not_block_an_apply(
 
     assert report.outcome == "materialized", f"blocked by: {report.blockers}"
     assert report.rollback_guidance == ()
+
+
+def test_an_apply_records_the_runtime_build_that_ran(ready_repo: Path) -> None:
+    """#658 end to end: the field is useless unless the apply path fills it.
+
+    Guards the dead-field trap -- `RunResult` carrying a version that never
+    reaches the record would pass every unit test and record nothing.
+    """
+    report = _apply(ready_repo)
+
+    assert report.evidence_path is not None
+    payload = json.loads(report.evidence_path.read_text(encoding="utf-8"))
+    assert payload["runtime_version"] == "0.5.0.0", (
+        f"the resolved runtime version never reached the record: {payload}"
+    )

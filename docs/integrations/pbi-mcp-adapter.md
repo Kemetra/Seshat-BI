@@ -228,6 +228,30 @@ A validator that could not run -- no data leg, an unreadable `definition.pbir`, 
 validator -- is likewise recorded with its reason. **An empty `checks_skipped` means nothing
 was skipped, not that nothing was checked.**
 
+### Which vendor build ran
+
+`npx` resolves a floating tag, so the argv carries a version **floor** --
+`@microsoft/powerbi-modeling-mcp@^0.5.0-beta` -- rather than a pin. Measured
+2026-08-20: the package publishes only prereleases (`0.5.0-beta.2` through
+`0.5.0-beta.12`), so there is nothing stable to pin to, and pinning a beta would
+freeze the adapter onto a build the publisher may unpublish. The floor still refuses
+a surprise jump to an incompatible future major.
+
+The range lives in the argv only. `VENDOR_PACKAGE` stays the bare identity because
+`pbi_mcp.detect` matches it as a **substring** to gate the bypass prohibition, and it
+is the `tool=` label on every evidence record -- a version suffix there would change
+what a refusal recognises.
+
+Because the resolved build can differ between runs, every record names it:
+`runtime_version` carries the handshake's `serverInfo.version`, and the CLI `--json`
+verdict reports the same value. It is `null`, never a placeholder, when no handshake
+completed -- a run that never reached the runtime measured nothing, and a string
+there would read as a measurement.
+
+The supported-version *range* stays `unknown` in `drift.py`, and `PBIMCP-DRIFT-03`
+still refuses to treat `unknown` as compatible. Capability **drift**, not version
+compatibility, remains the gate while the vendor is a preview.
+
 ### Known blocked scope
 
 **FR-011b** (verifying the definition against a content hash recorded at approval time)
