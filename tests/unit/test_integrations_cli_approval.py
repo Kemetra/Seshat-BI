@@ -259,3 +259,27 @@ def test_gate_module_performs_no_subprocess_or_network_call() -> None:
     for forbidden in ("subprocess", "urllib", "requests", "socket", "os.system"):
         assert forbidden not in source, forbidden
     assert subprocess is not None  # the test module may use it; the gate may not
+
+
+def test_authorization_is_not_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T038 (FR-016): a valid approval does not make a failed install "ready".
+
+    Authorization and verification are different questions. When apply runs under
+    a real approval but the resulting plan still needs operator action, the run
+    must report non-zero rather than success.
+    """
+    root = _workspace(tmp_path)
+    failed = _canonical_outcome(status="failed")
+    monkeypatch.setattr(integrations_setup, "live_resolvers", lambda: object())
+    monkeypatch.setattr(integrations_setup, "plan_profile", lambda *a, **k: failed)
+    monkeypatch.setattr(integrations_setup, "apply_profile", lambda *a, **k: failed)
+    monkeypatch.setattr(
+        "seshat.integrations.approval.evaluate",
+        lambda *a, **k: ApprovalVerdict(
+            True, "authorized", "", owner="A B (governance)"
+        ),
+    )
+
+    assert integrations_main(_args(root, refresh=True, apply=True, yes=True)) != 0
