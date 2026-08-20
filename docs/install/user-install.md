@@ -65,7 +65,7 @@ install use `pipx install "seshat-bi[stats]"`. To add it to an existing Seshat
 environment without replacing the installed application:
 
 ```powershell
-pipx inject seshat-bi --force "numpy==2.5.1" "scipy==1.18.0" "statsmodels==0.14.6"
+pipx inject seshat-bi --force "numpy==2.5.2" "scipy==1.18.0" "statsmodels==0.14.6"
 ```
 
 Change-point detection additionally needs:

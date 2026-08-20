@@ -39,6 +39,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       code_changed: ${{ steps.classify.outputs.code_changed }}
+      contracts_required: ${{ steps.classify.outputs.contracts_required }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -59,6 +60,7 @@ jobs:
           # A manual dispatch is an explicit request for the complete suite.
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             echo "code_changed=true" >> "$GITHUB_OUTPUT"
+            echo "contracts_required=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -70,41 +72,20 @@ jobs:
             push)
               if [ -z "$BEFORE_SHA" ] || [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
                 echo "code_changed=true" >> "$GITHUB_OUTPUT"
+                echo "contracts_required=true" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
               git diff --name-only "$BEFORE_SHA" "$CURRENT_SHA" > "$changed_file"
               ;;
             *)
               echo "code_changed=true" >> "$GITHUB_OUTPUT"
+              echo "contracts_required=true" >> "$GITHUB_OUTPUT"
               exit 0
               ;;
           esac
 
-          # Only human-facing prose and documentation images qualify. Governed
-          # Markdown such as AGENTS.md, CLAUDE.md, COMPASS.md, skills/** and
-          # specs/** deliberately falls through to the full suite.
-          code_changed=false
-          if [ ! -s "$changed_file" ]; then
-            code_changed=true
-          else
-            while IFS= read -r path; do
-              case "$path" in
-                docs/*.md|docs/*.rst|docs/*.txt|docs/*.png|docs/*.jpg|docs/*.jpeg|docs/*.gif|docs/*.svg|\
-                .github/ISSUE_TEMPLATE/*.md|.github/PULL_REQUEST_TEMPLATE.md|\
-                CHANGELOG.md|CODE_OF_CONDUCT.md|CONTRIBUTING.md|ONBOARDING.md|README.md|RELEASE_NOTES.md|SECURITY.md)
-                  ;;
-                *)
-                  code_changed=true
-                  break
-                  ;;
-              esac
-            done < "$changed_file"
-          fi
-
-          echo "code_changed=$code_changed" >> "$GITHUB_OUTPUT"
-          if [ "$code_changed" = "false" ]; then
-            echo "Documentation-only change: code-heavy jobs will report skipped/success."
-          fi
+          python3 scripts/classify_ci_changes.py --changed-files "$changed_file" \
+            >> "$GITHUB_OUTPUT"
 
   check:
     needs: changes
@@ -121,8 +102,15 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
-      - name: Install package
+      - name: Install package core
+        if: ${{ needs.changes.outputs.code_changed != 'true' }}
+        run: pip install -e .
+
+      - name: Install development environment
+        if: ${{ needs.changes.outputs.code_changed == 'true' }}
         run: pip install -e ".[dev]"
 
       - name: Ruff format check
@@ -151,32 +139,6 @@ jobs:
       - name: Unit tests
         if: ${{ needs.changes.outputs.code_changed == 'true' }}
         run: pytest -m unit
-
-      - name: Governed dbt adapter contract
-        if: ${{ needs.changes.outputs.code_changed == 'true' }}
-        # The dbt unit slice runs above via the unit marker. These credential-free
-        # contract/integration tests pin packaging, docs, public imports, artifact
-        # integrity, and the exact plan/evidence flow without contacting a database.
-        run: >-
-          pytest
-          tests/contract/test_dbt_documentation.py
-          tests/contract/test_dbt_package_contract.py
-          tests/contract/test_dbt_project.py
-          tests/contract/test_dbt_public_surface.py
-          tests/integration/test_dbt_artifact_flow.py
-
-      - name: Public distribution contract tests
-        if: ${{ needs.changes.outputs.code_changed == 'true' }}
-        # Explicit blocking gate for version/evidence/export contract behavior.
-        # The repository may truthfully report a candidate as blocked before an
-        # owner-approved version projection; these tests verify that fail-closed
-        # behavior without consuming credentials or publishing anything.
-        run: >-
-          pytest
-          tests/contract/test_public_knowledge_allowlist.py
-          tests/contract/test_generated_agent_bundles.py
-          tests/contract/test_release_version_sync.py
-          tests/contract/test_release_evidence_models.py
 
       - name: Generated agent bundle drift
         run: python scripts/export_agent_bundles.py --check
@@ -210,7 +172,7 @@ jobs:
       - name: Retail semantic-check (L3 contract<->DAX drift)
         # Separate step from `retail check` (above): the static check core is
         # stdlib-only and must never import yaml. `retail semantic-check` parses
-        # metric-contract YAML (pyyaml, already installed via the [dev] extra) to
+        # metric-contract YAML (pyyaml, already installed by the package core) to
         # gate the contract<->DAX denominator drift class (drift => exit 1). No
         # --commit-range: it reads committed TMDL + contracts, not git diffs.
         #
@@ -230,6 +192,44 @@ jobs:
         # Read-only; reads no constitution. On an un-bootstrapped repo it exits 0.
         run: retail kit-lint --repo .
 
+  contract-surfaces:
+    # Default lane for every credential-free test that has no specialized marker.
+    # This closes the false-green gap where an unmarked test was selected by no job.
+    # It is isolated from `check`, so the base environment still proves optional
+    # statistical, Studio and MCP dependencies do not leak into the static core.
+    needs: changes
+    if: ${{ needs.changes.outputs.contracts_required == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: studio-ui/package-lock.json
+      - name: Install contract environments
+        run: pip install -e ".[dev,stats,stats-change,studio,mcp,report,files]"
+      - name: Build the Studio frontend
+        run: python scripts/build_studio_frontend.py
+      - name: Unmarked credential-free contract tests
+        run: pytest -m "not unit and not integration and not live_db and not statistics"
+      - name: Optional surface unit tests
+        run: >-
+          pytest -m unit
+          tests/unit/test_studio_*.py
+          tests/unit/test_report_*.py
+          tests/unit/test_cli_profile_file.py
+      - name: MCP stdio integration
+        run: pytest tests/integration/test_governor_stdio_no_deadlock.py
+
   statistics:
     # Numerical methods are optional at runtime but mandatory in their own
     # credential-free CI environment. The base `check` job remains on .[dev].
@@ -242,6 +242,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Install statistics environment
         run: pip install -e ".[dev,stats,stats-change]"
       - name: Statistical tests
@@ -266,6 +268,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Install report environment
         # `studio` (fastapi/uvicorn) is needed because the Studio accessibility suite
         # below launches the REAL server as a subprocess; `report-pdf` already supplies
@@ -287,6 +291,20 @@ jobs:
           echo "$output"
           if echo "$output" | grep -qi "skipped"; then
             echo "::error::the real-browser test skipped in the job that installs the browser"
+            exit 1
+          fi
+
+      - name: Browser integration surfaces
+        run: |
+          set -euo pipefail
+          output=$(pytest \
+            tests/integration/test_demo_html_browser.py \
+            tests/integration/test_explorer_browser.py \
+            tests/integration/test_showcase_a11y_rtl.py \
+            -q -rs --no-header)
+          echo "$output"
+          if echo "$output" | grep -qi "skipped"; then
+            echo "::error::a browser integration test skipped in the provisioned job"
             exit 1
           fi
 
@@ -335,6 +353,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Install smoke harness tools
         run: python -m pip install build pipx
       - name: Windows first-success smoke
@@ -357,6 +377,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Install smoke harness tools
         run: python -m pip install build pipx
       - name: Best-effort first-success smoke
@@ -388,6 +410,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Install package
         run: pip install -e ".[dev]"
       - name: Validate generated platform bundle
@@ -420,6 +444,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Install credential-free integration environment
         run: pip install build twine -e ".[dev]"
       - name: Credential-free integration tests
@@ -449,6 +475,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Install package
         run: pip install -e ".[dev]"
       - name: Post or update the friendly summary
