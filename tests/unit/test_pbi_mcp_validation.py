@@ -150,7 +150,10 @@ def test_validator_targets_the_semantic_model_family_not_the_report_family(
 
 def test_validation_failure_is_blocking_with_rollback(repo_with_target: Path) -> None:
     outcome = validation.validate_semantic_model(
-        repo_with_target, target_path=TARGET_PATH, runner=_fake_runner(1)
+        repo_with_target,
+        target_path=TARGET_PATH,
+        runner=_fake_runner(1),
+        baseline=frozenset(),
     )
     assert outcome.blocking
     assert not outcome.passed
@@ -300,7 +303,7 @@ def test_every_blocker_id_has_readable_detail() -> None:
         for name, value in vars(validation).items()
         if name.startswith("BLOCKER_") and isinstance(value, str)
     ]
-    assert len(ids) == 3
+    assert len(ids) == 4
     for blocker in ids:
         assert validation.BLOCKER_DETAIL.get(blocker)
         assert blocker.startswith("PBIMCP-VAL-")
@@ -522,7 +525,7 @@ def test_a_target_inside_the_corpus_still_passes(tmp_path: Path) -> None:
     _git(tmp_path, "commit", "-q", "-m", "baseline", "--no-gpg-sign")
 
     outcome = validation.validate_semantic_model(
-        tmp_path, target_path=target_rel, backup_ref=None
+        tmp_path, target_path=target_rel, backup_ref=None, baseline=frozenset()
     )
 
     assert outcome.passed, f"a discoverable target was refused: {outcome.blockers}"
@@ -611,3 +614,117 @@ def test_a_skip_must_carry_a_reason() -> None:
             blockers=(),
             checks_skipped=(("value-check", ""),),
         )
+
+
+# --------------------------------------------------------------------------
+# Issue #663 gap 3 -- attribute a finding to the write that caused it.
+# --------------------------------------------------------------------------
+
+_PRE_EXISTING = (
+    "[error] L3 measure 'Unapproved': no approved metric contract "
+    "(Other.SemanticModel/definition/other.tmdl:2)"
+)
+_NEW = (
+    "[error] L3 measure 'Broken': no approved metric contract "
+    "(models/sales_model.tmdl:4)"
+)
+
+
+def _runner_printing(text: str, returncode: int):
+    def invoke(_root, args):
+        return subprocess.CompletedProcess(
+            args=list(args), returncode=returncode, stdout=text, stderr=""
+        )
+
+    return invoke
+
+
+def test_a_pre_existing_finding_does_not_block_the_write(
+    repo_with_target: Path,
+) -> None:
+    """The gap-3 defect: an error in an UNTOUCHED model blocked a good write and
+    offered rollback guidance that could not possibly fix it."""
+    outcome = validation.validate_semantic_model(
+        repo_with_target,
+        target_path=TARGET_PATH,
+        baseline=frozenset({_PRE_EXISTING}),
+        runner=_runner_printing(_PRE_EXISTING + "\n", 1),
+        examined=lambda _root, _artifact: True,
+    )
+
+    assert outcome.blocking is False, (
+        f"a pre-existing finding blocked: {outcome.failed}"
+    )
+    assert outcome.rollback_guidance == (), "offered rollback for someone else's error"
+    assert outcome.checks_skipped, "the pre-existing finding was silently dropped"
+
+
+def test_a_finding_this_write_introduced_does_block(repo_with_target: Path) -> None:
+    """The check must still work: a NEW finding blocks and carries rollback."""
+    outcome = validation.validate_semantic_model(
+        repo_with_target,
+        target_path=TARGET_PATH,
+        baseline=frozenset({_PRE_EXISTING}),
+        runner=_runner_printing(f"{_PRE_EXISTING}\n{_NEW}\n", 1),
+        examined=lambda _root, _artifact: True,
+    )
+
+    assert outcome.blocking is True
+    assert any(_NEW in item for item in outcome.failed)
+    assert not any(_PRE_EXISTING in item for item in outcome.failed), (
+        "a pre-existing finding was reported as this write's failure"
+    )
+    assert outcome.rollback_guidance, "a failure must carry rollback guidance"
+
+
+def test_an_unobtainable_baseline_blocks(repo_with_target: Path) -> None:
+    """Fails CLOSED. An empty baseline makes every finding look new (noisy but
+    safe); a silently-complete one makes every finding look pre-existing, hiding
+    the exact regression this check exists to catch."""
+    outcome = validation.validate_semantic_model(
+        repo_with_target,
+        target_path=TARGET_PATH,
+        baseline=None,
+        runner=_runner_printing("", 0),
+        examined=lambda _root, _artifact: True,
+    )
+
+    assert outcome.blocking is True
+    assert validation.BLOCKER_BASELINE_UNAVAILABLE in outcome.blockers
+    assert outcome.rollback_guidance, "a blocking outcome must carry rollback guidance"
+
+
+def test_the_baseline_helper_returns_none_when_it_cannot_run(
+    repo_with_target: Path,
+) -> None:
+    """None and an empty set are NOT the same and must stay distinguishable."""
+
+    def explode(_root, _args):
+        raise OSError("validator missing")
+
+    assert validation.semantic_baseline(repo_with_target, runner=explode) is None
+    assert (
+        validation.semantic_baseline(repo_with_target, runner=_runner_printing("", 0))
+        == frozenset()
+    )
+
+
+def test_a_nonzero_exit_with_no_parseable_finding_still_blocks(
+    repo_with_target: Path,
+) -> None:
+    """The baseline diff must not become a way to launder an unexplained failure.
+
+    A validator that exits non-zero while printing nothing the diff can attribute
+    has NOT been shown to be reporting a pre-existing problem. Treating it as
+    pre-existing would both pass a failing run and fabricate the reason why.
+    """
+    outcome = validation.validate_semantic_model(
+        repo_with_target,
+        target_path=TARGET_PATH,
+        baseline=frozenset(),
+        runner=_runner_printing("", 1),
+        examined=lambda _root, _artifact: True,
+    )
+
+    assert outcome.blocking is True, "an unexplained non-zero exit did not block"
+    assert outcome.rollback_guidance, "a blocking outcome must carry rollback guidance"
