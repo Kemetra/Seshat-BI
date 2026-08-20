@@ -33,6 +33,7 @@ from seshat.integrations.catalog import (
     LOCK_FILE,
     MCP_CONFIG,
     NODE_DIR,
+    PROFILE_NAMES,
     SKILLS_DIR,
     STAGING_DIR,
     Channel,
@@ -136,8 +137,38 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# The selection label a derived run reports (spec 155 FR-019). A derived scope is
+# NOT a curated profile, so it must not borrow one's name: `SetupOutcome.profile`
+# is rendered to the user and emitted in JSON, and naming a profile that was not
+# installed would misreport what happened. The JSON SHAPE is unchanged -- spec 144
+# FR-010 protects the shape, not this field's value.
+DERIVED_SELECTION = "derived"
+
+
 def _profile_label(item: Component) -> str:
     return ", ".join(profiles_for(item.id)) or "analytics-full"
+
+
+def _env_profile(root: Path, item: Component, requested: str, derived: bool) -> str:
+    """Which profile environment this component installs into.
+
+    For a profile run this is the requested profile, unchanged -- the existing
+    behaviour, which spec 144 FR-010/FR-011 protect.
+
+    For a DERIVED run it is the environment that already has the component, if
+    any, and otherwise the component's own base profile. Both halves matter:
+    preferring an environment that already holds it is what stops a derived run
+    reinstalling something a previous `analytics-full` run installed (spec 155
+    FR-018), and falling back to the base profile is what keeps a derived scope
+    from inventing an isolation target of its own (spec 155 FR-015).
+    """
+    if not derived:
+        return requested
+    base = profiles_for(item.id)
+    for candidate in (*base, DEFAULT_PROFILE):
+        if _is_installed(root, item, candidate):
+            return candidate
+    return base[0] if base else requested
 
 
 def _lock_resolution(item: Component, lock) -> Resolution | None:
@@ -269,6 +300,7 @@ def plan(
     root: Path,
     *,
     profile: str = DEFAULT_PROFILE,
+    components: tuple[Component, ...] | None = None,
     resolvers: Resolvers | None = None,
     harnesses: tuple[str, ...] = (),
     discovery_runner=None,
@@ -282,8 +314,10 @@ def plan(
     `--refresh` does, and even then nothing is written.
     """
     root = Path(root).resolve()
-    outcome = SetupOutcome(profile=profile)
-    components = profile_components(profile)
+    derived = components is not None
+    label = DERIVED_SELECTION if derived else profile
+    outcome = SetupOutcome(profile=label)
+    components = components if derived else profile_components(profile)
 
     try:
         lock = read_lock(root)
@@ -293,7 +327,7 @@ def plan(
         outcome.rows.append(
             ComponentPlan(
                 component="lock",
-                profile=profile,
+                profile=label,
                 channel="-",
                 pinned="-",
                 source=LOCK_FILE.as_posix(),
@@ -310,14 +344,15 @@ def plan(
     )
     outcome.notes.extend(verdict.reasons)
 
+    envs = {item.id: _env_profile(root, item, profile, derived) for item in components}
     for item, resolved in zip(components, verdict.resolutions):
-        outcome.rows.append(_plan_row(root, item, resolved, profile))
+        outcome.rows.append(_plan_row(root, item, resolved, envs[item.id]))
     outcome.discovery.extend(
         inspect_official_skills(
             root,
             components,
             installed={
-                item.id: _is_installed(root, item, profile) for item in components
+                item.id: _is_installed(root, item, envs[item.id]) for item in components
             },
             inputs=DiscoveryInputs(
                 harnesses=tuple(harnesses),
@@ -471,6 +506,7 @@ def apply(
     root: Path,
     *,
     profile: str = DEFAULT_PROFILE,
+    components: tuple[Component, ...] | None = None,
     resolvers: Resolvers,
     runner=None,
     harnesses: tuple[str, ...] = (),
@@ -486,8 +522,10 @@ def apply(
     """
     root = Path(root).resolve()
     runner = runner or _run
-    outcome = SetupOutcome(profile=profile)
-    components = profile_components(profile)
+    derived = components is not None
+    label = DERIVED_SELECTION if derived else profile
+    outcome = SetupOutcome(profile=label)
+    components = components if derived else profile_components(profile)
 
     try:
         read_lock(root)
@@ -495,7 +533,7 @@ def apply(
         outcome.rows.append(
             ComponentPlan(
                 component="lock",
-                profile=profile,
+                profile=label,
                 channel="-",
                 pinned="-",
                 source=LOCK_FILE.as_posix(),
@@ -512,6 +550,7 @@ def apply(
     )
     outcome.notes.extend(verdict.reasons)
 
+    envs = {item.id: _env_profile(root, item, profile, derived) for item in components}
     installed: list[tuple[str, str, str, Resolution]] = []
     for item, resolved in zip(components, verdict.resolutions):
         row, landed = _install_one(
@@ -519,7 +558,7 @@ def apply(
                 root=root,
                 item=item,
                 resolved=resolved,
-                profile=profile,
+                profile=envs[item.id],
                 runner=runner,
             )
         )
@@ -531,14 +570,16 @@ def apply(
     # A run in which nothing installed writes nothing, so a failed apply leaves
     # the previous lock byte-for-byte intact.
     if installed:
-        document = build_lock(profile, _now(), installed)
+        document = build_lock(label, _now(), installed)
+        if derived:
+            document = _carry_forward(root, document)
         outcome.lock_written = write_lock(root, document)
     outcome.discovery.extend(
         inspect_official_skills(
             root,
             components,
             installed={
-                item.id: _is_installed(root, item, profile) for item in components
+                item.id: _is_installed(root, item, envs[item.id]) for item in components
             },
             inputs=DiscoveryInputs(
                 harnesses=tuple(harnesses),
@@ -550,6 +591,48 @@ def apply(
         )
     )
     return outcome
+
+
+def verified_present(root: Path, item: Component) -> bool:
+    """Whether the control plane's own presence check passes for `item` NOW.
+
+    Deliberately not an install row's status. A handler returning `installed`
+    says a command exited zero; this re-reads the filesystem -- the install
+    marker, the required payload paths declared in the catalog, the distribution
+    metadata inside the environment. Spec 155 FR-016 turns on exactly that
+    difference, which is why the check is exposed rather than inferred by callers.
+
+    Every known environment is consulted, so a component installed by an earlier
+    profile run is not reported missing merely because a derived run would have
+    chosen a different environment for it.
+    """
+    return any(_is_installed(root, item, profile) for profile in PROFILE_NAMES)
+
+
+def _carry_forward(root: Path, document: dict) -> dict:
+    """Keep previously recorded components a DERIVED run did not touch.
+
+    A derived scope is narrower than a profile by design, and the lock is one
+    whole-file document. Writing only what this run installed would therefore
+    discard valid records for components outside the scope -- the state loss spec
+    155 FR-019 forbids.
+
+    Derived runs ONLY. The profile path keeps its existing whole-file semantics,
+    because changing them would alter observable behaviour that spec 144
+    FR-010/FR-011 protect; making the merge symmetric is an amendment and an
+    owner decision, not a side effect of this feature (spec 155 owner decision 3).
+    """
+    try:
+        previous = read_lock(root)
+    except LockError:
+        # An unreadable lock is not something to merge INTO. The run's own record
+        # is written as-is rather than silently inheriting bytes we cannot parse.
+        return document
+    if previous is None:
+        return document
+    merged = dict(previous.components)
+    merged.update(document.get("components") or {})
+    return {**document, "components": merged}
 
 
 def _handler_for(item: Component):

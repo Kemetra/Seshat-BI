@@ -34,23 +34,23 @@ No live DB provisioning, no automated ingestion code, no orchestrator integratio
 unless explicitly requested. Add the seam, not the implementation.
 
 <!-- SPECKIT START -->
-Active plan: `specs/155-guided-setup-execution/plan.md` (guided setup execution -- the seam
-from spec 153's derived capability plan, through spec 154's committed named-human approval,
-to spec 144's existing installer). Specified 2026-08-20; Draft. Phases 0-1 (research and
-design) are done; the 43 implementation tasks wait on ratification. The bridge is a NEW
-module on purpose: two shipped spec-153 tests assert `derivation.py` holds no execution or
-approval call site.
-**Spec 153 (capability-oriented setup) is COMPLETE** -- derivation from committed evidence,
-requirement strength, declines, and the capability->component projection all ship.
-`DEFAULT_PROFILE` is untouched, and its FR-018 boundary -- never inherit the weak approval
--- stays permanent.
-**Spec 154 (issue #671) is COMPLETE** -- `seshat integrations setup --apply` now requires a
-committed named-human `governance` approval in `contracts/provisioning-approvals.yaml`,
-read at HEAD. `--apply` is intent; `--yes` only suppresses the prompt; neither authorizes.
-**Spec 149 (F016 slice 5) is MERGED** (#659), with every post-write validation follow-up
-CLOSED: #657 (#670), #663 (#672), #661 + #663 (#674), #658 (#679). Its one remaining piece
-is the runtime-version PIN, blocked until Microsoft publishes a non-prerelease (measured
-2026-08-20: only `0.5.0-beta.*` exist).
+Active plan: `specs/149-pbi-mcp-write-adapter/plan.md` (F016 slice 5 -- the approval-gated
+Power BI MCP write adapter, ratified 2026-08-18). Implementation MERGED (#659) and every
+post-write validation follow-up CLOSED: #657 (#670), #663 (#672), #661 + #663 (#674),
+#658 (#679). The one remaining task is the runtime-version PIN, blocked until Microsoft
+publishes a non-prerelease (measured 2026-08-20: only `0.5.0-beta.*` exist) -- which is
+why the marker rests here rather than on newer work.
+**Spec 155 (guided setup execution) is IMPLEMENTED, awaiting ratification** -- `seshat
+integrations setup --derived` selects only the components a project's committed evidence
+needs, then provisions them through the existing installer behind spec 154's committed
+`governance` approval. `DEFAULT_PROFILE` and every `--profile` run are untouched; the
+bridge is `integrations/guided_setup.py`, deliberately NOT `derivation.py`, because two
+shipped spec-153 tests assert that file holds no execution or approval call site. Its
+spec.md is still `Draft`: implementation shipped on the owner's instruction, and no agent
+may write the `ratified` line.
+**Specs 153 and 154 are COMPLETE** -- capability derivation with requirement strength and
+declines, and the committed named-human provisioning approval read at HEAD (`--apply` is
+intent; `--yes` only suppresses the prompt; neither authorizes).
 <!-- SPECKIT END -->
 <!-- SESHAT-KIT START -->
 **Seshat BI kit router** (v0.2.0) -- generated from `.seshat/kit-source.yaml`; do not edit here.
