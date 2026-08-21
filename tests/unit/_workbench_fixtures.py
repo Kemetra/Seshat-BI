@@ -89,6 +89,18 @@ class GitWorkspace:
     def head_sha(self) -> str:
         return self._git("rev-parse", "HEAD")
 
+    def tracked_files_at_head(self) -> tuple[str, ...]:
+        """Repo-relative tracked paths at HEAD, in the shape `store_files` expects."""
+        listed = self._git("ls-tree", "-r", "--name-only", "HEAD")
+        return tuple(line for line in listed.splitlines() if line)
+
+    def file_at_head(self, relative: str) -> str | None:
+        """The committed content of one path at HEAD, or None if absent there."""
+        try:
+            return self._git("show", f"HEAD:{relative}")
+        except subprocess.CalledProcessError:
+            return None
+
 
 def git_workspace(root: Path) -> GitWorkspace:
     """Initialise `root` as a real git repo with a committer identity."""
