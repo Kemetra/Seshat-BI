@@ -27,7 +27,6 @@ import subprocess
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import replace
-from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 from typing import Any, cast
@@ -44,7 +43,6 @@ from . import (
     codex_bridge,
     codex_process,
     config,
-    decision_routes,
     events,
     projection,
     redaction,
@@ -276,86 +274,6 @@ def _with_headers(response: Response) -> Response:
 def _register_routes(app: FastAPI) -> None:
     """The seven deterministic routes. Agent-thread routes belong to Phase 4."""
 
-    async def _json_body(request: Request) -> dict[str, Any]:
-        """The request body as a mapping; a non-mapping becomes an empty one.
-
-        Returning {} rather than raising lets the route's own field checks produce the
-        contracted 422 with a useful message, instead of a framework-shaped error.
-        """
-        try:
-            body = await request.json()
-        except Exception:
-            return {}
-        return body if isinstance(body, dict) else {}
-
-    def _proposal_id_for(app: FastAPI, proposal_hash: Any) -> str:
-        """The prepared proposal whose hash matches, or "" when none does.
-
-        Looking the proposal up BY HASH is deliberate: the caller cannot name a
-        proposal id directly and then submit a different hash, so the binding the human
-        reviewed is the one the server resolves.
-        """
-        if not isinstance(proposal_hash, str):
-            return ""
-        for identifier, proposal in app.state.workbench_proposals.items():
-            if proposal.proposal_hash == proposal_hash:
-                return identifier
-        return ""
-
-    def _now_iso() -> str:
-        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    def _committed_reader(app: FastAPI):
-        """A reader for COMMITTED decision state, used by apply's authority check.
-
-        Reads through git rather than the working tree, because that is what the gate
-        reads. `git show HEAD:<path>` returns non-zero when the path is absent at HEAD,
-        which is the "nothing committed yet" case, not an error to surface.
-        """
-        from seshat import gitutil
-
-        root = app.state.launch.workspace_root
-
-        class _Committed:
-            def file_at_head(self, relative: str) -> str | None:
-                result = gitutil.run_subprocess(
-                    # The SHARED hardening tuple, never a local re-listing. Hardcoding
-                    # `core.fsmonitor` alone is exactly how this contract drifted
-                    # before: it leaves hooksPath and protocol.ext live on a tree this
-                    # process did not author.
-                    ["git", *gitutil.GIT_HARDENING, "show", f"HEAD:{relative}"],
-                    cwd=root,
-                    # run_subprocess sets stdin and timeout but NOT capture_output, so
-                    # stdout must be requested explicitly or this reads back empty and
-                    # every committed decision looks absent.
-                    capture_output=True,
-                    text=True,
-                )
-                if getattr(result, "returncode", 1) != 0:
-                    return None
-                return getattr(result, "stdout", "") or None
-
-        return _Committed()
-
-    def _working_tree_decisions(app: FastAPI) -> list[dict]:
-        """Decisions as they stand in the working tree, for the review surface.
-
-        Review SHOWS pending work, so it reads the working tree deliberately -- unlike
-        apply, which must read HEAD. Each entry keeps its `state`, so a reviewer sees
-        `pending_commit` rather than a decision dressed as settled.
-        """
-        import yaml
-
-        path = app.state.launch.workspace_root / decision_routes.DECISION_STORE_REL
-        try:
-            document = yaml.safe_load(path.read_text(encoding="utf-8"))
-        except (OSError, yaml.YAMLError):
-            return []
-        if not isinstance(document, dict):
-            return []
-        entries = document.get("decisions") or []
-        return [item for item in entries if isinstance(item, dict)]
-
     def _snapshot() -> projection.WorkspaceSnapshot:
         return projection.build_workspace_snapshot(
             app.state.launch.workspace_root, agent_health=app.state.agent_health
@@ -431,11 +349,10 @@ def _register_routes(app: FastAPI) -> None:
         return _redact(journey.as_dict())
 
     workbench_routes.register(
-        app,
+        workbench_routes.Deps(
+            app=app, problem=_problem, redact=_redact, snapshot=_snapshot
+        ),
         api_prefix=API_PREFIX,
-        problem=_problem,
-        redact=_redact,
-        snapshot=_snapshot,
     )
 
     @app.get(f"{API_PREFIX}/decisions")

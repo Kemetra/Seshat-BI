@@ -300,14 +300,7 @@ async def review(scope: str | None = None, *, deps: Deps) -> Any:
     return deps.redact(payload)
 
 
-def register(
-    app: FastAPI,
-    *,
-    api_prefix: str,
-    problem,
-    redact,
-    snapshot,
-) -> None:
+def register(deps: Deps, *, api_prefix: str) -> None:
     """Bind the workbench route handlers to `app`.
 
     Each handler is a MODULE-LEVEL function taking its dependencies explicitly, so
@@ -320,7 +313,7 @@ def register(
     boundary and the workspace projection.
     """
     API_PREFIX = api_prefix
-    deps = Deps(app=app, problem=problem, redact=redact, snapshot=snapshot)
+    app = deps.app
 
     @app.get(f"{API_PREFIX}/tables/{{table_id}}/evidence")
     async def _table_evidence(table_id: str) -> Any:
