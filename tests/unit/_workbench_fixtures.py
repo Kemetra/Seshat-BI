@@ -37,6 +37,9 @@ def _app(root: Path, *, table: str):
     module that merely imports these fixtures die at COLLECTION -- including the
     decision-write tests, which need no web stack at all.
     """
+    # DO NOT HOIST to module scope: `ruff check --fix` has done exactly that once, and
+    # it re-broke CI's extras-free `unit` job. Verify with `grep -c '^from fastapi'`
+    # after any lint --fix on this file.
     from fastapi.testclient import TestClient
 
     from seshat.studio.app import create_app
