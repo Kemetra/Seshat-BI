@@ -65,6 +65,9 @@ never self-grants). The authoritative delivered ledger remains
 >   before semantic-model readiness). `mappings/retail_store_sales/readiness-status.yaml`
 >   records **all seven stages `pass`**, `semantic_model_ready` included, with
 >   `publish_ready` re-approved 2026-07-05. The live blocker is now ADR 0018.
+>   *(Superseded 2026-08-21: ADR 0018 was RATIFIED 2026-08-18 and slice 5 shipped, so
+>   ADR 0018 is no longer a blocker at all -- see the reconciliation note in M12. Only
+>   slice 6 remains, on an owner scope/timing decision.)*
 > - **M8 is PARTIAL, and an earlier draft of this note wrongly marked it delivered.**
 >   The advisory `seshat doctor` predates the milestone; none of M8's four deliverables
 >   (JSON output, grouping, repair hints, agent-safe stop instructions) ships, and

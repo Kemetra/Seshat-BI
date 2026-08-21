@@ -732,7 +732,7 @@ capabilities:
 
   - id: pbi-mcp-doctor
     name: "seshat pbi-mcp"
-    summary: "Read-only Power BI execution-owner selector and MCP preflight: detects local MCP facts plus semantic_model_ready/dashboard_ready state, maps closed intents to official Microsoft or bounded Seshat surfaces, and blocks native report authoring until an exact target passes dashboard readiness and official-skill discovery is proven. MCP config generation and preflight remain placeholder-only/read-only; F016 stays parked."
+    summary: "Read-only Power BI execution-owner selector and MCP preflight: detects local MCP facts plus semantic_model_ready/dashboard_ready state, maps closed intents to official Microsoft or bounded Seshat surfaces, and blocks native report authoring until an exact target passes dashboard readiness and official-skill discovery is proven. MCP config generation and preflight remain placeholder-only/read-only. This capability covers the READ-ONLY family only; F016 itself is no longer parked -- ADR 0018 was ratified 2026-08-18 and the governed local-write slice 5 ships separately as `pbi-mcp plan-write` / `apply` (spec 149), with remote slice 6 still unbuilt."
     state: shipped
     authority: agent-runnable
     surface: cli
