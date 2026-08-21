@@ -112,6 +112,7 @@ class Deps:
     problem: Any
     redact: Any
     snapshot: Any
+    api_prefix: str = "/api/v1"
 
 
 async def table_evidence(table_id: str, *, deps: Deps) -> Any:
@@ -300,7 +301,7 @@ async def review(scope: str | None = None, *, deps: Deps) -> Any:
     return deps.redact(payload)
 
 
-def register(deps: Deps, *, api_prefix: str) -> None:
+def register(deps: Deps) -> None:
     """Bind the workbench route handlers to `app`.
 
     Each handler is a MODULE-LEVEL function taking its dependencies explicitly, so
@@ -312,7 +313,7 @@ def register(deps: Deps, *, api_prefix: str) -> None:
     they are app.py's single definitions of the problem shape, the redaction
     boundary and the workspace projection.
     """
-    API_PREFIX = api_prefix
+    API_PREFIX = deps.api_prefix
     app = deps.app
 
     @app.get(f"{API_PREFIX}/tables/{{table_id}}/evidence")

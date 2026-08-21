@@ -349,10 +349,7 @@ def _register_routes(app: FastAPI) -> None:
         return _redact(journey.as_dict())
 
     workbench_routes.register(
-        workbench_routes.Deps(
-            app=app, problem=_problem, redact=_redact, snapshot=_snapshot
-        ),
-        api_prefix=API_PREFIX,
+        workbench_routes.Deps(app, _problem, _redact, _snapshot, API_PREFIX)
     )
 
     @app.get(f"{API_PREFIX}/decisions")
