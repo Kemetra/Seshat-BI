@@ -423,7 +423,13 @@ components:
             technical_approvals:
               type: boolean
             business_decision_recording:
-              const: false
+              # Was `const: false` for Foundation. Widened to a boolean by spec 140
+              # (ratified 2026-08-21), which FR-022 anticipated by name: "decision
+              # transcription belongs to the next governed-workbench spec". The flag
+              # is now derived from whether `POST /decisions/record` is reachable, so
+              # pinning it false here would make the contract contradict the shipped
+              # build. Foundation-only deployments still report false.
+              type: boolean
     WorkspaceSnapshot:
       type: object
       additionalProperties: false

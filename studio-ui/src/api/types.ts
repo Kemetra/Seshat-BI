@@ -90,7 +90,7 @@ export interface BootstrapState {
   capabilities: {
     agent_turns: boolean;
     technical_approvals: boolean;
-    business_decision_recording: false;
+    business_decision_recording: boolean;
   };
 }
 

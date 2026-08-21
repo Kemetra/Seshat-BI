@@ -28,11 +28,11 @@ existing Studio asset pipeline.
 **Spec status:** **ratified** -- Ahmed Shaaban (owner), 2026-08-21. Phases 0 and 1
 below (research, design) are complete.
 
-**Implementation phases remain BLOCKED.** FR-140-020 sets two conditions and only the
-first is met: the package is ratified, but the **sole active Spec Kit fence must still
-be moved to this plan**. Ratification is not activation — spec 139 carried the same
-distinction ("Ratification does not activate implementation"). Until the fence moves,
-no task in `tasks.md` may start.
+**Implementation is AUTHORIZED.** FR-140-020's two conditions are both met: the
+package was ratified by Ahmed Shaaban (owner) 2026-08-21, and the owner moved the sole
+active Spec Kit fence (`.specify/feature.json`) to this plan on 2026-08-21. Spec 149
+was parked with four tasks open (including the owner-facing T053) to free the fence,
+which is a singleton.
 
 ## Global Constraints
 

@@ -8,6 +8,31 @@
 Decision 8 authorizes this task list; the mutation path ships only under this spec's tests and
 review.
 
+> ## PARKED 2026-08-21 -- the active fence moved to spec 140
+>
+> The owner directed the sole active Spec Kit fence (`.specify/feature.json`) to
+> `specs/140-studio-governed-workbench` on 2026-08-21, with **four tasks here still
+> open**. This spec is parked, not complete, and not abandoned. Verified open against
+> the filesystem, not just the checkboxes:
+>
+> - **T012b** -- `ApprovedDefinition` resolution + hash verification feeding
+>   `operation_binds`. `gate.py` declares the field; the resolution is not built.
+> - **T017** -- `src/seshat/pbi_mcp_adapter/target.py` **does not exist**.
+> - **T018** -- `src/seshat/pbi_mcp_adapter/git_safety.py` **does not exist**.
+> - **T053** -- **OWNER-FACING, still needs a ruling.** Retiring
+>   `VENDORED_RUNTIME_DIR` (`pbi_mcp/detect.py:56`) changes a security guard's
+>   identity set: it has TWO consumers, `DetectedFacts.vendored_runtime`
+>   (`detect.py:491`) and the bypass-prohibition matcher `_looks_powerbi_shaped`
+>   (`detect.py:110`). Narrowing what that matcher recognises as Power BI-shaped is
+>   not cosmetic.
+>
+> **The shipped state is safe to park**: the checkpoint after Phase 3 records that
+> the adapter "can refuse correctly and cannot yet write at all". Parking leaves a
+> fail-closed adapter, not a half-open one. Do not read the `Ratified` status line as
+> completion -- a status describes the ruling, not the progress.
+>
+> Resuming requires moving the fence back; it is a singleton.
+
 > **TDD is mandatory here.** Every implementation task has a preceding test task, and the test
 > must fail for the right reason before the implementation lands. Two repo-specific bars, both
 > earned from real defects:

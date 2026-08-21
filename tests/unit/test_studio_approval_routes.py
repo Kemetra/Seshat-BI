@@ -100,13 +100,18 @@ def _armed(tmp_path: Path, event: dict[str, Any], forbidden: list[str] | None = 
 # --------------------------------------------------------------------------- #
 
 
-def test_no_business_decision_route_can_mutate(tmp_path: Path):
-    """FR-022: Studio may PREPARE business-decision summaries, never RECORD them.
+def test_the_only_mutating_decision_route_is_the_spec_140_recorder(tmp_path: Path):
+    """Spec 140 SUPERSEDES this test's original form, and FR-022 said it would.
 
-    The assertion is about METHODS, not path names. `/decisions` legitimately exists
-    as a contract-specified GET (`listDecisionSummaries`) -- read-only prepared
-    summaries are the half FR-022 allows. What must not exist is a mutating verb on
-    any decision path, because that is the half it forbids.
+    FR-022 reads: "Foundation MUST prepare but MUST NOT record named-human business
+    decisions; **decision transcription belongs to the next governed-workbench
+    spec**." That successor is spec 140, ratified 2026-08-21, so `POST
+    /decisions/record` existing is FR-022 being honoured on schedule -- not breached.
+
+    The boundary that survives is narrower and still enforced here: exactly ONE
+    mutating decision route exists. A second one appearing is what this test now
+    catches, since two write paths would mean two accounts of how a ruling is
+    recorded.
     """
     _, app = _client(tmp_path)
     paths = app.openapi()["paths"]
@@ -118,8 +123,8 @@ def test_no_business_decision_route_can_mutate(tmp_path: Path):
         for method in operations
         if method.lower() in mutating
     }
-    assert offenders == set()
-    # Positive form: the read-only summary route IS present, and IS a GET only.
+    assert offenders == {f"POST {API}/decisions/record"}
+    # The read-only summary route is untouched and still a GET only.
     assert set(paths[f"{API}/decisions"]) == {"get"}
 
 
@@ -136,18 +141,19 @@ def test_no_capability_is_advertised_that_this_build_cannot_deliver():
     the seam are asserted together, so a refactor that removes delivery must fail here
     instead of leaving the browser told it can carry an approval to completion.
 
-    `business_decision_recording` stays const False -- FR-022 places that outside
-    Studio permanently, and no seam will ever flip it.
+    `business_decision_recording` is now DERIVED too (spec 140): True exactly when the
+    recording route is reachable. Asserted from both sides below, because a flag that
+    is hardcoded either way is the defect -- under-reporting a shipped seam is a lie in
+    the same class as over-reporting a missing one.
     """
     from types import SimpleNamespace
 
     from seshat.studio.app import _bootstrap_capabilities
 
-    # `agent_turns` is now DERIVED from `app.state.agent_turns_refused`, so the
-    # function takes the app. The two flags asserted here are unaffected by that state
-    # -- which is the point: a stand-in with no `agent_turns_refused` at all must still
-    # produce them, because neither depends on the provider outcome.
-    capabilities = _bootstrap_capabilities(SimpleNamespace(state=SimpleNamespace()))
+    # A stand-in with NO routes: the derivation must report recording unavailable
+    # rather than advertising a route this object does not have.
+    routeless = SimpleNamespace(state=SimpleNamespace(), routes=[])
+    capabilities = _bootstrap_capabilities(routeless)
     assert capabilities["technical_approvals"] is True
     assert capabilities["business_decision_recording"] is False
 

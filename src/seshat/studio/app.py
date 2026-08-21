@@ -47,6 +47,7 @@ from . import (
     projection,
     redaction,
     session,
+    workbench_routes,
 )
 from .approvals import prepared_summary
 from .bridge_selection import select_bridge
@@ -139,16 +140,33 @@ def _bootstrap_capabilities(app: FastAPI) -> dict[str, Any]:
     `test_the_advertised_capability_is_backed_by_a_reachable_delivery_seam`, so
     removing delivery fails a test rather than silently re-opening that gap.
 
-    `business_decision_recording` stays const False: FR-022 places a named-human
-    governance ruling outside Studio permanently, not pending a future seam. Its
-    constancy is a governance decision rather than an unfinished one, which is why it
-    is NOT derived alongside `agent_turns`.
+    **`business_decision_recording` became True with spec 140, and that is FR-022
+    being honoured rather than broken.** FR-022 reads: "Foundation MUST prepare but
+    MUST NOT record named-human business decisions; decision transcription belongs to
+    the next governed-workbench spec." It scoped the flag to FOUNDATION, naming the
+    successor that would carry recording -- spec 140, ratified 2026-08-21. Leaving the
+    flag False now would be the dishonest option: `POST /decisions/record` exists and
+    works, so a False here would under-report a shipped seam, which the `agent_turns`
+    note above identifies as a lie in the other direction rather than the safe default.
     """
     return {
         "agent_turns": not getattr(app.state, "agent_turns_refused", False),
         "technical_approvals": True,
-        "business_decision_recording": False,
+        # Derived, like `agent_turns`: True exactly when the recording route is
+        # reachable, so the flag cannot drift from the capability.
+        "business_decision_recording": _decision_recording_available(app),
     }
+
+
+def _decision_recording_available(app: FastAPI) -> bool:
+    """True when this build exposes the spec-140 named-human recording route.
+
+    Reads the SAME registry the route is registered into, so the advertisement and the
+    capability cannot disagree -- a second definition of "can this build record" is the
+    defect, not the value it holds.
+    """
+    target = f"{API_PREFIX}/decisions/record"
+    return any(getattr(route, "path", None) == target for route in app.routes)
 
 
 def _check_host(request: Request, app: FastAPI) -> JSONResponse | None:
@@ -329,6 +347,10 @@ def _register_routes(app: FastAPI) -> None:
                 "Open the Command Room to see the tables in this workspace.",
             )
         return _redact(journey.as_dict())
+
+    workbench_routes.register(
+        workbench_routes.Deps(app, _problem, _redact, _snapshot, API_PREFIX)
+    )
 
     @app.get(f"{API_PREFIX}/decisions")
     async def decisions() -> Any:
@@ -514,6 +536,12 @@ def create_app(
     )
     app.state.launch = launch
     app.state.sessions = session.SessionStore(token)
+    #: Prepared proposals, keyed by proposal_id. In-process on purpose: a proposal is a
+    #: review artifact, not a durable record, and persisting it would create a second
+    #: store the gate does not read. Initialised HERE rather than lazily so the routes
+    #: never read an attribute nothing wrote.
+    app.state.workbench_proposals = {}
+    app.state.workbench_decision_counter = 0
     app.state.expected_host = f"{launch.bind_host}:{launch.port}"
     #: FR-013a: the default and the only path SC-010 certifies. An
     #: operator-configured alternate bridge sets this to

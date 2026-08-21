@@ -476,10 +476,15 @@ def test_the_bootstrap_state_names_the_active_authentication_mode(
 def test_the_bootstrap_state_declares_business_decisions_unrecordable(
     authed_client,
 ) -> None:
-    """FR-022 -- Foundation records no named-human business decision."""
+    """Spec 140 supersedes the Foundation-era value; FR-022 named that successor.
+
+    FR-022 forbade recording in FOUNDATION and said transcription "belongs to the next
+    governed-workbench spec" -- spec 140, ratified 2026-08-21. The flag now reports the
+    shipped `POST /decisions/record` route, so True is the truthful value here.
+    """
     body = authed_client.get("/api/v1/bootstrap/state").json()
 
-    assert body["capabilities"]["business_decision_recording"] is False
+    assert body["capabilities"]["business_decision_recording"] is True
 
 
 # --------------------------------------------------------------------------- #
