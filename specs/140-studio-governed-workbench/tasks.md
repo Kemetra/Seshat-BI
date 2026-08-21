@@ -4,9 +4,12 @@
 **Spec**: [spec.md](./spec.md) | **Boundary contract**:
 [contracts/decision-write-boundary.md](./contracts/decision-write-boundary.md)
 
-**Spec status**: `draft`. Phases 0 and 1 (research, design) are complete. **Every task
-below is BLOCKED until a named human ratifies this package and the sole active Spec Kit
-fence points at this plan** (FR-140-020).
+**Spec status**: **ratified** -- Ahmed Shaaban (owner), 2026-08-21. Phases 0 and 1
+(research, design) are complete.
+
+**Every task below is still BLOCKED.** FR-140-020 sets two conditions; ratification met
+the first, but the **sole active Spec Kit fence must still be moved to this plan**.
+Ratification is not activation. Do not start Task 1.0 until the fence points here.
 
 **Progress**: 0 of 19 implementation tasks. Nothing started.
 

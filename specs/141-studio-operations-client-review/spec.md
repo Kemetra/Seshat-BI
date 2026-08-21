@@ -14,8 +14,12 @@ outline**: the Promotion Gate below still stands unchanged, and FR-141-020 still
 requires specs 139 and 140 to be accepted, this outline to be expanded into a full
 specification, and that exact package to be named-human ratified before any
 implementation begins. The agent transcribed the owner's ruling and did not
-self-ratify. Spec 141 remains gated on spec 140's ACCEPTANCE, not merely on 140's
-promotion to a full package (delivered 2026-08-21).
+self-ratify. Spec 141 remains gated on spec 140's **ACCEPTANCE** -- 140 being
+implemented and accepted the way 139 was -- not on 140's promotion (delivered
+2026-08-21) and not on 140's ratification (Ahmed Shaaban, 2026-08-21). Both of those
+have now happened and neither unblocks this spec: 140's own implementation has not
+started, so the contracts 141 depends on (proposal, decision, apply-receipt, event) do
+not exist yet.
 
 **Depends on**: accepted Studio Foundation (139) and Governed Analyst Workbench
 (140), including stable proposal, decision, apply-receipt, and event contracts.
