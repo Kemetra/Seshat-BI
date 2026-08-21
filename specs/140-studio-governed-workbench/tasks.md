@@ -13,7 +13,31 @@ the sole active Spec Kit fence (`.specify/feature.json`) to this plan on 2026-08
 Spec 149 was PARKED with four tasks open to free the fence -- see its `tasks.md`
 parking note, including the owner-facing T053.
 
-**Progress**: 0 of 19 implementation tasks. Nothing started.
+**Progress**: 19 of 19 tasks IMPLEMENTED on branch `feat/140-studio-governed-workbench`
+(commits `70f913a0`..`7de6b4d9`). The per-step boxes below are left UNMARKED on purpose:
+the code and tests exist and pass, but the plan's individual RED/GREEN steps were not
+each observed and ticked one at a time, and bulk-marking them would claim a
+verification that did not happen in that form. What IS verified is stated here.
+
+76 feature tests: 6 fixtures + 17 decision-write + 12 evidence + 10 proposals + 17
+decision-routes + 14 apply/review -- all passing. Every guard was proven load-bearing
+by disabling it, observing the specific failure, and restoring byte-identical: 9 pokes
+across the four phases, each recorded in its commit message.
+
+Two corrections worth reading rather than assuming a clean sweep:
+- Two Phase B tests were WRONG and the shipped projection was right: a malformed table
+  is dropped from `snapshot.tables` entirely and reported as an
+  `unreadable_readiness_file` defect naming it via `source_ref`. The tests were
+  corrected; the code was not bent to match them.
+- `gitutil.run_subprocess` sets `stdin` and `timeout` but NOT `capture_output`, so the
+  first HEAD read returned empty and every committed decision looked absent -- apply
+  would have refused forever. Fail-closed, but silently broken.
+
+`business_decision_recording` flipped False -> True. Six spec-139 tests and two
+artifacts (the 139 OpenAPI contract, the generated TS types) were updated to the new
+truth with the FR-022 reasoning recorded in place, not deleted: FR-022 scoped the
+prohibition to Foundation and named "the next governed-workbench spec" as its
+successor.
 
 TDD order: the failing test comes before the code. A task is done only when its test
 was seen RED, then GREEN. Nothing is marked done that was not observed.
