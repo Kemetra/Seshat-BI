@@ -246,3 +246,62 @@ def test_repair_hints_are_inert_text_not_commands_to_run(tmp_path: Path) -> None
     assert not called, "building the digest executed a subprocess"
     for entry in payload["findings"]:
         assert isinstance(entry["repair_hint"], str)
+
+
+# ---------------------------------------------------------------------------
+# M8 -- agent-safe next action (deliverable 4)
+# ---------------------------------------------------------------------------
+
+
+def test_digest_names_a_next_allowed_action() -> None:
+    """M8 deliverable 4 / Desired Output: "next allowed action: ...".
+
+    The 2026-08-16 measurement recorded the gap precisely: the digest "ends by
+    pointing at `seshat check`, not at a next action". This asserts the digest
+    NAMES the action.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    from seshat.doctor import format_digest_with_next_action
+
+    text = format_digest_with_next_action([], repo_root)
+    assert "next allowed action:" in text
+
+
+def test_next_action_reuses_the_shipped_readiness_vocabulary() -> None:
+    """Reuse `next`'s answer -- never a second readiness model.
+
+    Circular-fixture guard: the expectation is read from the SHIPPED producer
+    against the REAL repo, not hand-written here, so this test cannot silently
+    agree with a wrong implementation.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    from seshat.agent_next import build_agent_next_document
+    from seshat.doctor import next_allowed_action
+
+    expected = build_agent_next_document(repo_root, None).get("next_allowed_action")
+    assert expected, "the shipped producer must yield an action on the real repo"
+    assert next_allowed_action(repo_root) == expected
+
+
+def test_digest_keeps_the_gate_authority_pointer() -> None:
+    """The `check` pointer is deliberate governance, not noise.
+
+    doctor must never read as a second gate (Principle I): the digest says the
+    `check` exit code remains the authority. M8 adds a next action; it does not
+    license removing that boundary marker.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    from seshat.doctor import format_digest_with_next_action
+
+    text = format_digest_with_next_action([], repo_root)
+    assert "check" in text and "authority" in text
+
+
+def test_doctor_next_action_grants_no_approval_and_moves_no_stage() -> None:
+    """Naming an action must not BE the action (Principle V)."""
+    repo_root = Path(__file__).resolve().parents[2]
+    from seshat.doctor import format_digest_with_next_action
+
+    text = format_digest_with_next_action([], repo_root).lower()
+    for forbidden in ("approved", "granted", "advanced to", "now passes"):
+        assert forbidden not in text, f"digest implies authority it lacks: {forbidden}"

@@ -46,6 +46,13 @@ _LOADBEARING_DOCS: tuple[str, ...] = (
 )
 
 
+#: The Principle-I boundary marker: doctor is advisory, `check` is the gate.
+_GATE_POINTER = (
+    "\n\n(advisory digest -- the `{prog} check` gate exit code remains the "
+    "authority; run it to gate.)"
+)
+
+
 def _probe_loadbearing(ctx: RuleContext) -> list[Finding]:
     """Report any load-bearing doc that is not a tracked file (read-only probe)."""
     from .core import Severity
@@ -193,6 +200,41 @@ def build_digest_payload(findings: list[Finding]) -> dict[str, object]:
     }
 
 
+def next_allowed_action(repo_root: Path) -> str:
+    """The truthful next readiness action, from the SHIPPED producer.
+
+    Delegates to :func:`seshat.agent_next.build_agent_next_document`, which
+    already owns "the one truthful next readiness action" -- deliberately NOT a
+    second readiness model computed here. Naming an action is not taking it:
+    doctor advances no stage and grants no approval (Principle V).
+    """
+    from .agent_next import build_agent_next_document
+
+    document = build_agent_next_document(repo_root, None)
+    action = document.get("next_allowed_action")
+    return str(action) if action else "(no action available)"
+
+
+def format_digest_with_next_action(
+    findings: list[Finding], repo_root: Path, prog: str = "seshat"
+) -> str:
+    """The digest plus the agent-safe next action (M8 deliverable 4).
+
+    The gate-authority pointer is KEPT: doctor must never read as a second gate
+    (Principle I). M8 adds the next action; it does not license removing that
+    boundary marker.
+    """
+    action = next_allowed_action(repo_root)
+    digest = format_digest(findings, prog)
+    if not findings:
+        # The CLEAN digest is a one-liner carrying no gate pointer.
+        # Append it so the Principle-I boundary marker survives on a
+        # clean repo too -- otherwise the reassuring path is the one
+        # that silently drops the governance note.
+        digest += _GATE_POINTER.format(prog=prog)
+    return digest + f"\n\nnext allowed action: {action}"
+
+
 def run_doctor(
     repo_root: Path,
     strict: bool = False,
@@ -228,7 +270,7 @@ def run_doctor(
 
         print(json.dumps(build_digest_payload(findings), indent=2))
     else:
-        print(format_digest(findings, prog))
+        print(format_digest_with_next_action(findings, repo_root, prog))
     actionable = [
         f for f in findings if f.severity in (Severity.ERROR, Severity.WARNING)
     ]
