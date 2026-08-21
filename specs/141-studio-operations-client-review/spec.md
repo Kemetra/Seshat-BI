@@ -1,184 +1,249 @@
-# Feature Outline: Studio Operations and Client Review
+# Feature Specification: Studio Operations and Client Review
 
-**Feature Branch**: future branch derived after Workbench acceptance
+**Feature Branch**: `spec/141-promote-operations`
 
 **Created**: 2026-08-03
 
-**Status**: program outline; specification and ratification required after spec 140
-is accepted. This file is not an active implementation plan.
+**Promoted**: 2026-08-21 -- expanded from program outline into this specification
 
-**Direction ruled**: 2026-08-21 -- Ahmed Shaaban (owner) ratified the Studio program
-DIRECTION for specs 140 and 141 in session. That ruling agrees the scope and sequence
-recorded here. It is **NOT implementation authority and NOT a ratification of this
-outline**: the Promotion Gate below still stands unchanged, and FR-141-020 still
-requires specs 139 and 140 to be accepted, this outline to be expanded into a full
-specification, and that exact package to be named-human ratified before any
-implementation begins. The agent transcribed the owner's ruling and did not
-self-ratify.
+**Status**: draft -- promoted from outline; awaiting named-human ratification
 
-**Prerequisite now SATISFIED (2026-08-21).** Spec 141 was gated on spec 140's
-ACCEPTANCE -- not its promotion, not its ratification. Spec 140 is now implemented,
-merged (`421c8f4d`, PR #695) and accepted by Ahmed Shaaban, and the contracts this spec
-depends on exist in the tree: proposals (`studio/proposals.py`), the named-human
-decision path (`studio/decision_routes.py`, `decision_write.py`), the apply receipt
-(`studio/apply.py`) and the scoped review surface (`studio/review_scope.py`).
+**Status history**: program outline 2026-08-03; program DIRECTION ruled by the owner
+2026-08-21 (scope agreement, explicitly not implementation authority); promoted to this
+full specification 2026-08-21 once its prerequisite was satisfied. The agent transcribed
+the owner's rulings and has not self-ratified.
 
-What that unblocks is **PROMOTION** of this outline into a full specification, research,
-data model, contracts, plan and task list -- nothing more. FR-141-020 still requires a
-named human to ratify that exact package, and the sole active Spec Kit fence must move
-to its plan, before any implementation begins. The owner asked to ratify spec 141 on
-2026-08-21; that request could not be honoured against an outline, for the same reason
-it could not be honoured for spec 140 a few hours earlier, and the promotion was run
-instead.
+**Prerequisite SATISFIED**: FR-141-020 required specs 139 and 140 *accepted*, not merely
+ratified. Spec 139 was accepted 2026-08-16 (38/38 tasks); spec 140 was implemented,
+merged (`421c8f4d`, PR #695) and accepted by Ahmed Shaaban 2026-08-21. The contracts this
+spec consumes therefore exist in the tree rather than on paper -- see "What this spec
+builds on" below.
 
-**Depends on**: accepted Studio Foundation (139) and Governed Analyst Workbench
-(140), including stable proposal, decision, apply-receipt, and event contracts.
+**Ratification still required**: the owner asked to ratify spec 141 on 2026-08-21. That
+could not be honoured against a one-page outline, for the same reason it could not be
+honoured for spec 140 hours earlier: the Promotion Gate requires a named human to ratify
+the *exact package*, and there was none. This package is that expansion. A named human
+must still ratify it, and the sole active Spec Kit fence must move to its plan, before
+any task starts.
 
 ## Purpose
 
-Complete the Studio program with an operational view for technicians and a polished,
-safe review surface for clients. Operations explains installation, agent, gate,
-validation, packaging, and run failures without exposing secrets. Client Review turns
-approved evidence into a concise decision/outcome story without exposing internal
-commands, raw logs, or analyst-only controls.
+Complete the Studio program with two surfaces the Workbench deliberately left out: an
+operational view that explains why something cannot proceed, and a client review surface
+that turns approved evidence into a decision story without leaking the machinery.
+
+Both are **presentation over existing truth**. Neither may compute readiness, redefine a
+metric, or soften a blocked fact. That constraint is the feature: a support view that
+invents a diagnosis, or a client view that renders "pending" as "done", would be worse
+than no view at all.
 
 ## Primary Users
 
 - technician/support analyst: diagnoses why Studio, an integration, or a governed
   workflow cannot proceed;
 - lead analyst: reviews recent governed runs and prepares client material;
-- final client/business owner: understands status, decisions, evidence, and next
+- final client/business owner: understands status, decisions, evidence, and the next
   responsibility in clear language.
 
-## User Stories
+## What this spec builds on (verified in the tree, 2026-08-21)
+
+| Need | Shipped seam |
+| --- | --- |
+| Component diagnostics | `seshat/doctor.py` -- categorical findings, grouping, repair hints |
+| Normalized run events | `studio/events.py` -- `StudioEvent`, `ThreadEvents`, `ThreadStore` |
+| Durable governed receipts | `decision_write.DecisionWriteReceipt`, `studio/apply.ApplyReceipt` |
+| Committed decision reads | `decision_write.decisions_at_head` |
+| Scoped review filtering | `studio/review_scope.py` -- server-side scope, withheld fields |
+| Redaction | `studio/redaction.py` (`scrub_payload`, `redact_credentials`, `redact_paths`) over `seshat/redaction_core.py` |
+| Evidence export precedent | `seshat/evidence_pack.py` |
+
+This spec adds no second implementation of any of these. Where a need overlaps a shipped
+seam, it consumes it; a second diagnostic engine or a second redaction path would be the
+defect, not the feature.
+
+## The two boundaries that carry this feature
+
+**1. A diagnostic recommends; it never repairs.** Operations may name a recovery action.
+Executing one goes through the same technical-approval and readiness policy as any other
+mutation (FR-141-018). A support surface that can fix things is a mutation surface with a
+friendly name.
+
+**2. A client view may only narrow, never soften.** Every fact reaching Client Review is
+already approved and already committed. `pending` and `blocked` render as themselves. The
+export is built from an **allowlist** of safe fields, never a denylist applied after
+assembly -- because a denylist fails open on the field nobody thought of.
+
+## User Scenarios & Testing
 
 ### US1 - Diagnose Studio and integration health (P1)
 
-A technician opens Operations and sees categorical health for the local Studio
-process, package extras, Codex adapter, bundle capability, static gate, optional live
-boundary, and frontend assets, each with evidence and a recovery action.
+A technician opens Operations and sees categorical health for the local Studio process,
+package extras, Codex adapter, bundle capability, static gate, optional live boundary,
+and frontend assets -- each with evidence and a recovery action.
 
-Acceptance intent:
+Acceptance:
 
-1. No aggregate health score is shown.
-2. Diagnostics distinguish missing, misconfigured, incompatible, deferred, failed,
-   and healthy states.
-3. Credential and workspace data is redacted before display/export.
-4. A diagnostic can recommend an action but cannot execute it without the same
+1. **No aggregate health score.** Seven components each carry their own state; there is
+   no roll-up number, because a single score invites "we're at 80%" reasoning about
+   things that are individually pass or fail.
+2. States are distinct and exhaustive: `missing`, `misconfigured`, `incompatible`,
+   `deferred`, `failed`, `healthy`. `deferred` is not a failure and must not render as
+   one.
+3. Credential and workspace data is redacted before display and before export.
+4. A diagnostic may recommend an action; it cannot execute one without the existing
    technical approval and readiness policy.
+5. An unreadable component reports `failed` with its reason, never `healthy` by absence
+   of evidence.
 
 ### US2 - Review a redacted run history (P1)
 
-The analyst can inspect recent in-process and optionally committed governed receipts:
-what was requested, what tools were proposed, who decided, what changed, which gates
-ran, and the categorical result.
+The analyst inspects recent in-process and committed governed receipts: what was
+requested, what tools were proposed, who decided, what changed, which gates ran, and the
+categorical result.
 
-Acceptance intent:
+Acceptance:
 
-1. Run history is reconstructed from normalized events and durable governed receipts,
-   not raw provider transcripts.
-2. Hidden reasoning, secrets, DSNs, raw prompts marked sensitive, and absolute paths
-   never appear.
-3. Process-only conversation history is labeled ephemeral and disappears on restart.
-4. Durable audit claims cite their committed source.
+1. History is reconstructed from normalized `StudioEvent` records and durable receipts,
+   never from raw provider transcripts.
+2. Hidden reasoning, secrets, DSNs, prompts marked sensitive, and absolute paths never
+   appear.
+3. Process-only conversation history is labelled **ephemeral** and disappears on
+   restart; the label is part of the contract, not a UI nicety.
+4. A durable audit claim cites its committed source. A claim that cannot cite one is
+   shown as ephemeral rather than promoted to durable.
+5. A decision still in `pending commit` appears as pending, never as a completed ruling
+   -- the same three-state honesty spec 140 established.
 
 ### US3 - Prepare a client-ready review (P1)
 
 The lead analyst selects approved metrics, decisions, evidence, blockers, and next
-responsibilities. Studio previews a simplified client narrative and exports a local,
+responsibilities. Studio previews a simplified narrative and exports a local,
 self-contained review artifact.
 
-Acceptance intent:
+Acceptance:
 
-1. Only approved/eligible evidence enters the client view.
-2. Pending or blocked facts remain visibly pending/blocked and are never softened to
-   success.
+1. Only approved and eligible evidence enters the client view; eligibility is read from
+   committed state at `HEAD`.
+2. Pending or blocked facts remain visibly pending or blocked, never softened.
 3. Internal command names, skill names, raw diffs, logs, and absolute paths are absent.
-4. The export is accessible, self-contained, reproducible, and uses no remote assets.
+4. The export is self-contained, reproducible, accessible, and references no remote
+   asset.
+5. The narrative is generated from selected facts only; it may not add a claim absent
+   from that selection.
 
 ### US4 - Let the client respond safely (P2)
 
-Within the authenticated local session, a client can acknowledge a result, request
-clarification, or answer a scoped business decision using the Workbench's named-human
+Within the authenticated local session a client can acknowledge a result, request
+clarification, or answer a scoped business decision through the Workbench's named-human
 boundary.
 
-Acceptance intent:
+Acceptance:
 
-1. Client actions are explicit, scoped, and revision-bound.
-2. Acknowledgment is not treated as approval of a different business judgment.
-3. Client feedback becomes a governed prepared item; it does not silently alter
-   artifacts or readiness.
-4. Expired/stale review packages cannot record decisions.
+1. Acknowledgement is a **distinct action** from a business approval and is recorded as
+   such.
+2. A scoped business answer routes through spec 140's `POST /decisions/record`; this
+   spec adds no second recording path.
+3. Decline and request-clarification are always available.
+4. A client response never advances readiness by itself.
 
-### US5 - Export a support bundle without secrets (P2)
+### US5 - Assemble a support bundle (P2)
 
-A technician can generate a local diagnostic bundle containing versions, categorical
-health, safe configuration presence, normalized failure events, and gate references,
-while excluding credentials and business data.
+A technician exports a bundle a maintainer can read without the workspace present.
 
-Acceptance intent:
+Acceptance:
 
-1. Preview lists every included file/field before export.
-2. A secret corpus scan must pass before the bundle is finalized.
-3. Raw source data, `.env`, credential files, DSNs, browser cookies, and provider raw
-   transcripts are structurally excluded.
-4. Export failure leaves no partial archive.
+1. Built from an **allowlist** of safe fields and files.
+2. Structurally excludes `.env`, data extracts, credential stores, cookies, auth
+   headers, raw provider transcripts, and absolute paths.
+3. Creation is atomic, and the staged content is scanned with the existing redaction
+   corpus before finalization.
+4. A scan failure aborts the bundle; it never ships a partially scrubbed archive.
 
-## Provisional Requirements
+## Requirements
 
-- **FR-141-001**: Operations MUST present categorical component states with evidence,
-  blocker, and recovery action; it MUST NOT calculate a health/readiness score.
-- **FR-141-002**: Diagnostics MUST reuse existing `--doctor`, package-contract,
-  capability, gate, and adapter probes where available rather than fork checks.
-- **FR-141-003**: Diagnostics MUST be read-only until a separately displayed
-  technical action receives approval and passes readiness scope.
-- **FR-141-004**: Run history MUST use normalized Studio events and governed receipts,
-  never hidden reasoning or raw provider protocol logs.
-- **FR-141-005**: Ephemeral and durable history MUST be visually and semantically
-  distinct.
-- **FR-141-006**: Every durable claim in Operations or Client Review MUST cite its
-  committed evidence or decision receipt.
-- **FR-141-007**: Client Review MUST include only explicitly selected, eligible,
-  approved content and preserve blocked/pending categorical wording.
-- **FR-141-008**: Client Review MUST hide commands, skills, raw file paths, raw diffs,
-  internal logs, provider protocol, and analyst-only controls by default and export.
-- **FR-141-009**: Client exports MUST be self-contained local HTML and optionally PDF
-  only if a reproducible local renderer is separately accepted; no remote assets.
-- **FR-141-010**: Export inputs MUST bind to a workspace revision and become stale
-  when governed truth changes.
+- **FR-141-001**: Operations MUST report the seven components categorically with
+  evidence and a recovery action for each.
+- **FR-141-002**: No aggregate health, maturity, confidence, or readiness score may be
+  computed or displayed.
+- **FR-141-003**: Component states MUST distinguish missing, misconfigured,
+  incompatible, deferred, failed, and healthy; `deferred` MUST NOT render as failure.
+- **FR-141-004**: Diagnostics MUST consume the shipped `seshat/doctor.py` findings rather
+  than implement a second diagnostic engine.
+- **FR-141-005**: A diagnostic MAY recommend a recovery action and MUST NOT execute one
+  outside the existing technical-approval and readiness policy.
+- **FR-141-006**: An unreadable or unavailable component MUST report `failed` with its
+  reason; absence of evidence MUST NOT read as healthy.
+- **FR-141-007**: Run history MUST be reconstructed from normalized events and durable
+  receipts, never from raw provider transcripts.
+- **FR-141-008**: Hidden reasoning, secrets, DSNs, sensitive prompts, and absolute paths
+  MUST NOT appear in any Operations or Client Review surface or export.
+- **FR-141-009**: Process-only history MUST be labelled ephemeral and MUST NOT survive a
+  restart.
+- **FR-141-010**: A durable audit claim MUST cite its committed source; an uncitable
+  claim MUST be presented as ephemeral.
 - **FR-141-011**: Client responses MUST route through spec 140's scoped named-human
-  decision/feedback contracts; acknowledgment MUST remain a distinct action.
-- **FR-141-012**: Support bundles MUST be assembled from an allowlist of safe fields
-  and files, not a redact-after-zipping denylist.
+  decision contracts; acknowledgement MUST remain a distinct action.
+- **FR-141-012**: Support bundles MUST be assembled from an allowlist of safe fields and
+  files, not a redact-after-assembly denylist.
 - **FR-141-013**: Support bundles MUST structurally exclude `.env`, data extracts,
-  credential stores, cookies, API/auth headers, raw provider transcripts, and
-  absolute paths.
-- **FR-141-014**: Support-bundle creation MUST be atomic and MUST scan the staged
-  content with the existing/new redaction corpus before finalization.
-- **FR-141-015**: Accessibility MUST meet WCAG 2.2 AA across technician density,
-  client simplicity, print/export, keyboard use, zoom, and reduced motion.
+  credential stores, cookies, API/auth headers, raw provider transcripts, and absolute
+  paths.
+- **FR-141-014**: Support-bundle creation MUST be atomic and MUST scan staged content
+  with the existing redaction corpus before finalization; a scan failure MUST abort.
+- **FR-141-015**: Accessibility MUST meet WCAG 2.2 AA across technician density, client
+  simplicity, print/export, keyboard use, zoom, and reduced motion.
 - **FR-141-016**: Responsive layouts MUST preserve the correct primary action and
   decision context from mobile width through large desktop.
 - **FR-141-017**: Operations and Client Review MUST remain localhost, single-workspace,
   and authenticated under Foundation's security boundary.
-- **FR-141-018**: No diagnostic, export, acknowledgment, or client response may
-  advance readiness except through existing authoritative artifacts and gates.
-- **FR-141-019**: Existing static dashboard and Foundation/Workbench journeys MUST
-  remain backward compatible.
+- **FR-141-018**: No diagnostic, export, acknowledgement, or client response may advance
+  readiness except through existing authoritative artifacts and gates.
+- **FR-141-019**: Existing static dashboard and Foundation/Workbench journeys MUST remain
+  backward compatible.
 - **FR-141-020**: Implementation MUST NOT begin until specs 139 and 140 are accepted,
   this detailed spec is named-human ratified, and its plan is the sole active fence.
 
-## Provisional Entities
+  *Promotion note*: the first condition is now met -- 139 accepted 2026-08-16, 140
+  accepted 2026-08-21. The remaining two are not.
+- **FR-141-021**: Client Review MUST render a `pending commit` decision as pending; it
+  MUST NOT present one as a completed ruling.
+- **FR-141-022**: The client narrative MUST be derived only from the selected facts and
+  MUST NOT introduce a claim absent from that selection.
 
-- `ComponentDiagnostic`: categorical state, evidence, blocker, recovery action, and
-  safe version/config presence.
-- `GovernedRunSummary`: normalized request/outcome timeline plus durable receipt refs.
+## Key Entities
+
+- `ComponentDiagnostic`: categorical state, evidence, blocker, recovery action, and safe
+  version/config presence.
+- `GovernedRunSummary`: normalized request/outcome timeline plus durable receipt
+  references.
 - `ClientReviewDraft`: revision-bound selection of eligible facts and narrative.
 - `ClientReviewArtifact`: self-contained immutable exported review with manifest.
-- `ClientAcknowledgment`: scoped acknowledgment distinct from business approval.
-- `ClientFeedbackItem`: prepared clarification/feedback routed to analyst workflow.
-- `SupportBundleManifest`: allowlisted safe fields/files, hashes, versions, and
+- `ClientAcknowledgment`: scoped acknowledgement, distinct from business approval.
+- `ClientFeedbackItem`: prepared clarification routed to the analyst workflow.
+- `SupportBundleManifest`: allowlisted safe fields/files, hashes, versions, and the
   redaction-scan receipt.
+
+## Success Criteria
+
+- **SC-141-001**: No surface or export exposes an aggregate score, proven by a test that
+  searches every payload for a numeric roll-up.
+- **SC-141-002**: A deferred component renders as deferred and not as failure, with its
+  inverse asserted so the test cannot pass by treating everything as deferred.
+- **SC-141-003**: A support bundle built from a workspace containing `.env`, a DSN, and
+  an absolute path contains none of them, proven by scanning the produced archive.
+- **SC-141-004**: A pending-commit decision appears as pending in Client Review, proven
+  alongside the committed case so the assertion is not vacuous.
+- **SC-141-005**: A recovery action cannot execute without technical approval, proven by
+  attempting it and asserting refusal.
+- **SC-141-006**: Ephemeral history is absent after a restart, proven by asserting it was
+  present before.
+
+## Assumptions
+
+- Operations reads the shipped `doctor.py` findings; this spec adds no new probe.
+- Run history uses the existing `ThreadStore`/`StudioEvent` records; no new event schema.
+- The support bundle follows `evidence_pack.py`'s precedent for a self-contained export.
+- Client Review reuses spec 140's `review_scope` filtering rather than a parallel one.
 
 ## Out of Scope
 
@@ -188,11 +253,17 @@ Acceptance intent:
 - arbitrary log download;
 - aggregate health, maturity, confidence, or readiness scores;
 - automated repair without explicit technical approval;
-- redefining metrics, mappings, or readiness in presentation code.
+- redefining metrics, mappings, or readiness in presentation code;
+- a second decision-recording path (spec 140 owns the only one).
 
-## Promotion Gate
+## Promotion Gate -- expansion delivered, ratification required
 
-After Workbench acceptance, this outline must be expanded and reviewed from both the
-support technician and final-client perspectives. The resulting exact specification,
-security/export contracts, plan, and tasks require named-human ratification and the
-single active fence. This outline cannot authorize implementation.
+The outline required expansion "from both the support technician and final-client
+perspectives" into an exact specification with security/export contracts, plan, and
+tasks, after which "the resulting exact specification ... require[s] named-human
+ratification and the single active fence."
+
+The expansion is delivered by this package. The ratification is not: a named human must
+ratify this exact specification, plan, contracts, and task list, and the fence must move
+to its plan. Until both happen, no agent may write the ratified line and no task may
+start.
