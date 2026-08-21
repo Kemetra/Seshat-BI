@@ -71,9 +71,14 @@ it never asserts that the customer must adopt.
   reports missing `dbt_project.yml` / `selectors.yml`.
 - dagster: `seshat dagster init` then `seshat dagster doctor`.
 - Power BI MCP: `seshat pbi-mcp doctor`, then `pbi-mcp generate-config` and
-  `pbi-mcp preflight`. **The read-only family only.** ADR 0018 is RATIFIED
-  (2026-08-18), but ratification armed the TERMS, not a build: slice 5 still needs
-  its own spec, so no write path exists -- this command never advertises a
-  state-changing mode, because that would advise a capability that is not built.
+  `pbi-mcp preflight`. **This command advertises the read-only family only.**
+  ADR 0018 is RATIFIED (2026-08-18) and slice 5 IS now built (spec 149, PR #659):
+  `seshat pbi-mcp plan-write` and `seshat pbi-mcp apply` exist. They are deliberately
+  NOT advertised here, because they are approval-gated -- a write requires committed
+  passing readiness, a shape-valid named-human `publish_ready` approval naming the
+  target, an allowlisted target, a resolved operation and a clean-or-backed-up tree.
+  Advertising them as guidance would invite an unapproved attempt, and a successful
+  write advances no readiness stage. (Updated 2026-08-21; the earlier text said no
+  write path existed, which was true only before PR #659.)
 
 The command prints these as guidance. It never runs them.

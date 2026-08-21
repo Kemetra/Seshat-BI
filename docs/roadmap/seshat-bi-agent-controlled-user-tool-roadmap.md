@@ -8,8 +8,11 @@ an explicit spec-level `BUILT` status (specs 107–113), while M1/M2 and M5 rest
 shipped-artifact evidence rather than a ratified acceptance record; the reconciliation
 table below states the basis per row. **Two milestones remain open: M8 is PARTIAL**
 (the advisory `seshat doctor` ships, but none of its four deliverables does — see the
-table), and **M12 (Power BI execution adapter)**, which is blocked on ADR 0018
-ratification, not on readiness. This remains a forward-looking roadmap, NOT part of the delivered
+table), and **M12 (Power BI execution adapter)**, which is now **PARTLY DELIVERED**:
+ADR 0018 was RATIFIED by the owner on 2026-08-18 and slice 5 (governed local write)
+SHIPPED via spec 149 / PR #659, leaving slice 6 (remote, query-only) unbuilt and
+awaiting an owner scope/timing decision (ADR decision 7). M12 is no longer blocked on
+ratification. This remains a forward-looking roadmap, NOT part of the delivered
 ledger: individual milestones still land through the normal spec → build → gate path,
 and net-new runtime / CI pieces are spec-and-held for review rather than auto-built
 (Principle V — `never_self_grant_approval`; the agent records owner-directed rulings,
@@ -50,7 +53,7 @@ never self-grants). The authoritative delivered ledger remains
 > | M9 evidence pack | BUILT (docs-only under B) | spec 112 `**Status**: **BUILT**` |
 > | M10 BI delivery layer | BUILT (docs-only under B) | spec 113 `**Status**: **BUILT**` |
 > | M11 distribution maturity | BUILT | spec 108 `**Status**: **BUILT.**` |
-> | **M12 Power BI execution** | **OPEN — owner-gated** | see the corrected constraint in M12 |
+> | **M12 Power BI execution** | **PARTLY DELIVERED — slice 6 owner-gated** | ADR 0018 RATIFIED 2026-08-18; F016 slices 1-4 (read-only) + slice 5 (governed local write, spec 149 / PR #659, `pbi-mcp plan-write` / `apply`) shipped. Slice 6 (remote, query-only) NOT built — ADR decision 7 + owner scope/timing |
 >
 > Two consequences worth stating plainly, because both were traps for the next agent:
 >
@@ -211,7 +214,7 @@ The demo explicitly proves three core rules: source mapping before silver, metri
 
 ### 2.9 Roadmap says the original foundation is shipped
 
-The roadmap says the original F005–F015 sequence, including F011A, is shipped to `main`; the only original parked feature is F016, the Power BI execution adapter, deliberately last and gated.
+The roadmap says the original F005–F015 sequence, including F011A, is shipped to `main`; F016, the Power BI execution adapter, is the last of that sequence, deliberately last and gated. *(Updated 2026-08-21: F016 is no longer parked – read-only slices 1-4 and governed local-write slice 5 have shipped; only remote slice 6 is outstanding.)*
 
 ---
 
@@ -860,7 +863,7 @@ Product module runtime or skill-to-CLI bridge.
 
 Power BI policy says Power BI is the reporting target, not the source of truth; it reads from `gold` only, every measure traces to a metric contract, PBIP artifacts stay source-control friendly, and publishing automation is deferred until semantic-model readiness passes.
 
-The roadmap says F016 remains the only original parked feature and is deliberately execution-only, gated, and last.
+The roadmap says F016 is the last of the original sequence and is deliberately execution-only, gated, and last. *(Updated 2026-08-21: no longer parked – slices 1-5 shipped, remote slice 6 outstanding and owner-gated.)*
 
 ### Desired Direction
 
@@ -949,12 +952,20 @@ Any CI/release automation changes should be explicitly approved.
 >
 > **The live blocker is different and owner-gated.** F016's read-only foundation
 > already shipped — slice 1 (PR #464: adapter contract + docs) and slices 2–4
-> (PR #467: `seshat pbi-mcp doctor|generate-config|preflight`). Slices 5–6 are
-> blocked on **ADR 0018 (`docs/decisions/0018-unpark-f016-power-bi-mcp-execution-adapter.md`),
-> which is `Proposed -- NOT ratified`**, plus three further open owner decisions
-> tracked in issue #469 (vendored vs `npx` runtime default; slice-6 scope timing;
-> F032 owner + supported version range). An agent must never self-grant that
-> ratification.
+> (PR #467: `seshat pbi-mcp doctor|generate-config|preflight`).
+>
+> > **Reconciled 2026-08-21.** What followed here is the PRE-RATIFICATION record: it
+> > said slices 5–6 were blocked on ADR 0018 being `Proposed -- NOT ratified`, plus
+> > three further open owner decisions in issue #469 (vendored vs `npx`; slice-6 scope
+> > timing; F032 owner + version range). Current state: **ADR 0018 was RATIFIED by the
+> > owner on 2026-08-18**, and **slice 5 is BUILT** — spec 149 / PR #659, shipping
+> > `seshat pbi-mcp plan-write` and `seshat pbi-mcp apply` behind the approval gate.
+> > Of the three further decisions, `npx`-vs-vendored was settled by ADR 0018 itself
+> > (vendoring is a rejected alternative), and the F032 supported-version row is
+> > externally blocked while both Microsoft servers remain public preview with no
+> > release to pin (issue #658). **Slice-6 scope/timing is the one genuinely open owner
+> > decision.** An agent must never self-grant a ratification, and a successful MCP
+> > execution grants no approval and advances no readiness stage.
 
 Roadmap hard rule #6 says there is no Power BI execution before semantic-model readiness; F016 is execution-only, last, and cannot define metrics, mappings, semantic logic, or dashboard design. 
 
@@ -1294,7 +1305,8 @@ Seshat BI
 > superseded text is preserved in git history.
 
 **On this roadmap, two milestones remain: M8 (workspace doctor) is PARTIAL and IS
-agent-buildable; M12 (Power BI execution adapter) is owner-gated.**
+agent-buildable; M12 (Power BI execution adapter) is PARTLY DELIVERED, with only its
+slice 6 owner-gated.**
 
 **M8 — the agent-buildable one.** The advisory `seshat doctor` ships, but none of M8's
 four deliverables does: JSON output (`--format json` exits 2 today), human-readable
@@ -1302,17 +1314,30 @@ grouping, non-mutating repair hints, and agent-safe stop instructions. Its "outp
 includes next safe action" criterion is also unmet. Anyone picking this up should spec
 it normally rather than reading the existing verb as delivery.
 
-**M12 — the owner-gated one.** The next action there is an owner decision, not code:
+**M12 — the partly-delivered one.** *(Updated 2026-08-21. This block previously gave
+the next action as "ratify ADR 0018", which was correct until 2026-08-18.)*
+
+ADR 0018 is **RATIFIED (Ahmed Shaaban, owner, 2026-08-18)** and F016 **slice 5 is BUILT**:
+spec 149 / PR #659 shipped `seshat pbi-mcp plan-write` and `seshat pbi-mcp apply`, which
+execute against Microsoft's official local Power BI Modeling MCP behind the approval gate
+(committed passing readiness + a shape-valid named-human `publish_ready` approval naming
+the target + an allowlisted target + a resolved operation + a clean-or-backed-up tree).
+A successful write advances **no** readiness stage and grants no approval.
+
+The next action is therefore a **scope/timing decision on slice 6**, not a ratification:
 
 ```text
-ratify ADR 0018 (docs/decisions/0018-unpark-f016-power-bi-mcp-execution-adapter.md)
+decide whether F016 slice 6 (remote Power BI MCP, query-only) is in scope now,
+later, or not at all  --  ADR 0018 decision 7
 ```
 
-It is currently `Proposed -- NOT ratified`. Ratifying it unblocks F016 slices 5–6
-(approval-gated mutations, then the optional query-only remote server). Issue #469
-carries three further open owner decisions alongside it: vendored vs `npx` runtime
-default, whether slice 6 is in scope now or after slice 5 proves out, and the F032
-owner + supported version range. **An agent must never self-grant that ratification**
+Slice 6 is **not built**. Its three prerequisites (tenant setting, Build permission,
+Copilot licence for Generate Query) sit outside this repo, remote results may never be a
+gate input, and the RLS-not-enforced-for-Service-Principal warning is mandatory. Of the
+other decisions issue #469 once carried, `npx`-vs-vendored was settled by ADR 0018 itself
+(vendoring is a rejected alternative), and the F032 owner + supported version range stays
+externally blocked while both Microsoft servers are public preview with no release to pin
+(issue #658). **An agent must never self-grant a ratification or an approval**
 (Principle V — `never_self_grant_approval`).
 
 Beyond M8 above, further agent-buildable work lives in `specs/` rather than on this
@@ -1361,8 +1386,10 @@ T034 redaction ruling) after T036's external signed-in Codex run and the running
 evidence it produced, closing spec 139 at 38/38. **Spec 140's gate is therefore open**:
 its next step is specification + owner ratification, which is ordinary spec work, not a
 blocked wait. **141 remains gated on 140.** Only one of the two remaining Studio tiers
-is still waiting on a prior acceptance — unlike M12, which is blocked on an unratified
-ADR and is not startable at all.
+is still waiting on a prior acceptance. *(Updated 2026-08-21: this sentence previously
+contrasted 140/141 with M12 as "blocked on an unratified ADR and not startable at all".
+ADR 0018 was ratified 2026-08-18 and M12's slice 5 shipped; M12's remaining slice 6 is
+gated on an owner scope/timing decision, not on a ratification.)*
 
 > **Do not read 140/141's missing `tasks.md` as unplanned work.** The same shape means
 > something different elsewhere in `specs/`: 110–113 are also `spec.md`-only, but each
