@@ -197,12 +197,15 @@ def record(
         # and this route does not manufacture one.
         decision_type="assumption_note",
         scope={"artifact": proposal.target_artifact},
-        signer=payload["signer"],
-        answer=payload["answer"],
-        proposal_hash=proposal.proposal_hash,
-        workspace_revision=proposal.workspace_revision,
-        recorded_at=recorded_at,
-        reviewed_scope=proposal.target_artifact,
+        ruling=decision_write.HumanRuling(
+            signer=payload["signer"], answer=payload["answer"]
+        ),
+        binding=decision_write.ReviewBinding(
+            proposal_hash=proposal.proposal_hash,
+            workspace_revision=proposal.workspace_revision,
+            recorded_at=recorded_at,
+            reviewed_scope=proposal.target_artifact,
+        ),
     )
     try:
         return decision_write.append_decision(

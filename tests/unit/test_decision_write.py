@@ -35,15 +35,20 @@ def _entry(**overrides: object) -> dict:
         # contract, which is a separate concern from the write path.
         "decision_type": "assumption_note",
         "scope": {"table": "sales"},
-        "signer": _SIGNER,
-        "answer": "net_of_returns",
-        "proposal_hash": "h" * 64,
-        "workspace_revision": "r" * 16,
-        "recorded_at": "2026-08-21T10:00:00Z",
-        "reviewed_scope": _STORE,
     }
+    signer = str(overrides.pop("signer", _SIGNER))
+    answer = str(overrides.pop("answer", "net_of_returns"))
     payload.update(overrides)  # type: ignore[arg-type]
-    return decision_write.build_entry(**payload)  # type: ignore[arg-type]
+    return decision_write.build_entry(
+        **payload,  # type: ignore[arg-type]
+        ruling=decision_write.HumanRuling(signer=signer, answer=answer),
+        binding=decision_write.ReviewBinding(
+            proposal_hash="h" * 64,
+            workspace_revision="r" * 16,
+            recorded_at="2026-08-21T10:00:00Z",
+            reviewed_scope=_STORE,
+        ),
+    )
 
 
 # --- Task 1.1: build a decision entry -------------------------------------------------

@@ -69,17 +69,41 @@ class _Committed(Protocol):
     def file_at_head(self, relative: str) -> str | None: ...
 
 
+@dataclass(frozen=True)
+class HumanRuling:
+    """What the NAMED HUMAN supplied: who they are and what they answered.
+
+    Its own type because these two fields carry the whole of FR-140-009. Grouping them
+    makes the rule enforceable by construction -- there is no way to build a ruling
+    without a signer, so no code path can record an answer nobody signed for.
+    """
+
+    signer: str
+    answer: str
+
+
+@dataclass(frozen=True)
+class ReviewBinding:
+    """What the human reviewed, and when -- the provenance of the ruling.
+
+    Separate from `HumanRuling` because these are SERVER-supplied facts about the
+    review, not the person's judgement. Keeping the two apart in the type system means
+    a reader can see at a glance which half the agent may fill in.
+    """
+
+    proposal_hash: str
+    workspace_revision: str
+    recorded_at: str
+    reviewed_scope: str
+
+
 def build_entry(
     *,
     decision_id: str,
     decision_type: str,
     scope: dict[str, Any],
-    signer: str,
-    answer: str,
-    proposal_hash: str,
-    workspace_revision: str,
-    recorded_at: str,
-    reviewed_scope: str,
+    ruling: HumanRuling,
+    binding: ReviewBinding,
 ) -> dict[str, Any]:
     """Assemble one decision entry.
 
@@ -95,14 +119,14 @@ def build_entry(
         "decision_type": decision_type,
         "status": _RECORDED_STATUS,
         "scope": scope,
-        "answer": answer,
+        "answer": ruling.answer,
         "approval": {
-            "approved_by": signer,
-            "approved_at": recorded_at,
+            "approved_by": ruling.signer,
+            "approved_at": binding.recorded_at,
             "source": _SOURCE,
-            "evidence": f"proposal:{proposal_hash}",
-            "evidence_identity": f"workspace_revision:{workspace_revision}",
-            "reviewed_scope": reviewed_scope,
+            "evidence": f"proposal:{binding.proposal_hash}",
+            "evidence_identity": (f"workspace_revision:{binding.workspace_revision}"),
+            "reviewed_scope": binding.reviewed_scope,
         },
     }
 
