@@ -66,13 +66,17 @@ def test_the_generated_file_is_marked_as_generated() -> None:
     assert "generate_studio_types.py" in head
 
 
-def test_business_decision_recording_is_typed_as_impossible() -> None:
-    """FR-022 -- Foundation records no named-human business decision.
+def test_business_decision_recording_is_typed_as_a_runtime_boolean() -> None:
+    """Spec 140 made recording real, so the type must let the browser branch on it.
 
-    The contract pins the field to `const: false`, so the generated type must be the
-    literal `false`, not `boolean`: a `boolean` would let browser code branch on it as
-    if recording were merely disabled rather than absent.
+    Under Foundation the contract pinned `const: false` and the generated type was the
+    literal `false` -- correct then, because recording was ABSENT rather than merely
+    disabled. Spec 140 (ratified 2026-08-21, anticipated by FR-022 as "the next
+    governed-workbench spec") ships `POST /decisions/record`, and the flag is derived
+    from that route being reachable. A literal `false` in the type would now be a lie
+    the compiler enforces, and would stop the UI from ever showing the control.
     """
     generated = _GENERATED.read_text(encoding="utf-8")
 
-    assert "business_decision_recording: false;" in generated
+    assert "business_decision_recording: boolean;" in generated
+    assert "business_decision_recording: false;" not in generated

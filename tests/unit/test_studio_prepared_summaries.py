@@ -176,10 +176,21 @@ def test_no_route_can_mutate_a_decision_summary(tmp_path: Path):
         )
 
 
-def test_recording_a_business_decision_is_still_unadvertised(tmp_path: Path):
-    """Listing a prepared summary is not recording a ruling, and the flag says so."""
+def test_listing_a_prepared_summary_is_not_the_same_as_recording(tmp_path: Path):
+    """The distinction this test defends survives spec 140; only the flag moved.
+
+    Recording became available with spec 140 (FR-022 named it as the successor), so the
+    flag is now True. What must stay true is that the read-only summary route does NOT
+    record anything: listing what a human owes is not their ruling.
+    """
     client, _ = _client(tmp_path)
 
     capabilities = client.get(f"{API}/bootstrap/state").json()["capabilities"]
+    listed = client.get(f"{API}/decisions")
 
-    assert capabilities["business_decision_recording"] is False
+    assert capabilities["business_decision_recording"] is True
+    assert listed.status_code == 200
+    # The GET is still read-only: nothing it returns is a recorded ruling.
+    assert all(
+        item.get("state") != "pending_commit" for item in listed.json().get("items", [])
+    )

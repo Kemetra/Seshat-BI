@@ -27,6 +27,7 @@ import subprocess
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import replace
+from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 from typing import Any, cast
@@ -43,9 +44,11 @@ from . import (
     codex_bridge,
     codex_process,
     config,
+    decision_routes,
     events,
     evidence,
     projection,
+    proposals,
     redaction,
     session,
 )
@@ -140,16 +143,33 @@ def _bootstrap_capabilities(app: FastAPI) -> dict[str, Any]:
     `test_the_advertised_capability_is_backed_by_a_reachable_delivery_seam`, so
     removing delivery fails a test rather than silently re-opening that gap.
 
-    `business_decision_recording` stays const False: FR-022 places a named-human
-    governance ruling outside Studio permanently, not pending a future seam. Its
-    constancy is a governance decision rather than an unfinished one, which is why it
-    is NOT derived alongside `agent_turns`.
+    **`business_decision_recording` became True with spec 140, and that is FR-022
+    being honoured rather than broken.** FR-022 reads: "Foundation MUST prepare but
+    MUST NOT record named-human business decisions; decision transcription belongs to
+    the next governed-workbench spec." It scoped the flag to FOUNDATION, naming the
+    successor that would carry recording -- spec 140, ratified 2026-08-21. Leaving the
+    flag False now would be the dishonest option: `POST /decisions/record` exists and
+    works, so a False here would under-report a shipped seam, which the `agent_turns`
+    note above identifies as a lie in the other direction rather than the safe default.
     """
     return {
         "agent_turns": not getattr(app.state, "agent_turns_refused", False),
         "technical_approvals": True,
-        "business_decision_recording": False,
+        # Derived, like `agent_turns`: True exactly when the recording route is
+        # reachable, so the flag cannot drift from the capability.
+        "business_decision_recording": _decision_recording_available(app),
     }
+
+
+def _decision_recording_available(app: FastAPI) -> bool:
+    """True when this build exposes the spec-140 named-human recording route.
+
+    Reads the SAME registry the route is registered into, so the advertisement and the
+    capability cannot disagree -- a second definition of "can this build record" is the
+    defect, not the value it holds.
+    """
+    target = f"{API_PREFIX}/decisions/record"
+    return any(getattr(route, "path", None) == target for route in app.routes)
 
 
 def _check_host(request: Request, app: FastAPI) -> JSONResponse | None:
@@ -257,6 +277,35 @@ def _with_headers(response: Response) -> Response:
 def _register_routes(app: FastAPI) -> None:
     """The seven deterministic routes. Agent-thread routes belong to Phase 4."""
 
+    async def _json_body(request: Request) -> dict[str, Any]:
+        """The request body as a mapping; a non-mapping becomes an empty one.
+
+        Returning {} rather than raising lets the route's own field checks produce the
+        contracted 422 with a useful message, instead of a framework-shaped error.
+        """
+        try:
+            body = await request.json()
+        except Exception:
+            return {}
+        return body if isinstance(body, dict) else {}
+
+    def _proposal_id_for(app: FastAPI, proposal_hash: Any) -> str:
+        """The prepared proposal whose hash matches, or "" when none does.
+
+        Looking the proposal up BY HASH is deliberate: the caller cannot name a
+        proposal id directly and then submit a different hash, so the binding the human
+        reviewed is the one the server resolves.
+        """
+        if not isinstance(proposal_hash, str):
+            return ""
+        for identifier, proposal in app.state.workbench_proposals.items():
+            if proposal.proposal_hash == proposal_hash:
+                return identifier
+        return ""
+
+    def _now_iso() -> str:
+        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
     def _snapshot() -> projection.WorkspaceSnapshot:
         return projection.build_workspace_snapshot(
             app.state.launch.workspace_root, agent_health=app.state.agent_health
@@ -349,6 +398,110 @@ def _register_routes(app: FastAPI) -> None:
                 "Open the Command Room to see the tables in this workspace.",
             )
         return _redact(bundle.as_dict())
+
+    @app.post(f"{API_PREFIX}/proposals", status_code=201)
+    async def create_proposal(request: Request) -> Any:
+        """Prepare an immutable change proposal (spec 140 US2).
+
+        The agent prepares; it does not decide. The response carries the hash and
+        revision that bind any later decision.
+        """
+        payload = await _json_body(request)
+        target = payload.get("target_artifact")
+        intent = payload.get("intent")
+        if not isinstance(target, str) or not isinstance(intent, str):
+            return _problem(
+                422,
+                "Incomplete proposal request",
+                "Both intent and target_artifact are required.",
+                "Describe the change and name the artifact it would touch.",
+            )
+        proposal = decision_routes.prepare(
+            target_artifact=target,
+            intent=intent,
+            workspace_revision=_snapshot().identity.revision,
+            table_id=payload.get("table_id"),
+        )
+        app.state.workbench_proposals[proposal.proposal_id] = proposal
+        return _redact({**proposal.as_dict(), "stale": False})
+
+    @app.get(f"{API_PREFIX}/proposals/{{proposal_id}}")
+    async def read_proposal(proposal_id: str) -> Any:
+        proposal = app.state.workbench_proposals.get(proposal_id)
+        if proposal is None:
+            return _problem(
+                404,
+                "Unknown proposal",
+                "No prepared proposal matches that identifier.",
+                "Prepare the change again to get a current proposal.",
+            )
+        stale = proposals.is_stale(proposal, _snapshot().identity.revision)
+        return _redact({**proposal.as_dict(), "stale": stale})
+
+    @app.post(f"{API_PREFIX}/decisions/record", status_code=201)
+    async def record_decision(request: Request) -> Any:
+        """Record a named-human business decision (spec 140 US3).
+
+        The ONLY route that writes a business decision. It writes into the working
+        tree and reports `pending commit`; it never commits, and readiness does not
+        move until a human does (FR-140-015, FR-140-021, FR-140-023).
+        """
+        payload = await _json_body(request)
+        # Shape before staleness. A payload with no proposal_hash at all is the WRONG
+        # SHAPE (422) -- e.g. a technical tool-approval body, which FR-140-013 keeps a
+        # distinct model. Only a hash that is present but unrecognised is a stale or
+        # superseded binding (409). Collapsing the two would report a mis-addressed
+        # request as if the world had moved.
+        if (
+            not isinstance(payload.get("proposal_hash"), str)
+            or not payload["proposal_hash"].strip()
+        ):
+            return _problem(
+                422,
+                "Decision not recorded",
+                "proposal_hash is required; a business decision must name the exact "
+                "proposal it decides. A technical tool approval is a different model "
+                "and a different endpoint.",
+                "Prepare a proposal, review it, then submit the decision.",
+            )
+        proposal = app.state.workbench_proposals.get(
+            _proposal_id_for(app, payload["proposal_hash"])
+        )
+        if proposal is None:
+            return _problem(
+                409,
+                "Unknown or superseded proposal",
+                "That proposal is not the current prepared proposal.",
+                "Prepare the change again and re-review it before signing.",
+            )
+        counter = app.state.workbench_decision_counter = (
+            app.state.workbench_decision_counter + 1
+        )
+        try:
+            receipt = decision_routes.record(
+                repo_root=app.state.launch.workspace_root,
+                payload=payload,
+                proposal=proposal,
+                current_revision=_snapshot().identity.revision,
+                authority=None,
+                decision_id=f"studio-{counter:04d}",
+                recorded_at=_now_iso(),
+            )
+        except decision_routes.RecordRefused as refused:
+            return _problem(
+                refused.status,
+                "Decision not recorded",
+                refused.detail,
+                "Nothing was written. Correct the submission and try again.",
+            )
+        return _redact(
+            {
+                "written_path": receipt.written_path,
+                "decision_id": receipt.decision_id,
+                "state": receipt.state,
+                "gate_authority": receipt.gate_authority,
+            }
+        )
 
     @app.get(f"{API_PREFIX}/decisions")
     async def decisions() -> Any:
@@ -534,6 +687,12 @@ def create_app(
     )
     app.state.launch = launch
     app.state.sessions = session.SessionStore(token)
+    #: Prepared proposals, keyed by proposal_id. In-process on purpose: a proposal is a
+    #: review artifact, not a durable record, and persisting it would create a second
+    #: store the gate does not read. Initialised HERE rather than lazily so the routes
+    #: never read an attribute nothing wrote.
+    app.state.workbench_proposals = {}
+    app.state.workbench_decision_counter = 0
     app.state.expected_host = f"{launch.bind_host}:{launch.port}"
     #: FR-013a: the default and the only path SC-010 certifies. An
     #: operator-configured alternate bridge sets this to

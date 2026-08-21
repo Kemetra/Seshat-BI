@@ -105,15 +105,24 @@ def test_the_flag_tracks_the_same_state_the_route_gates_on(tmp_path: Path):
     assert _capabilities(client)["agent_turns"] is not refused
 
 
-def test_business_decision_recording_stays_const_false(tmp_path: Path):
-    """FR-022 places the ruling outside Studio PERMANENTLY, not pending a seam.
+def test_business_decision_recording_is_advertised_and_backed(tmp_path: Path):
+    """Spec 140 flipped this flag, and FR-022 is why that is correct.
 
-    Included so a future change that makes every flag dynamic cannot quietly make this
-    one dynamic too: its constancy is a governance decision, not an oversight.
+    FR-022 scoped the prohibition to FOUNDATION -- "decision transcription belongs to
+    the next governed-workbench spec" -- and that successor, spec 140, was ratified
+    2026-08-21. So the honest value is now True, and it must be BACKED: advertised
+    exactly when the route is reachable, never hardcoded.
     """
-    client, _ = _client(tmp_path)
+    client, app = _client(tmp_path)
 
-    assert _capabilities(client)["business_decision_recording"] is False
+    advertised = _capabilities(client)["business_decision_recording"]
+    reachable = any(
+        getattr(route, "path", None) == "/api/v1/decisions/record"
+        for route in app.routes
+    )
+
+    assert advertised is True
+    assert advertised is reachable, "the flag must track the route, not a literal"
 
 
 def test_technical_approvals_is_advertised_and_backed(tmp_path: Path):
