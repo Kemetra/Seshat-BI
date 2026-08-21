@@ -66,10 +66,13 @@ publish gate applies. Record the strongest connectivity above; list all here.
   > `pbi_mcp_adapter/runner.py` invokes `npx --yes @microsoft/powerbi-modeling-mcp`.
   >
   > **Still open, owner-gated:** the `VENDORED_RUNTIME_DIR` constant at
-  > `src/seshat/pbi_mcp/detect.py` remains live and feeds
-  > `DetectedFacts.vendored_runtime`, which the shipped `seshat pbi-mcp doctor` reports
-  > in both its text and `--json` output. Retiring it therefore changes slices 1-4
-  > behaviour, so it is deliberately NOT removed here (spec 149, T053).
+  > `src/seshat/pbi_mcp/detect.py:56` remains live and has TWO consumers. It feeds
+  > `DetectedFacts.vendored_runtime` (`detect.py:491`), which the shipped
+  > `seshat pbi-mcp doctor` reports in both its text and `--json` output; and it is one
+  > of the two literals the bypass-prohibition matcher `_looks_powerbi_shaped`
+  > (`detect.py:110`) keys on to decide whether an MCP server entry is Power BI-shaped.
+  > Retiring it therefore changes slices 1-4 behaviour AND narrows what the bypass guard
+  > recognises, so it is deliberately NOT removed here (spec 149, T053).
 - For the remote server: opens a Streamable HTTP connection to the published Power BI
   MCP endpoint, which queries an already-published semantic model in the Power BI
   Service (`external-service-connected` boundary; query-only, no local file writes).

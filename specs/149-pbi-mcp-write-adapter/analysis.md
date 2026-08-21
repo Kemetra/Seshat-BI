@@ -36,7 +36,7 @@ read-only-resting-state posture is stronger than the minimum those principles re
 | `_FORBIDDEN_FLAG = "--skipconfirmation"` exists as the single chokepoint | Confirmed, `detect.py:49` |
 | `_WRITE_FLAGS` covers **both** `--readwrite` and `--read-write` | Confirmed, `detect.py:50` |
 | Evidence vocabulary is **five** values, not four | Confirmed, `dagster_adapter/__init__.py:43-44`, `OUTCOMES` frozenset |
-| `VENDORED_RUNTIME_DIR` still live and contradicts ADR 0018 | Confirmed, `detect.py:47`, consumed at `detect.py:369` |
+| `VENDORED_RUNTIME_DIR` still live and contradicts ADR 0018 | Confirmed, `detect.py:56` (line numbers re-measured 2026-08-21; the earlier `:47`/`:369` citations were stale). TWO consumers, not one: `detect.py:491` populating `DetectedFacts.vendored_runtime`, and `detect.py:110` inside the bypass-prohibition matcher `_looks_powerbi_shaped` |
 | `parser_pbi_mcp.py` exists (CLI legs extend, not create) | Confirmed |
 | Group help claims "F016 stays parked -- no mutation path" | Confirmed, `parser_pbi_mcp.py:146` — T047 correctly treats this as a governance defect |
 | `gitutil.run_subprocess` docstring excludes execution runners | Confirmed, research R4 quotes it accurately |
