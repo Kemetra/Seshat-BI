@@ -8,10 +8,40 @@
 below is BLOCKED until a named human ratifies this package and the sole active Spec Kit
 fence points at this plan** (FR-140-020).
 
-**Progress**: 0 of 18 implementation tasks. Nothing started.
+**Progress**: 0 of 19 implementation tasks. Nothing started.
 
 TDD order: the failing test comes before the code. A task is done only when its test
 was seen RED, then GREEN. Nothing is marked done that was not observed.
+
+**Vocabulary and helpers verified against the shipped tree** (do not substitute
+guesses; an unrecognized status is malformed and fails closed at every consumer):
+
+- `status` must come from `decision_store.STATUS_VALUES`: `proposed`, `approved`,
+  `rejected`, `pending`, `needs_user_input`, `needs_sample`, `blocked`, `deferred`,
+  `superseded`. **There is no `decided`** -- a recorded human answer is `approved`.
+- A **non-critical** `decision_type` is any recognized type outside
+  `CRITICAL_DECISION_TYPES` (which contains `kpi_definition`, `pii_handling`,
+  `table_grain`, `primary_key`, `relationship_cardinality`, `missing_value_rule`,
+  `data_exclusion`, `policy_ruling`, `dashboard_blueprint_approval`,
+  `report_intent_approval`, `publish_export`). Only a non-critical decision can be
+  written with `authority=None`.
+- YAML: the repo is deliberately **`pyyaml`-only** (`pyproject.toml` pins `pyyaml>=6`
+  and comments that the static core stays dependency-light). Task 1.3 therefore
+  hand-appends text rather than adding a round-trip library. Do not introduce
+  `ruamel.yaml`; the repo has a dependency-freshness gate.
+- Test helpers that already exist and MUST be reused rather than reinvented:
+  `tests/unit/_studio_workspace_fixtures.py` provides `write_ready_table`,
+  `write_blocked_table`, `write_warning_table`, `write_empty_workspace`,
+  `write_pending_live_table`, `write_malformed_table`, `write_missing_stage_table`.
+  The house client pattern is `create_app(tmp_path, port=9999)` wrapped in a
+  `fastapi.testclient.TestClient` with a browser Origin header, then
+  `POST {API}/bootstrap?token=...` expecting 204 -- see
+  `tests/unit/test_studio_approval_reachability.py::_client`.
+- Projection field names (verified): `WorkspaceSnapshot.input_defects` (not
+  `defects`); `InputDefect` has **no** `table_id` (`code`, `message`, `source_ref`,
+  `recovery_action`); `StageState` has **no** `pending_live` (`stage`, `status`,
+  `evidence`, `blocking_reasons`, `required_authority`); pending-live state lives on
+  `EvidenceRef.live_state`.
 
 Phase order is mandatory: **Phase A must be fully green before Phase C begins**, because
 C's routes depend on A's invariants.
@@ -19,6 +49,154 @@ C's routes depend on A's invariants.
 ---
 
 ## Phase A -- Decision Store write path (no UI)
+
+### Task 1.0: Build the shared test fixtures the later phases consume
+
+Phases B-D reference `studio_client`, `git_workspace`, `prepared_proposal`,
+`store_file`, `committed_decision`, and `two_scoped_decisions`. **None of these exist
+today** -- `grep -rn 'def studio_client' tests/` returns nothing. Build them once here
+so no later task starts by inventing one.
+
+**Files:**
+- Create: `tests/unit/_workbench_fixtures.py`
+- Test: `tests/unit/test_workbench_fixtures.py`
+
+**Interfaces:**
+- Reuses: `tests/unit/_studio_workspace_fixtures.py` (`write_ready_table`,
+  `write_pending_live_table`, `write_malformed_table`, ...) and the house client
+  pattern in `tests/unit/test_studio_approval_reachability.py::_client`
+- Produces: `studio_client(tmp_path)`, `git_workspace(tmp_path)`,
+  `store_file(tmp_path)`
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+from pathlib import Path
+
+from tests.unit import _workbench_fixtures as fixtures
+
+
+def test_the_client_fixture_is_authenticated_and_the_workspace_is_a_git_repo(
+    tmp_path: Path,
+):
+    """The fixtures must produce a REAL authenticated client over a REAL git repo.
+
+    A fake would make every Phase C/D test vacuous: the readiness-reads-HEAD proof
+    (Task 3.5) is meaningless without a workspace that can actually commit.
+    """
+    client = fixtures.studio_client(tmp_path)
+    assert client.get("/api/v1/workspace").status_code == 200
+
+    workspace = fixtures.git_workspace(tmp_path)
+    workspace.commit_all("test: initial")
+    assert workspace.head_sha()
+
+    store = fixtures.store_file(tmp_path)
+    assert store.exists() and store.name.endswith(".yaml")
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pytest tests/unit/test_workbench_fixtures.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'tests.unit._workbench_fixtures'`
+
+- [ ] **Step 3: Write minimal implementation**
+
+```python
+"""Shared fixtures for the spec-140 workbench tests.
+
+Deliberately builds on `_studio_workspace_fixtures` rather than hand-rolling readiness
+documents: a fixture only these tests can read would make the whole suite green while
+proving nothing about the shipped readers.
+"""
+
+from __future__ import annotations
+
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from tests.unit import _studio_workspace_fixtures as workspace_fixtures
+
+API = "/api/v1"
+_BROWSER_ORIGIN = {"Origin": "http://127.0.0.1:9999"}
+
+
+def studio_client(root: Path, *, table: str = "ready_sales") -> TestClient:
+    """An authenticated TestClient over a workspace with one ready table."""
+    from seshat.studio.app import create_app
+
+    (root / ".seshat").mkdir(parents=True, exist_ok=True)
+    workspace_fixtures.write_ready_table(root, table=table)
+    app, token = create_app(root, port=9999)
+    client = TestClient(app, base_url="http://127.0.0.1:9999", headers=_BROWSER_ORIGIN)
+    assert client.post(f"{API}/bootstrap", params={"token": token}).status_code == 204
+    return client
+
+
+@dataclass(frozen=True)
+class GitWorkspace:
+    root: Path
+
+    def _git(self, *args: str) -> str:
+        result = subprocess.run(
+            ["git", "-c", "core.fsmonitor=false", *args],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip()
+
+    def commit_all(self, message: str) -> None:
+        self._git("add", "-A")
+        self._git("-c", "commit.gpgsign=false", "commit", "--no-gpg-sign", "-m", message)
+
+    def head_sha(self) -> str:
+        return self._git("rev-parse", "HEAD")
+
+
+def git_workspace(root: Path) -> GitWorkspace:
+    """Initialise `root` as a real git repo with an identity set."""
+    workspace = GitWorkspace(root)
+    workspace._git("init", "-q")
+    workspace._git("config", "user.email", "test@example.invalid")
+    workspace._git("config", "user.name", "Test Runner")
+    return workspace
+
+
+def store_file(root: Path) -> Path:
+    """The semantic-decisions store file, created empty if absent."""
+    path = root / ".seshat" / "semantic-decisions.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        path.write_text("decisions: []\n", encoding="utf-8")
+    return path
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `pytest tests/unit/test_workbench_fixtures.py -v`
+Expected: PASS
+
+Cross-platform note: use `Path` and the helpers above rather than hardcoded `/` or
+`.exe` paths. The CI `unit` job runs `ubuntu-latest` only, so a POSIX-locked fixture
+stays green in CI forever and fails only on Windows (issue #691).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add tests/unit/_workbench_fixtures.py tests/unit/test_workbench_fixtures.py
+git commit -m "test: add shared workbench fixtures for spec 140"
+```
+
+`prepared_proposal`, `committed_decision`, and `two_scoped_decisions` depend on code
+that does not exist until Phase C; add each to this module in the first task that needs
+it, following the same rule -- build on shipped readers, never on a bespoke fake.
+
+---
 
 ### Task 1.1: Build a decision entry from a named-human answer
 
@@ -39,7 +217,7 @@ from seshat import decision_store, decision_write
 def test_build_entry_populates_every_required_approval_field():
     entry = decision_write.build_entry(
         decision_id="d-001",
-        decision_type="metric_definition",
+        decision_type="kpi_definition",
         scope={"table": "sales"},
         signer="Ahmed Shaaban (owner)",
         answer="net_of_returns",
@@ -90,7 +268,7 @@ def build_entry(
     return {
         "id": decision_id,
         "decision_type": decision_type,
-        "status": "decided",
+        "status": "approved",
         "scope": scope,
         "answer": answer,
         "approval": {
@@ -144,7 +322,7 @@ def test_a_malformed_signer_is_refused_and_the_file_is_untouched(tmp_path):
 
     entry = decision_write.build_entry(
         decision_id="d-002",
-        decision_type="metric_definition",
+        decision_type="kpi_definition",
         scope={"table": "sales"},
         signer="owner (owner)",  # name is a role token -> owner_shape_ok rejects
         answer="net_of_returns",
@@ -242,7 +420,7 @@ def test_append_preserves_existing_entries_and_comments(tmp_path):
 
     entry = decision_write.build_entry(
         decision_id="d-003",
-        decision_type="non_critical_note",
+        decision_type="assumption_note",
         scope={"table": "sales"},
         signer="Ahmed Shaaban (owner)",
         answer="yes",
@@ -271,28 +449,59 @@ Expected: FAIL — `NotImplementedError` from the `_atomic_append` stub
 import os
 import tempfile
 
-from ruamel.yaml import YAML
+def _atomic_append(path: Path, entry: dict[str, Any]) -> None:
+    """Append one decision, then replace the file in a single atomic rename."""
+import os
+import tempfile
 
-_yaml = YAML()          # round-trip mode: preserves comments and key order
-_yaml.preserve_quotes = True
+import yaml
 
 
 def _atomic_append(path: Path, entry: dict[str, Any]) -> None:
-    """Append one decision, then replace the file in a single atomic rename."""
-    with path.open("r", encoding="utf-8") as handle:
-        document = _yaml.load(handle) or {}
-    document.setdefault("decisions", []).append(entry)
+    """Append one decision by TEXT append, then replace the file atomically.
+
+    Deliberately not a parse-mutate-dump round trip. `yaml.safe_load` +
+    `yaml.safe_dump` would drop every comment and reflow the whole document, which
+    Task 1.3's test forbids -- and the repo is pyyaml-only by design
+    (`pyproject.toml` keeps the static core dependency-light), so a round-trip
+    loader is not available. Appending text leaves existing bytes untouched by
+    construction, which is a stronger guarantee than reformatting carefully.
+    """
+    existing = path.read_text(encoding="utf-8")
+
+    # Validate our own fragment parses, and that the merged document is still valid
+    # YAML with the new entry last. A fragment that breaks the file must never land.
+    fragment = yaml.safe_dump(
+        [entry], sort_keys=False, default_flow_style=False, allow_unicode=True
+    )
+    indented = "".join(
+        f"  {line}\n" if line.strip() else "\n" for line in fragment.splitlines()
+    )
+    if "decisions:" not in existing:
+        merged = existing.rstrip("\n") + "\ndecisions:\n" + indented
+    else:
+        merged = existing.rstrip("\n") + "\n" + indented
+
+    parsed = yaml.safe_load(merged)
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("decisions"), list):
+        raise WriteRefused("append would produce a malformed decision store")
+    if parsed["decisions"][-1].get("id") != entry["id"]:
+        raise WriteRefused("append did not land the new entry last")
 
     directory = path.parent
     handle_fd, temporary = tempfile.mkstemp(dir=directory, suffix=".tmp")
     try:
-        with os.fdopen(handle_fd, "w", encoding="utf-8") as staged:
-            _yaml.dump(document, staged)
+        with os.fdopen(handle_fd, "w", encoding="utf-8", newline="\n") as staged:
+            staged.write(merged)
         os.replace(temporary, path)      # atomic on POSIX and Windows
     except BaseException:
         Path(temporary).unlink(missing_ok=True)
         raise
 ```
+
+Note for the implementer: the merged-document re-parse is the safety net that makes a
+text append safe. Without it, a malformed fragment could corrupt the store and the
+corruption would only surface later, in the gate.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -333,7 +542,7 @@ def test_the_write_path_calls_the_shipped_predicate(tmp_path, monkeypatch):
 
     entry = decision_write.build_entry(
         decision_id="d-004",
-        decision_type="non_critical_note",
+        decision_type="assumption_note",
         scope={"table": "sales"},
         signer="Ahmed Shaaban (owner)",
         answer="yes",
@@ -402,7 +611,7 @@ def test_the_write_succeeds_with_the_git_runner_disabled(tmp_path, monkeypatch):
 
     entry = decision_write.build_entry(
         decision_id="d-005",
-        decision_type="non_critical_note",
+        decision_type="assumption_note",
         scope={"table": "sales"},
         signer="Ahmed Shaaban (owner)",
         answer="yes",
@@ -459,13 +668,24 @@ git commit -m "test: prove the decision write performs no git operation"
 - [ ] **Step 1: Write the failing test**
 
 ```python
-from seshat.studio import evidence
+from pathlib import Path
+
+from seshat.studio import evidence, projection
+from tests.unit import _studio_workspace_fixtures as workspace_fixtures
 
 
-def test_a_table_with_malformed_evidence_reports_a_defect_not_a_pass(studio_snapshot):
+def test_a_table_with_malformed_evidence_reports_a_defect_not_a_pass(tmp_path: Path):
     """Malformed evidence must surface as a defect. An empty success state here would
-    present missing information as a clean bill of health."""
-    bundle = evidence.bundle_for(studio_snapshot, "sales_malformed")
+    present missing information as a clean bill of health.
+
+    Uses the SHIPPED fixture writer, so the bundle is built from a real committed
+    readiness document rather than a hand-made snapshot only this test can read.
+    """
+    workspace_fixtures.write_malformed_table(tmp_path, table="malformed_sales")
+    snapshot = projection.build_workspace_snapshot(tmp_path)
+
+    bundle = evidence.bundle_for(snapshot, "malformed_sales")
+
     assert bundle.defects, "malformed evidence must produce at least one defect"
     assert all(stage.status != "pass" for stage in bundle.stages)
 ```
@@ -481,6 +701,11 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'seshat.studio.evidence
 from dataclasses import dataclass
 
 from seshat.studio import projection
+
+#: The `EvidenceRef.live_state` values that mean "no live evidence yet". Confirm the
+#: exact vocabulary in projection.py before relying on it; an unrecognized value must
+#: be treated as pending rather than as satisfied.
+_PENDING_LIVE_STATES = frozenset({"pending", "pending_live"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -500,9 +725,17 @@ def bundle_for(
         table_id=table_id,
         stages=journey.stages,
         evidence=tuple(ref for stage in journey.stages for ref in stage.evidence),
-        defects=tuple(d for d in snapshot.defects if d.table_id == table_id),
+        # `WorkspaceSnapshot.input_defects` -- NOT `.defects`. `InputDefect` carries no
+        # `table_id`, so defects cannot be filtered by table identity; correlate via
+        # `source_ref` if per-table narrowing is needed, and otherwise carry them all
+        # rather than silently dropping a defect that belongs to this view.
+        defects=snapshot.input_defects,
+        # `StageState` has NO `pending_live` field. Pending-live state lives on
+        # `EvidenceRef.live_state`, so it is DERIVED here.
         pending_live=tuple(
-            stage.stage for stage in journey.stages if stage.pending_live
+            stage.stage
+            for stage in journey.stages
+            if any(ref.live_state in _PENDING_LIVE_STATES for ref in stage.evidence)
         ),
     )
 ```
@@ -526,24 +759,50 @@ git commit -m "feat: assemble a table evidence bundle for the workbench"
 - [ ] **Step 1: Write the failing test**
 
 ```python
-def test_every_claim_has_a_source_or_is_marked_pending_live(studio_snapshot):
-    bundle = evidence.bundle_for(studio_snapshot, "sales")
+def test_a_pending_live_stage_is_reported_pending_not_unsourced(tmp_path: Path):
+    """A stage awaiting a live profile is NOT the same as a stage with no source.
+
+    Uses the shipped `write_pending_live_table` fixture so the live_state values come
+    from a real readiness document.
+    """
+    workspace_fixtures.write_pending_live_table(tmp_path, table="pending_live_sales")
+    snapshot = projection.build_workspace_snapshot(tmp_path)
+
+    bundle = evidence.bundle_for(snapshot, "pending_live_sales")
+
+    assert bundle.pending_live, "a pending-live stage must be reported as pending"
     for stage in bundle.stages:
         assert stage.evidence or stage.stage in bundle.pending_live, (
             f"stage {stage.stage} displays a claim with no source reference"
         )
+
+
+def test_a_stage_with_no_evidence_is_not_reported_as_pending_live(tmp_path: Path):
+    """The inverse, and the reason this pair exists: an empty evidence list means
+    "no evidence" (a defect), never "awaiting a live profile". Collapsing the two
+    would launder missing data into an expected-pending state."""
+    workspace_fixtures.write_malformed_table(tmp_path, table="malformed_sales")
+    snapshot = projection.build_workspace_snapshot(tmp_path)
+
+    bundle = evidence.bundle_for(snapshot, "malformed_sales")
+
+    for stage in bundle.stages:
+        if not stage.evidence:
+            assert stage.stage not in bundle.pending_live
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pytest tests/unit/test_studio_evidence.py::test_every_claim_has_a_source_or_is_marked_pending_live -v`
-Expected: FAIL until `pending_live` is populated from the live-boundary marker.
+Run: `pytest tests/unit/test_studio_evidence.py -k pending_live -v`
+Expected: FAIL — the second test fails if `pending_live` is derived from "empty
+evidence" instead of from `EvidenceRef.live_state`.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Populate `pending_live` from the projection's existing `[PENDING LIVE PROFILE]` marker
-rather than inferring it from an empty evidence list — an empty list means "no evidence",
-which is a defect, not a pending boundary.
+Task 2.1 already derives `pending_live` from `EvidenceRef.live_state`. If the first
+test fails, the `_PENDING_LIVE_STATES` vocabulary is wrong — read the real values out of
+`projection.py` and correct the set. Do **not** switch to inferring from an empty
+evidence list; the second test exists to forbid exactly that.
 
 - [ ] **Step 4: Run test to verify it passes**
 

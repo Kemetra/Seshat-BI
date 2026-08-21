@@ -50,15 +50,45 @@ persisted state.
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `table_id` | `str` | |
+| `table_id` | `str` | matches `TableJourney.table_id` |
 | `stages` | `tuple[StageState, ...]` | reused from `projection`, not redefined |
-| `evidence` | `tuple[EvidenceRef, ...]` | reused from `projection` |
+| `evidence` | `tuple[EvidenceRef, ...]` | flattened from `StageState.evidence` |
 | `defects` | `tuple[InputDefect, ...]` | malformed evidence surfaces here, never as a pass |
-| `pending_live` | `tuple[str, ...]` | boundaries marked `[PENDING LIVE PROFILE]` |
+| `pending_live` | `tuple[str, ...]` | stage names whose evidence carries a pending `live_state` |
+
+**Verified against `src/seshat/studio/projection.py`** -- these are the actual shipped
+field names, which differ from a naive guess in three ways that matter:
+
+- `WorkspaceSnapshot.input_defects` (not `defects`) is the snapshot-level attribute.
+- `InputDefect` has **no** `table_id`. Its fields are `code`, `message`, `source_ref`,
+  `recovery_action`. Defects therefore cannot be filtered per table by identity; they
+  are correlated via `source_ref`, or carried at workspace level.
+- `StageState` has **no** `pending_live` field. Its fields are `stage`, `status`,
+  `evidence`, `blocking_reasons`, `required_authority`. Pending-live state lives on
+  `EvidenceRef.live_state` (`EvidenceRef` = `label`, `source_ref`, `kind`,
+  `live_state`), so `pending_live` must be **derived** from evidence, not read off the
+  stage.
 
 Because every member is an existing projection type, US1 adds a view rather than a new
 source of truth. A claim that cannot be traced to an `EvidenceRef` or a `pending_live`
 entry must not be displayed.
+
+### Decision-entry vocabulary (verified, not assumed)
+
+The `decision_type` and `status` values a write must use are closed sets in
+`decision_store.py`. Inventing a member is a silent failure: `is_known_status` treats an
+unrecognized status as malformed and every consumer fails closed.
+
+- `STATUS_VALUES` = `proposed`, `approved`, `rejected`, `pending`, `needs_user_input`,
+  `needs_sample`, `blocked`, `deferred`, `superseded`. **There is no `decided`.** A
+  recorded human answer uses `approved`.
+- `CRITICAL_DECISION_TYPES` = `kpi_definition`, `pii_handling`, `table_grain`,
+  `primary_key`, `relationship_cardinality`, `missing_value_rule`, `data_exclusion`,
+  `policy_ruling`, `dashboard_blueprint_approval`, `report_intent_approval`,
+  `publish_export`. A critical type additionally requires the authority contract to
+  declare the signer's class eligible, and `authority is None` fails closed.
+- A **non-critical** `decision_type` is any recognized type outside that set; only such
+  a decision can be written with `authority=None`.
 
 ### `BusinessDecisionRequest` (US3)
 

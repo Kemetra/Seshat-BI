@@ -21,9 +21,9 @@ core. Phase 4 adds apply/verify and the scoped client-review context. Each phase
 independently shippable and gate-verifiable; the risky write paths land only after the
 store's invariants are proven.
 
-**Tech Stack:** Python 3.13, FastAPI (existing Studio app), `ruamel.yaml` or equivalent
-round-trip YAML (Phase 1 decision), pytest. Frontend follows Foundation's existing
-Studio asset pipeline.
+**Tech Stack:** Python 3.13, FastAPI (existing Studio app), `pyyaml` (the repo's only
+YAML dependency — no round-trip loader is added), pytest. Frontend follows Foundation's
+existing Studio asset pipeline.
 
 **Spec status:** `draft`. Phases 0 and 1 below (research, design) are complete.
 **Implementation phases MUST NOT begin until a named human ratifies this package and
@@ -118,18 +118,34 @@ specs/140-studio-governed-workbench/
 src/seshat/
 ├── decision_write.py           <- NEW: append-only atomic decision write
 └── studio/
+    ├── evidence.py             <- NEW (Phase B): EvidenceBundle view over projection
     ├── proposals.py            <- NEW: ChangeProposal build + hash + staleness
     ├── decision_routes.py      <- NEW: the one recording route
-    ├── apply.py                <- NEW (Phase 4): scoped apply + receipt
-    ├── review_scope.py         <- NEW (Phase 4): client-review least privilege
+    ├── apply.py                <- NEW (Phase D): scoped apply + receipt
+    ├── review_scope.py         <- NEW (Phase D): client-review least privilege
     └── app.py                  <- MODIFY: register new routers
 tests/unit/
+├── _workbench_fixtures.py      <- NEW (Task 1.0): shared fixtures; builds on
+│                                  _studio_workspace_fixtures.py, never a bespoke fake
+├── test_workbench_fixtures.py
 ├── test_decision_write.py
+├── test_studio_evidence.py
 ├── test_studio_proposals.py
 ├── test_studio_decision_routes.py
 ├── test_studio_apply.py
 └── test_studio_review_scope.py
 ```
+
+**Reuse, do not reinvent**: `tests/unit/_studio_workspace_fixtures.py` already ships
+`write_ready_table`, `write_pending_live_table`, `write_malformed_table` and siblings,
+and `tests/unit/test_studio_approval_reachability.py::_client` is the house
+authenticated-client pattern. Task 1.0 wraps those; a hand-rolled readiness document
+would make the suite green while proving nothing about the shipped readers.
+
+**Dependency constraint**: the repo is `pyyaml`-only by design (`pyproject.toml` pins
+`pyyaml>=6` and notes the static core stays dependency-light). The decision append is a
+validated text append plus a merged-document re-parse, not a round-trip loader — adding
+`ruamel.yaml` would trip the dependency-freshness gate and is not permitted here.
 
 ## Phase 0 -- Research (DONE, recorded in research.md)
 

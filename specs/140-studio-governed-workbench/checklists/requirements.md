@@ -55,9 +55,35 @@ against the written package, not against intentions.
 - [x] Package is one coherent feature, not a program
 - [x] Spec 141 territory (operations history, client export) left to 141
 - [x] Phasing keeps the security-critical write path first and independently testable
-- [ ] **Owner judgement**: is the all-five-stories scope right for one ratification, or
-      should US4/US5 split into a follow-on spec? Raised for the ratifier; the package
-      is written to the owner's stated choice of all five.
+- [x] **Owner judgement**: all-five-stories scope confirmed by the owner 2026-08-21
+      ("All five as the outline lists them"). The Phase-D split remains a noted
+      contingency in `plan.md` under Complexity Tracking if review finds the package
+      too large to judge as one unit.
+
+## Claims about shipped code (verified against the tree, not against this package)
+
+An adversarial review found that the first draft asserted field names, enum members, and
+a dependency it had never read — the `decision_store` side was built from validators,
+but the `projection` side was built from a class-name grep. Internal consistency passed
+precisely because all three documents repeated the same guesses.
+
+- [x] `WorkspaceSnapshot.input_defects` (draft said `.defects`)
+- [x] `InputDefect` has no `table_id` — so defects cannot be filtered by table identity
+- [x] `StageState` has no `pending_live` — derived from `EvidenceRef.live_state` instead
+- [x] `build_workspace_snapshot(root)` is the builder (draft said `projection.snapshot`)
+- [x] `status` values are `STATUS_VALUES`; there is no `decided` (draft used it)
+- [x] `decision_type` values checked against `CRITICAL_DECISION_TYPES` (draft invented
+      `metric_definition` and `non_critical_note`)
+- [x] `pyyaml` only — draft's `ruamel.yaml` would have added a dependency and tripped
+      the freshness gate
+- [x] Existing test helpers found and reused (`_studio_workspace_fixtures.py`, the
+      `_client` pattern) rather than reinvented
+- [x] Every symbol the package names re-confirmed present in `src/`
+- [x] Every projection attribute the tasks dereference re-confirmed declared
+
+**Standing rule this produced**: internal consistency across a spec package is not
+verification. Each claim about shipped code must be checked against the file, and a
+class-name grep is not a read of the fields.
 
 ## Verification discipline
 
