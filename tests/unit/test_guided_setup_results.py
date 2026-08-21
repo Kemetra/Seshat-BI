@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import venv
 from pathlib import Path
 
 import pytest
@@ -128,8 +129,8 @@ def test_a_component_installs_into_its_own_base_profile_environment(
     runner = Runner()
     _derived_apply(_project(tmp_path), runner, monkeypatch)
 
-    assert runner.mentions((ENV_DIR / "analytics-core").as_posix())
-    assert not runner.mentions((ENV_DIR / "analytics-full").as_posix())
+    assert runner.mentions(str(tmp_path / ENV_DIR / "analytics-core"))
+    assert not runner.mentions(str(tmp_path / ENV_DIR / "analytics-full"))
 
 
 def test_a_component_a_previous_profile_run_installed_is_not_reinstalled(
@@ -142,13 +143,10 @@ def test_a_component_a_previous_profile_run_installed_is_not_reinstalled(
     exercises the real presence check rather than a flag.
     """
     root = _project(tmp_path)
-    site = root / ENV_DIR / "analytics-full" / "lib" / "python3.13" / "site-packages"
-    site.mkdir(parents=True)
+    environment = root / ENV_DIR / "analytics-full"
+    venv.EnvBuilder(with_pip=False).create(environment)
+    site = next(path for path in environment.rglob("site-packages") if path.is_dir())
     (site / "connectorx-0.4.4.dist-info").mkdir()
-    (root / ENV_DIR / "analytics-full" / "bin").mkdir(parents=True, exist_ok=True)
-    (root / ENV_DIR / "analytics-full" / "bin" / "python").write_text(
-        "", encoding="utf-8"
-    )
 
     runner = Runner()
     outcome = _derived_apply(root, runner, monkeypatch)
