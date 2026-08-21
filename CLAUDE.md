@@ -43,14 +43,16 @@ post-write validation follow-up CLOSED: #657 (#670), #663 (#672), #661 + #663 (#
 runtime-version PIN is blocked until Microsoft publishes a non-prerelease (re-measured
 2026-08-21: still only `0.5.0-beta.2`..`.12`, `latest` = `0.5.0-beta.12`) -- which is why
 the marker rests here rather than on newer work.
-**Spec 155 (guided setup execution) is IMPLEMENTED, awaiting ratification** -- `seshat
-integrations setup --derived` selects only the components a project's committed evidence
-needs, then provisions them through the existing installer behind spec 154's committed
-`governance` approval. `DEFAULT_PROFILE` and every `--profile` run are untouched; the
-bridge is `integrations/guided_setup.py`, deliberately NOT `derivation.py`, because two
-shipped spec-153 tests assert that file holds no execution or approval call site. Its
-spec.md is still `Draft`: implementation shipped on the owner's instruction, and no agent
-may write the `ratified` line.
+**Spec 155 (guided setup execution) is IMPLEMENTED and RATIFIED** (Ahmed Shaaban, owner,
+2026-08-21) -- `seshat integrations setup --derived` selects only the components a
+project's committed evidence needs, then provisions them through the existing installer
+behind spec 154's committed `governance` approval. `DEFAULT_PROFILE` and every `--profile`
+run are untouched; the bridge is `integrations/guided_setup.py`, deliberately NOT
+`derivation.py`, because two shipped spec-153 tests assert that file holds no execution or
+approval call site -- that boundary survives ratification and is still binding. The build
+preceded the ratification here (implementation shipped on the owner's instruction while
+the spec read `Draft`); its `Status history` records that order, so do not cite 155 as a
+precedent for building ahead of a ratification.
 **Specs 153 and 154 are COMPLETE** -- capability derivation with requirement strength and
 declines, and the committed named-human provisioning approval read at HEAD (`--apply` is
 intent; `--yes` only suppresses the prompt; neither authorizes).

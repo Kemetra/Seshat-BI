@@ -4,7 +4,18 @@
 
 **Created**: 2026-08-20
 
-**Status**: Draft
+**Status**: ratified -- Ahmed Shaaban, 2026-08-21
+
+**Status history**: Draft -- 2026-08-20; implementation shipped 2026-08-21 on the
+owner's instruction while the spec was still Draft; ratified 2026-08-21 by the owner
+in session. Recorded in the order it actually happened: the build preceded the
+ratification here, so this line is NOT evidence of the normal spec-then-build
+sequence, and a reader should not cite spec 155 as a precedent for building ahead of
+a ratification. The agent transcribed this decision and did not self-ratify. Both
+prerequisites were already ratified -- specs 153 and 154, 2026-08-20. The spec-153
+boundary remains permanent: `integrations/guided_setup.py` is the bridge, deliberately
+NOT `derivation.py`, because two shipped spec-153 tests assert that file holds no
+execution or approval call site.
 
 **Input**: Connect the capability-oriented project plan produced by spec 153 to the
 existing integration control plane, so a user provisions ONLY the capabilities the
