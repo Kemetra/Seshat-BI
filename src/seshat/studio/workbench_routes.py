@@ -14,6 +14,7 @@ reviewable at a glance; it is the whole security model of this feature.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -98,6 +99,207 @@ def _working_tree_decisions(root: Path, relative: str) -> list[dict[str, Any]]:
     return [item for item in entries if isinstance(item, dict)]
 
 
+@dataclass(frozen=True)
+class Deps:
+    """The three app-level seams every workbench handler needs.
+
+    Bundled so a handler can be a module-level function instead of a closure. That
+    is what lets `register` stay branch-free: the complexity lives in the handler
+    that owns it, where it can be read and tested on its own.
+    """
+
+    app: Any
+    problem: Any
+    redact: Any
+    snapshot: Any
+
+
+async def table_evidence(table_id: str, *, deps: Deps) -> Any:
+    """One table's evidence bundle (spec 140 US1, FR-140-002).
+
+    Read-only. Groups what the projection already exposes -- stages, evidence
+    refs, input defects, pending-live boundaries -- so the investigation view
+    cannot disagree with the readiness the gate computes.
+    """
+    try:
+        bundle = evidence.bundle_for(deps.snapshot(), table_id)
+    except KeyError:
+        return deps.problem(
+            404,
+            "Unknown table",
+            "No onboarded table matches that identifier.",
+            "Open the Command Room to see the tables in this workspace.",
+        )
+    return deps.redact(bundle.as_dict())
+
+
+async def create_proposal(request: Request, *, deps: Deps) -> Any:
+    """Prepare an immutable change proposal (spec 140 US2).
+
+    The agent prepares; it does not decide. The response carries the hash and
+    revision that bind any later decision.
+    """
+    payload = await _json_body(request)
+    target = payload.get("target_artifact")
+    intent = payload.get("intent")
+    if not isinstance(target, str) or not isinstance(intent, str):
+        return deps.problem(
+            422,
+            "Incomplete proposal request",
+            "Both intent and target_artifact are required.",
+            "Describe the change and name the artifact it would touch.",
+        )
+    proposal = decision_routes.prepare(
+        target_artifact=target,
+        intent=intent,
+        workspace_revision=deps.snapshot().identity.revision,
+        table_id=payload.get("table_id"),
+    )
+    deps.app.state.workbench_proposals[proposal.proposal_id] = proposal
+    return deps.redact({**proposal.as_dict(), "stale": False})
+
+
+async def read_proposal(proposal_id: str, *, deps: Deps) -> Any:
+    proposal = deps.app.state.workbench_proposals.get(proposal_id)
+    if proposal is None:
+        return deps.problem(
+            404,
+            "Unknown proposal",
+            "No prepared proposal matches that identifier.",
+            "Prepare the change again to get a current proposal.",
+        )
+    stale = proposals.is_stale(proposal, deps.snapshot().identity.revision)
+    return deps.redact({**proposal.as_dict(), "stale": stale})
+
+
+async def record_decision(request: Request, *, deps: Deps) -> Any:
+    """Record a named-human business decision (spec 140 US3).
+
+    The ONLY route that writes a business decision. It writes into the working
+    tree and reports `pending commit`; it never commits, and readiness does not
+    move until a human does (FR-140-015, FR-140-021, FR-140-023).
+    """
+    payload = await _json_body(request)
+    # Shape before staleness. A payload with no proposal_hash at all is the WRONG
+    # SHAPE (422) -- e.g. a technical tool-approval body, which FR-140-013 keeps a
+    # distinct model. Only a hash that is present but unrecognised is a stale or
+    # superseded binding (409). Collapsing the two would report a mis-addressed
+    # request as if the world had moved.
+    if (
+        not isinstance(payload.get("proposal_hash"), str)
+        or not payload["proposal_hash"].strip()
+    ):
+        return deps.problem(
+            422,
+            "Decision not recorded",
+            "proposal_hash is required; a business decision must name the exact "
+            "proposal it decides. A technical tool approval is a different model "
+            "and a different endpoint.",
+            "Prepare a proposal, review it, then submit the decision.",
+        )
+    proposal = deps.app.state.workbench_proposals.get(
+        _proposal_id_for(deps.app, payload["proposal_hash"])
+    )
+    if proposal is None:
+        return deps.problem(
+            409,
+            "Unknown or superseded proposal",
+            "That proposal is not the current prepared proposal.",
+            "Prepare the change again and re-review it before signing.",
+        )
+    counter = deps.app.state.workbench_decision_counter = (
+        deps.app.state.workbench_decision_counter + 1
+    )
+    try:
+        receipt = decision_routes.record(
+            context=decision_routes.WorkspaceContext(
+                repo_root=deps.app.state.launch.workspace_root,
+                current_revision=deps.snapshot().identity.revision,
+                # Explicit: None means eligibility cannot be validated, which the
+                # shipped predicate treats as fail-closed.
+                authority=None,
+                store_rel=decision_routes.DECISION_STORE_REL,
+            ),
+            payload=payload,
+            proposal=proposal,
+            decision_id=f"studio-{counter:04d}",
+            recorded_at=_now_iso(),
+        )
+    except decision_routes.RecordRefused as refused:
+        return deps.problem(
+            refused.status,
+            "Decision not recorded",
+            refused.detail,
+            "Nothing was written. Correct the submission and try again.",
+        )
+    return deps.redact(
+        {
+            "written_path": receipt.written_path,
+            "decision_id": receipt.decision_id,
+            "state": receipt.state,
+            "gate_authority": receipt.gate_authority,
+        }
+    )
+
+
+async def apply_proposal_route(
+    proposal_id: str, request: Request, *, deps: Deps
+) -> Any:
+    """Apply exactly the reviewed proposal (spec 140 US4).
+
+    Refused unless a COMMITTED decision authorizes it: a recorded decision is
+    pending commit until a human commits, and pending commit is not authority.
+    """
+    proposal = deps.app.state.workbench_proposals.get(proposal_id)
+    if proposal is None:
+        return deps.problem(
+            404,
+            "Unknown proposal",
+            "No prepared proposal matches that identifier.",
+            "Prepare the change again to get a current proposal.",
+        )
+    try:
+        receipt = apply_module.apply_proposal(
+            committed=_CommittedReader(deps.app.state.launch.workspace_root),
+            proposal=proposal,
+            payload=await _json_body(request),
+            context=decision_routes.WorkspaceContext(
+                repo_root=deps.app.state.launch.workspace_root,
+                current_revision=deps.snapshot().identity.revision,
+                store_rel=decision_routes.DECISION_STORE_REL,
+            ),
+            live_available=False,
+        )
+    except apply_module.ApplyRefused as refused:
+        return deps.problem(
+            refused.status,
+            "Apply refused",
+            refused.detail,
+            "Nothing was applied.",
+        )
+    return deps.redact(receipt.as_dict())
+
+
+async def review(scope: str | None = None, *, deps: Deps) -> Any:
+    """The client-review surface for one explicitly selected scope (US5)."""
+    try:
+        payload = review_scope.review_for(
+            scope=scope,
+            decisions=_working_tree_decisions(
+                deps.app.state.launch.workspace_root,
+                decision_routes.DECISION_STORE_REL,
+            ),
+        )
+    except review_scope.ScopeRefused as refused:
+        return deps.problem(
+            refused.status,
+            "Review scope required",
+            refused.detail,
+            "Select the exact scope to review.",
+        )
+    return deps.redact(payload)
+
+
 def register(
     app: FastAPI,
     *,
@@ -106,198 +308,40 @@ def register(
     redact,
     snapshot,
 ) -> None:
-    """Register the workbench routes on `app`.
+    """Bind the workbench route handlers to `app`.
 
-    `problem`, `redact` and `snapshot` are passed IN rather than re-implemented: they
-    are app.py's single definitions of the problem shape, the redaction boundary, and
-    the workspace projection, and a second copy of any of them would be a second
-    account of the same thing.
+    Each handler is a MODULE-LEVEL function taking its dependencies explicitly, so
+    this function is a flat list of registrations with no branching of its own. It
+    previously nested all six bodies, which made its cyclomatic complexity the SUM
+    of theirs (28) while none of that complexity was actually its own.
+
+    `problem`, `redact` and `snapshot` are passed IN rather than re-implemented:
+    they are app.py's single definitions of the problem shape, the redaction
+    boundary and the workspace projection.
     """
     API_PREFIX = api_prefix
-    _problem = problem
-    _redact = redact
-    _snapshot = snapshot
+    deps = Deps(app=app, problem=problem, redact=redact, snapshot=snapshot)
 
     @app.get(f"{API_PREFIX}/tables/{{table_id}}/evidence")
-    async def table_evidence(table_id: str) -> Any:
-        """One table's evidence bundle (spec 140 US1, FR-140-002).
-
-        Read-only. Groups what the projection already exposes -- stages, evidence
-        refs, input defects, pending-live boundaries -- so the investigation view
-        cannot disagree with the readiness the gate computes.
-        """
-        try:
-            bundle = evidence.bundle_for(_snapshot(), table_id)
-        except KeyError:
-            return _problem(
-                404,
-                "Unknown table",
-                "No onboarded table matches that identifier.",
-                "Open the Command Room to see the tables in this workspace.",
-            )
-        return _redact(bundle.as_dict())
+    async def _table_evidence(table_id: str) -> Any:
+        return await table_evidence(table_id, deps=deps)
 
     @app.post(f"{API_PREFIX}/proposals", status_code=201)
-    async def create_proposal(request: Request) -> Any:
-        """Prepare an immutable change proposal (spec 140 US2).
-
-        The agent prepares; it does not decide. The response carries the hash and
-        revision that bind any later decision.
-        """
-        payload = await _json_body(request)
-        target = payload.get("target_artifact")
-        intent = payload.get("intent")
-        if not isinstance(target, str) or not isinstance(intent, str):
-            return _problem(
-                422,
-                "Incomplete proposal request",
-                "Both intent and target_artifact are required.",
-                "Describe the change and name the artifact it would touch.",
-            )
-        proposal = decision_routes.prepare(
-            target_artifact=target,
-            intent=intent,
-            workspace_revision=_snapshot().identity.revision,
-            table_id=payload.get("table_id"),
-        )
-        app.state.workbench_proposals[proposal.proposal_id] = proposal
-        return _redact({**proposal.as_dict(), "stale": False})
+    async def _create_proposal(request: Request) -> Any:
+        return await create_proposal(request, deps=deps)
 
     @app.get(f"{API_PREFIX}/proposals/{{proposal_id}}")
-    async def read_proposal(proposal_id: str) -> Any:
-        proposal = app.state.workbench_proposals.get(proposal_id)
-        if proposal is None:
-            return _problem(
-                404,
-                "Unknown proposal",
-                "No prepared proposal matches that identifier.",
-                "Prepare the change again to get a current proposal.",
-            )
-        stale = proposals.is_stale(proposal, _snapshot().identity.revision)
-        return _redact({**proposal.as_dict(), "stale": stale})
+    async def _read_proposal(proposal_id: str) -> Any:
+        return await read_proposal(proposal_id, deps=deps)
 
     @app.post(f"{API_PREFIX}/decisions/record", status_code=201)
-    async def record_decision(request: Request) -> Any:
-        """Record a named-human business decision (spec 140 US3).
-
-        The ONLY route that writes a business decision. It writes into the working
-        tree and reports `pending commit`; it never commits, and readiness does not
-        move until a human does (FR-140-015, FR-140-021, FR-140-023).
-        """
-        payload = await _json_body(request)
-        # Shape before staleness. A payload with no proposal_hash at all is the WRONG
-        # SHAPE (422) -- e.g. a technical tool-approval body, which FR-140-013 keeps a
-        # distinct model. Only a hash that is present but unrecognised is a stale or
-        # superseded binding (409). Collapsing the two would report a mis-addressed
-        # request as if the world had moved.
-        if (
-            not isinstance(payload.get("proposal_hash"), str)
-            or not payload["proposal_hash"].strip()
-        ):
-            return _problem(
-                422,
-                "Decision not recorded",
-                "proposal_hash is required; a business decision must name the exact "
-                "proposal it decides. A technical tool approval is a different model "
-                "and a different endpoint.",
-                "Prepare a proposal, review it, then submit the decision.",
-            )
-        proposal = app.state.workbench_proposals.get(
-            _proposal_id_for(app, payload["proposal_hash"])
-        )
-        if proposal is None:
-            return _problem(
-                409,
-                "Unknown or superseded proposal",
-                "That proposal is not the current prepared proposal.",
-                "Prepare the change again and re-review it before signing.",
-            )
-        counter = app.state.workbench_decision_counter = (
-            app.state.workbench_decision_counter + 1
-        )
-        try:
-            receipt = decision_routes.record(
-                context=decision_routes.WorkspaceContext(
-                    repo_root=app.state.launch.workspace_root,
-                    current_revision=_snapshot().identity.revision,
-                    # Explicit: None means eligibility cannot be validated, which the
-                    # shipped predicate treats as fail-closed.
-                    authority=None,
-                    store_rel=decision_routes.DECISION_STORE_REL,
-                ),
-                payload=payload,
-                proposal=proposal,
-                decision_id=f"studio-{counter:04d}",
-                recorded_at=_now_iso(),
-            )
-        except decision_routes.RecordRefused as refused:
-            return _problem(
-                refused.status,
-                "Decision not recorded",
-                refused.detail,
-                "Nothing was written. Correct the submission and try again.",
-            )
-        return _redact(
-            {
-                "written_path": receipt.written_path,
-                "decision_id": receipt.decision_id,
-                "state": receipt.state,
-                "gate_authority": receipt.gate_authority,
-            }
-        )
+    async def _record_decision(request: Request) -> Any:
+        return await record_decision(request, deps=deps)
 
     @app.post(f"{API_PREFIX}/proposals/{{proposal_id}}/apply")
-    async def apply_proposal_route(proposal_id: str, request: Request) -> Any:
-        """Apply exactly the reviewed proposal (spec 140 US4).
-
-        Refused unless a COMMITTED decision authorizes it: a recorded decision is
-        pending commit until a human commits, and pending commit is not authority.
-        """
-        proposal = app.state.workbench_proposals.get(proposal_id)
-        if proposal is None:
-            return _problem(
-                404,
-                "Unknown proposal",
-                "No prepared proposal matches that identifier.",
-                "Prepare the change again to get a current proposal.",
-            )
-        try:
-            receipt = apply_module.apply_proposal(
-                committed=_CommittedReader(app.state.launch.workspace_root),
-                proposal=proposal,
-                payload=await _json_body(request),
-                context=decision_routes.WorkspaceContext(
-                    repo_root=app.state.launch.workspace_root,
-                    current_revision=_snapshot().identity.revision,
-                    store_rel=decision_routes.DECISION_STORE_REL,
-                ),
-                live_available=False,
-            )
-        except apply_module.ApplyRefused as refused:
-            return _problem(
-                refused.status,
-                "Apply refused",
-                refused.detail,
-                "Nothing was applied.",
-            )
-        return _redact(receipt.as_dict())
+    async def _apply_proposal_route(proposal_id: str, request: Request) -> Any:
+        return await apply_proposal_route(proposal_id, request, deps=deps)
 
     @app.get(f"{API_PREFIX}/review")
-    async def review(scope: str | None = None) -> Any:
-        """The client-review surface for one explicitly selected scope (US5)."""
-        try:
-            payload = review_scope.review_for(
-                scope=scope,
-                decisions=_working_tree_decisions(
-                    app.state.launch.workspace_root,
-                    decision_routes.DECISION_STORE_REL,
-                ),
-            )
-        except review_scope.ScopeRefused as refused:
-            return _problem(
-                refused.status,
-                "Review scope required",
-                refused.detail,
-                "Select the exact scope to review.",
-            )
-        return _redact(payload)
+    async def _review(scope: str | None = None) -> Any:
+        return await review(scope, deps=deps)
