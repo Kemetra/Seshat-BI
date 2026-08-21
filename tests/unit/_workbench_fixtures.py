@@ -30,8 +30,15 @@ _BROWSER_ORIGIN = {"Origin": _BASE_URL}
 SEMANTIC_DECISIONS = decision_store.STORE_PATHS[0]
 
 
-def _app(root: Path, *, table: str) -> tuple[TestClient, str]:
-    """A Studio app over a workspace holding one ready table, plus its token."""
+def _app(root: Path, *, table: str):
+    """A Studio app over a workspace holding one ready table, plus its token.
+
+    `fastapi` is imported INSIDE the functions that need it, not at module scope. The
+    CI `unit` job installs no app extras, so a module-level import would make every
+    module that merely imports these fixtures die at COLLECTION -- including the
+    decision-write tests, which need no web stack at all.
+    """
+
     from seshat.studio.app import create_app
 
     workspace_fixtures.write_ready_table(root, table=table)
@@ -40,7 +47,7 @@ def _app(root: Path, *, table: str) -> tuple[TestClient, str]:
     return client, token
 
 
-def studio_client(root: Path, *, table: str = "ready_sales") -> TestClient:
+def studio_client(root: Path, *, table: str = "ready_sales"):
     """An authenticated TestClient over a real workspace."""
     client, token = _app(root, table=table)
     bootstrapped = client.post(f"{API}/bootstrap", params={"token": token})
@@ -48,7 +55,7 @@ def studio_client(root: Path, *, table: str = "ready_sales") -> TestClient:
     return client
 
 
-def unauthenticated_client(root: Path, *, table: str = "ready_sales") -> TestClient:
+def unauthenticated_client(root: Path, *, table: str = "ready_sales"):
     """The same app with bootstrap deliberately NOT performed.
 
     Exists so a test can prove the authenticated client's success came from

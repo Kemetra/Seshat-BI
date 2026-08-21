@@ -34,15 +34,20 @@ No live DB provisioning, no automated ingestion code, no orchestrator integratio
 unless explicitly requested. Add the seam, not the implementation.
 
 <!-- SPECKIT START -->
-Active plan: `specs/149-pbi-mcp-write-adapter/plan.md` (F016 slice 5 -- the approval-gated
-Power BI MCP write adapter, ratified 2026-08-18). Implementation MERGED (#659) and every
-post-write validation follow-up CLOSED: #657 (#670), #663 (#672), #661 + #663 (#674).
-#658 stays OPEN but is now down to ONE item of its three: the env allowlist shipped
-(`allowed_vendor_environment`, applied at the spawn site) and #679 recorded the resolved
-`serverInfo.version` in evidence, so an unpinned run is at least attributable. The
-runtime-version PIN is blocked until Microsoft publishes a non-prerelease (re-measured
-2026-08-21: still only `0.5.0-beta.2`..`.12`, `latest` = `0.5.0-beta.12`) -- which is why
-the marker rests here rather than on newer work.
+Active plan: `specs/140-studio-governed-workbench/plan.md` (Studio Governed Analyst
+Workbench, ratified by Ahmed Shaaban 2026-08-21). The owner moved the fence here on
+2026-08-21, satisfying FR-140-020's second condition; all four phases are implemented on
+`feat/140-studio-governed-workbench`.
+
+**Spec 149 is PARKED, not complete.** The fence is a singleton, so moving it here parked
+149 with FOUR tasks open, verified against the filesystem rather than the checkboxes:
+T012b (`ApprovedDefinition` resolution feeding `operation_binds`), T017 (`target.py`
+absent), T018 (`git_safety.py` absent), and T053 -- **owner-facing**, because retiring
+`VENDORED_RUNTIME_DIR` narrows the identity set the bypass-prohibition matcher
+`_looks_powerbi_shaped` recognises. Parking is safe: the shipped adapter can refuse and
+cannot write at all. Its own `tasks.md` carries the full parking note. #658 also remains
+open, blocked externally until Microsoft publishes a non-prerelease runtime (re-measured
+2026-08-21: only `0.5.0-beta.2`..`.12`).
 **Spec 155 (guided setup execution) is IMPLEMENTED and RATIFIED** (Ahmed Shaaban, owner,
 2026-08-21) -- `seshat integrations setup --derived` selects only the components a
 project's committed evidence needs, then provisions them through the existing installer

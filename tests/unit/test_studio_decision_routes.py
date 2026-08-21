@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("fastapi")  # CI's unit job installs no app extras
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from unit import _workbench_fixtures as fixtures  # noqa: E402
