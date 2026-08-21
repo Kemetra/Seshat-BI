@@ -16,7 +16,6 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from fastapi.testclient import TestClient
 from unit import _studio_workspace_fixtures as workspace_fixtures
 
 from seshat import decision_store
@@ -38,6 +37,7 @@ def _app(root: Path, *, table: str):
     module that merely imports these fixtures die at COLLECTION -- including the
     decision-write tests, which need no web stack at all.
     """
+    from fastapi.testclient import TestClient
 
     from seshat.studio.app import create_app
 
