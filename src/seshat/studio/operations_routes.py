@@ -195,17 +195,29 @@ def _pending_items(root: Path, scope: str) -> list[str]:
     if not isinstance(document, dict):
         return []
     committed_ids = {str(entry.get("id", "")) for entry in _committed_at_path(root)}
-    pending: list[str] = []
-    for entry in document.get("decisions") or []:
-        if not isinstance(entry, dict):
-            continue
-        if str(entry.get("id", "")) in committed_ids:
-            continue
-        reviewed = entry.get("approval", {}).get("reviewed_scope")
-        if scope and reviewed != scope:
-            continue
-        pending.append(f"{entry.get('answer', 'a decision')} -- awaiting commit")
-    return pending
+    return [
+        f"{entry.get('answer', 'a decision')} -- awaiting commit"
+        for entry in document.get("decisions") or []
+        if is_pending_for_scope(entry, scope, committed_ids)
+    ]
+
+
+def is_pending_for_scope(entry: object, scope: str, committed_ids: set[str]) -> bool:
+    """True when this working-tree entry is pending for the requested scope.
+
+    Public so it can be tested directly: the committed-ids check below is the one that
+    keeps an already-committed decision from ALSO appearing as pending, and a
+    route-level test cannot distinguish "correctly excluded" from "never reached".
+
+    Each condition is a distinct reason NOT to show an entry, and naming them together
+    makes the whole set reviewable rather than four sequential skips.
+    """
+    if not isinstance(entry, dict):
+        return False
+    if str(entry.get("id", "")) in committed_ids:
+        return False  # already committed: it is a decision, not a pending item
+    reviewed = entry.get("approval", {}).get("reviewed_scope")
+    return not scope or reviewed == scope
 
 
 def _committed_at_path(root: Path) -> list[dict[str, Any]]:
@@ -213,6 +225,20 @@ def _committed_at_path(root: Path) -> list[dict[str, Any]]:
 
     reader = workbench_routes._CommittedReader(root)
     return decision_write.decisions_at_head(reader, decision_routes.DECISION_STORE_REL)
+
+
+def names_a_person_and_scope(scope: object, who: object) -> bool:
+    """True when an acknowledgement identifies both what was seen and who saw it.
+
+    Named rather than inlined because the four clauses answer one question: recording
+    that "someone saw a result" is meaningless without which result and which someone.
+    """
+    return (
+        isinstance(scope, str)
+        and bool(scope.strip())
+        and isinstance(who, str)
+        and bool(who.strip())
+    )
 
 
 async def client_acknowledge(request: Request, *, deps: Deps) -> Any:
@@ -224,7 +250,7 @@ async def client_acknowledge(request: Request, *, deps: Deps) -> Any:
     payload = await _json_body(request)
     scope = payload.get("scope")
     who = payload.get("acknowledged_by")
-    if not isinstance(scope, str) or not isinstance(who, str) or not who.strip():
+    if not names_a_person_and_scope(scope, who):
         return deps.problem(
             422,
             "Acknowledgement not recorded",

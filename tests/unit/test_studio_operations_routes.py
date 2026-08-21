@@ -223,3 +223,81 @@ def test_an_acknowledgement_without_a_named_person_is_refused(tmp_path: Path):
     )
 
     assert response.status_code == 422, response.text
+
+
+# --- the extracted predicates, tested directly ---------------------------------------
+#
+# A route-level test cannot distinguish "correctly excluded" from "never reached": I
+# disabled the committed-ids check and all 14 route tests still passed. These cover the
+# predicates themselves.
+
+
+def test_an_already_committed_entry_is_not_also_pending():
+    """The guard the route tests could not see. Without it, a committed decision would
+    appear BOTH as a decision and as a pending item."""
+    from seshat.studio import operations_routes
+
+    entry = {
+        "id": "studio-0001",
+        "answer": "approve",
+        "approval": {"reviewed_scope": _STORE_REL},
+    }
+
+    assert not operations_routes.is_pending_for_scope(
+        entry, _STORE_REL, {"studio-0001"}
+    )
+
+
+def test_an_uncommitted_entry_in_scope_is_pending():
+    """The paired positive case: without it, the predicate could reject everything."""
+    from seshat.studio import operations_routes
+
+    entry = {
+        "id": "studio-0002",
+        "answer": "approve",
+        "approval": {"reviewed_scope": _STORE_REL},
+    }
+
+    assert operations_routes.is_pending_for_scope(entry, _STORE_REL, set())
+
+
+def test_an_entry_from_another_scope_is_not_pending_here():
+    from seshat.studio import operations_routes
+
+    entry = {
+        "id": "studio-0003",
+        "answer": "approve",
+        "approval": {"reviewed_scope": ".seshat/kpi-contracts.yaml"},
+    }
+
+    assert not operations_routes.is_pending_for_scope(entry, _STORE_REL, set())
+
+
+def test_a_non_mapping_entry_is_not_pending():
+    """Malformed store content must not crash the review surface."""
+    from seshat.studio import operations_routes
+
+    assert not operations_routes.is_pending_for_scope("not a dict", _STORE_REL, set())
+
+
+@pytest.mark.parametrize(
+    "scope,who",
+    [
+        (None, "Client"),
+        (_STORE_REL, None),
+        ("", "Client"),
+        (_STORE_REL, "   "),
+        (_STORE_REL, ""),
+    ],
+)
+def test_an_acknowledgement_missing_either_half_is_refused(scope, who):
+    from seshat.studio import operations_routes
+
+    assert not operations_routes.names_a_person_and_scope(scope, who)
+
+
+def test_an_acknowledgement_with_both_halves_is_accepted():
+    """The paired positive case, so the predicate is not simply always False."""
+    from seshat.studio import operations_routes
+
+    assert operations_routes.names_a_person_and_scope(_STORE_REL, "Client")
