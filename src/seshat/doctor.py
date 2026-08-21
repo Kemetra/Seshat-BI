@@ -121,7 +121,27 @@ def format_digest(findings: list[Finding], prog: str = "seshat") -> str:
     return "\n".join(lines)
 
 
-def run_doctor(repo_root: Path, strict: bool = False, prog: str = "seshat") -> int:
+def build_digest_payload(findings: list[Finding]) -> dict[str, object]:
+    """The machine-readable digest (M8 deliverable 1).
+
+    Reuses the SHIPPED :meth:`Finding.to_dict` / ``FindingDict`` shape that
+    ``check --format json`` already emits, deliberately rather than defining a
+    second finding vocabulary: an agent that can read one verb's JSON can read
+    this one. Categorical only -- a count, never a numeric health score (hard
+    rule #9).
+    """
+    return {
+        "findings": [f.to_dict() for f in findings],
+        "finding_count": len(findings),
+    }
+
+
+def run_doctor(
+    repo_root: Path,
+    strict: bool = False,
+    prog: str = "seshat",
+    output_format: str = "text",
+) -> int:
     """Print the digest. Return 0 (advisory) unless ``strict`` and drift exists.
 
     ``--strict`` counts only actionable findings (WARNING/ERROR); an INFO -- such
@@ -146,7 +166,12 @@ def run_doctor(repo_root: Path, strict: bool = False, prog: str = "seshat") -> i
         )
         return 1
     findings = collect_findings(ctx)
-    print(format_digest(findings, prog))
+    if output_format == "json":
+        import json
+
+        print(json.dumps(build_digest_payload(findings), indent=2))
+    else:
+        print(format_digest(findings, prog))
     actionable = [
         f for f in findings if f.severity in (Severity.ERROR, Severity.WARNING)
     ]

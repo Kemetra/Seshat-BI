@@ -121,6 +121,7 @@ def _run_doctor(args: object) -> int:
         Path(args.repo),  # type: ignore[attr-defined]
         strict=args.strict,  # type: ignore[attr-defined]
         prog=getattr(args, "prog", "seshat"),
+        output_format=getattr(args, "output_format", "text"),
     )
 
 

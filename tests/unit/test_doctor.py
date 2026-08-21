@@ -101,3 +101,72 @@ def test_doctor_adds_no_register_rule() -> None:
     importlib.reload(seshat.rules)
     ids = {r.id for r in registry.all_rules()}
     assert "DOCTOR" not in ids
+
+
+# ---------------------------------------------------------------------------
+# M8 -- machine-readable output (deliverable 1)
+# ---------------------------------------------------------------------------
+
+
+def test_doctor_json_payload_reuses_the_finding_serializer(tmp_path: Path) -> None:
+    """M8 deliverable 1: a machine-readable digest.
+
+    Reuses the SHIPPED `Finding.to_dict()` / `FindingDict` shape that
+    `check --format json` already emits, so an agent parses one vocabulary
+    across both verbs rather than two.
+    """
+    from seshat.doctor import build_digest_payload
+
+    findings = collect_findings(_ctx_missing_everything(tmp_path))
+    payload = build_digest_payload(findings)
+
+    # Non-vacuity: an empty payload must NOT satisfy this test.
+    assert payload["findings"], (
+        "the fixture has genuine drift; findings must be present"
+    )
+    assert any("glossary.md" in f["message"] for f in payload["findings"])
+    # every entry is the shipped FindingDict shape, not a new one
+    for entry in payload["findings"]:
+        assert set(entry) >= {"rule_id", "severity", "message", "locator"}
+    # hard rule #9: categorical only, never a numeric health score
+    assert "score" not in payload
+    assert "percent" not in payload
+
+
+def test_doctor_json_is_valid_json_and_advisory_exit_zero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--format json` prints parseable JSON and stays advisory (exit 0)."""
+    import json
+
+    _bootstrap(tmp_path)
+    code = run_doctor(tmp_path, strict=False, output_format="json")
+    out = capsys.readouterr().out
+
+    assert code == 0
+    parsed = json.loads(out)  # raises if the payload is not valid JSON
+    assert parsed["findings"], "bootstrapped-but-empty repo has drift to report"
+
+
+def test_doctor_cli_accepts_format_json() -> None:
+    """M8: the CLI surface must expose the machine-readable format.
+
+    Measured 2026-08-16 and again 2026-08-21: `doctor --format json` exited 2
+    because the subparser accepted only --repo/--strict. This asserts the flag
+    parses AND that the choice set is constrained (a free-form string would let
+    a typo silently fall back to text).
+    """
+    from seshat.cli import _build_parser
+
+    parser = _build_parser("seshat")
+    args = parser.parse_args(["doctor", "--format", "json"])
+    assert getattr(args, "output_format", None) == "json"
+
+
+def test_doctor_cli_default_format_is_text() -> None:
+    """Backward compatibility: the default surface must not become JSON."""
+    from seshat.cli import _build_parser
+
+    parser = _build_parser("seshat")
+    args = parser.parse_args(["doctor"])
+    assert getattr(args, "output_format", "text") == "text"
