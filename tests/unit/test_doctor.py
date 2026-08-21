@@ -170,3 +170,79 @@ def test_doctor_cli_default_format_is_text() -> None:
     parser = _build_parser("seshat")
     args = parser.parse_args(["doctor"])
     assert getattr(args, "output_format", "text") == "text"
+
+
+# ---------------------------------------------------------------------------
+# M8 -- grouping + repair hints (deliverables 2 and 3)
+# ---------------------------------------------------------------------------
+
+
+def test_digest_groups_findings_by_rule_area(tmp_path: Path) -> None:
+    """M8 deliverable 2: grouped, not one flat severity list.
+
+    Grouping is DERIVED from the existing `rule_id`, deliberately not a new
+    parallel classification system.
+    """
+    findings = collect_findings(_ctx_missing_everything(tmp_path))
+    text = format_digest(findings)
+
+    rule_ids = {f.rule_id for f in findings}
+    assert len(rule_ids) > 1, "fixture must span >1 rule for grouping to mean anything"
+    # every distinct rule area appears as its own group header line
+    for rid in rule_ids:
+        assert f"{rid}:" in text, f"no group header for {rid}"
+
+
+def test_every_finding_carries_a_repair_hint(tmp_path: Path) -> None:
+    """M8 deliverable 3: actionable, non-mutating repair hints."""
+    from seshat.doctor import build_digest_payload
+
+    payload = build_digest_payload(collect_findings(_ctx_missing_everything(tmp_path)))
+    assert payload["findings"]
+    for entry in payload["findings"]:
+        assert entry.get("repair_hint"), f"no repair hint for {entry['rule_id']}"
+
+
+def test_repair_hints_differ_per_rule_area(tmp_path: Path) -> None:
+    """Non-vacuity: one constant hint string would satisfy a presence check.
+
+    A hint that says the same thing for every rule is not actionable, so assert
+    the hints actually DISCRIMINATE between rule areas.
+    """
+    from seshat.doctor import build_digest_payload
+
+    payload = build_digest_payload(collect_findings(_ctx_missing_everything(tmp_path)))
+    by_rule = {e["rule_id"]: e["repair_hint"] for e in payload["findings"]}
+    assert len(by_rule) > 1, "fixture must span >1 rule"
+    assert len(set(by_rule.values())) > 1, "hints are a constant, not per-area guidance"
+
+
+def test_repair_hints_are_inert_text_not_commands_to_run(tmp_path: Path) -> None:
+    """A hint must never mutate anything: doctor reads and reports, never fixes.
+
+    Guards the M8 constraint "repair hints that do not modify files" at the data
+    level -- the hint is a string, and building the payload runs no subprocess.
+    """
+    import subprocess
+
+    from seshat.doctor import build_digest_payload
+
+    called: list[object] = []
+    real_run = subprocess.run
+
+    def _tripwire(*a: object, **k: object):  # pragma: no cover - must not fire
+        called.append(a)
+        return real_run(*a, **k)  # type: ignore[arg-type]
+
+    subprocess.run = _tripwire  # type: ignore[assignment]
+    try:
+        payload = build_digest_payload(
+            collect_findings(_ctx_missing_everything(tmp_path))
+        )
+    finally:
+        subprocess.run = real_run  # type: ignore[assignment]
+
+    assert payload["findings"]
+    assert not called, "building the digest executed a subprocess"
+    for entry in payload["findings"]:
+        assert isinstance(entry["repair_hint"], str)

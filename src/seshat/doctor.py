@@ -112,13 +112,65 @@ def format_digest(findings: list[Finding], prog: str = "seshat") -> str:
     if not findings:
         return f"{prog} doctor: no drift found across the aggregated read-only checks."
     lines = [f"{prog} doctor: {len(findings)} finding(s) across read-only checks:"]
-    for f in findings:
-        lines.append(f"  [{f.severity.value}] {f.rule_id} {f.message} ({f.locator})")
+    for rule_id, group in group_by_rule(findings).items():
+        lines.append("")
+        lines.append(f"{rule_id}: {len(group)} finding(s)")
+        for f in group:
+            lines.append(f"  [{f.severity.value}] {f.message} ({f.locator})")
+        lines.append(f"  hint: {repair_hint(rule_id)}")
     lines.append(
         f"\n(advisory digest -- the `{prog} check` gate exit code remains the "
         "authority; run it to gate.)"
     )
     return "\n".join(lines)
+
+
+#: Non-mutating repair guidance, keyed by the rule area that raised the finding.
+#: Text ONLY -- doctor reads and reports, never fixes (M8: "repair hints that do
+#: not modify files"). Nothing here is executed, and no entry is a command the
+#: tool will run on the user's behalf.
+_REPAIR_HINTS: dict[str, str] = {
+    "A1": (
+        "a route in docs/routing/routes.yaml does not resolve -- check the "
+        "manifest exists and every target it names is a tracked file"
+    ),
+    "A3": (
+        "route coverage is not a bijection -- a route lacks a surface, or a "
+        "surface lacks a route; reconcile docs/routing/routes.yaml with the "
+        "shipped verbs"
+    ),
+    "SC1": (
+        "a prose status claim disagrees with its evidence -- correct the claim "
+        "or the doc it points at; never loosen the claim to match stale prose"
+    ),
+    "DOCTOR": (
+        "a load-bearing doc is untracked -- add the file, or `git add` it if it "
+        "exists but was never committed"
+    ),
+}
+
+#: The hint offered when a rule area has no specific entry above. Deliberately
+#: names the read-only next step rather than inventing guidance.
+_DEFAULT_HINT = (
+    "inspect the locator above; this finding is advisory and no file was changed"
+)
+
+
+def repair_hint(rule_id: str) -> str:
+    """The non-mutating repair hint for a rule area (M8 deliverable 3)."""
+    return _REPAIR_HINTS.get(rule_id, _DEFAULT_HINT)
+
+
+def group_by_rule(findings: list[Finding]) -> dict[str, list[Finding]]:
+    """Group findings by their EXISTING ``rule_id`` (M8 deliverable 2).
+
+    Derived from a field the findings already carry -- deliberately not a second
+    classification vocabulary layered over the rule registry.
+    """
+    grouped: dict[str, list[Finding]] = {}
+    for f in findings:
+        grouped.setdefault(f.rule_id, []).append(f)
+    return grouped
 
 
 def build_digest_payload(findings: list[Finding]) -> dict[str, object]:
@@ -130,8 +182,13 @@ def build_digest_payload(findings: list[Finding]) -> dict[str, object]:
     this one. Categorical only -- a count, never a numeric health score (hard
     rule #9).
     """
+    entries: list[dict[str, object]] = []
+    for f in findings:
+        entry: dict[str, object] = dict(f.to_dict())
+        entry["repair_hint"] = repair_hint(f.rule_id)
+        entries.append(entry)
     return {
-        "findings": [f.to_dict() for f in findings],
+        "findings": entries,
         "finding_count": len(findings),
     }
 
