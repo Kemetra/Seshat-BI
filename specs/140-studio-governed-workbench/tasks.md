@@ -7,9 +7,11 @@
 **Spec status**: **ratified** -- Ahmed Shaaban (owner), 2026-08-21. Phases 0 and 1
 (research, design) are complete.
 
-**Every task below is still BLOCKED.** FR-140-020 sets two conditions; ratification met
-the first, but the **sole active Spec Kit fence must still be moved to this plan**.
-Ratification is not activation. Do not start Task 1.0 until the fence points here.
+**FR-140-020 is now SATISFIED -- implementation is authorized.** Both conditions are
+met: the package was ratified by Ahmed Shaaban (owner) 2026-08-21, and the owner moved
+the sole active Spec Kit fence (`.specify/feature.json`) to this plan on 2026-08-21.
+Spec 149 was PARKED with four tasks open to free the fence -- see its `tasks.md`
+parking note, including the owner-facing T053.
 
 **Progress**: 0 of 19 implementation tasks. Nothing started.
 
