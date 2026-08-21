@@ -44,6 +44,7 @@ from . import (
     codex_process,
     config,
     events,
+    evidence,
     projection,
     redaction,
     session,
@@ -329,6 +330,25 @@ def _register_routes(app: FastAPI) -> None:
                 "Open the Command Room to see the tables in this workspace.",
             )
         return _redact(journey.as_dict())
+
+    @app.get(f"{API_PREFIX}/tables/{{table_id}}/evidence")
+    async def table_evidence(table_id: str) -> Any:
+        """One table's evidence bundle (spec 140 US1, FR-140-002).
+
+        Read-only. Groups what the projection already exposes -- stages, evidence
+        refs, input defects, pending-live boundaries -- so the investigation view
+        cannot disagree with the readiness the gate computes.
+        """
+        try:
+            bundle = evidence.bundle_for(_snapshot(), table_id)
+        except KeyError:
+            return _problem(
+                404,
+                "Unknown table",
+                "No onboarded table matches that identifier.",
+                "Open the Command Room to see the tables in this workspace.",
+            )
+        return _redact(bundle.as_dict())
 
     @app.get(f"{API_PREFIX}/decisions")
     async def decisions() -> Any:
