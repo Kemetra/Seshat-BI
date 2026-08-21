@@ -6,7 +6,33 @@
 
 **Promoted**: 2026-08-21 -- expanded from program outline into this specification
 
-**Status**: ratified -- Ahmed Shaaban (owner), 2026-08-21
+**Status**: implemented -- all 19 tasks delivered and merged (`421c8f4d`, PR #695);
+accepted by Ahmed Shaaban, 2026-08-21
+
+**Acceptance record (2026-08-21)**: the owner accepted this feature in session after
+implementation merged as `421c8f4d` (PR #695). What acceptance covers, stated precisely
+so a reader does not have to reconstruct it:
+
+- All four phases shipped: the Decision Store write path, the evidence journey, the
+  proposal and named-human decision routes, and scoped apply plus client review.
+- 76 feature tests pass, plus 733 across the wider studio suite. Every guard was proven
+  load-bearing by disabling it and observing the specific failure, then restoring
+  byte-identical.
+- 14 CI checks pass. CodeScene's remaining findings were accepted with the measurement
+  recorded on each review thread, not silently suppressed.
+- **The 95 per-step checkboxes in `tasks.md` remain UNMARKED on purpose.** The 19 tasks
+  are delivered, but the plan's individual RED/GREEN steps were not each observed and
+  ticked one at a time. Acceptance covers the delivered feature and its evidence; it
+  does not claim a step-by-step ledger that was never kept. Read `tasks.md`'s progress
+  note rather than inferring completeness from checkboxes.
+- Two known items are recorded rather than resolved: `app.py` scores 8.70 against a
+  8.74 baseline (both flagged Large Methods predate this feature), and four
+  excess-argument findings cannot be cleared by bundling because CodeScene counts the
+  data a function requires rather than its parameter slots.
+
+This acceptance is what FR-141-020 requires of spec 140, so it unblocks spec 141's
+promotion. It does not authorize 141's implementation: that still needs 141's own full
+package, a named-human ratification of it, and the fence.
 
 **Status history**: program outline 2026-08-03; program DIRECTION ruled by the owner
 2026-08-21 (scope agreement, explicitly not implementation authority); promoted to this
@@ -15,18 +41,20 @@ full specification 2026-08-21 under the outline's Promotion Gate; **this exact p
 Ahmed Shaaban (owner) in session on 2026-08-21.** The agent transcribed the owner's
 ruling and did not self-ratify.
 
-Ratification is not activation. FR-140-020 has two conditions and only the first is
-now met: the package is ratified, but the **sole active Spec Kit fence must still be
-moved to this plan** before implementation begins. Until that fence moves, every task
-in `tasks.md` remains blocked.
+FR-140-020's two conditions were both met before implementation began: the package was
+ratified 2026-08-21, and the owner moved the sole active Spec Kit fence
+(`.specify/feature.json`) to this plan the same day. Moving the fence PARKED spec 149
+with four tasks open, including the owner-facing T053 -- see that spec's `tasks.md`.
 
 The scope ratified here is **all five user stories** (US1-US5), per the owner's
 decision of 2026-08-21. `plan.md` retains the Phase-D split as a noted contingency; a
 split would require a new ratification of the reduced package, not a silent narrowing.
 
-Recorded in the order it happened: outline, then direction ruling, then promotion, then
-ratification. Unlike spec 155, no implementation preceded this ratification -- the
-package is docs-only and no task has been started.
+Recorded in the order it happened: outline, direction ruling, promotion, ratification,
+fence move, implementation, acceptance. Unlike spec 155, no implementation preceded the
+ratification -- the package was docs-only when it was ratified, and every task ran after
+both FR-140-020 conditions were satisfied. That ordering is the one worth citing from
+this spec.
 
 **Depends on**: accepted `specs/139-seshat-studio-foundation/` (implemented, all 38
 tasks complete, accepted by Ahmed Shaaban 2026-08-16), including its security

@@ -14,12 +14,22 @@ outline**: the Promotion Gate below still stands unchanged, and FR-141-020 still
 requires specs 139 and 140 to be accepted, this outline to be expanded into a full
 specification, and that exact package to be named-human ratified before any
 implementation begins. The agent transcribed the owner's ruling and did not
-self-ratify. Spec 141 remains gated on spec 140's **ACCEPTANCE** -- 140 being
-implemented and accepted the way 139 was -- not on 140's promotion (delivered
-2026-08-21) and not on 140's ratification (Ahmed Shaaban, 2026-08-21). Both of those
-have now happened and neither unblocks this spec: 140's own implementation has not
-started, so the contracts 141 depends on (proposal, decision, apply-receipt, event) do
-not exist yet.
+self-ratify.
+
+**Prerequisite now SATISFIED (2026-08-21).** Spec 141 was gated on spec 140's
+ACCEPTANCE -- not its promotion, not its ratification. Spec 140 is now implemented,
+merged (`421c8f4d`, PR #695) and accepted by Ahmed Shaaban, and the contracts this spec
+depends on exist in the tree: proposals (`studio/proposals.py`), the named-human
+decision path (`studio/decision_routes.py`, `decision_write.py`), the apply receipt
+(`studio/apply.py`) and the scoped review surface (`studio/review_scope.py`).
+
+What that unblocks is **PROMOTION** of this outline into a full specification, research,
+data model, contracts, plan and task list -- nothing more. FR-141-020 still requires a
+named human to ratify that exact package, and the sole active Spec Kit fence must move
+to its plan, before any implementation begins. The owner asked to ratify spec 141 on
+2026-08-21; that request could not be honoured against an outline, for the same reason
+it could not be honoured for spec 140 a few hours earlier, and the promotion was run
+instead.
 
 **Depends on**: accepted Studio Foundation (139) and Governed Analyst Workbench
 (140), including stable proposal, decision, apply-receipt, and event contracts.

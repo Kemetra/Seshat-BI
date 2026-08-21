@@ -35,9 +35,17 @@ unless explicitly requested. Add the seam, not the implementation.
 
 <!-- SPECKIT START -->
 Active plan: `specs/140-studio-governed-workbench/plan.md` (Studio Governed Analyst
-Workbench, ratified by Ahmed Shaaban 2026-08-21). The owner moved the fence here on
-2026-08-21, satisfying FR-140-020's second condition; all four phases are implemented on
-`feat/140-studio-governed-workbench`.
+Workbench). **DELIVERED**: ratified, implemented and merged (`421c8f4d`, PR #695), then
+ACCEPTED by Ahmed Shaaban 2026-08-21. All 19 tasks shipped across four phases; 76
+feature tests plus 733 in the wider studio suite. Read the spec's acceptance record
+before assuming completeness -- the 95 per-step boxes in its `tasks.md` are unmarked on
+purpose, because the plan's individual RED/GREEN steps were not each ticked one at a
+time.
+
+That acceptance is what FR-141-020 required of 140, so **spec 141 is now unblocked for
+PROMOTION** -- expanding its outline into a full package. It is not unblocked for
+implementation: 141 still needs that package, a named-human ratification of it, and the
+fence.
 
 **Spec 149 is PARKED, not complete.** The fence is a singleton, so moving it here parked
 149 with FOUR tasks open, verified against the filesystem rather than the checkboxes:
