@@ -11,7 +11,10 @@
 >   explicit spec-level BUILT status; M1/M2 and M5 rest on shipped-artifact evidence
 >   only, which that file's table states per row. TWO milestones remain open: M8 is
 >   PARTIAL (the advisory `seshat doctor` ships, but none of its four deliverables
->   does -- and it is agent-buildable), and M12 is owner-gated on ADR 0018.
+>   does -- and it is agent-buildable), and M12 is PARTLY DELIVERED: ADR 0018 was
+>   RATIFIED 2026-08-18 and F016 slice 5 (governed local write) SHIPPED via spec 149 /
+>   PR #659, so M12's remaining scope is slice 6 (remote, query-only), which is not
+>   built and needs an owner scope/timing decision (ADR decision 7).
 > - **The Studio program (specs 139-152)** is tracked in `specs/`, on a different
 >   numbering axis, and is not F-numbered at all. **Spec 139 closed 2026-08-16
 >   (38/38 tasks, PR #652).** Its last three tasks landed together: T036's external
@@ -24,15 +27,24 @@
 >   zero open tasks (there is no spec 149). See section 11 of the milestone roadmap
 >   for the table.
 >
-> The F016 row in the 2026-06-26 closure section below carries a dated correction: its
-> readiness gate has since opened, and the block moved to ADR 0018.
+> The F016 row in the 2026-06-26 closure section below carries dated corrections: its
+> readiness gate has since opened, the ADR 0018 block was lifted by ratification on
+> 2026-08-18, and slice 5 has since been BUILT (spec 149, PR #659). Read the dated
+> notes in order -- the 2026-08-16 note predates the build and the 2026-08-18 note
+> corrects it.
 
 - **Status:** Delivered ledger + a partly-shipped companion tier. As of 2026-06-25 the
   entire originally-spec'd sequence (F005-F015, incl. F011A) is **SHIPPED** to
   `main`; **F016 (the Power BI execution adapter -- official Power BI MCP /
   connection; `pbi-cli` no longer preferred) remains the only parked feature of
   that original sequence** -- deliberately LAST, execution-only, and gated (hard
-  rule #6). Separately, the **Companion Modules & Adapters tier (F024-F035)** is
+  rule #6).
+  > **Reconciled 2026-08-21.** The "only parked feature" clause states the
+  > 2026-06-25 position and is left as the dated record. Current state: F016 is
+  > **PARTLY BUILT** -- slices 1-4 (read-only) and slice 5 (governed local write,
+  > spec 149 / PR #659) are shipped; only slice 6 (remote, query-only) is unbuilt,
+  > gated on ADR 0018 decision 7 plus owner scope/timing. F016 is no longer parked.
+  Separately, the **Companion Modules & Adapters tier (F024-F035)** is
   **PARTLY SHIPPED** (status corrected 2026-06-26): six of its features (F025-F030)
   shipped as docs-first skills under `.claude/skills/`; F024 + F031-F033 remain
   spec-only; **F034's authoring slice shipped 2026-06-26** (its built-page
@@ -73,6 +85,11 @@ for any deferred/gated item).
 
 **Remaining work is human / gated only -- no agent-buildable item is left:**
 
+> **Reconciled 2026-08-21.** This heading states the 2026-06-26 position. It is no
+> longer strictly true: M8 (workspace doctor) on the milestone roadmap is PARTIAL and
+> IS agent-buildable, and F016 slice 5 has since shipped. The F016 entry below carries
+> its own dated correction chain.
+
 - **F016 (Power BI execution adapter)** -- gated by hard rule #6 (not startable
   before Semantic Model Ready is `pass`); execution-only; deliberately last.
   > **Superseded 2026-08-16 (the gate moved, the block did not).** As written above
@@ -84,7 +101,9 @@ for any deferred/gated item).
   > unblocked at the ADR level: **ADR 0018 was RATIFIED by the owner on 2026-08-18**,
   > so its terms of entry are BINDING and the park is lifted. Slice 5 still needs its
   > own spec (ADR decision 1: the spec is authored AFTER ratification) and is NOT
-  > built; slice 6 remains gated on ADR decision 7. Of the three further "open owner
+  > built *(superseded on this point by the 2026-08-18 note below: the spec was
+  > authored as spec 149 and slice 5 IS now built)*; slice 6 remains gated on ADR
+  > decision 7. Of the three further "open owner
   > decisions" in issue #469, `npx`-vs-vendored was already settled by ADR 0018 itself
   > (vendoring is a rejected alternative) and the F032 row is externally blocked (both
   > Microsoft servers are public preview with no release to pin), leaving slice-6
@@ -160,14 +179,16 @@ The kit's surfaces, top (what the user touches) to bottom (later adapter):
 | 3 | **Mapping Governance** | the source-mapping gate, grain confidence, mapping diff | shipped (gate + F008) |
 | 4 | **Validation & Readiness** | `seshat check` / `retail validate` + the readiness spine, QC room, ledger | shipped (checks + F005, F012, F015) |
 | 5 | **Metrics & Semantic Model** | metric contracts, KPI packs, governed PBIP model | shipped (F009-F010) |
-| 6 | **Dashboard & Delivery** | dashboard design, handoff pack; Power BI execution adapter | shipped (F011, F011A, F013); **F016 execution adapter remains (official Power BI MCP / connection; execution-only, gated, last)** |
+| 6 | **Dashboard & Delivery** | dashboard design, handoff pack; Power BI execution adapter | shipped (F011, F011A, F013); **F016 execution adapter PARTLY BUILT -- read-only slices 1-4 + governed local write slice 5 shipped (spec 149 / PR #659); slice 6 (remote, query-only) not built, owner-gated** |
 
 ## Feature sequence
 
 Each feature advances a readiness stage. **The entire sequence below (F005-F015,
-incl. F011A) is SHIPPED.** The single remaining feature is **F016 (the Power BI
-execution adapter -- official Power BI MCP / connection; `pbi-cli` no longer preferred)**
--- the next executable slice, deliberately LAST, execution-only, and gated on
+incl. F011A) is SHIPPED.** The last feature of the sequence is **F016 (the Power BI
+execution adapter -- official Power BI MCP / connection; `pbi-cli` no longer preferred)**,
+now **PARTLY BUILT**: slices 1-4 (read-only) and slice 5 (governed local write, spec 149 /
+PR #659) are shipped; slice 6 (remote, query-only) remains unbuilt and owner-gated.
+Deliberately LAST, execution-only, and gated on
 semantic-model readiness (hard rule #6). The tables below are kept as a delivered
 ledger (catalog + commit refs); the original Now/Next/Then/Later tiers are retained
 as the historical authoring order.
@@ -208,13 +229,13 @@ as the historical authoring order.
 | **012** | Data Quality Control Room | 4 | all stages | a consolidated view of data-quality findings + blockers across tables | `e9a3264` |
 | **013** | BI Handoff Pack | 6 | Publish Ready | the documentation/evidence bundle handed to a BI consumer | `f00ff13` |
 
-### Tier 4 -- SHIPPED (except F016)
+### Tier 4 -- SHIPPED (F016 partly built: slices 1-5 shipped, slice 6 outstanding)
 
 | Feature | Name | Layer | Advances stage | One-line scope | Shipped |
 |---------|------|-------|----------------|----------------|---------|
 | **014** | Source Drift Detector | 2 | Source Ready | detect when a source's shape/semantics drift from its profile | `70914d4` |
 | **015** | Reconciliation Ledger | 4 | Gold Ready | a durable ledger of cross-layer reconciliation results over time | `0eefe57` |
-| **016** | Power BI Execution Adapter (official Power BI MCP / connection) | 6 | Dashboard/Publish | the deferred, EXECUTION-ONLY Power BI adapter -- materializes/publishes an already-approved model; cannot define metrics, mappings, semantic logic, or dashboard design. LAST, gated on semantic-model readiness. (`pbi-cli` is no longer the preferred path; the official Power BI MCP / connection is the preferred future adapter.) | **NOT BUILT -- the only remaining feature (gated, by design)** |
+| **016** | Power BI Execution Adapter (official Power BI MCP / connection) | 6 | Dashboard/Publish | the deferred, EXECUTION-ONLY Power BI adapter -- materializes/publishes an already-approved model; cannot define metrics, mappings, semantic logic, or dashboard design. LAST, gated on semantic-model readiness. (`pbi-cli` is no longer the preferred path; the official Power BI MCP / connection is the preferred future adapter.) | **PARTLY BUILT** -- read-only slices 1-4 shipped (PR #464, #467) and the governed local-write slice 5 shipped 2026-08-18 (spec 149, PR #659: `pbi-mcp plan-write` / `apply`, approval-gated, advances no stage). **Slice 6 (remote, query-only) NOT BUILT** -- gated on ADR 0018 decision 7 + an owner scope/timing decision |
 
 ### Tier 5 -- Companion Modules & Adapters (F024-F035) -- PARTLY SHIPPED
 
@@ -246,7 +267,7 @@ sequences before it or assumes it exists.
 | **F031** | Adapter Maintenance & Auto-Update Policy | Maintenance Automation | `025` | spec-only -- **no consumer yet** (the dbt/dagster adapters are docs-only skills + templates; there is no running runtime to maintain). Defer until an adapter has a runtime. ADR `0011` allotted. |
 | **F032** | Adapter Compatibility Matrix | Maintenance Automation | `026` | spec-only -- same no-consumer reason as F031 |
 | **F033** | Release & Maturity Management | Maintenance Automation / Skill | `027` | spec-only -- same no-consumer reason as F031 |
-| **F034** | Visual Implementation MVP | Dashboard & Delivery (F016-independent) | `039` | **Authoring slice SHIPPED 2026-06-26** (spec `Finalized`) -- the trace template, Dashboard Ready evidence item, and review workflow exist. The original slice deliberately left the built page to a human Desktop action. Phase 3 records Microsoft's official `powerbi-report-authoring` skill as the native PBIR execution owner after `dashboard_ready: pass`; Spec 148 now provides read-only Claude Code/Codex discovery proof, while the committed sample page remains empty. Seshat retains design approval and conformity validation; F016 remains the separate parked live semantic adapter. |
+| **F034** | Visual Implementation MVP | Dashboard & Delivery (F016-independent) | `039` | **Authoring slice SHIPPED 2026-06-26** (spec `Finalized`) -- the trace template, Dashboard Ready evidence item, and review workflow exist. The original slice deliberately left the built page to a human Desktop action. Phase 3 records Microsoft's official `powerbi-report-authoring` skill as the native PBIR execution owner after `dashboard_ready: pass`; Spec 148 now provides read-only Claude Code/Codex discovery proof, while the committed sample page remains empty. Seshat retains design approval and conformity validation; F016 is the separate live semantic adapter, PARTLY BUILT as of 2026-08-18 (read-only slices 1-4 + governed local-write slice 5 shipped; remote slice 6 outstanding and owner-gated), and no longer parked. |
 | **F035** | Approval Evidence Pack | Product Module (artifact-writing) | `063` | **Authored 2026-07-02** -- `.claude/skills/approval-evidence-pack/` + `templates/approval-evidence-pack.md`. Composes ONE pre-approval evidence pack for ONE (table, stage) so a named human reads one traceable document before signing; generic across all seven stages via a stage parameter. Reads committed artifacts only (per-stage readiness doc, `readiness-status.yaml`, per-contract AL1 signal, `parked-on.yaml`, pending contracts); writes only `mappings/<table>/approval-evidence-pack-<stage>.md` with an EMPTY approval slot; adds no `seshat check` rule and no runtime code (the agent is the runtime). Composes AFTER F028 (late-stage 10-section pack) and BEFORE F027 (records the signature); structurally incapable of writing `approvals[]` / moving a stage / emitting a score/count (Principle V; hard rule #9). On-disk spec dir `063-approval-evidence-pack` (dir != F-number; this row wins, per the tier note). |
 | **F036** | Cross-Table Lineage / Impact Analysis | Product Module (read-only) | `099` | **Spec-built 2026-07-05** -- `.claude/skills/cross-table-lineage/` + `templates/lineage-trace.md`, `templates/module-contract.md`. A READ-ONLY aggregator that derives a column-level lineage trace (source-map -> migration SQL -> metric contract -> TMDL measure -> dashboard visual) from committed artifacts; creates no truth, opens no DB, emits no score. A contract<->column or measure<->contract link with no explicit machine-readable cross-reference stays a candidate (never auto-promoted to `proven`); FR-010 (a promotion heuristic) is left OPEN for a named human. No `seshat check` rule. |
 | **F037** | Consumer-Facing Data Dictionary | Product Module (artifact-writing) | `101` | **Spec-built 2026-07-05** -- `.claude/skills/consumer-data-dictionary/` + `templates/consumer-data-dictionary.md`. Composes a per-table analyst-facing dictionary (gold columns + approved metric contracts -> plain "what does this column/measure mean") from committed artifacts only; never invents meaning (retail-kpi owns it) -- a technical-only source-map rationale is verbatim-cited-or-gapped (FR-008/Q1 OPEN for a named human). No `seshat check` rule. |
@@ -343,9 +364,12 @@ existing constitution (Principles I, IV, V, VIII), they do not replace it:
 
 ## What is intentionally out of scope (this roadmap slice)
 
-- Still out of scope (unbuilt by design): the Power BI EXECUTION adapter (F016 --
-  official Power BI MCP / connection preferred, `pbi-cli` no longer preferred;
-  execution-only, gated + last), Fabric deployment, autonomous ML/model
+- Still out of scope (unbuilt by design): the Power BI EXECUTION adapter's **remote,
+  query-only slice 6** (F016 -- official Power BI MCP / connection preferred, `pbi-cli`
+  no longer preferred; execution-only, gated + last). *Reconciled 2026-08-21: F016
+  slices 1-4 (read-only) and slice 5 (governed local write, spec 149 / PR #659) have
+  since shipped and are no longer out of scope; slice 6 remains so.* Also out of
+  scope: Fabric deployment, autonomous ML/model
   deployment, causal claims, a universal ERP connector, and fully automated
   mapping approval. Governed descriptive/inferential methods and baseline
   forecasts now ship through `seshat analyze` as derived evidence pending

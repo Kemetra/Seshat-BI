@@ -86,10 +86,13 @@ wiring -- the authoring sibling of `retail-govern`, which interprets rule findin
 <!-- SPECKIT START -->
 Active plan: `specs/149-pbi-mcp-write-adapter/plan.md` (F016 slice 5 -- the approval-gated
 Power BI MCP write adapter, ratified 2026-08-18). Implementation MERGED (#659) and every
-post-write validation follow-up CLOSED: #657 (#670), #663 (#672), #661 + #663 (#674),
-#658 (#679). The one remaining task is the runtime-version PIN, blocked until Microsoft
-publishes a non-prerelease (measured 2026-08-20: only `0.5.0-beta.*` exist) -- which is
-why the marker rests here rather than on newer work.
+post-write validation follow-up CLOSED: #657 (#670), #663 (#672), #661 + #663 (#674).
+#658 stays OPEN but is down to ONE item of its three: the env allowlist shipped
+(`allowed_vendor_environment`, applied at the spawn site) and #679 recorded the resolved
+`serverInfo.version` in evidence, so an unpinned run is at least attributable. The
+runtime-version PIN is blocked until Microsoft publishes a non-prerelease (re-measured
+2026-08-21: still only `0.5.0-beta.2`..`.12`, `latest` = `0.5.0-beta.12`) -- which is why
+the marker rests here rather than on newer work.
 **Spec 155 (guided setup execution) is IMPLEMENTED, awaiting ratification** -- `seshat
 integrations setup --derived` selects only the components a project's committed evidence
 needs, then provisions them through the existing installer behind spec 154's committed
