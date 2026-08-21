@@ -7,6 +7,16 @@
 **Status**: program outline; specification and ratification required after spec 140
 is accepted. This file is not an active implementation plan.
 
+**Direction ruled**: 2026-08-21 -- Ahmed Shaaban (owner) ratified the Studio program
+DIRECTION for specs 140 and 141 in session. That ruling agrees the scope and sequence
+recorded here. It is **NOT implementation authority and NOT a ratification of this
+outline**: the Promotion Gate below still stands unchanged, and FR-141-020 still
+requires specs 139 and 140 to be accepted, this outline to be expanded into a full
+specification, and that exact package to be named-human ratified before any
+implementation begins. The agent transcribed the owner's ruling and did not
+self-ratify. Spec 141 remains gated on spec 140's ACCEPTANCE, not merely on 140's
+promotion to a full package (delivered 2026-08-21).
+
 **Depends on**: accepted Studio Foundation (139) and Governed Analyst Workbench
 (140), including stable proposal, decision, apply-receipt, and event contracts.
 
