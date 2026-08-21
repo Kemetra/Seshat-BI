@@ -1343,8 +1343,11 @@ externally blocked while both Microsoft servers are public preview with no relea
 (Principle V — `never_self_grant_approval`).
 
 Beyond M8 above, further agent-buildable work lives in `specs/` rather than on this
-roadmap — see the Studio section below. Spec 139 closed at 38/38 on 2026-08-16, so the
-next Studio work is **specifying spec 140**, not finishing 139.
+roadmap — see the Studio section below. Spec 139 closed at 38/38 on 2026-08-16, and spec
+140 was promoted from a program outline to a full package and **ratified by Ahmed
+Shaaban on 2026-08-21**. Ratification is not activation: spec 140's implementation stays
+blocked until the sole active Spec Kit fence is moved to its plan (FR-140-020), so the
+next Studio step is **moving that fence**, not specifying 140.
 
 ---
 

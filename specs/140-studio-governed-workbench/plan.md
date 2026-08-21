@@ -25,11 +25,14 @@ store's invariants are proven.
 YAML dependency — no round-trip loader is added), pytest. Frontend follows Foundation's
 existing Studio asset pipeline.
 
-**Spec status:** `draft`. Phases 0 and 1 below (research, design) are complete.
-**Implementation phases MUST NOT begin until a named human ratifies this package and
-the sole active Spec Kit fence points at this plan** (FR-140-020). This repo does not
-build against an unratified spec; spec 155's status history records why that ordering
-matters.
+**Spec status:** **ratified** -- Ahmed Shaaban (owner), 2026-08-21. Phases 0 and 1
+below (research, design) are complete.
+
+**Implementation phases remain BLOCKED.** FR-140-020 sets two conditions and only the
+first is met: the package is ratified, but the **sole active Spec Kit fence must still
+be moved to this plan**. Ratification is not activation — spec 139 carried the same
+distinction ("Ratification does not activate implementation"). Until the fence moves,
+no task in `tasks.md` may start.
 
 ## Global Constraints
 

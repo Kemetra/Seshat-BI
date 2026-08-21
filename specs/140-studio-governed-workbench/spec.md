@@ -6,14 +6,27 @@
 
 **Promoted**: 2026-08-21 -- expanded from program outline into this specification
 
-**Status**: draft -- promoted from outline; awaiting named-human ratification
+**Status**: ratified -- Ahmed Shaaban (owner), 2026-08-21
 
-**Status history**: program outline 2026-08-03; promoted to full specification
-2026-08-21 under the outline's Promotion Gate. The owner ratified the program
-DIRECTION for specs 140 and 141 on 2026-08-21; that ruling is scope agreement and is
-explicitly NOT implementation authority. This package still requires named-human
-ratification of this exact specification, plan, contracts, and task list, and the sole
-active Spec Kit fence must point at this plan, before implementation begins.
+**Status history**: program outline 2026-08-03; program DIRECTION ruled by the owner
+2026-08-21 (scope agreement, explicitly not implementation authority); promoted to this
+full specification 2026-08-21 under the outline's Promotion Gate; **this exact package
+-- specification, research, data model, contracts, plan, and task list -- ratified by
+Ahmed Shaaban (owner) in session on 2026-08-21.** The agent transcribed the owner's
+ruling and did not self-ratify.
+
+Ratification is not activation. FR-140-020 has two conditions and only the first is
+now met: the package is ratified, but the **sole active Spec Kit fence must still be
+moved to this plan** before implementation begins. Until that fence moves, every task
+in `tasks.md` remains blocked.
+
+The scope ratified here is **all five user stories** (US1-US5), per the owner's
+decision of 2026-08-21. `plan.md` retains the Phase-D split as a noted contingency; a
+split would require a new ratification of the reduced package, not a silent narrowing.
+
+Recorded in the order it happened: outline, then direction ruling, then promotion, then
+ratification. Unlike spec 155, no implementation preceded this ratification -- the
+package is docs-only and no task has been started.
 
 **Depends on**: accepted `specs/139-seshat-studio-foundation/` (implemented, all 38
 tasks complete, accepted by Ahmed Shaaban 2026-08-16), including its security
