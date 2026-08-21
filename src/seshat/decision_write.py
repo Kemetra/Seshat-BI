@@ -158,39 +158,51 @@ def _atomic_append(path: Path, entry: dict[str, Any]) -> None:
     without it a malformed fragment could corrupt the store and only surface later, in
     the gate.
     """
-    existing = path.read_text(encoding="utf-8")
+    merged = _merge_text(path.read_text(encoding="utf-8"), _render_fragment(entry))
+    _verify_merged(merged, entry)
+    _replace_atomically(path, merged)
 
+
+def _render_fragment(entry: dict[str, Any]) -> str:
+    """One decision entry as an indented YAML list item."""
     fragment = yaml.safe_dump(
         [entry], sort_keys=False, default_flow_style=False, allow_unicode=True
     )
-    indented = "".join(
+    return "".join(
         f"  {line}\n" if line.strip() else "\n" for line in fragment.splitlines()
     )
 
-    body = existing.rstrip("\n")
-    if "decisions:" in existing:
-        # An empty `decisions: []` cannot take an appended block item; replace it.
-        merged = (
-            body.replace("decisions: []", "decisions:") + "\n" + indented
-            if "decisions: []" in existing
-            else body + "\n" + indented
-        )
-    else:
-        merged = (
-            body + "\ndecisions:\n" + indented if body else "decisions:\n" + indented
-        )
 
+def _merge_text(existing: str, indented: str) -> str:
+    """Splice the fragment in as TEXT, leaving the existing bytes untouched.
+
+    An empty `decisions: []` is REPLACED rather than appended to: a flow-style empty
+    list cannot take a block item beneath it.
+    """
+    body = existing.rstrip("\n")
+    if "decisions:" not in existing:
+        return body + "\ndecisions:\n" + indented if body else "decisions:\n" + indented
+    if "decisions: []" in existing:
+        return body.replace("decisions: []", "decisions:") + "\n" + indented
+    return body + "\n" + indented
+
+
+def _verify_merged(merged: str, entry: dict[str, Any]) -> None:
+    """Re-parse before writing; raise rather than persist a malformed store."""
     parsed = yaml.safe_load(merged)
     if not isinstance(parsed, dict) or not isinstance(parsed.get("decisions"), list):
         raise WriteRefused("append would produce a malformed decision store")
     if not parsed["decisions"] or parsed["decisions"][-1].get("id") != entry.get("id"):
         raise WriteRefused("append did not land the new entry last")
 
+
+def _replace_atomically(path: Path, merged: str) -> None:
+    """Stage beside the target, then one rename (atomic on POSIX and Windows)."""
     handle_fd, temporary = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
     try:
         with os.fdopen(handle_fd, "w", encoding="utf-8", newline="\n") as staged:
             staged.write(merged)
-        os.replace(temporary, path)  # atomic on POSIX and Windows
+        os.replace(temporary, path)
     except BaseException:
         Path(temporary).unlink(missing_ok=True)
         raise

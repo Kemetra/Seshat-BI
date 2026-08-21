@@ -90,15 +90,27 @@ def _canonical_hash(payload: dict) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
+@dataclass(frozen=True, slots=True)
+class DecisionQuestion:
+    """The question a proposal puts to a named human, with its closed answer set.
+
+    Bundled because the three travel together and are meaningless apart: a question
+    without its allowed answers cannot be validated against, and an answer set without
+    a required authority cannot say WHO may pick from it.
+    """
+
+    question: str
+    allowed_answers: tuple[str, ...]
+    required_authority: str
+
+
 def build_proposal(
     *,
     target_artifact: str,
     diff: str,
     fields: tuple[FieldProvenance, ...],
     workspace_revision: str,
-    question: str,
-    allowed_answers: tuple[str, ...],
-    required_authority: str,
+    decision: DecisionQuestion,
     validation: tuple[str, ...] = (),
 ) -> ChangeProposal:
     """Prepare a proposal. The agent prepares; it does not decide.
@@ -111,9 +123,9 @@ def build_proposal(
             "target": target_artifact,
             "diff": diff,
             "revision": workspace_revision,
-            "question": question,
-            "answers": list(allowed_answers),
-            "authority": required_authority,
+            "question": decision.question,
+            "answers": list(decision.allowed_answers),
+            "authority": decision.required_authority,
         }
     )
     return ChangeProposal(
@@ -122,9 +134,9 @@ def build_proposal(
         workspace_revision=workspace_revision,
         target_artifact=target_artifact,
         diff=diff,
-        question=question,
-        allowed_answers=tuple(allowed_answers),
-        required_authority=required_authority,
+        question=decision.question,
+        allowed_answers=tuple(decision.allowed_answers),
+        required_authority=decision.required_authority,
         fields=tuple(fields),
         validation=tuple(validation),
     )

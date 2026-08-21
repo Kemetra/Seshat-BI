@@ -75,9 +75,11 @@ def prepare(
             ),
         ),
         workspace_revision=workspace_revision,
-        question=question,
-        allowed_answers=("approve", "decline"),
-        required_authority="owner",
+        decision=proposals.DecisionQuestion(
+            question=question,
+            allowed_answers=("approve", "decline"),
+            required_authority="owner",
+        ),
     )
 
 
@@ -145,13 +147,32 @@ def _require_consistent_authority(payload: dict[str, Any]) -> None:
         )
 
 
+@dataclass(frozen=True)
+class WorkspaceContext:
+    """The workspace facts a recording or apply needs, bundled as one seam.
+
+    A PUBLIC dataclass rather than five loose parameters: `repo_root`,
+    `current_revision`, `store_rel` and the identity fields travel together on every
+    call, and threading them individually made three call sites each restate the same
+    context. Bundling them keeps the caller seam explicit -- a caller must still supply
+    every field -- while giving the functions one argument instead of many.
+
+    `authority` stays here rather than defaulting: `None` means "eligibility cannot be
+    validated", which the shipped predicate treats as fail-closed, so it must be an
+    explicit choice at the call site.
+    """
+
+    repo_root: Path | str
+    current_revision: str
+    authority: dict[str, frozenset[str]] | None = None
+    store_rel: str = ""
+
+
 def record(
     *,
-    repo_root: Path | str,
+    context: WorkspaceContext,
     payload: dict[str, Any],
     proposal: proposals.ChangeProposal,
-    current_revision: str,
-    authority: dict[str, frozenset[str]] | None,
     decision_id: str,
     recorded_at: str,
 ) -> decision_write.DecisionWriteReceipt:
@@ -162,7 +183,7 @@ def record(
     """
     _require_human_fields(payload)
     _require_consistent_authority(payload)
-    _require_fresh_binding(payload, proposal, current_revision)
+    _require_fresh_binding(payload, proposal, context.current_revision)
     _require_valid_answer(payload, proposal)
 
     entry = decision_write.build_entry(
@@ -180,7 +201,7 @@ def record(
     )
     try:
         return decision_write.append_decision(
-            repo_root, DECISION_STORE_REL, entry, authority
+            context.repo_root, DECISION_STORE_REL, entry, context.authority
         )
     except decision_write.WriteRefused as refused:
         # The shipped validators rejected it; surface their reason rather than a

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from seshat import decision_write
-from seshat.studio import proposals
+from seshat.studio import decision_routes, proposals
 
 #: Said on every receipt. A static gate proves the artifact is well-formed; it cannot
 #: prove the numbers are right or that a live source agrees (FR-140-016).
@@ -106,8 +106,7 @@ def apply_proposal(
     committed: Any,
     proposal: proposals.ChangeProposal,
     payload: dict[str, Any],
-    current_revision: str,
-    store_rel: str,
+    context: "decision_routes.WorkspaceContext",
     live_available: bool = False,
 ) -> ApplyReceipt:
     """Apply exactly the reviewed proposal, refusing anything wider or unauthorized.
@@ -115,11 +114,11 @@ def apply_proposal(
     Order is part of the contract: staleness, then authority, then scope. Each refusal
     happens before anything is applied.
     """
-    if proposals.is_stale(proposal, current_revision):
+    if proposals.is_stale(proposal, context.current_revision):
         raise ApplyRefused(
             409, "the workspace moved since this proposal was reviewed; re-review it"
         )
-    _require_authoritative_decision(committed, proposal, store_rel)
+    _require_authoritative_decision(committed, proposal, context.store_rel)
     applied = _require_reviewed_scope(payload, proposal)
 
     verification = {"static": STATIC_LABEL}

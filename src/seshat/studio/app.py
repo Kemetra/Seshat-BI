@@ -324,7 +324,11 @@ def _register_routes(app: FastAPI) -> None:
         class _Committed:
             def file_at_head(self, relative: str) -> str | None:
                 result = gitutil.run_subprocess(
-                    ["git", "-c", "core.fsmonitor=false", "show", f"HEAD:{relative}"],
+                    # The SHARED hardening tuple, never a local re-listing. Hardcoding
+                    # `core.fsmonitor` alone is exactly how this contract drifted
+                    # before: it leaves hooksPath and protocol.ext live on a tree this
+                    # process did not author.
+                    ["git", *gitutil.GIT_HARDENING, "show", f"HEAD:{relative}"],
                     cwd=root,
                     # run_subprocess sets stdin and timeout but NOT capture_output, so
                     # stdout must be requested explicitly or this reads back empty and
@@ -530,11 +534,16 @@ def _register_routes(app: FastAPI) -> None:
         )
         try:
             receipt = decision_routes.record(
-                repo_root=app.state.launch.workspace_root,
+                context=decision_routes.WorkspaceContext(
+                    repo_root=app.state.launch.workspace_root,
+                    current_revision=_snapshot().identity.revision,
+                    # Explicit: None means eligibility cannot be validated, which the
+                    # shipped predicate treats as fail-closed.
+                    authority=None,
+                    store_rel=decision_routes.DECISION_STORE_REL,
+                ),
                 payload=payload,
                 proposal=proposal,
-                current_revision=_snapshot().identity.revision,
-                authority=None,
                 decision_id=f"studio-{counter:04d}",
                 recorded_at=_now_iso(),
             )
@@ -574,8 +583,11 @@ def _register_routes(app: FastAPI) -> None:
                 committed=_committed_reader(app),
                 proposal=proposal,
                 payload=await _json_body(request),
-                current_revision=_snapshot().identity.revision,
-                store_rel=decision_routes.DECISION_STORE_REL,
+                context=decision_routes.WorkspaceContext(
+                    repo_root=app.state.launch.workspace_root,
+                    current_revision=_snapshot().identity.revision,
+                    store_rel=decision_routes.DECISION_STORE_REL,
+                ),
                 live_available=False,
             )
         except apply_module.ApplyRefused as refused:

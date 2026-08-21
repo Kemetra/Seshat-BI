@@ -28,9 +28,11 @@ def _proposal(**overrides):
         "diff": "- net_sales\n+ net_sales_of_returns\n",
         "fields": (),
         "workspace_revision": _REVISION,
-        "question": "Should net sales be reported net of returns?",
-        "allowed_answers": ("net_of_returns", "gross"),
-        "required_authority": "owner",
+        "decision": proposals.DecisionQuestion(
+            question="Should net sales be reported net of returns?",
+            allowed_answers=("net_of_returns", "gross"),
+            required_authority="owner",
+        ),
     }
     payload.update(overrides)
     return proposals.build_proposal(**payload)  # type: ignore[arg-type]
