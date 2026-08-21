@@ -151,11 +151,16 @@ def _require_consistent_authority(payload: dict[str, Any]) -> None:
 class WorkspaceContext:
     """The workspace facts a recording or apply needs, bundled as one seam.
 
-    A PUBLIC dataclass rather than five loose parameters: `repo_root`,
-    `current_revision`, `store_rel` and the identity fields travel together on every
-    call, and threading them individually made three call sites each restate the same
-    context. Bundling them keeps the caller seam explicit -- a caller must still supply
-    every field -- while giving the functions one argument instead of many.
+    A PUBLIC dataclass rather than loose parameters: `repo_root`, `current_revision`,
+    `authority` and `store_rel` travel together on every call, and threading them
+    individually made three call sites each restate the same context. Bundling keeps the
+    caller seam explicit -- a caller must still supply every field -- while giving the
+    functions one argument in place of four.
+
+    Measured honestly: this did NOT clear CodeScene's "Excess Number of Function
+    Arguments" on `record`, which still takes five keyword arguments after the change.
+    The bundle is justified as a real seam -- the same context genuinely belongs
+    together -- not as a metric fix. Those are separate claims; only the first holds.
 
     `authority` stays here rather than defaulting: `None` means "eligibility cannot be
     validated", which the shipped predicate treats as fail-closed, so it must be an
