@@ -17,9 +17,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from unit import _studio_workspace_fixtures as workspace_fixtures
 
 from seshat import decision_store
-from unit import _studio_workspace_fixtures as workspace_fixtures
 
 API = "/api/v1"
 _BASE_URL = "http://127.0.0.1:9999"
@@ -60,7 +60,7 @@ def unauthenticated_client(root: Path, *, table: str = "ready_sales") -> TestCli
 
 @dataclass(frozen=True)
 class GitWorkspace:
-    """A real git repository, so committed-vs-uncommitted state is genuinely testable."""
+    """A real git repo, so committed-vs-uncommitted state is genuinely testable."""
 
     root: Path
 
