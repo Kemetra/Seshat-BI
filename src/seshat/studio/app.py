@@ -50,7 +50,11 @@ from . import (
     projection,
     proposals,
     redaction,
+    review_scope,
     session,
+)
+from . import (
+    apply as apply_module,
 )
 from .approvals import prepared_summary
 from .bridge_selection import select_bridge
@@ -306,6 +310,53 @@ def _register_routes(app: FastAPI) -> None:
     def _now_iso() -> str:
         return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
+    def _committed_reader(app: FastAPI):
+        """A reader for COMMITTED decision state, used by apply's authority check.
+
+        Reads through git rather than the working tree, because that is what the gate
+        reads. `git show HEAD:<path>` returns non-zero when the path is absent at HEAD,
+        which is the "nothing committed yet" case, not an error to surface.
+        """
+        from seshat import gitutil
+
+        root = app.state.launch.workspace_root
+
+        class _Committed:
+            def file_at_head(self, relative: str) -> str | None:
+                result = gitutil.run_subprocess(
+                    ["git", "-c", "core.fsmonitor=false", "show", f"HEAD:{relative}"],
+                    cwd=root,
+                    # run_subprocess sets stdin and timeout but NOT capture_output, so
+                    # stdout must be requested explicitly or this reads back empty and
+                    # every committed decision looks absent.
+                    capture_output=True,
+                    text=True,
+                )
+                if getattr(result, "returncode", 1) != 0:
+                    return None
+                return getattr(result, "stdout", "") or None
+
+        return _Committed()
+
+    def _working_tree_decisions(app: FastAPI) -> list[dict]:
+        """Decisions as they stand in the working tree, for the review surface.
+
+        Review SHOWS pending work, so it reads the working tree deliberately -- unlike
+        apply, which must read HEAD. Each entry keeps its `state`, so a reviewer sees
+        `pending_commit` rather than a decision dressed as settled.
+        """
+        import yaml
+
+        path = app.state.launch.workspace_root / decision_routes.DECISION_STORE_REL
+        try:
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            return []
+        if not isinstance(document, dict):
+            return []
+        entries = document.get("decisions") or []
+        return [item for item in entries if isinstance(item, dict)]
+
     def _snapshot() -> projection.WorkspaceSnapshot:
         return projection.build_workspace_snapshot(
             app.state.launch.workspace_root, agent_health=app.state.agent_health
@@ -502,6 +553,56 @@ def _register_routes(app: FastAPI) -> None:
                 "gate_authority": receipt.gate_authority,
             }
         )
+
+    @app.post(f"{API_PREFIX}/proposals/{{proposal_id}}/apply")
+    async def apply_proposal_route(proposal_id: str, request: Request) -> Any:
+        """Apply exactly the reviewed proposal (spec 140 US4).
+
+        Refused unless a COMMITTED decision authorizes it: a recorded decision is
+        pending commit until a human commits, and pending commit is not authority.
+        """
+        proposal = app.state.workbench_proposals.get(proposal_id)
+        if proposal is None:
+            return _problem(
+                404,
+                "Unknown proposal",
+                "No prepared proposal matches that identifier.",
+                "Prepare the change again to get a current proposal.",
+            )
+        try:
+            receipt = apply_module.apply_proposal(
+                committed=_committed_reader(app),
+                proposal=proposal,
+                payload=await _json_body(request),
+                current_revision=_snapshot().identity.revision,
+                store_rel=decision_routes.DECISION_STORE_REL,
+                live_available=False,
+            )
+        except apply_module.ApplyRefused as refused:
+            return _problem(
+                refused.status,
+                "Apply refused",
+                refused.detail,
+                "Nothing was applied.",
+            )
+        return _redact(receipt.as_dict())
+
+    @app.get(f"{API_PREFIX}/review")
+    async def review(scope: str | None = None) -> Any:
+        """The client-review surface for one explicitly selected scope (US5)."""
+        try:
+            payload = review_scope.review_for(
+                scope=scope,
+                decisions=_working_tree_decisions(app),
+            )
+        except review_scope.ScopeRefused as refused:
+            return _problem(
+                refused.status,
+                "Review scope required",
+                refused.detail,
+                "Select the exact scope to review.",
+            )
+        return _redact(payload)
 
     @app.get(f"{API_PREFIX}/decisions")
     async def decisions() -> Any:
