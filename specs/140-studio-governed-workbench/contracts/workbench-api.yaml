@@ -1,0 +1,313 @@
+openapi: 3.1.0
+info:
+  title: Seshat Studio Workbench API (spec 140 -- proposed)
+  version: 0.1.0
+  description: >-
+    Proposed extension to the Foundation API (spec 139) adding the first
+    domain-mutating routes in Studio. Foundation's contract states it "does not
+    authorize arbitrary workspace paths, business approvals, or browser-side tool
+    execution"; this contract deliberately and narrowly extends the business-approval
+    clause, and only under named-human ratification of spec 140.
+
+    Boundary that governs every route below: a decision written through this API is
+    working-tree state, NOT authority. The static gate reads decisions from tracked
+    files at HEAD. No route in this contract commits to git, and no response field can
+    express "approved" for an uncommitted decision.
+
+    Unchanged from Foundation: same-origin loopback only, session cookie required,
+    single pinned workspace, all responses redacted.
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    variables:
+      port:
+        default: "0"
+        description: OS-assigned loopback port selected at process start.
+security:
+  - studioSession: []
+
+paths:
+  /proposals:
+    post:
+      summary: Prepare an immutable change proposal from the current workspace revision.
+      description: >-
+        The agent prepares; it does not decide. The response carries the exact diff,
+        per-field provenance, and the hash/revision pair that later binds a decision.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposalRequest"
+      responses:
+        "201":
+          description: Proposal prepared.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangeProposal"
+        "409":
+          description: >-
+            Workspace revision moved while preparing; caller must re-request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: Forbidden stage or failing gate prevents any proposal.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /proposals/{proposal_id}:
+    get:
+      summary: Re-read a proposal and its current staleness.
+      parameters:
+        - in: path
+          name: proposal_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Proposal, with `stale` true once inputs moved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangeProposal"
+        "404":
+          description: Unknown proposal.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /decisions/record:
+    post:
+      summary: Record a named-human business decision into the Decision Store file.
+      description: >-
+        The ONLY route that writes a business decision. Every one of `signer`,
+        `declared_authority`, and `answer` must be supplied by the human caller; the
+        server has no default for them and will not infer them (FR-140-009).
+
+        On success the decision exists in the working tree and is reported as
+        `pending commit`. It is NOT authority and MUST NOT be displayed as approved.
+        Readiness is unchanged until a human commits the file (FR-140-015, FR-140-021,
+        FR-140-023).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NamedHumanDecision"
+      responses:
+        "201":
+          description: Decision appended to the store file; pending commit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DecisionWriteReceipt"
+        "409":
+          description: >-
+            Stale proposal hash or workspace revision. Fail closed before any write
+            (FR-140-012). The store file is byte-identical after this response.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: >-
+            Rejected by the shipped validators -- malformed `signer`
+            (`owner_shape_ok`), missing approval field, or authority class ineligible
+            for a critical decision type. Nothing is partially written (FR-140-022).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /proposals/{proposal_id}/apply:
+    post:
+      summary: Apply exactly the reviewed proposal scope (US4, P2).
+      description: >-
+        Refused unless the governing decision is already `authoritative` -- that is,
+        committed and readable at HEAD. A `pending commit` decision is not sufficient
+        (US4 acceptance 5).
+      parameters:
+        - in: path
+          name: proposal_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Applied within scope; verification evidence attached.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplyReceipt"
+        "409":
+          description: Proposal stale, or its approval invalidated by a changed diff.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: >-
+            Required decision is absent or only `pending commit`; or the scope exceeds
+            the reviewed scope or the readiness forbidden scope (FR-140-014).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+components:
+  securitySchemes:
+    studioSession:
+      type: apiKey
+      in: cookie
+      name: studio_session
+
+  schemas:
+    ProposalRequest:
+      type: object
+      required: [intent, target_artifact]
+      additionalProperties: false
+      properties:
+        intent:
+          type: string
+          description: Business-language description of the change requested.
+        target_artifact:
+          type: string
+          description: Repo-relative artifact path the change would touch.
+        table_id:
+          type: string
+
+    ChangeProposal:
+      type: object
+      required:
+        [proposal_id, proposal_hash, workspace_revision, target_artifact, diff,
+         fields, impact, required_authority, stale]
+      additionalProperties: false
+      properties:
+        proposal_id: {type: string}
+        proposal_hash:
+          type: string
+          description: Canonical hash of scope + diff. Binds any later decision.
+        workspace_revision: {type: string}
+        target_artifact: {type: string}
+        diff:
+          type: string
+          description: Exact artifact diff, shown before any approval control.
+        fields:
+          type: array
+          items: {$ref: "#/components/schemas/FieldProvenance"}
+        impact: {$ref: "#/components/schemas/ImpactSummary"}
+        required_authority:
+          type: string
+          enum: [technical, named_human]
+        validation:
+          type: array
+          items: {type: string}
+          description: Results from the existing engines; never re-derived here.
+        stale:
+          type: boolean
+          description: True once workspace inputs moved; a stale proposal cannot bind.
+
+    FieldProvenance:
+      type: object
+      required: [field, kind, source_ref]
+      additionalProperties: false
+      properties:
+        field: {type: string}
+        kind:
+          type: string
+          enum:
+            [discovered_fact, existing_decision, default, inference,
+             new_human_judgment]
+          description: >-
+            Closed set (FR-140-006). `inference` and `default` must never be presented
+            as `existing_decision`.
+        source_ref: {type: string}
+        author: {type: string}
+        recorded_at: {type: string, format: date-time}
+
+    ImpactSummary:
+      type: object
+      additionalProperties: false
+      properties:
+        affected_artifacts: {type: array, items: {type: string}}
+        affected_stages: {type: array, items: {type: string}}
+        affected_metrics: {type: array, items: {type: string}}
+        required_decisions: {type: array, items: {type: string}}
+
+    NamedHumanDecision:
+      type: object
+      required:
+        [signer, declared_authority, answer, proposal_hash, workspace_revision]
+      additionalProperties: false
+      properties:
+        signer:
+          type: string
+          description: >-
+            Must satisfy the shipped `owner_shape_ok`: "Person Name (class_token)".
+            Human-supplied only; no server default (FR-140-009).
+          examples: ["Ahmed Shaaban (owner)"]
+        declared_authority:
+          type: string
+          description: Authority class the signer declares; must match `signer`.
+        answer:
+          type: string
+          description: One of the request's allowed answers. Human-supplied only.
+        proposal_hash: {type: string}
+        workspace_revision: {type: string}
+
+    DecisionWriteReceipt:
+      type: object
+      required: [written_path, decision_id, state, gate_authority]
+      additionalProperties: false
+      properties:
+        written_path:
+          type: string
+          description: Which `.seshat/` store file was appended.
+        decision_id: {type: string}
+        state:
+          type: string
+          enum: [pending_commit]
+          description: >-
+            Single-member enum by design. This type cannot express "approved" for an
+            uncommitted decision (FR-140-021).
+        gate_authority:
+          type: string
+          description: >-
+            Statement that the static gate reads committed state at HEAD, so this
+            receipt is not authority.
+
+    ApplyReceipt:
+      type: object
+      required: [proposal_hash, applied_paths, verification]
+      additionalProperties: false
+      properties:
+        proposal_hash: {type: string}
+        applied_paths: {type: array, items: {type: string}}
+        commands: {type: array, items: {type: string}}
+        verification:
+          type: object
+          properties:
+            static:
+              type: string
+              description: Necessary, not semantic or live correctness (FR-140-016).
+            live:
+              type: string
+              description: >-
+                Absent or `[PENDING LIVE PROFILE]` when the DB boundary is
+                unavailable; never a fabricated pass (FR-140-017).
+        remaining_blockers: {type: array, items: {type: string}}
+
+    Problem:
+      type: object
+      description: RFC 9457 problem object, redacted per Foundation's boundary.
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
