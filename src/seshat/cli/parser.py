@@ -908,6 +908,16 @@ def _add_doctor_parser(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help="exit non-zero if any finding is present (default: advisory, exit 0)",
     )
+    doctor_p.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help=(
+            "'text' (default) is the human digest; 'json' emits the same "
+            "findings in the shipped FindingDict shape -- never a numeric score."
+        ),
+    )
 
 
 def _distribution_version() -> str:

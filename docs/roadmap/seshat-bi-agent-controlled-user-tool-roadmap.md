@@ -1,14 +1,13 @@
 ## Seshat BI — Agent-Controlled User Tool Roadmap
 
-**Status:** **Draft / Proposed — direction ratified; M1–M7 and M9–M11 delivered, M8
-PARTIAL, M12 open.** The core
+**Status:** **Draft / Proposed — direction ratified; M1–M7, M8 and M9–M11
+delivered; M12 partly delivered.** The core
 product-direction fork (A-vs-B, see the ✅ callout below) was **ratified B by Ahmed
 Shaaban (owner) 2026-07-07**. **M1–M7 and M9–M11 are delivered** — seven of them carry
 an explicit spec-level `BUILT` status (specs 107–113), while M1/M2 and M5 rest on
 shipped-artifact evidence rather than a ratified acceptance record; the reconciliation
-table below states the basis per row. **Two milestones remain open: M8 is PARTIAL**
-(the advisory `seshat doctor` ships, but none of its four deliverables does — see the
-table), and **M12 (Power BI execution adapter)**, which is now **PARTLY DELIVERED**:
+table below states the basis per row. **M8 was DELIVERED 2026-08-21** (all four deliverables ship; see the
+table). The one milestone still open is **M12 (Power BI execution adapter)**, which is now **PARTLY DELIVERED**:
 ADR 0018 was RATIFIED by the owner on 2026-08-18 and slice 5 (governed local write)
 SHIPPED via spec 149 / PR #659, leaving slice 6 (remote, query-only) unbuilt and
 awaiting an owner scope/timing decision (ADR decision 7). M12 is no longer blocked on
@@ -49,7 +48,7 @@ never self-grants). The authoritative delivered ledger remains
 > | M5 first-hour experience | delivered | two governed `built` claims in `docs/quality/status-claims.yaml` (`first-hour-compass-worked-example-store-sales`, `...-doc-...`); the shipped skill + `docs/tools/first-hour-compass.md`. Its four acceptance criteria are about demo BEHAVIOUR and were not re-run for this note |
 > | M6 source onboarding | BUILT (docs-only under B) | spec 110 `**Status**: **BUILT**` |
 > | M7 mapping review UX | BUILT (docs-only under B) | spec 111 `**Status**: **BUILT**` |
-> | M8 workspace doctor | **PARTIAL -- do not treat as done** | The advisory command ships (`seshat doctor`, exit 0; `--strict` exists; default stays advisory), but **none of M8's four deliverables does**. Measured 2026-08-16: `seshat doctor --format json` exits 2 (`parser.py` accepts only `--repo`/`--strict`), and `doctor.py::format_digest` emits a flat severity list -- no JSON, no grouping, no repair hints, no agent-safe stop instructions. Its "output includes next safe action" criterion is unmet: the digest ends by pointing at `seshat check`, not at a next action. The pre-existing advisory verb is NOT delivery of this milestone |
+> | M8 workspace doctor | **DELIVERED 2026-08-21** | All four deliverables now ship. JSON: `doctor --format json` emits the shipped `FindingDict` shape via `build_digest_payload` (it exited 2 before). Grouping: `format_digest` groups by the existing `rule_id`. Repair hints: `_REPAIR_HINTS` per rule area, inert text, asserted non-constant and subprocess-free. Next safe action: the digest ends `next allowed action: ...`, delegating to `agent_next.build_agent_next_document` rather than computing a second readiness model -- and it KEEPS the `check`-is-the-gate pointer, so doctor still never reads as a second gate. Default text output and `--strict` semantics unchanged |
 > | M9 evidence pack | BUILT (docs-only under B) | spec 112 `**Status**: **BUILT**` |
 > | M10 BI delivery layer | BUILT (docs-only under B) | spec 113 `**Status**: **BUILT**` |
 > | M11 distribution maturity | BUILT | spec 108 `**Status**: **BUILT.**` |
@@ -1307,15 +1306,15 @@ Seshat BI
 > shipped in July 2026, so following it would have duplicated delivered work. The
 > superseded text is preserved in git history.
 
-**On this roadmap, two milestones remain: M8 (workspace doctor) is PARTIAL and IS
-agent-buildable; M12 (Power BI execution adapter) is PARTLY DELIVERED, with only its
-slice 6 owner-gated.**
+**On this roadmap, M8 (workspace doctor) was DELIVERED 2026-08-21; M12 (Power BI
+execution adapter) is PARTLY DELIVERED, with only its slice 6 owner-gated.**
 
-**M8 — the agent-buildable one.** The advisory `seshat doctor` ships, but none of M8's
-four deliverables does: JSON output (`--format json` exits 2 today), human-readable
-grouping, non-mutating repair hints, and agent-safe stop instructions. Its "output
-includes next safe action" criterion is also unmet. Anyone picking this up should spec
-it normally rather than reading the existing verb as delivery.
+**M8 — DELIVERED 2026-08-21.** All four deliverables ship: `doctor --format json`
+emits the shipped `FindingDict` shape (it exited 2 before), the digest groups by the
+existing `rule_id`, each rule area carries an inert repair hint, and the digest ends
+`next allowed action: ...` by delegating to `agent_next.build_agent_next_document`.
+The `check`-is-the-gate pointer is retained, so doctor still never reads as a second
+gate (Principle I), and default text output plus `--strict` semantics are unchanged.
 
 **M12 — the partly-delivered one.** *(Updated 2026-08-21. This block previously gave
 the next action as "ratify ADR 0018", which was correct until 2026-08-18.)*

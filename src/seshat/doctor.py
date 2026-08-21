@@ -46,6 +46,13 @@ _LOADBEARING_DOCS: tuple[str, ...] = (
 )
 
 
+#: The Principle-I boundary marker: doctor is advisory, `check` is the gate.
+_GATE_POINTER = (
+    "\n\n(advisory digest -- the `{prog} check` gate exit code remains the "
+    "authority; run it to gate.)"
+)
+
+
 def _probe_loadbearing(ctx: RuleContext) -> list[Finding]:
     """Report any load-bearing doc that is not a tracked file (read-only probe)."""
     from .core import Severity
@@ -112,8 +119,12 @@ def format_digest(findings: list[Finding], prog: str = "seshat") -> str:
     if not findings:
         return f"{prog} doctor: no drift found across the aggregated read-only checks."
     lines = [f"{prog} doctor: {len(findings)} finding(s) across read-only checks:"]
-    for f in findings:
-        lines.append(f"  [{f.severity.value}] {f.rule_id} {f.message} ({f.locator})")
+    for rule_id, group in group_by_rule(findings).items():
+        lines.append("")
+        lines.append(f"{rule_id}: {len(group)} finding(s)")
+        for f in group:
+            lines.append(f"  [{f.severity.value}] {f.message} ({f.locator})")
+        lines.append(f"  hint: {repair_hint(rule_id)}")
     lines.append(
         f"\n(advisory digest -- the `{prog} check` gate exit code remains the "
         "authority; run it to gate.)"
@@ -121,7 +132,115 @@ def format_digest(findings: list[Finding], prog: str = "seshat") -> str:
     return "\n".join(lines)
 
 
-def run_doctor(repo_root: Path, strict: bool = False, prog: str = "seshat") -> int:
+#: Non-mutating repair guidance, keyed by the rule area that raised the finding.
+#: Text ONLY -- doctor reads and reports, never fixes (M8: "repair hints that do
+#: not modify files"). Nothing here is executed, and no entry is a command the
+#: tool will run on the user's behalf.
+_REPAIR_HINTS: dict[str, str] = {
+    "A1": (
+        "a route in docs/routing/routes.yaml does not resolve -- check the "
+        "manifest exists and every target it names is a tracked file"
+    ),
+    "A3": (
+        "route coverage is not a bijection -- a route lacks a surface, or a "
+        "surface lacks a route; reconcile docs/routing/routes.yaml with the "
+        "shipped verbs"
+    ),
+    "SC1": (
+        "a prose status claim disagrees with its evidence -- correct the claim "
+        "or the doc it points at; never loosen the claim to match stale prose"
+    ),
+    "DOCTOR": (
+        "a load-bearing doc is untracked -- add the file, or `git add` it if it "
+        "exists but was never committed"
+    ),
+}
+
+#: The hint offered when a rule area has no specific entry above. Deliberately
+#: names the read-only next step rather than inventing guidance.
+_DEFAULT_HINT = (
+    "inspect the locator above; this finding is advisory and no file was changed"
+)
+
+
+def repair_hint(rule_id: str) -> str:
+    """The non-mutating repair hint for a rule area (M8 deliverable 3)."""
+    return _REPAIR_HINTS.get(rule_id, _DEFAULT_HINT)
+
+
+def group_by_rule(findings: list[Finding]) -> dict[str, list[Finding]]:
+    """Group findings by their EXISTING ``rule_id`` (M8 deliverable 2).
+
+    Derived from a field the findings already carry -- deliberately not a second
+    classification vocabulary layered over the rule registry.
+    """
+    grouped: dict[str, list[Finding]] = {}
+    for f in findings:
+        grouped.setdefault(f.rule_id, []).append(f)
+    return grouped
+
+
+def build_digest_payload(findings: list[Finding]) -> dict[str, object]:
+    """The machine-readable digest (M8 deliverable 1).
+
+    Reuses the SHIPPED :meth:`Finding.to_dict` / ``FindingDict`` shape that
+    ``check --format json`` already emits, deliberately rather than defining a
+    second finding vocabulary: an agent that can read one verb's JSON can read
+    this one. Categorical only -- a count, never a numeric health score (hard
+    rule #9).
+    """
+    entries: list[dict[str, object]] = []
+    for f in findings:
+        entry: dict[str, object] = dict(f.to_dict())
+        entry["repair_hint"] = repair_hint(f.rule_id)
+        entries.append(entry)
+    return {
+        "findings": entries,
+        "finding_count": len(findings),
+    }
+
+
+def next_allowed_action(repo_root: Path) -> str:
+    """The truthful next readiness action, from the SHIPPED producer.
+
+    Delegates to :func:`seshat.agent_next.build_agent_next_document`, which
+    already owns "the one truthful next readiness action" -- deliberately NOT a
+    second readiness model computed here. Naming an action is not taking it:
+    doctor advances no stage and grants no approval (Principle V).
+    """
+    from .agent_next import build_agent_next_document
+
+    document = build_agent_next_document(repo_root, None)
+    action = document.get("next_allowed_action")
+    return str(action) if action else "(no action available)"
+
+
+def format_digest_with_next_action(
+    findings: list[Finding], repo_root: Path, prog: str = "seshat"
+) -> str:
+    """The digest plus the agent-safe next action (M8 deliverable 4).
+
+    The gate-authority pointer is KEPT: doctor must never read as a second gate
+    (Principle I). M8 adds the next action; it does not license removing that
+    boundary marker.
+    """
+    action = next_allowed_action(repo_root)
+    digest = format_digest(findings, prog)
+    if not findings:
+        # The CLEAN digest is a one-liner carrying no gate pointer.
+        # Append it so the Principle-I boundary marker survives on a
+        # clean repo too -- otherwise the reassuring path is the one
+        # that silently drops the governance note.
+        digest += _GATE_POINTER.format(prog=prog)
+    return digest + f"\n\nnext allowed action: {action}"
+
+
+def run_doctor(
+    repo_root: Path,
+    strict: bool = False,
+    prog: str = "seshat",
+    output_format: str = "text",
+) -> int:
     """Print the digest. Return 0 (advisory) unless ``strict`` and drift exists.
 
     ``--strict`` counts only actionable findings (WARNING/ERROR); an INFO -- such
@@ -146,7 +265,12 @@ def run_doctor(repo_root: Path, strict: bool = False, prog: str = "seshat") -> i
         )
         return 1
     findings = collect_findings(ctx)
-    print(format_digest(findings, prog))
+    if output_format == "json":
+        import json
+
+        print(json.dumps(build_digest_payload(findings), indent=2))
+    else:
+        print(format_digest_with_next_action(findings, repo_root, prog))
     actionable = [
         f for f in findings if f.severity in (Severity.ERROR, Severity.WARNING)
     ]

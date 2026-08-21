@@ -86,8 +86,8 @@ for any deferred/gated item).
 **Remaining work is human / gated only -- no agent-buildable item is left:**
 
 > **Reconciled 2026-08-21.** This heading states the 2026-06-26 position. It is no
-> longer strictly true: M8 (workspace doctor) on the milestone roadmap is PARTIAL and
-> IS agent-buildable, and F016 slice 5 has since shipped. The F016 entry below carries
+> longer strictly true: F016 slice 5 has since shipped, and M8 (workspace doctor) on
+> the milestone roadmap was delivered 2026-08-21. The F016 entry below carries
 > its own dated correction chain.
 
 - **F016 (Power BI execution adapter)** -- gated by hard rule #6 (not startable
