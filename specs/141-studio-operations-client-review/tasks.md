@@ -4,12 +4,34 @@
 **Spec**: [spec.md](./spec.md) | **Contract**:
 [contracts/export-boundary.md](./contracts/export-boundary.md)
 
-**Spec status**: `draft`. Phases 0 and 1 (research, design) are complete. **Every task
-below is BLOCKED** until a named human ratifies this package and the sole active Spec Kit
-fence points at this plan (FR-141-020). Specs 139 and 140 are accepted, so the first of
-the three conditions is met.
+**Spec status**: **ratified** -- Ahmed Shaaban (owner), 2026-08-21. FR-141-020 fully
+satisfied: 139 and 140 accepted, this package ratified, and the fence moved to this plan
+the same day. Implementation was authorized before any task ran.
 
-**Progress**: 0 of 15 tasks. Nothing started.
+**Progress**: 15 of 15 tasks IMPLEMENTED on branch `feat/141-operations-client-review`
+(commits `9787e792`, `66f718b8`).
+
+49 feature tests: 22 operations + 13 exports + 14 routes. They pass with fastapi present
+AND with it blocked at import time, so the CI `unit` job's extras-free configuration is
+covered. 792 passed across the wider studio suite.
+
+Guards proven load-bearing by six disable-and-observe pokes, each restoring the file
+byte-identical: reordering `state_for`'s deferred check fails the mixed-set test; making
+the scrubber a denylist fails 2; skipping the bundle scan fails the no-artifact test;
+letting recovery succeed fails 2; making client review read the working tree instead of
+HEAD fails the uncommitted-evidence test; dropping the acknowledgement name check fails
+its test.
+
+**The per-step boxes below are left UNMARKED on purpose**, the same posture spec 140
+took: the code and tests exist and pass, but the plan's individual RED/GREEN steps were
+not each observed and ticked one at a time, and bulk-marking them would claim a
+verification that did not happen in that form.
+
+One defect caught during implementation, worth reading rather than assuming a clean
+sweep: `_findings_by_component` initially returned `{}`, which would have reported all
+seven components healthy regardless of reality -- the empty-success state US1 exists to
+prevent -- while every other test still passed. It now reads `doctor.collect_findings`
+and fails CLOSED to a `failed` `studio_process` finding if the engine cannot run.
 
 TDD order: the failing test comes before the code. A task is done only when its test was
 seen RED, then GREEN. Nothing is marked done that was not observed.

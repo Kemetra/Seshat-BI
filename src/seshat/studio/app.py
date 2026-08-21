@@ -44,6 +44,7 @@ from . import (
     codex_process,
     config,
     events,
+    operations_routes,
     projection,
     redaction,
     session,
@@ -350,6 +351,9 @@ def _register_routes(app: FastAPI) -> None:
 
     workbench_routes.register(
         workbench_routes.Deps(app, _problem, _redact, _snapshot, API_PREFIX)
+    )
+    operations_routes.register(
+        operations_routes.Deps(app, _problem, _redact, API_PREFIX)
     )
 
     @app.get(f"{API_PREFIX}/decisions")

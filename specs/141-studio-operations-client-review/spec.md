@@ -6,7 +6,7 @@
 
 **Promoted**: 2026-08-21 -- expanded from program outline into this specification
 
-**Status**: draft -- promoted from outline; awaiting named-human ratification
+**Status**: ratified -- Ahmed Shaaban (owner), 2026-08-21
 
 **Status history**: program outline 2026-08-03; program DIRECTION ruled by the owner
 2026-08-21 (scope agreement, explicitly not implementation authority); promoted to this
@@ -19,12 +19,24 @@ merged (`421c8f4d`, PR #695) and accepted by Ahmed Shaaban 2026-08-21. The contr
 spec consumes therefore exist in the tree rather than on paper -- see "What this spec
 builds on" below.
 
-**Ratification still required**: the owner asked to ratify spec 141 on 2026-08-21. That
-could not be honoured against a one-page outline, for the same reason it could not be
-honoured for spec 140 hours earlier: the Promotion Gate requires a named human to ratify
-the *exact package*, and there was none. This package is that expansion. A named human
-must still ratify it, and the sole active Spec Kit fence must move to its plan, before
-any task starts.
+**Ratified 2026-08-21 by Ahmed Shaaban (owner), in session.** The owner first asked to
+ratify spec 141 while it was a one-page outline; that could not be honoured, for the same
+reason it could not be honoured for spec 140 hours earlier -- the Promotion Gate requires
+a named human to ratify the *exact package*, and there was none. This package is that
+expansion, and this ratification is of it: specification, research, data model, contracts,
+plan, task list, quickstart and checklist as they stand at this commit. The agent
+transcribed the ruling and did not self-ratify.
+
+**Scope ratified**: all five user stories, including US5 (support bundle). The checklist
+raised the option of splitting US5 into a follow-on spec; the owner ruled for the whole
+package on 2026-08-21. A later narrowing would need a new ratification, not a silent
+reduction.
+
+**FR-141-020 is now fully satisfied**: 139 and 140 accepted, this package ratified, and
+the owner moved the sole active Spec Kit fence to this plan on 2026-08-21. Implementation
+is authorized. Moving the fence parked spec 140 -- delivered and accepted, so nothing is
+abandoned -- while spec 149 remains parked with four tasks open, including the
+owner-facing T053.
 
 ## Purpose
 
