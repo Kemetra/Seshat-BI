@@ -1759,7 +1759,7 @@ const backlog_markdown = renderBacklog(review, {
   date: DATE,
   ascii: ASCII,
   rawCount: allIdeas.length,
-  rounds: 3,                 // r1 + cross + fill generation rounds
+  rounds: 1,                 // trimmed variant: a SINGLE generation round (no cross-pollinate, no fill)
   prior: memory,             // PR4: cross-run memory -> SHIPPED/SETTLED appendix
   health: run_health,        // FU1: fail-loud DEGRADED banner
   metrics: self_metrics,     // FU1: deterministic run-quality rollup
