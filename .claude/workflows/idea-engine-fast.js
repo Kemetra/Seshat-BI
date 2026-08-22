@@ -1,22 +1,21 @@
 export const meta = {
-  name: 'idea-engine',
-  description: 'Idea generator for Seshat BI. Ground maps the real repo with five subsystem explorers + a reconcile-verify pass; Memory reads the prior bank so shipped/settled ideas are not regenerated; six role lenses (creative / BI analyst / technical / design / business-consumer / newcomer-operator) generate in parallel, then cross-pollinate; a completeness critic finds blind spots and triggers one targeted fill pass; a synthesizer merges into a schema-validated candidate set that JS stamps with stable ids (identity is assigned, never inferred from titles); an adversarial skeptic challenges EVERY candidate by id (default-refuted); a four-standpoint reviewer PANEL scores value/feasibility and rules eligibility; a pure-JS aggregate joins every reviewer row to its candidate by id, takes the median, gates eligibility, and applies a demote-only clamp; rows citing an unknown id are dropped and candidates nobody scored are reported rather than silently lost. ADOPT requires 2+ of 4 reviewers choosing it AND a unanimous full-panel eligibility pass, so a 0-ADOPT run is normal and CONSIDER is the practical top verdict. Each idea is tagged with WHO it serves (end_user / operator / tool_internal) so a run heavy on tool-internal self-checking is a visible signal, not hidden. Model is matched to each stage: the idea-originating and verdict stages (Interpret / Generate / Completeness / Synthesize / Skeptic / Panel) run on Opus at high effort; the context-gathering and reaction stages (Ground / Memory / Cross-pollinate / dissent / Rescue) run on Sonnet at high effort -- faster and cheaper without weakening any verdict. Output: a ranked NOW/HORIZON idea BANK, rendered deterministically -- exploratory inspiration, not a roadmap or commitment.',
-  whenToUse: 'When you want a deep, exhaustive, rigorously vetted, history-aware idea bank for the project -- OR when you want to hand the engine your OWN rough/half-formed idea(s) to expand into a reviewable shape and run through the same skeptic + reviewer panel. Opus-high on the idea/verdict stages + Sonnet-high on the gather/react stages, multi-round, multi-explorer, panel-reviewed -- thorough (many agents/tokens/time, though lighter than all-Opus). Re-runnable; pass a focus string, or {focus,sinceRef,date,ascii}, or {ideas:["rough words","another"]} / {seed:"rough words"} to review your own ideas (a bare string is treated as both focus AND a single seed idea). When ideas are supplied they are expanded, tagged origin:user, reviewed like any idea, and surfaced in a "Your Ideas" lane at the top. Output is an idea bank, never a plan.',
+  name: 'idea-engine-fast',
+  description: 'Idea generator for Seshat BI. Ground maps the real repo with five subsystem explorers + a reconcile-verify pass; Memory reads the prior bank so shipped/settled ideas are not regenerated; six role lenses (creative / BI analyst / technical / design / business-consumer / newcomer-operator) generate in parallel in a SINGLE round (this trimmed variant drops the cross-pollinate and completeness-critic/fill rounds of the full idea-engine -- 13 fewer agents and 4 fewer sequential barriers, at the cost of cross-disciplinary hybrids and blind-spot coverage); a synthesizer merges into a schema-validated candidate set that JS stamps with stable ids (identity is assigned, never inferred from titles); an adversarial skeptic challenges EVERY candidate by id (default-refuted); a four-standpoint reviewer PANEL scores value/feasibility and rules eligibility; a pure-JS aggregate joins every reviewer row to its candidate by id, takes the median, gates eligibility, and applies a demote-only clamp; rows citing an unknown id are dropped and candidates nobody scored are reported rather than silently lost. ADOPT requires 2+ of 4 reviewers choosing it AND a unanimous full-panel eligibility pass, so a 0-ADOPT run is normal and CONSIDER is the practical top verdict. Each idea is tagged with WHO it serves (end_user / operator / tool_internal) so a run heavy on tool-internal self-checking is a visible signal, not hidden. Model is matched to each stage: the idea-originating and verdict stages (Interpret / Generate / Synthesize / Skeptic / Panel) run on Opus at high effort; the context-gathering and reaction stages (Ground / Memory / dissent / Rescue) run on Sonnet at high effort -- faster and cheaper without weakening any verdict. Output: a ranked NOW/HORIZON idea BANK, rendered deterministically -- exploratory inspiration, not a roadmap or commitment.',
+  whenToUse: 'The FAST variant of idea-engine: use when you want a vetted, history-aware idea bank quickly and can accept fewer ideas. Same Ground/Memory/duplicate-suppression and the same skeptic + 4-reviewer panel and JS gates as the full engine, but ONE generation round -- no cross-pollination, no blind-spot fill. Reach for the full `idea-engine` when coverage matters more than wall-clock -- OR when you want to hand the engine your OWN rough/half-formed idea(s) to expand into a reviewable shape and run through the same skeptic + reviewer panel. Opus-high on the idea/verdict stages + Sonnet-high on the gather/react stages, SINGLE-round, multi-explorer, panel-reviewed. Re-runnable; pass a focus string, or {focus,sinceRef,date,ascii}, or {ideas:["rough words","another"]} / {seed:"rough words"} to review your own ideas (a bare string is treated as both focus AND a single seed idea). When ideas are supplied they are expanded, tagged origin:user, reviewed like any idea, and surfaced in a "Your Ideas" lane at the top. Output is an idea bank, never a plan.',
   phases: [
     { title: 'Ground',         detail: '5 subsystem explorers map the repo in parallel; JS merge + reconcile-verify', model: 'sonnet' },
     { title: 'Memory',         detail: 'read prior bank + Ground ship-status: label shipped/settled ideas (no re-litigation)', model: 'sonnet' },
-    { title: 'Interpret',      detail: 'expand the USER\'S own rough idea(s) into reviewable shape + surface the chosen/rejected readings (only when ideas supplied)', model: 'opus' },
-    { title: 'Generate',       detail: 'creative / BI / technical / design / consumer / operator lenses propose in parallel (round 1)', model: 'opus' },
-    { title: 'Cross-pollinate',detail: 'each lens reacts to the others; surface cross-disciplinary ideas', model: 'sonnet' },
-    { title: 'Completeness',   detail: 'critic finds blind spots -> one more targeted generation pass', model: 'opus' },
-    { title: 'Synthesize',     detail: 'merge + dedupe into one candidate set', model: 'opus' },
-    { title: 'Verify',         detail: 'adversarial skeptic challenges EVERY candidate (default-refuted)', model: 'opus' },
+    { title: 'Interpret',      detail: 'expand the USER own rough idea(s) into reviewable shape (only when ideas supplied)', model: 'opus' },
+    { title: 'Generate',       detail: 'creative / BI / technical / design / consumer / operator lenses propose in parallel (SINGLE round)', model: 'opus' },
+    { title: 'Synthesize',     detail: 'merge + dedupe into one candidate set; JS stamps stable ids', model: 'opus' },
+    { title: 'Verify',         detail: 'adversarial skeptic challenges EVERY candidate by id (default-refuted)', model: 'opus' },
     { title: 'Panel-review',   detail: '4 independent reviewers (principle / shipped-dup / value-feasibility / design-foundation) score the set', model: 'opus' },
     { title: 'Aggregate',      detail: 'pure-JS median + eligibility gate + demote-only clamp; tiny prose agent for dissent', model: 'sonnet' },
     { title: 'Rescue',         detail: 'steelman the not-adopted ideas (reason only, never a re-score); skipped if none', model: 'sonnet' },
     { title: 'Render',         detail: 'pure-JS: render the idea-backlog markdown (no agent); orchestrator writes' },
   ],
 }
+
 const S = (...c) => String.fromCharCode(...c)
 
 // ---- CANDIDATE IDENTITY: a JS-stamped id, never a parsed title -------------------
@@ -1043,36 +1042,9 @@ const round1 = await parallel(LENSES.map(l => () =>
     .then(r => classify(r, l.key))
 ))
 
-// ===================== 3. CROSS-POLLINATE =====================
-phase('Cross-pollinate')
-const round1Json = JSON.stringify(round1.filter(r => r._status === 'ok').map(r => ({ lens: r.lens || r._key, ideas: r.ideas })), null, 2)
-const crossRound = await parallel(LENSES.map(l => () =>
-  agent(
-    genPrompt(l.role,
-      `You have now SEEN what the other lenses proposed (below). React to them: combine a strong idea from another lens with your own perspective, fill a gap they left, or push a half-idea further. Generate 3-5 NEW cross-disciplinary ideas (do NOT repeat ideas already listed). The best ideas live at the seams between disciplines.\n\n=== ALL ROUND-1 IDEAS ===\n${round1Json}`),
-    { label: `${l.label}:cross`, phase: 'Cross-pollinate', schema: IDEA_SCHEMA, ...GATHER }
-  ).then(r => classify(r, l.key))
-))
-
-// ===================== 4. COMPLETENESS CRITIC -> targeted pass =====================
-phase('Completeness')
-const sofar = [...round1, ...crossRound].filter(r => r._status === 'ok')
-const sofarJson = JSON.stringify(sofar.map(r => ({ lens: r.lens || r._key, ideas: (r.ideas||[]).map(i => i.title) })), null, 2)
-const gaps = await agent(
-  `You are a COMPLETENESS CRITIC. Below are all idea TITLES generated so far for Seshat BI, plus the repo map. Your job is to find what\u0027s MISSING -- readiness stages with few ideas, repo gaps/tensions nobody addressed, idea TYPES underrepresented (e.g. all features and no DX, or all technical and no business value), and obvious adjacent ideas no lens reached. List 5-10 specific missing angles as short prompts (\u0022nobody proposed anything for X / for the Y gap\u0022). Do not generate full ideas -- just name the blind spots precisely.\n\n=== REPO MAP ===\n${exploreMap}\n\n=== IDEA TITLES SO FAR ===\n${sofarJson}`,
-  { label: 'critic:gaps', phase: 'Completeness', ...CREATE }
-)
-// one targeted fill pass aimed at the named gaps
-const fillRound = await parallel(LENSES.map(l => () =>
-  agent(genPrompt(l.role,
-    `A completeness critic identified these BLIND SPOTS in the ideas generated so far. From YOUR lens, generate 2-4 ideas that specifically fill the gaps most relevant to you (do not repeat existing ideas).\n\n=== BLIND SPOTS ===\n${gaps}`),
-    { label: `${l.label}:fill`, phase: 'Completeness', schema: IDEA_SCHEMA, ...CREATE }
-  ).then(r => classify(r, l.key))
-))
-
 // The user's expanded ideas lead the pool (origin:user) so they are visible to the synthesizer
 // FIRST; every lens-generated idea is tagged origin:engine. Both flow through the same gate.
-const engineIdeas = [...round1, ...crossRound, ...fillRound].filter(r => r._status === 'ok').flatMap(r =>
+const engineIdeas = [...round1].filter(r => r._status === 'ok').flatMap(r =>
   (r.ideas || []).map(i => ({ ...i, source_lens: r.lens || r._key, origin: 'engine' }))
 )
 const allIdeas = [...userIdeas, ...engineIdeas]
@@ -1090,8 +1062,6 @@ function census(label, expected, arr) {
 const run_health = (() => {
   const rounds = [
     census('generate', LENSES.length, round1),
-    census('cross-pollinate', LENSES.length, crossRound),
-    census('fill', LENSES.length, fillRound),
   ]
   const anyFailed = rounds.some(r => r.failed > 0)
   const anyShort = rounds.some(r => r.ok < r.expected)
@@ -1115,8 +1085,8 @@ const run_health = (() => {
 // ===================== 5. SYNTHESIZE =====================
 phase('Synthesize')
 const synthesis = await agent(
-  `You are the SYNTHESIZER. Many ideas were generated across six lenses over three rounds
-(initial, cross-pollination, gap-fill). Merge into ONE clean candidate set.
+  `You are the SYNTHESIZER. Many ideas were generated across six lenses in ONE round.
+Merge into ONE clean candidate set.
 - DEDUPE near-duplicates (keep the strongest framing; note where lenses/rounds converged in
   convergence_note -- convergence is a strength signal).
 - Keep each idea's title, pitch, horizon, why_it_fits, rough_shape, strengthens_layer, serves,
@@ -1789,7 +1759,7 @@ const backlog_markdown = renderBacklog(review, {
   date: DATE,
   ascii: ASCII,
   rawCount: allIdeas.length,
-  rounds: 3,                 // r1 + cross + fill generation rounds
+  rounds: 1,                 // trimmed variant: a SINGLE generation round (no cross-pollinate, no fill)
   prior: memory,             // PR4: cross-run memory -> SHIPPED/SETTLED appendix
   health: run_health,        // FU1: fail-loud DEGRADED banner
   metrics: self_metrics,     // FU1: deterministic run-quality rollup
@@ -1806,14 +1776,13 @@ return {
   interpreted,                               // user-idea feature: raw interpreter output (null if no user ideas)
   user_ideas_in: USER_IDEAS,                 // the raw user idea strings this run reviewed (null if none)
   user_ideas_expanded: userIdeas.length,     // how many were successfully expanded into the pool
-  gaps_found: gaps,
   synthesis,
   adversarial_verify: verify,
   panel,                                     // the 3 raw reviewer records (pre-aggregation)
   panel_splits: aggregated.splits,           // ideas where the panel disagreed (eligibility/score)
   review,                                    // aggregated, renderer-shaped (JS gate + clamp applied)
   raw_idea_count: allIdeas.length,
-  rounds: { r1: round1.filter(r => r._status === 'ok').length, cross: crossRound.filter(r => r._status === 'ok').length, fill: fillRound.filter(r => r._status === 'ok').length },
+  rounds: { r1: round1.filter(r => r._status === 'ok').length },   // single generation round (trimmed variant)
   run_health,                                // FU1: per-round census + degraded flag
   self_metrics,                              // FU1: deterministic run-quality rollup
   rescue,                                    // FU2: steelman notes for the not-adopted
