@@ -27,6 +27,127 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Changed -- BREAKING
+
+This release is classified **MAJOR** under `docs/operations/versioning-policy.md`.
+Two existing CLI output/exit contracts changed, and that table's MAJOR row names
+both cases directly ("a `--format text` output shape changes ... an exit-code
+meaning changes"). Neither is an accidental regression -- both are deliberate --
+but both can break a consumer who built process around v1.1.0, so they are stated
+first rather than buried under the additions.
+
+- **`seshat doctor`'s default text output is reshaped** (M8; #689). v1.1.0 emitted
+  one flat line per finding:
+
+  ```
+    [error] A1 <message> (<locator>)
+  ```
+
+  It now groups findings by rule id, with a per-group count header, a
+  non-mutating `hint:` line per group, and a trailing `next allowed action:` line:
+
+  ```
+  A1: 2 finding(s)
+    [error] <message> (<locator>)
+    hint: <non-mutating repair guidance>
+
+  next allowed action: <action>
+  ```
+
+  **Any consumer scraping `seshat doctor` stdout will break.** Migration: use
+  **`seshat doctor --format json`** (new in this release), which emits a stable
+  `{"findings": [...], "finding_count": N}` payload with a `repair_hint` key per
+  finding. Parse that instead of the human digest -- the text digest is explicitly
+  a human surface and may be reshaped again.
+
+  The gate-authority pointer is retained, and is now also appended on the
+  **clean** path, so the reassuring no-findings output cannot be the one that
+  silently drops the Principle-I boundary marker. `doctor` remains advisory: the
+  `seshat check` exit code is still the only gate, and `doctor` still never
+  modifies a file.
+
+- **`seshat pbi-mcp preflight` can now exit `2` where it exited `0`** (spec 149;
+  #659). `_is_powerbi_server` previously derived a server's identity only from its
+  `name`, `command`, and `url`. It now also matches the vendor package
+  (`@microsoft/powerbi-modeling-mcp`) or the vendored runtime path appearing in the
+  entry's **argument vector**, and `--readwrite=true` is now recognised as write
+  mode (the flag matcher splits on `=` rather than requiring exact membership).
+
+  **This is a security fix, not a regression.** A `.mcp.json` could previously
+  alias the official server under an unrelated name (say `modeling`), invoke it via
+  `npx` in `args`, and classify as `absent` -- handing the bypass guard a clean
+  verdict while `--skipconfirmation` sat in the same entry. Identity now comes from
+  what is **run**, not what it is **called**.
+
+  If `preflight` newly exits `2` for you, it is reporting a real bypass-shaped
+  config that was previously invisible. Fix the config; do not pin to 1.1.0 to
+  restore the `0`.
+
+### Added
+
+- **Studio governed analyst workbench** (spec 140; #695). Ratified and accepted
+  2026-08-21. Its 95 per-step boxes are deliberately unmarked -- read the
+  acceptance record rather than inferring completeness from checkboxes.
+- **Studio operations and client review** (spec 141; #697). Disclosure-boundary
+  work: `contracts/export-boundary.md` separates *softening* (pending shown as
+  approved), *leaking* (a DSN in an export) and *acting* (a recovery button that
+  repairs). Read that contract before touching an export path.
+- **Approval-gated Power BI MCP writes** (spec 149; #659 and follow-ups #670,
+  #672, #674, #679). `seshat pbi-mcp plan-write` and `seshat pbi-mcp apply` execute
+  against Microsoft's official local Power BI Modeling MCP (external, unforked,
+  never vendored, per ADR 0018). A write requires committed passing readiness read
+  at HEAD, a shape-valid named-human `publish_ready` approval naming the target, an
+  allowlisted target, a resolved `--operation` from the committed approved set, and
+  a clean tree or a backup ref that actually holds the target's content. Twelve
+  typed gate blockers, fail-closed throughout. **A successful write advances no
+  readiness stage and grants no approval**, and `--skipconfirmation` is refused
+  everywhere.
+- **`seshat doctor --format json`** (M8 deliverable 1; #689) -- machine-readable
+  digest, the supported surface for programmatic consumers.
+- **`seshat doctor` groups findings and offers non-mutating repair hints** and
+  **names the next allowed action** (M8 deliverables 2-4; #689). Hints are text
+  only: nothing there is executed on the user's behalf.
+- **Guided setup execution** (spec 155; #683, #684) -- derived scope through to
+  approved provisioning, including `seshat integrations setup --derived`.
+- **Capability derivation from committed project evidence** (spec 153; #681,
+  #682), with declines, satisfied-state and the technical-evidence path.
+
+### Fixed
+
+- **The vendor MCP subprocess receives an explicit minimal environment** (#658;
+  `07f5a049`, #668) rather than inheriting the full parent environment. `env` is now
+  **required** on `SubprocessTransport`, so omitting it is a `TypeError` rather than
+  a silent inherit, and proxy routing (`HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`) is
+  forwarded. The allowlist survived the move to a long-lived stdio session (#660),
+  which would otherwise have dropped it.
+- **Post-write validation is scoped to the write that caused a finding** (#661,
+  #663; #674) and **cannot pass vacuously**.
+- **Every Power BI MCP write-evidence record is retained** (#657; #670).
+- **Evidence is redacted through both layers** rather than refused, and the CLI
+  verdict is scrubbed through both (#662, plus the terminal-evidence fix).
+- **A pre-launch runtime failure records as `blocked`, not `failed`** -- a
+  degradation is reported rather than silently treated as a clean run.
+- **An unparseable MCP config is refused instead of treated as safe** -- fail
+  closed, not open.
+- **`seshat check`'s guided-setup fixtures are platform-neutral** (#691; #694).
+  Two tests hardcoded POSIX path separators and a POSIX venv layout, so they passed
+  on Linux CI forever and failed only on Windows. The production code was correct
+  in both cases.
+
+### Internal
+
+- **The unit suite now runs on Windows in CI** (#698; #699). `unit-windows`
+  mirrors the `check` job's unit step on `windows-latest`, non-blocking to start.
+  Before it, Windows CI ran only the CLI first-success journey and never invoked
+  `pytest`, so POSIX-locked fixtures were invisible to CI by construction. It
+  passed on its first run (6329 passed, 59 skipped, 776 deselected).
+- No `seshat check` rule ids were added, removed, or renamed, and **no existing
+  rule's predicate or severity changed** -- `src/seshat/rules/` has zero changed
+  files in this range. A consumer's `seshat check` verdict on an unchanged repo is
+  unchanged by this release; the breaking surface is the two CLI contracts above,
+  not the rule set.
+
+
 ## [1.1.0] -- 2026-08-15
 
 ### Fixed
