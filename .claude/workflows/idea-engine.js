@@ -1,6 +1,6 @@
 export const meta = {
   name: 'idea-engine',
-  description: 'Idea generator for Seshat BI. Ground maps the real repo with five subsystem explorers + a reconcile-verify pass; Memory reads the prior bank so shipped/settled ideas are not regenerated; six role lenses (creative / BI analyst / technical / design / business-consumer / newcomer-operator) generate in parallel, then cross-pollinate; a completeness critic finds blind spots and triggers one targeted fill pass; a synthesizer merges; an adversarial skeptic challenges EVERY candidate (default-refuted); a four-standpoint reviewer PANEL scores value/feasibility and rules eligibility; a pure-JS aggregate takes the median, gates eligibility, and applies a demote-only clamp. Each idea is tagged with WHO it serves (end_user / operator / tool_internal) so a run heavy on tool-internal self-checking is a visible signal, not hidden. Model is matched to each stage: the idea-originating and verdict stages (Interpret / Generate / Completeness / Synthesize / Skeptic / Panel) run on Opus at xhigh effort; the context-gathering and reaction stages (Ground / Memory / Cross-pollinate / dissent / Rescue) run on Sonnet at high effort -- faster and cheaper without weakening any verdict. Output: a ranked NOW/HORIZON idea BANK, rendered deterministically -- exploratory inspiration, not a roadmap or commitment.',
+  description: 'Idea generator for Seshat BI. Ground maps the real repo with five subsystem explorers + a reconcile-verify pass; Memory reads the prior bank so shipped/settled ideas are not regenerated; six role lenses (creative / BI analyst / technical / design / business-consumer / newcomer-operator) generate in parallel, then cross-pollinate; a completeness critic finds blind spots and triggers one targeted fill pass; a synthesizer merges into a schema-validated candidate set that JS stamps with stable ids (identity is assigned, never inferred from titles); an adversarial skeptic challenges EVERY candidate by id (default-refuted); a four-standpoint reviewer PANEL scores value/feasibility and rules eligibility; a pure-JS aggregate joins every reviewer row to its candidate by id, takes the median, gates eligibility, and applies a demote-only clamp; rows citing an unknown id are dropped and candidates nobody scored are reported rather than silently lost. ADOPT requires 2+ of 4 reviewers choosing it AND a unanimous full-panel eligibility pass, so a 0-ADOPT run is normal and CONSIDER is the practical top verdict. Each idea is tagged with WHO it serves (end_user / operator / tool_internal) so a run heavy on tool-internal self-checking is a visible signal, not hidden. Model is matched to each stage: the idea-originating and verdict stages (Interpret / Generate / Completeness / Synthesize / Skeptic / Panel) run on Opus at xhigh effort; the context-gathering and reaction stages (Ground / Memory / Cross-pollinate / dissent / Rescue) run on Sonnet at high effort -- faster and cheaper without weakening any verdict. Output: a ranked NOW/HORIZON idea BANK, rendered deterministically -- exploratory inspiration, not a roadmap or commitment.',
   whenToUse: 'When you want a deep, exhaustive, rigorously vetted, history-aware idea bank for the project -- OR when you want to hand the engine your OWN rough/half-formed idea(s) to expand into a reviewable shape and run through the same skeptic + reviewer panel. Opus-xhigh on the idea/verdict stages + Sonnet-high on the gather/react stages, multi-round, multi-explorer, panel-reviewed -- thorough (many agents/tokens/time, though lighter than all-Opus). Re-runnable; pass a focus string, or {focus,sinceRef,date,ascii}, or {ideas:["rough words","another"]} / {seed:"rough words"} to review your own ideas (a bare string is treated as both focus AND a single seed idea). When ideas are supplied they are expanded, tagged origin:user, reviewed like any idea, and surfaced in a "Your Ideas" lane at the top. Output is an idea bank, never a plan.',
   phases: [
     { title: 'Ground',         detail: '5 subsystem explorers map the repo in parallel; JS merge + reconcile-verify', model: 'sonnet' },
@@ -19,45 +19,35 @@ export const meta = {
 }
 const S = (...c) => String.fromCharCode(...c)
 
-// Shared title-normalizer (module scope so the render stage can re-assert user-idea origin by
-// title, using the SAME canonical identity aggregatePanel groups on -- a leading #N/N. number if
-// present, else lowercased punctuation/whitespace-normalized prose). Keeping one definition means
-// the render-side re-assert and the panel-side grouping can never drift apart.
-const normKey = t => {
-  const s = String(t || '').trim()
-  const m = s.match(/^#?\s*(\d+)\s*[.:)]/)          // "#41.", "41.", "41)", "41:"
-  if (m) return 'n' + m[1]
-  // UNNUMBERED-TITLE COLLISION FIX. The number branch above only merges same-idea variants
-  // that carry a shared leading #N. When the synthesizer/panel emit an idea as prose WITHOUT
-  // a number (e.g. "retail drift -- the missing runtime seam ..." vs the same title suffixed
-  // "(PROTECTED user idea)", or "Publish-Readiness Preflight Card -- ...before deferred F016"
-  // vs "...before the deferred F016 adapter"), the whole-string normalize below treated each
-  // phrasing as a DISTINCT idea. That over-split the panel (one idea -> 2-3 rows with divergent
-  // scores) AND mis-fired the skeptic-coverage clamp (the skeptic challenged one phrasing;
-  // the other phrasing's key was absent from challengedTitles -> falsely "uncovered" -> killed
-  // + DEGRADED banner). Titles here follow "<Idea Name> -- <varying description>", so the
-  // canonical identity is the HEAD segment before the first ' -- '/' - '/' : ' separator.
-  // Keying on that head merges the variants of one idea while keeping genuinely different
-  // ideas apart. The number branch is untouched, so the documented number-collision over-count
-  // guard is unaffected (numbered titles never reach this fallback).
-  const head = s.split(/\s+[—–]\s+|\s+-\s+|\s+:\s+/)[0]
-  return head.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-}
-// proseKey: user-idea matching ONLY. normKey collapses a numbered title ("#41. Foo") to "n41"
-// for PANEL GROUPING -- correct there (reviewers keep the number, reword the trailing title), but
-// WRONG for matching a survived user idea back to its interpreter title (which carries no number
-// and normalizes to prose). proseKey STRIPS any leading list number, then normalizes prose, so a
-// numbered candidate and the un-numbered interpreter title compare equal. Must NOT replace normKey
-// in aggregatePanel (that would resurrect the number-collision over-count the file warns about).
+// ---- CANDIDATE IDENTITY: a JS-stamped id, never a parsed title -------------------
+// HISTORY (why this replaced two title normalizers). Synthesize used to be schema-LESS,
+// so it returned free prose. Every downstream stage (skeptic, 4 reviewers, dissent clerk)
+// then had to re-identify an idea by RE-TYPING its title, and JS was left inferring whether
+// two strings meant the same idea. That inference was the root cause of three separate
+// shipped bugs -- the panel over-split one idea into 2-3 rows with divergent scores
+// (febc0074), the skeptic-coverage clamp mis-fired and falsely killed covered ideas
+// (e5f3b20a), and the "Your Ideas" lane silently emptied when a merged group kept a
+// suffixed title variant (300a28b0). Each fix added another regex branch to normKey/proseKey.
+//
+// ROOT-CAUSE FIX: identity is no longer INFERRED from prose, it is ASSIGNED in JS.
+// Synthesize now returns a SCHEMA'd array; JS stamps each candidate `c1..cN`; the skeptic
+// and the panel are required by schema to echo that id back. Grouping, coverage checking,
+// user-idea survival and dissent keying all join on the id -- an exact string equality that
+// cannot drift. Ids are run-local (never persisted, no Date/random), so the cross-run Memory
+// stage still joins on title + citation as it always did.
+const candidateId = n => 'c' + n
+// idKey: normalize an id an LLM echoed back (trim/case/stray punctuation) so 'C3 ' == 'c3'.
+// It never falls back to prose: an unmatched id is a MISS we count, not a fuzzy guess.
+const idKey = v => String(v == null ? '' : v).trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+
+// proseKey: retained for the ONE place identity is genuinely prose -- matching the
+// interpreter's verbatim `original_words` anchor back to the raw seed the user typed.
+// No id exists at that point (ids are stamped later, at Synthesize), so a normalized
+// prose compare is the only available join. It is NOT used for panel grouping, skeptic
+// coverage, or user-idea survival any more -- those all key on the stamped id.
 const proseKey = t => String(t || '').trim()
   .replace(/^#?\s*\d+\s*[.:)]\s*/, '')                 // drop a leading "#41." / "41)" / "41:" prefix
-  .replace(/\s*\([^()]*\)\s*$/, '')                    // drop a TRAILING "(...)" suffix, e.g. the
-  // "(PROTECTED user idea)" tag the re-injection step (sec. 6b) appends to a dropped user idea's
-  // title. Without this, the interpreter's original title ("... taxonomy") and the re-injected
-  // display title ("... taxonomy (PROTECTED user idea)") normalize to DIFFERENT keys, so the
-  // render-side origin re-assert (userKeySet.has(proseKey(title))) misses -> the idea's origin
-  // flips to 'engine' and the "Your Ideas" lane empties (a NEW degradation introduced by the
-  // normKey head-merge, since the merged group can keep the suffixed variant as its display title).
+  .replace(/\s*\([^()]*\)\s*$/, '')                    // drop a TRAILING "(...)" suffix
   .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
 // Device-portable: never hardcode a machine path. The agents that consume REPO resolve
@@ -237,6 +227,40 @@ const INTERPRET_SCHEMA = {
   },
 }
 
+// SYNTHESIS schema. Synthesize used to be schema-LESS (free prose), which is what forced
+// every downstream stage to re-identify ideas by re-typing titles. A schema'd array is the
+// root-cause fix: JS stamps a stable id on each returned candidate, and the skeptic + panel
+// echo that id back instead of a re-phrased title.
+const SYNTHESIS_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['candidates'],
+  properties: {
+    candidates: {
+      type: 'array',
+      description: 'the merged, deduped candidate set -- one entry per distinct idea',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['title', 'pitch', 'horizon', 'why_it_fits', 'rough_shape', 'strengthens_layer', 'serves', 'origin'],
+        properties: {
+          title: { type: 'string' },
+          pitch: { type: 'string' },
+          horizon: { type: 'string', enum: ['NOW', 'HORIZON'] },
+          why_it_fits: { type: 'string' },
+          rough_shape: { type: 'string' },
+          strengthens_layer: { type: 'string', enum: ['bi-sql', 'bi-dax', 'bi-python', 'bi-bigdata', 'retail-kpi', 'docs-spine', 'design-system', 'none'] },
+          serves: { type: 'string', enum: ['end_user', 'operator', 'tool_internal'] },
+          origin: { type: 'string', enum: ['user', 'engine'], description: 'user = the human proposed it; NEVER downgrade a user idea to engine' },
+          source_lens: { type: 'string', description: 'the lens(es) that produced it, comma-joined' },
+          convergence_note: { type: 'string', description: 'where lenses/rounds converged -- a strength signal' },
+          prior_state: { type: 'string', description: 'e.g. "shipped: <citation>" when it matches known-shipped work' },
+        },
+      },
+    },
+  },
+}
+
 // Disposition enum keeps the repo's existing vocabulary minus 'not-challenged' (the
 // "I didn't look" hole) -- 'killed' is KEPT (it is already in the committed backlog's
 // triage history; renaming it to 'refuted' would silently break that record).
@@ -255,8 +279,9 @@ const VERIFY_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['title', 'strongest_objection', 'objection_holds', 'disposition', 'why'],
+        required: ['id', 'title', 'strongest_objection', 'objection_holds', 'disposition', 'why'],
         properties: {
+          id: { type: 'string', description: 'the candidate id exactly as given (c1, c2, ...) -- copy it, never invent one' },
           title: { type: 'string' },
           strongest_objection: { type: 'string' },
           objection_holds: { type: 'boolean' },
@@ -280,8 +305,9 @@ const PANEL_REVIEWER_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['title', 'horizon', 'eligible', 'ineligibility_reason', 'consistency', 'value_score', 'feasibility_score', 'verdict', 'survived_verification', 'prior_status', 'relitigation', 'rationale', 'strengthens_layer', 'serves', 'origin'],
+        required: ['id', 'title', 'horizon', 'eligible', 'ineligibility_reason', 'consistency', 'value_score', 'feasibility_score', 'verdict', 'survived_verification', 'prior_status', 'relitigation', 'rationale', 'strengthens_layer', 'serves', 'origin'],
         properties: {
+          id: { type: 'string', description: 'the candidate id exactly as given (c1, c2, ...) -- copy it, never invent one' },
           title: { type: 'string' },
           horizon: { type: 'string', enum: ['NOW', 'HORIZON'] },
           strengthens_layer: { type: 'string', enum: ['bi-sql', 'bi-dax', 'bi-python', 'bi-bigdata', 'retail-kpi', 'docs-spine', 'design-system', 'none'], description: 'carried from the idea: the knowledge layer it most strengthens' },
@@ -307,17 +333,17 @@ const PANEL_REVIEWER_SCHEMA = {
 const DISSENT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['dissent_by_title', 'portfolio_summary'],
+  required: ['dissent_by_id', 'portfolio_summary'],
   properties: {
     portfolio_summary: { type: 'string' },
-    dissent_by_title: {
+    dissent_by_id: {
       type: 'array',
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['title', 'dissent'],
+        required: ['id', 'dissent'],
         properties: {
-          title: { type: 'string' },
+          id: { type: 'string', description: 'the candidate id (c1, c2, ...)' },
           dissent: { type: 'string' },
         },
       },
@@ -425,58 +451,118 @@ function reduceGroupedIdea(title, rows, expected, challenged) {
 // keep the first-seen title as the row group's DISPLAY title.
 // add one scored idea to the grouping accumulator: register its stable key on first sight
 // (preserving first-seen order + display title), then append its row under that key.
-function addReviewerRow(acc, si, standpoint) {
-  if (!si || !si.title) return
-  const key = normKey(si.title)
-  if (!acc.seen.has(key)) { acc.seen.add(key); acc.order.push(key); acc.displayTitle[key] = si.title }
-  ;(acc.byTitle[key] = acc.byTitle[key] || []).push({ ...si, reviewer_standpoint: si.reviewer_standpoint || standpoint })
+// registerKey: first-sighting bookkeeping for one candidate id -- preserves first-seen order
+// and remembers a display title. Split out of addReviewerRow to keep each branch-count low.
+function registerKey(acc, key, title) {
+  if (acc.seen.has(key)) return
+  acc.seen.add(key)
+  acc.order.push(key)
+  acc.displayTitle[key] = title
 }
-function groupReviewerRows(live) {
-  const acc = { order: [], seen: new Set(), byTitle: {}, displayTitle: {} }
+// rowIdentity: the stamped id for a reviewer row, or '' when the row cannot be trusted --
+// missing/malformed id, or an id that is not in the stamped candidate set (a hallucination).
+function rowIdentity(si, validIds) {
+  const key = idKey(si && si.id)
+  return (key && validIds.has(key)) ? key : ''
+}
+function addReviewerRow(acc, si, standpoint, validIds) {
+  if (!si) return
+  // FAIL-CLOSED on identity. A row whose id is missing, malformed, or not in the stamped
+  // candidate set is a HALLUCINATED row -- admitting it would create a phantom idea with
+  // reviewer scores attached to nothing. Drop it and count it; the caller banners the count.
+  const key = rowIdentity(si, validIds)
+  if (!key) { acc.dropped.push(si.title || '(no id)'); return }
+  registerKey(acc, key, si.title)
+  const row = { ...si, reviewer_standpoint: si.reviewer_standpoint || standpoint }
+  if (!acc.byTitle[key]) acc.byTitle[key] = []
+  acc.byTitle[key].push(row)
+}
+function groupReviewerRows(live, validIds) {
+  const acc = { order: [], seen: new Set(), byTitle: {}, displayTitle: {}, dropped: [] }
   for (const reviewer of live) {
     const standpoint = reviewer.reviewer_standpoint || reviewer._key || 'reviewer'
-    for (const si of (reviewer.scored_ideas || [])) addReviewerRow(acc, si, standpoint)
+    for (const si of (reviewer.scored_ideas || [])) addReviewerRow(acc, si, standpoint, validIds)
   }
-  return { order: acc.order, byTitle: acc.byTitle, displayTitle: acc.displayTitle }
+  return { order: acc.order, byTitle: acc.byTitle, displayTitle: acc.displayTitle, dropped: acc.dropped }
 }
 
-// aggregatePanel: PURE JS. Matches ideas by title across the 3 reviewer records and
-// reduces to one verdict per idea. Median scores; eligibility gate (pass/fail/split);
-// demote-only clamp (fail -> REJECT, split -> at most CONSIDER); majority verdict else
-// the MORE CAUTIOUS of the tie. No Date/random; deterministic.
-function aggregatePanel(panel, expectedReviewers, verifyRec) {
+// aggregatePanel: PURE JS. Joins reviewer rows to candidates by STAMPED ID (never a parsed
+// title) and reduces to one verdict per idea. Median scores; eligibility gate (pass/fail/split);
+// demote-only clamp (fail -> REJECT, split -> at most CONSIDER); majority verdict else the MORE
+// CAUTIOUS of the tie. No Date/random; deterministic.
+//
+// IDENTITY. `candidates` is the JS-stamped set (each { id, title, ... }). Reviewers and the
+// skeptic are required by schema to echo that id back, so grouping is an exact string match.
+// This replaced a title-normalizing heuristic that had shipped three identity bugs -- panel
+// over-split, mis-fired coverage clamp, and an emptied user-idea lane. Three fail-closed rules:
+//   - a reviewer row with an unknown/missing id is DROPPED (a phantom row cannot become an idea)
+//   - a candidate the skeptic never challenged keeps the existing killed + demote-from-ADOPT clamp
+//   - a candidate NO reviewer scored is surfaced as unreviewed, never silently omitted
+// indexCandidates: the stamped candidate set -> { validIds, byId }. Pure lookup build, kept
+// out of aggregatePanel so the reducer stays readable (and testable) on its own.
+function indexCandidates(candidates) {
+  const cands = Array.isArray(candidates) ? candidates : []
+  const validIds = new Set()
+  const byId = {}
+  for (const c of cands) {
+    const k = idKey(c && c.id)
+    if (!k) continue
+    validIds.add(k)
+    byId[k] = c
+  }
+  return { cands, validIds, byId }
+}
+// challengedIdSet: the ids the skeptic actually challenged, filtered to the stamped set so a
+// hallucinated id cannot grant coverage to an idea that was never really challenged.
+function challengedIdSet(verifyRec, validIds) {
+  const rows = (verifyRec && Array.isArray(verifyRec.challenged)) ? verifyRec.challenged : []
+  const out = new Set()
+  for (const ch of rows) {
+    const k = idKey(ch && ch.id)
+    if (k && validIds.has(k)) out.add(k)
+  }
+  return out
+}
+// unreviewedCandidates: candidates no reviewer scored. They must never silently vanish -- that
+// would shrink the bank and hide a panel gap -- so they are named for the caller's banner.
+function unreviewedCandidates(cands, scoredIds) {
+  const out = []
+  for (const c of cands) {
+    const k = idKey(c && c.id)
+    if (k && !scoredIds.has(k)) out.push(c.title || k)
+  }
+  return out
+}
+
+function aggregatePanel(panel, expectedReviewers, verifyRec, candidates) {
   const live = (panel || []).filter(Boolean)
   // A panelist that died (null) is a gate-integrity problem, not a smaller panel: if the
   // strict principle auditor fails, the remaining reviewers must not be treated as a
   // complete eligibility ruling. Track the shortfall so the gate can refuse to pass.
   const expected = Number.isFinite(expectedReviewers) ? expectedReviewers : live.length
   const panel_failed = Math.max(0, expected - live.length)
-  // STABLE GROUPING KEY. The four reviewers all reference an idea by its leading number
-  // (e.g. "#41. Symptom Concierge (which-layer-owns-this-symptom router)" vs "41. Symptom
-  // Concierge -- cross-layer ... router") but PHRASE the trailing title differently. Grouping
-  // on the raw free-text title therefore SPLIT one idea into 2-3 rows with divergent scores
-  // (the 62-vs-42 over-count). groupReviewerRows uses normKey() to collapse each title to its
-  // canonical identity: the leading #N / N. number when present, else a lowercased,
-  // punctuation/whitespace-normalized form so near-identical prose still merges. Display keeps
-  // the first-seen human title. challengedTitles is normalized on the SAME key so the skeptic
-  // coverage clamp does not mis-fire on the skeptic's differently-phrased titles.
+  const { cands, validIds, byId } = indexCandidates(candidates)
   // The skeptic's "challenge EVERY candidate" contract is enforced HERE in JS, not by the
   // schema (which only requires an array) or the prompt (a request). An idea the skeptic
   // silently omitted from challenged[] is treated as if it FAILED the gate: marked killed
   // and demoted out of ADOPT, mirroring the demote-only eligibility clamp. Unchallenged !=
   // safe -- it means coverage was not proven, so it must not read as a survived ADOPT.
-  const challengedTitles = new Set(((verifyRec && Array.isArray(verifyRec.challenged) ? verifyRec.challenged : []))
-    .map(ch => ch && ch.title).filter(Boolean).map(normKey))
-  const { order, byTitle, displayTitle } = groupReviewerRows(live)
+  const challengedIds = challengedIdSet(verifyRec, validIds)
+  const { order, byTitle, displayTitle, dropped } = groupReviewerRows(live, validIds)
 
   let uncovered = 0
   const ideas = order.map(key => {
-    const res = reduceGroupedIdea(displayTitle[key], byTitle[key], expected, challengedTitles.has(key))
+    // Prefer the candidate's OWN stamped title for display: it is the synthesizer's canonical
+    // wording, not whichever reviewer happened to be seen first.
+    const title = (byId[key] && byId[key].title) || displayTitle[key]
+    const res = reduceGroupedIdea(title, byTitle[key], expected, challengedIds.has(key))
     uncovered += res.uncovered
-    return res.idea
+    return { ...res.idea, id: key }
   })
+  const unreviewed = unreviewedCandidates(cands, new Set(order))
   const splits = ideas.filter(i => i.eligibility_gate === 'split' || i.score_spread >= 4).map(i => i.title)
-  return { ideas, splits, panel_failed, reviewers_seen: live.length, reviewers_expected: expected, uncovered_by_skeptic: uncovered }
+  return { ideas, splits, panel_failed, reviewers_seen: live.length, reviewers_expected: expected,
+    uncovered_by_skeptic: uncovered, dropped_rows: dropped || [], unreviewed }
 }
 
 // ===================== 1. GROUND (multi-agent explore + JS merge + verify) =====================
@@ -1021,70 +1107,98 @@ phase('Synthesize')
 const synthesis = await agent(
   `You are the SYNTHESIZER. Many ideas were generated across six lenses over three rounds
 (initial, cross-pollination, gap-fill). Merge into ONE clean candidate set.
-- DEDUPE near-duplicates (keep the strongest framing; note where lenses/rounds converged -- convergence is a strength signal).
-- GROUP into themes.
-- Keep each idea\u0027s title, pitch, horizon, why_it_fits, rough_shape, strengthens_layer, serves, origin, source_lens(es).
+- DEDUPE near-duplicates (keep the strongest framing; note where lenses/rounds converged in
+  convergence_note -- convergence is a strength signal).
+- Keep each idea's title, pitch, horizon, why_it_fits, rough_shape, strengthens_layer, serves,
+  origin, source_lens(es).
 - USER IDEAS ARE PROTECTED: any idea with origin "user" is the human OWN idea. NEVER merge it away,
-  drop it, or rename it into a machine idea. Keep every origin:user idea as its OWN distinct row with
-  its origin:user tag preserved. If a machine idea converges with a user idea, NOTE the convergence on
-  the USER idea (a strength signal) rather than absorbing the user idea into the machine one. The user
-  must be able to find their own idea in the output -- losing it is a failure.
+  drop it, or rename it into a machine idea. Keep every origin:user idea as its OWN distinct entry
+  with origin "user" preserved. If a machine idea converges with a user idea, NOTE the convergence
+  on the USER entry (a strength signal) rather than absorbing the user idea into the machine one.
+  The user must be able to find their own idea in the output -- losing it is a failure.
 - Do NOT score (the reviewer does). Do NOT invent new ideas; only merge/clarify.
-- Flag any idea that might violate a hard principle (the reviewer rules).
-- If a candidate matches a prior idea KNOWN to have SHIPPED (see history below), KEEP it but
-  tag it \u0022prior_state: shipped\u0022 with the citation -- do NOT drop it (a materially-new variant
-  and the convergence signal both matter). Dropping would hide a genuine extension.
+- If a candidate matches a prior idea KNOWN to have SHIPPED (see history below), KEEP it and set
+  prior_state to "shipped: <citation>" -- do NOT drop it (a materially-new variant and the
+  convergence signal both matter). Dropping would hide a genuine extension.
+- Return ONE entry per distinct idea in the candidates array. Do NOT number the titles; the
+  orchestrator assigns each candidate a stable id.
 ${MEMORY_LINE}
 
-=== REPO MAP ===\n${exploreMap}\n\n=== ALL RAW IDEAS (JSON) ===\n${JSON.stringify(allIdeas, null, 2)}
+=== REPO MAP ===
+${exploreMap}
 
-Output a clean candidate list grouped by theme, each idea with its fields (INCLUDING its origin tag --
-user or engine) + source lens(es) + a convergence note where applicable. Every origin:user idea must
-still be present and clearly marked as the user's own.`,
-  { label: 'synthesize:merge', phase: 'Synthesize', ...JUDGE }
+=== ALL RAW IDEAS (JSON) ===
+${JSON.stringify(allIdeas, null, 2)}`,
+  { label: 'synthesize:merge', phase: 'Synthesize', schema: SYNTHESIS_SCHEMA, ...JUDGE }
 )
 
+// ---- CANDIDATE SET + STABLE IDS (the identity root-cause fix) --------------------
+// Synthesize is now schema'd, so it returns structured candidates instead of prose. JS -- not
+// an LLM -- stamps each one `c1..cN`. Every downstream stage receives the id-labelled set and
+// echoes the id back, so identity is an exact match rather than a title-similarity guess.
+//
+// NULL-SYNTHESIS FALLBACK (new path introduced by adding the schema): a schema miss or agent
+// death used to be impossible to distinguish from prose. If the synthesizer returns nothing
+// usable we fall back to the RAW pre-dedupe pool rather than aborting -- a redundant bank is
+// recoverable, a lost run is not -- and mark the run degraded so the duplication is visible.
+const _synthCands = (synthesis && Array.isArray(synthesis.candidates)) ? synthesis.candidates.filter(Boolean) : []
+const synthesisFailed = !_synthCands.length
+const _baseCands = synthesisFailed ? allIdeas : _synthCands
+
 // ---- USER-IDEA PRESERVER (JS-enforced survival, upstream of the panel) -----------
-// ROOT-CAUSE FIX: the synthesizer is a schema-less LLM told (in prose) never to merge
-// away an origin:user idea. Observed failure (run wf_927fa9f5): it disobeyed -- absorbed
-// 5 of 6 user ideas into engine candidates and demoted them to merge-ledger footnotes,
-// even emitting a FALSE self-check ("ALL 6 PRESENT"). The downstream lostUserIdeas guard
-// correctly DETECTED the loss and bannered it, but a detector cannot recover a verdict --
-// the 5 ideas never reached the panel, so the "Your Ideas" lane was empty. Prose alone is
-// not a guarantee. We hold the ground truth (userIdeas from the interpreter), so we ENFORCE
-// survival in JS: any user idea whose title is not present in the synthesizer's text is
-// RE-APPENDED as an explicit, clearly-tagged protected candidate BEFORE the skeptic + panel
-// see the set -- so every user idea always gets a real adversarial + panel verdict regardless
-// of what the synthesizer did. Match on proseKey (the same identity the render lane re-asserts
-// on), substring-either-direction to tolerate a light rewording the synth may have kept.
-const _synthText = typeof synthesis === 'string' ? synthesis : JSON.stringify(synthesis)
-const _synthKey = proseKey(_synthText)
+// ROOT-CAUSE HISTORY: the synthesizer is an LLM told (in prose) never to merge away an
+// origin:user idea. Observed failure (run wf_927fa9f5): it disobeyed -- absorbed 5 of 6 user
+// ideas into engine candidates and emitted a FALSE self-check ("ALL 6 PRESENT"). A detector
+// cannot recover a verdict, so we ENFORCE survival in JS from the ground truth we hold
+// (userIdeas from the interpreter). Now that synthesis is structured, the check is an exact
+// field compare (origin + title) instead of a substring scan of prose -- no fuzzy matching.
+const _keptUserKeys = new Set(_baseCands.filter(c => c && c.origin === 'user').map(c => proseKey(c.title)))
 const _missingUserIdeas = userIdeas.filter(u => {
   const k = proseKey(u.title)
-  return !!k && !_synthKey.includes(k)     // absent from the synth text entirely
+  return !!k && !_keptUserKeys.has(k)
 })
-const _preservedBlock = _missingUserIdeas.length
-  ? '\n\n=== PROTECTED USER IDEAS RE-INJECTED (origin:user -- the synthesizer dropped or merged these; '
-    + 'they are the human OWN ideas and MUST be reviewed on their own merits, never treated as duplicates to skip) ===\n'
-    + _missingUserIdeas.map(u =>
-        'TITLE: ' + u.title + '\n'
-        + 'ORIGIN: user\n'
-        + 'HORIZON: ' + u.horizon + '\n'
-        + 'SERVES: ' + u.serves + '\n'
-        + 'STRENGTHENS_LAYER: ' + u.strengthens_layer + '\n'
-        + 'PITCH: ' + u.pitch + '\n'
-        + 'WHY_IT_FITS: ' + u.why_it_fits + '\n'
-        + 'ROUGH_SHAPE: ' + u.rough_shape
-      ).join('\n\n')
-  : ''
-// synthesized = the set the skeptic + panel actually read: the synthesizer's output plus any
-// user idea it dropped, re-appended. When the synth kept them all, this equals synthesis.
-const synthesized = _synthText + _preservedBlock
+// Re-append any dropped user idea as its own protected candidate BEFORE ids are stamped, so it
+// receives a real id and gets a genuine adversarial + panel verdict like any other candidate.
+const candidates = [..._baseCands, ..._missingUserIdeas.map(u => ({ ...u, origin: 'user' }))]
+  .map((c, n) => ({ ...c, id: candidateId(n + 1), origin: c.origin === 'user' ? 'user' : 'engine' }))
+// The ground-truth id set for every user idea -- render re-asserts origin from THIS, so an LLM
+// hop that flips the tag to 'engine' can never empty the "Your Ideas" lane.
+const userIdSet = new Set(candidates.filter(c => c.origin === 'user').map(c => idKey(c.id)))
+// userNotes re-keyed by id (was title-keyed): the render lane joins interpreter notes on id.
+const userNotesById = {}
+for (const c of candidates) {
+  if (c.origin !== 'user') continue
+  const note = userNotesByTitle[c.title] || userNotesByTitle[Object.keys(userNotesByTitle).find(t => proseKey(t) === proseKey(c.title)) || '']
+  if (note) userNotesById[idKey(c.id)] = note
+}
 if (_missingUserIdeas.length) {
   log('user-idea preserver: re-injected ' + _missingUserIdeas.length
     + ' user idea(s) the synthesizer dropped, so the panel reviews them: '
     + _missingUserIdeas.map(u => u.title).join('; '))
 }
+if (synthesisFailed) {
+  log('synthesize:merge returned no usable candidates -- falling back to the RAW pre-dedupe pool ('
+    + candidates.length + ' candidates, duplicates NOT merged)')
+}
+
+// The id-labelled candidate set every downstream stage reads. Rendering the id INTO the prompt
+// is what lets the skeptic and reviewers echo it back exactly.
+// NOTE: two statements, NOT candidates.map(...).join(...). The Workflow loader desyncs on a
+// (-wrapped multi-line expression whose closing ) is followed by a .method() -- the same trap
+// documented at the panel fan-out below (node --check passes; the loader is stricter).
+const candidateLines = candidates.map(c =>
+  '[' + c.id + '] ' + c.title
+  + '\n  origin: ' + c.origin
+  + ' | horizon: ' + c.horizon
+  + ' | serves: ' + c.serves
+  + ' | strengthens_layer: ' + c.strengthens_layer
+  + (c.prior_state ? '\n  prior_state: ' + c.prior_state : '')
+  + (c.convergence_note ? '\n  convergence: ' + c.convergence_note : '')
+  + '\n  pitch: ' + c.pitch
+  + '\n  why_it_fits: ' + c.why_it_fits
+  + '\n  rough_shape: ' + c.rough_shape
+)
+const candidatesBlock = candidateLines.join('\n\n')
 
 // ===================== 6. ADVERSARIAL VERIFY (universal coverage) =====================
 phase('Verify')
@@ -1096,6 +1210,10 @@ attempt a refutation -- there is no \u0022skip the ones that look fine.\u0022 Th
 every idea is that it does NOT survive; an idea earns \u0027survived\u0027 only if your hardest objection
 provably fails. Killing nothing is a RED FLAG that you did not really try.
 
+For EACH idea you MUST copy its id (the [c<N>] label) into the id field EXACTLY as given --
+never invent, renumber, or omit an id. A challenge whose id does not match a listed candidate is
+discarded, and any candidate you leave unchallenged is auto-clamped to killed (unproven coverage).
+
 For EACH idea, find the strongest objection: does it secretly violate a hard principle? does it
 duplicate a feature the ship-status says is already SHIPPED? is the \u0022feasible\u0022 framing hiding a
 missing dependency (a gold source, a runtime consumer, a human ruling)? would it quietly turn a
@@ -1103,7 +1221,7 @@ reasoning layer into an executor or a stats engine? Then rule it survived / weak
 with one line of why.
 
 === SHIP STATUS (for the duplicate-of-shipped check) ===\n${JSON.stringify((explore_map && explore_map.ship_status) || [], null, 2)}
-=== SYNTHESIZED CANDIDATES ===\n${synthesized}`,
+=== SYNTHESIZED CANDIDATES (id-labelled -- echo the id back) ===\n${candidatesBlock}`,
   { label: 'verify:skeptic', phase: 'Verify', schema: VERIFY_SCHEMA, ...JUDGE }
 )
 
@@ -1135,6 +1253,10 @@ You are ONE of four independent reviewers scoring the SAME synthesized idea set 
 Score from YOUR standpoint; the other three cover the other angles. Default to caution. This is a
 triage opinion for an IDEA BANK, never a build decision -- you never promote anything to the roadmap.
 
+For EACH idea COPY its id (the [c<N>] label) into the id field EXACTLY as given -- never invent,
+renumber, or omit one. A scored row whose id does not match a listed candidate is DISCARDED, and a
+candidate nobody scores is reported as unreviewed; the id is how your score reaches the right idea.
+
 For EACH idea set: horizon (NOW/HORIZON); eligible (bool) + ineligibility_reason (named principle
 or \u0027\u0027); consistency (consistent/minor-tension/conflict); value_score & feasibility_score (1-10);
 verdict (ADOPT/CONSIDER/PARK/REJECT/SHIPPED -- use SHIPPED only if it matches a shipped feature);
@@ -1148,7 +1270,7 @@ user idea is genuinely ineligible or weak, say so plainly (that honest verdict I
 asked for), and the steelman stage will look for a narrower eligible seam.
 
 === SHIP STATUS ===\n${JSON.stringify((explore_map && explore_map.ship_status) || [], null, 2)}${MEMORY_LINE}
-=== SYNTHESIZED CANDIDATES ===\n${synthesized}
+=== SYNTHESIZED CANDIDATES (id-labelled -- echo the id back) ===\n${candidatesBlock}
 === ADVERSARIAL SKEPTIC\u0027S CHALLENGES ===\n${verify ? JSON.stringify(verify) : S(40,115,107,101,112,116,105,99,32,112,114,111,100,117,99,101,100,32,110,111,116,104,105,110,103,41)}`,
     { label: p.label, phase: 'Panel-review', schema: PANEL_REVIEWER_SCHEMA, ...JUDGE }
   ).then(r => r ? { ...r, _key: p.key } : null)
@@ -1160,7 +1282,7 @@ const panel = panelRaw.filter(Boolean)
 // LLM sampling pass (an LLM cannot miscompute a median or call a 2-1 split a "majority").
 // The clamp only DEMOTES toward caution, so it is orchestration, not self-approval.
 phase('Aggregate')
-const aggregated = aggregatePanel(panel, PANELISTS.length, verify)   // verify threaded for the skeptic-coverage clamp
+const aggregated = aggregatePanel(panel, PANELISTS.length, verify, candidates)   // verify -> skeptic-coverage clamp; candidates -> id join
 
 // Fold the review-panel census into run_health: a dead reviewer (esp. the principle
 // auditor) is a degraded run, even if every generation lens reported. This makes a
@@ -1181,19 +1303,36 @@ if (aggregated.uncovered_by_skeptic > 0) {
   run_health.banner = run_health.banner ? `${run_health.banner} Also: ${note}.` : `DEGRADED RUN: ${note}. Treat this bank as partial.`
 }
 // USER-IDEA SURVIVAL GUARD (the feature's core promise, enforced in JS -- not left to prose).
-// The synthesizer is schema-less and told to merge; the panel echoes origin. If either drops or
-// reworded a user idea, it would silently vanish from the "Your Ideas" lane -- the one outcome
-// this feature exists to prevent. We hold the ground truth (userIdeas), so we enforce with it:
-//   - lostUserIdeas: any user title with NO normalized match among the aggregated titles was
-//     dropped/reworded by synthesis. A re-assert cannot recover a row that no longer exists, so
-//     this is announced LOUD (same idiom as uncovered_by_skeptic / panel_failed).
-//   - userKeySet: the normalized keys we DO force back to origin:user at render (fix #1 below),
-//     so a mislabel (origin flipped to 'engine' by an LLM hop) cannot empty the lane.
-const userKeySet = new Set(userIdeas.map(u => proseKey(u.title)))
-const aggregatedKeySet = new Set(aggregated.ideas.map(i => proseKey(i.title)))
-const lostUserIdeas = userIdeas.filter(u => !aggregatedKeySet.has(proseKey(u.title))).map(u => u.title)
+// Now that every candidate carries a JS-stamped id, this is an exact id compare rather than a
+// title-similarity guess. userIdSet is the ground truth built at stamping time; the render step
+// re-asserts origin from it, so an LLM hop that flips the tag to 'engine' cannot empty the lane.
+// A user idea missing here means the PANEL never scored it (synthesis can no longer lose it --
+// the preserver re-injects before ids are stamped), which is a panel gap worth bannering.
+const aggregatedIdSet = new Set(aggregated.ideas.map(i => idKey(i.id)))
+const lostUserIdeas = candidates
+  .filter(c => c.origin === 'user' && !aggregatedIdSet.has(idKey(c.id)))
+  .map(c => c.title)
 if (lostUserIdeas.length) {
-  const note = `YOUR idea(s) may have been merged or renamed away by synthesis and could not be matched back: ${lostUserIdeas.join(S(59,32))} -- check the bank body; re-run with more distinctive wording if they are missing`
+  const note = `YOUR idea(s) reached the candidate set but no reviewer scored them: ${lostUserIdeas.join(S(59,32))} -- re-run to get a panel verdict on them`
+  run_health.degraded = true
+  run_health.banner = run_health.banner ? `${run_health.banner} Also: ${note}.` : `DEGRADED RUN: ${note}. Treat this bank as partial.`
+}
+// Synthesis fallback (schema miss) -- the bank is un-deduped, so say so loudly.
+if (synthesisFailed) {
+  const note = 'the synthesizer returned no usable candidate set -- this bank was built from the RAW pre-dedupe pool, so near-duplicate ideas are NOT merged'
+  run_health.degraded = true
+  run_health.banner = run_health.banner ? `${run_health.banner} Also: ${note}.` : `DEGRADED RUN: ${note}. Treat this bank as partial.`
+}
+// Hallucinated reviewer rows (an id not in the stamped set) were dropped rather than admitted
+// as phantom ideas. Announce the count -- a silent drop would hide reviewer unreliability.
+if (aggregated.dropped_rows && aggregated.dropped_rows.length) {
+  const note = `${aggregated.dropped_rows.length} reviewer row(s) cited an unknown candidate id and were discarded (no phantom ideas admitted)`
+  run_health.degraded = true
+  run_health.banner = run_health.banner ? `${run_health.banner} Also: ${note}.` : `DEGRADED RUN: ${note}. Treat this bank as partial.`
+}
+// Candidates NO reviewer scored: they exist but carry no verdict. Never silently omitted.
+if (aggregated.unreviewed && aggregated.unreviewed.length) {
+  const note = `${aggregated.unreviewed.length} candidate(s) were never scored by any reviewer and carry no verdict: ${aggregated.unreviewed.join(S(59,32))}`
   run_health.degraded = true
   run_health.banner = run_health.banner ? `${run_health.banner} Also: ${note}.` : `DEGRADED RUN: ${note}. Treat this bank as partial.`
 }
@@ -1203,7 +1342,7 @@ if (lostUserIdeas.length) {
 // return (schema miss / agent failure) must NOT abort the run after the panel succeeded. We
 // coalesce null to a safe default (matching the defensive null-handling on the lens/panel
 // agents) so the deterministic renderer still emits the aggregated scores.
-const FALLBACK_DISSENT = { dissent_by_title: [], portfolio_summary: aggregated.ideas.length ? '(panel summary unavailable -- the dissent clerk did not return; verdicts and scores below are final.)' : 'No ideas reached the panel.' }
+const FALLBACK_DISSENT = { dissent_by_id: [], portfolio_summary: aggregated.ideas.length ? '(panel summary unavailable -- the dissent clerk did not return; verdicts and scores below are final.)' : 'No ideas reached the panel.' }
 const dissentRaw = aggregated.ideas.length ? await agent(
   `You are the PANEL CLERK. Write human-facing PROSE only -- you change NO scores and NO verdicts
 (those are already computed). (1) For each idea flagged with a panel split below, write a one- to
@@ -1212,7 +1351,7 @@ ruled it ineligible for X\u0022). (2) Write a \u0027portfolio_summary\u0027: a s
 on. Return dissent keyed by idea title, plus the summary. Do not invent ideas or numbers.
 
 === AGGREGATED IDEAS (verdicts/scores already final; splits flagged) ===
-${JSON.stringify(aggregated.ideas.map(i => ({ title: i.title, verdict: i.verdict, eligibility_gate: i.eligibility_gate, value_score: i.value_score, feasibility_score: i.feasibility_score, score_spread: i.score_spread, per_reviewer: i._per_reviewer })), null, 2)}`,
+${JSON.stringify(aggregated.ideas.map(i => ({ id: i.id, title: i.title, verdict: i.verdict, eligibility_gate: i.eligibility_gate, value_score: i.value_score, feasibility_score: i.feasibility_score, score_spread: i.score_spread, per_reviewer: i._per_reviewer })), null, 2)}`,
   { label: 'aggregate:dissent-prose', phase: 'Aggregate', schema: DISSENT_SCHEMA, ...GATHER }
 ) : null
 const dissentAgent = dissentRaw || FALLBACK_DISSENT
@@ -1222,10 +1361,11 @@ const dissentAgent = dissentRaw || FALLBACK_DISSENT
 // names the renderer reads (title/horizon/eligible/consistency/value_score/
 // feasibility_score/verdict/rationale/first_step) PLUS dissent.
 const dissentMap = {}
-for (const d of (dissentAgent.dissent_by_title || [])) dissentMap[d.title] = d.dissent
+for (const d of (dissentAgent.dissent_by_id || [])) { const k = idKey(d && d.id); if (k) dissentMap[k] = d.dissent }
 const review = {
   summary: dissentAgent.portfolio_summary || '',
   scored_ideas: aggregated.ideas.map(i => ({
+    id: i.id,
     title: i.title,
     horizon: i.horizon,
     eligible: i.eligibility_gate === 'pass',   // ONLY a full clean pass reads as eligible
@@ -1242,8 +1382,8 @@ const review = {
     // Re-assert origin from JS ground truth: if this title matches a known user idea, it IS
     // origin:user regardless of what the two LLM hops (synthesizer, panel) echoed. A flipped tag
     // cannot empty the "Your Ideas" lane (the filter is i.origin === 'user').
-    origin: userKeySet.has(proseKey(i.title)) ? 'user' : (i.origin || 'engine'),
-    dissent: dissentMap[i.title] || '',
+    origin: userIdSet.has(idKey(i.id)) ? 'user' : (i.origin || 'engine'),
+    dissent: dissentMap[idKey(i.id)] || '',
   })),
 }
 
@@ -1268,8 +1408,9 @@ const RESCUE_SCHEMA = {
         additionalProperties: false,
         // NO verdict / eligible field by design -- this stage produces a REASON, never a
         // re-score. Re-judging is a future run's panel job, not this agent's.
-        required: ['title', 'rescue_possible', 'reframed_pitch', 'narrowed_seam', 'residual_blocker'],
+        required: ['id', 'title', 'rescue_possible', 'reframed_pitch', 'narrowed_seam', 'residual_blocker'],
         properties: {
+          id: { type: 'string', description: 'the candidate id exactly as given (c1, c2, ...)' },
           title: { type: 'string' },
           rescue_possible: { type: 'boolean', description: 'is there a plausible reframing that could make it eligible later?' },
           reframed_pitch: { type: 'string', description: 'the rescued framing, or "" if none' },
@@ -1295,7 +1436,7 @@ every hard principle: a \u0022rescue\u0022 that still executes, bypasses a gate,
 NOT a rescue -- say rescue_possible false and name the principle.
 
 === NOT-ADOPTED IDEAS (title, verdict, eligibility, rationale) ===
-${JSON.stringify(rejected.map(i => ({ title: i.title, verdict: i.verdict, eligible: i.eligible, rationale: i.rationale })), null, 2)}`,
+${JSON.stringify(rejected.map(i => ({ id: i.id, title: i.title, verdict: i.verdict, eligible: i.eligible, rationale: i.rationale })), null, 2)}`,
   { label: 'rescue:steelman', phase: 'Rescue', schema: RESCUE_SCHEMA, ...GATHER }
 ) : { rescues: [] }
 
@@ -1470,7 +1611,9 @@ function renderLegendBlock() {
   return [
     '## Legend',
     '',
-    '- **Verdict** (reviewer\'s *triage opinion only* -- not a decision to build) -- ADOPT (worth a closer look first; eligible, consistent, high value) - CONSIDER (interesting; needs a decision or dependency) - PARK (horizon / later) - REJECT (ineligible or conflicts -- kept for the record).',
+    '- **Verdict** (reviewer\'s *triage opinion only* -- not a decision to build) -- ADOPT (worth a closer look first) - CONSIDER (interesting; needs a decision or dependency) - PARK (horizon / later) - REJECT (ineligible or conflicts -- kept for the record).',
+    '- **How a verdict is reached** (deterministic, computed in JS -- no model picks the final label): the panel verdict is the one 2 or more of the 4 reviewers chose; with no such majority the MORE CAUTIOUS verdict present wins. A demote-only clamp then applies -- if the reviewers split on eligibility (or the panel was short a reviewer) ADOPT is capped at CONSIDER, if all four ruled it ineligible it becomes REJECT, and an idea the adversarial skeptic never challenged is capped out of ADOPT for unproven coverage. Nothing is ever promoted upward.',
+    '- **Why ADOPT is rare**: it requires 2+ of 4 reviewers to independently choose ADOPT *and* a unanimous full-panel eligibility pass. Reviewers are told to default to caution and the skeptic defaults to refuted, so most genuinely good ideas land on CONSIDER. A run with 0 ADOPT is the normal outcome, not a failure -- read CONSIDER as the top recommendation and compare ideas by their V/F scores.',
     '- **Horizon** -- `NOW` (fits the repo today) - `HORIZON` (future vision).',
     '- **Eligibility** -- respects all hard principles, or violates one (named in the rationale).',
     '- **V / F** -- value / feasibility (1-10), reviewer-assigned.',
@@ -1513,9 +1656,8 @@ function renderDesignLane(ideas) {
 // the verdict, and (b) catch a misread. Rendered ONLY when the user supplied ideas; omitted
 // entirely otherwise (the lane never shows on an ordinary generation run). Cross-reference view:
 // no re-score -- each idea keeps its verdict and also appears in its verdict section below.
-// userNotes is keyed by the interpreter's ORIGINAL title; the panel may have reworded the row,
-// so look notes up by normalized key (same identity origin was re-asserted on) -- an exact-title
-// lookup would drop the "Your words / Read as" lines whenever the title drifted.
+// userNotes is keyed by CANDIDATE ID (userNotesById), so a reworded title can no longer drop the
+// "Your words / Read as" lines -- the id is the same one origin was re-asserted on.
 // gate of a scored idea (three-state): explicit eligibility_gate, else derived from the
 // legacy boolean `eligible` (false -> fail, else pass). Shared by every eligibility tag.
 function gateOf(i) {
@@ -1533,14 +1675,12 @@ function userNoteLines(n) {
 }
 function renderUserIdeaRow(i, userNotes) {
   const eligTag = USER_ELIG_TAG[gateOf(i)]
-  const n = userNotes[proseKey(i.title)] || {}
+  const n = userNotes[idKey(i.id)] || {}
   const head = `- **${norm(i.title)}** -- ${norm(i.verdict)} - \`${norm(i.horizon)}\` - V${i.value_score} / F${i.feasibility_score} - ${eligTag}`
   return [head, ...userNoteLines(n)].join('\n')
 }
 function renderYourIdeas(ideas, opts) {
-  const userNotesRaw = opts.userNotes || {}
-  const userNotes = {}
-  for (const k of Object.keys(userNotesRaw)) userNotes[proseKey(k)] = userNotesRaw[k]
+  const userNotes = opts.userNotes || {}       // already keyed by candidate id
   const userCohort = ideas.filter(i => i.origin === 'user')
   if (!userCohort.length) return null
   return ['## Your Ideas (expanded + reviewed)', '',
@@ -1644,7 +1784,7 @@ const backlog_markdown = renderBacklog(review, {
   health: run_health,        // FU1: fail-loud DEGRADED banner
   metrics: self_metrics,     // FU1: deterministic run-quality rollup
   rescue,                    // FU2: steelman notes for the not-adopted
-  userNotes: userNotesByTitle, // user-idea feature: interpreter reading notes for the Your Ideas lane
+  userNotes: userNotesById,  // user-idea feature: interpreter reading notes, keyed by candidate id
 })
 
 return {
