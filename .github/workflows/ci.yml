@@ -340,6 +340,57 @@ jobs:
             exit 1
           fi
 
+  unit-windows:
+    # The unit suite runs on `ubuntu-latest` in `check`; this leg runs the SAME step on
+    # Windows so POSIX-locked fixtures cannot stay green forever (issue #698). Before
+    # this existed, Windows CI (`smoke`) only exercised the CLI first-success journey
+    # via scripts/install_smoke_test.py and never invoked pytest at all -- so a test
+    # that hardcoded `/` separators or a `lib/pythonX.Y/site-packages` venv layout was
+    # invisible to CI by construction and failed only on a Windows dev machine (#691).
+    #
+    # NON-BLOCKING on purpose. The suite has never been observed green on Windows, so a
+    # required leg would be a merge wall on day one. Failures here are pre-existing
+    # Windows-only defects CI could not previously see -- that signal is the point.
+    # Promote to blocking (drop `continue-on-error`) once it has been observed green.
+    needs: changes
+    if: ${{ needs.changes.outputs.code_changed == 'true' }}
+    continue-on-error: true
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install development environment
+        run: pip install -e ".[dev]"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: studio-ui/package-lock.json
+
+      - name: Build the Studio frontend
+        # Mirrors `check`. NOT optional: seven FR-033 "no remote asset" and
+        # wheel-content tests read the built output and SKIP silently when it is
+        # absent, so omitting this step would buy a vacuous pass on exactly the
+        # tests most likely to differ across platforms.
+        run: python scripts/build_studio_frontend.py
+
+      - name: Unit tests
+        # Mirrors `check`'s "Unit tests" step. Coverage is disabled because
+        # pyproject's addopts enable it by default and it costs time without
+        # adding signal on an exploratory platform leg. `pythonpath` comes from
+        # pyproject, so no PYTHONPATH is needed.
+        run: pytest -m unit --no-cov
+
   smoke:
     # Windows is the release gate for the first-success journey. The test builds both
     # package artifacts, installs the wheel with pipx in a throwaway location, then
