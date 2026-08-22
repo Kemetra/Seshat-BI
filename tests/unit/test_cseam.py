@@ -37,6 +37,9 @@ def test_ci_keeps_required_check_present_while_gating_heavy_jobs() -> None:
         "report-surfaces",
         "smoke",
         "smoke-unix",
+        # The Windows unit leg (#698) is as heavy as `check` and must stay
+        # docs-only-gated like every other code-heavy job.
+        "unit-windows",
         "agent-distribution",
         "integration",
     }
