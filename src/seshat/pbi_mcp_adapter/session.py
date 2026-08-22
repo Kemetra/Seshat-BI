@@ -112,7 +112,14 @@ class McpSession:
         """
         started = time.monotonic()
         while True:
-            if time.monotonic() - started > self._deadline:
+            # `>=`, not `>`: a deadline of 0 means "do not wait", so ZERO elapsed
+            # is already spent. With `>` the first iteration fell through to a
+            # read, and a caller asking not to wait got an unbounded one. That
+            # also made the covering test a race on clock granularity -- on
+            # Windows two consecutive `monotonic()` reads return the same value
+            # about 44% of the time, so it failed in CI and passed on Linux
+            # (#698).
+            if time.monotonic() - started >= self._deadline:
                 # SessionStalled, not a bare SessionError: this IS a timeout, and
                 # the caller distinguishes the two by TYPE. Raising the base class
                 # here reported a stall as "failed without naming a cause"

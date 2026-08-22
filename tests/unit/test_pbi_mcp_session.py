@@ -25,6 +25,9 @@ class FakeTransport:
     def __init__(self, replies: list[dict] | None = None, *, noise: bool = False):
         self.written: list[dict] = []
         self.terminated = False
+        #: How many times the session asked the transport for a frame. Lets a
+        #: test assert an already-expired deadline gave up WITHOUT reading (#698).
+        self.reads = 0
         frames: list[bytes] = []
         for reply in replies or []:
             if noise:
@@ -37,6 +40,7 @@ class FakeTransport:
         self.written.append(json.loads(data.decode("utf-8")))
 
     def read_line(self) -> bytes:
+        self.reads += 1
         if not self._frames:
             return b""
         return self._frames.pop(0)
@@ -160,17 +164,45 @@ def test_close_terminates_the_transport():
     assert transport.terminated is True
 
 
-def test_a_deadline_of_zero_raises_the_STALLED_type_not_the_base():
+def test_a_deadline_of_zero_raises_the_STALLED_type_not_the_base(monkeypatch):
     """The bound is real -- AND its type carries the cause (review M2).
 
     Asserting `SessionError` here could not distinguish a stall from a crash, so
     reverting both timeout sites to the base class left every test green while the
     runner reported a timeout as "failed without naming a cause".
+
+    The clock is FROZEN rather than left to run (#698). Read live, this test was a
+    race on the platform clock: it only passed when two back-to-back
+    ``time.monotonic()`` reads differed, so a zero deadline registered as elapsed.
+    On Windows ``QueryPerformanceCounter``'s reported 1e-07 resolution is not its
+    update rate -- consecutive reads return the SAME value about 44% of the time,
+    the guard did not fire, and the test failed in CI while passing on Linux.
+    Freezing the clock pins the boundary itself: zero elapsed against a zero
+    deadline MUST already be expired, on every platform and every run.
     """
+    monkeypatch.setattr(session.time, "monotonic", lambda: 1000.0)
     transport = FakeTransport([_init_reply()])
     sess = session.McpSession(transport, deadline_seconds=0)
     with pytest.raises(session.SessionStalled):
         sess.handshake()
+
+
+def test_an_exhausted_deadline_does_not_read_the_transport_at_all(monkeypatch):
+    """A zero budget must not consume a frame before noticing it is spent.
+
+    The guard used ``>``, so zero-elapsed-against-zero-deadline was NOT expired
+    and the loop fell through to ``read_line()`` -- a caller asking for "do not
+    wait" got an unbounded read instead of an immediate stall. Asserting the
+    exception type alone missed this: the frame was already consumed by then.
+    """
+    monkeypatch.setattr(session.time, "monotonic", lambda: 1000.0)
+    transport = FakeTransport([_init_reply()])
+    sess = session.McpSession(transport, deadline_seconds=0)
+    with pytest.raises(session.SessionStalled):
+        sess.handshake()
+    assert transport.reads == 0, (
+        "an already-expired deadline read the transport before giving up"
+    )
 
 
 def test_a_closed_stream_raises_the_BASE_type_not_stalled():
