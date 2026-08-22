@@ -27,6 +27,8 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+## [2.0.0] -- 2026-08-22
+
 ### Changed -- BREAKING
 
 This release is classified **MAJOR** under `docs/operations/versioning-policy.md`.
