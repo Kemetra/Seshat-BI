@@ -1,7 +1,7 @@
 export const meta = {
   name: 'idea-engine',
-  description: 'Idea generator for Seshat BI. Ground maps the real repo with five subsystem explorers + a reconcile-verify pass; Memory reads the prior bank so shipped/settled ideas are not regenerated; six role lenses (creative / BI analyst / technical / design / business-consumer / newcomer-operator) generate in parallel, then cross-pollinate; a completeness critic finds blind spots and triggers one targeted fill pass; a synthesizer merges into a schema-validated candidate set that JS stamps with stable ids (identity is assigned, never inferred from titles); an adversarial skeptic challenges EVERY candidate by id (default-refuted); a four-standpoint reviewer PANEL scores value/feasibility and rules eligibility; a pure-JS aggregate joins every reviewer row to its candidate by id, takes the median, gates eligibility, and applies a demote-only clamp; rows citing an unknown id are dropped and candidates nobody scored are reported rather than silently lost. ADOPT requires 2+ of 4 reviewers choosing it AND a unanimous full-panel eligibility pass, so a 0-ADOPT run is normal and CONSIDER is the practical top verdict. Each idea is tagged with WHO it serves (end_user / operator / tool_internal) so a run heavy on tool-internal self-checking is a visible signal, not hidden. Model is matched to each stage: the idea-originating and verdict stages (Interpret / Generate / Completeness / Synthesize / Skeptic / Panel) run on Opus at xhigh effort; the context-gathering and reaction stages (Ground / Memory / Cross-pollinate / dissent / Rescue) run on Sonnet at high effort -- faster and cheaper without weakening any verdict. Output: a ranked NOW/HORIZON idea BANK, rendered deterministically -- exploratory inspiration, not a roadmap or commitment.',
-  whenToUse: 'When you want a deep, exhaustive, rigorously vetted, history-aware idea bank for the project -- OR when you want to hand the engine your OWN rough/half-formed idea(s) to expand into a reviewable shape and run through the same skeptic + reviewer panel. Opus-xhigh on the idea/verdict stages + Sonnet-high on the gather/react stages, multi-round, multi-explorer, panel-reviewed -- thorough (many agents/tokens/time, though lighter than all-Opus). Re-runnable; pass a focus string, or {focus,sinceRef,date,ascii}, or {ideas:["rough words","another"]} / {seed:"rough words"} to review your own ideas (a bare string is treated as both focus AND a single seed idea). When ideas are supplied they are expanded, tagged origin:user, reviewed like any idea, and surfaced in a "Your Ideas" lane at the top. Output is an idea bank, never a plan.',
+  description: 'Idea generator for Seshat BI. Ground maps the real repo with five subsystem explorers + a reconcile-verify pass; Memory reads the prior bank so shipped/settled ideas are not regenerated; six role lenses (creative / BI analyst / technical / design / business-consumer / newcomer-operator) generate in parallel, then cross-pollinate; a completeness critic finds blind spots and triggers one targeted fill pass; a synthesizer merges into a schema-validated candidate set that JS stamps with stable ids (identity is assigned, never inferred from titles); an adversarial skeptic challenges EVERY candidate by id (default-refuted); a four-standpoint reviewer PANEL scores value/feasibility and rules eligibility; a pure-JS aggregate joins every reviewer row to its candidate by id, takes the median, gates eligibility, and applies a demote-only clamp; rows citing an unknown id are dropped and candidates nobody scored are reported rather than silently lost. ADOPT requires 2+ of 4 reviewers choosing it AND a unanimous full-panel eligibility pass, so a 0-ADOPT run is normal and CONSIDER is the practical top verdict. Each idea is tagged with WHO it serves (end_user / operator / tool_internal) so a run heavy on tool-internal self-checking is a visible signal, not hidden. Model is matched to each stage: the idea-originating and verdict stages (Interpret / Generate / Completeness / Synthesize / Skeptic / Panel) run on Opus at high effort; the context-gathering and reaction stages (Ground / Memory / Cross-pollinate / dissent / Rescue) run on Sonnet at high effort -- faster and cheaper without weakening any verdict. Output: a ranked NOW/HORIZON idea BANK, rendered deterministically -- exploratory inspiration, not a roadmap or commitment.',
+  whenToUse: 'When you want a deep, exhaustive, rigorously vetted, history-aware idea bank for the project -- OR when you want to hand the engine your OWN rough/half-formed idea(s) to expand into a reviewable shape and run through the same skeptic + reviewer panel. Opus-high on the idea/verdict stages + Sonnet-high on the gather/react stages, multi-round, multi-explorer, panel-reviewed -- thorough (many agents/tokens/time, though lighter than all-Opus). Re-runnable; pass a focus string, or {focus,sinceRef,date,ascii}, or {ideas:["rough words","another"]} / {seed:"rough words"} to review your own ideas (a bare string is treated as both focus AND a single seed idea). When ideas are supplied they are expanded, tagged origin:user, reviewed like any idea, and surfaced in a "Your Ideas" lane at the top. Output is an idea bank, never a plan.',
   phases: [
     { title: 'Ground',         detail: '5 subsystem explorers map the repo in parallel; JS merge + reconcile-verify', model: 'sonnet' },
     { title: 'Memory',         detail: 'read prior bank + Ground ship-status: label shipped/settled ideas (no re-litigation)', model: 'sonnet' },
@@ -140,18 +140,28 @@ spec/feature process with a human decision.
 ${FOCUS_LINE}`
 
 // ---- model tiers (model matched to what the stage DECIDES) ----
-// The rule: a stage that ORIGINATES or JUDGES an idea runs on Opus xhigh -- those
-// outputs ARE the product and a weak model there makes the rigor decorative. A stage
-// that only GATHERS context or reacts/rephrases runs on Sonnet high -- reliable code
-// reading + reasoning, far faster/cheaper than Opus, and it decides no verdict.
+// The rule: a stage that ORIGINATES or JUDGES an idea runs on Opus -- those outputs ARE
+// the product and a weak model there makes the rigor decorative. A stage that only GATHERS
+// context or reacts/rephrases runs on Sonnet -- reliable code reading + reasoning, far
+// faster/cheaper than Opus, and it decides no verdict.
 // User directive: the non-Opus tier is Sonnet at HIGH effort (not medium/low) -- a
 // quality safety-margin on the retrieval/reaction stages.
 //   GATHER  -> Ground explorers, Ground reconcile, Memory, Cross-pollinate, Aggregate-dissent, Rescue
-//   CREATE  -> Interpret, Generate, Completeness (originate ideas / read user intent)  [UNTOUCHABLE Opus]
-//   JUDGE   -> Synthesize, Skeptic, Panel (decide verdicts / protect user ideas)       [UNTOUCHABLE Opus]
+//   CREATE  -> Interpret, Generate, Completeness (originate ideas / read user intent)  [Opus]
+//   JUDGE   -> Synthesize, Skeptic, Panel (decide verdicts / protect user ideas)       [Opus]
+//
+// EFFORT IS 'high', NOT 'xhigh'. Observed failure (run wf_0c92ba2d-b77): every Opus agent
+// died on `API Error: 400 output_config.effort 'xhigh' is not supported when thinking is
+// disabled on this model. Use effort 'high' or below, or enable thinking.` -- all 6 Generate
+// lenses returned nothing, and Interpret/Completeness/Synthesize/Skeptic/Panel (12 of ~19
+// agents, i.e. every verdict-producing stage) would have died the same way. The 13 Sonnet-high
+// agents were unaffected, which is why Ground and Memory looked healthy while the run was
+// already doomed. 'high' is the API's own recommended fallback and keeps Opus on every stage
+// the tiering decision cares about; do NOT raise this back to 'xhigh' unless thinking is
+// enabled for the session, or the whole idea/verdict half of the workflow fails closed again.
 const GATHER = { model: 'sonnet', effort: 'high' }   // retrieval + reaction, decides no verdict
-const CREATE = { model: 'opus',   effort: 'xhigh' }  // originates ideas / reads user intent -- the ideas themselves
-const JUDGE  = { model: 'opus',   effort: 'xhigh' }  // synthesize / skeptic / panel -- the verdicts (the goal)
+const CREATE = { model: 'opus',   effort: 'high' }   // originates ideas / reads user intent -- the ideas themselves
+const JUDGE  = { model: 'opus',   effort: 'high' }   // synthesize / skeptic / panel -- the verdicts (the goal)
 // Back-compat aliases so any un-repointed call still resolves; new calls use the tier names.
 const SCOUT = GATHER
 const LEAD  = JUDGE
@@ -646,7 +656,7 @@ const MERGED_MAP_SCHEMA = {
   },
 }
 
-// The 5 subsystem explorers. Each pins opus xhigh explicitly (never the Explore
+// The 5 subsystem explorers. Each pins the GATHER tier explicitly (never the Explore
 // agentType Haiku default) and is read-only.
 // NOTE: this clause is hoisted out of the ship-delta brief and built with string
 // concatenation (NOT a nested `${cond ? `a` : `b`}` template). The Workflow loader's
