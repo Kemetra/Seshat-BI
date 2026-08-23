@@ -40,6 +40,7 @@ from typing import Any, Iterable
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
 from ..rule_coverage import TEST_FIXTURES, any_tracked_file
+from .yaml_tree import load, strings_for
 
 REF_CORPUS = any_tracked_file(
     "design/*",
@@ -61,52 +62,40 @@ _SCANNED_ROOTS = ("design/", "templates/", "reports/", "contracts/report/")
 _TOKEN_FILE_HINT = "design/tokens/"
 # A value that makes no claim about a target: an unfilled template slot, or the
 # documented literal for "there deliberately isn't one".
-_NOT_A_CLAIM = ("none", "n/a", "")
+_NOT_A_CLAIM = frozenset({"none", "n/a", ""})
 
 
-def _load(path: Path) -> Any:
-    import yaml  # lazy: keep the retail-check core stdlib-only at module scope (B1/B3)
+def _claims(node: Any, keys: frozenset[str]) -> set[str]:
+    """Values under ``keys`` that actually assert a resolvable target.
 
-    try:
-        with path.open(encoding="utf-8-sig") as fh:
-            return yaml.safe_load(fh)
-    except (OSError, yaml.YAMLError):
-        return None
-
-
-def _is_claim(value: Any) -> bool:
-    """Does this value assert a resolvable target?"""
-    if not isinstance(value, str):
-        return False
-    text = value.strip()
-    if text.lower() in _NOT_A_CLAIM:
-        return False
-    return not (text.startswith("<") and text.endswith(">"))
+    An unfilled ``<placeholder>`` and the documented ``none`` assert nothing, so
+    they are not claims and cannot dangle.
+    """
+    found = set()
+    for value in strings_for(node, *keys):
+        if value.lower() in _NOT_A_CLAIM:
+            continue
+        if value.startswith("<") and value.endswith(">"):
+            continue
+        found.add(value)
+    return found
 
 
-def _pointers(node: Any, keys: frozenset[str]) -> Iterable[str]:
-    """Every value under one of ``keys`` that actually claims a target."""
-    if isinstance(node, dict):
-        for key, value in node.items():
-            if key in keys and _is_claim(value):
-                yield value.strip()
-            yield from _pointers(value, keys)
-    elif isinstance(node, list):
-        for item in node:
-            yield from _pointers(item, keys)
+def _scanned_files(ctx: RuleContext) -> Iterable[str]:
+    return (
+        rel
+        for rel in ctx.tracked_files
+        if rel.startswith(_SCANNED_ROOTS)
+        and rel.endswith((".yaml", ".yml"))
+        and not is_test_path(rel)
+    )
 
 
 def _token_documents(ctx: RuleContext) -> list[Any]:
     """Every committed design-token document a dotted pointer may resolve into."""
-    docs = []
-    for rel in ctx.tracked_files:
-        if is_test_path(rel) or _TOKEN_FILE_HINT not in rel:
-            continue
-        if rel.endswith((".yaml", ".yml")):
-            loaded = _load(ctx.repo_root / rel)
-            if isinstance(loaded, dict):
-                docs.append(loaded)
-    return docs
+    candidates = (rel for rel in _scanned_files(ctx) if _TOKEN_FILE_HINT in rel)
+    loaded = (load(ctx.repo_root / rel) for rel in candidates)
+    return [doc for doc in loaded if isinstance(doc, dict)]
 
 
 def _resolves_in(doc: Any, dotted: str) -> bool:
@@ -118,27 +107,25 @@ def _resolves_in(doc: Any, dotted: str) -> bool:
     return True
 
 
-def _file_findings(ctx: RuleContext, rel: str, doc: Any) -> Iterable[Finding]:
-    for target in sorted(set(_pointers(doc, FILE_REF_KEYS))):
-        if not (ctx.repo_root / target).exists():
-            yield Finding(
-                rule_id=RULE_ID,
-                severity=Severity.ERROR,
-                message=f"pointer target does not exist: {target}",
-                locator=rel,
-            )
+def _finding(rel: str, message: str) -> Finding:
+    return Finding(
+        rule_id=RULE_ID, severity=Severity.ERROR, message=message, locator=rel
+    )
+
+
+def _file_findings(repo_root: Path, rel: str, doc: Any) -> Iterable[Finding]:
+    for target in sorted(_claims(doc, FILE_REF_KEYS)):
+        if not (repo_root / target).exists():
+            yield _finding(rel, f"pointer target does not exist: {target}")
 
 
 def _token_findings(rel: str, doc: Any, token_docs: list[Any]) -> Iterable[Finding]:
-    if not token_docs:
-        return  # no token file tracked: nothing to resolve against, not an error
-    for dotted in sorted(set(_pointers(doc, TOKEN_REF_KEYS))):
-        if not any(_resolves_in(td, dotted) for td in token_docs):
-            yield Finding(
-                rule_id=RULE_ID,
-                severity=Severity.ERROR,
-                message=f"token pointer does not resolve in any token file: {dotted}",
-                locator=rel,
+    # No token file tracked means nothing to resolve against, which is a coverage
+    # gap the census reports rather than a dangling pointer.
+    for dotted in sorted(_claims(doc, TOKEN_REF_KEYS)) if token_docs else ():
+        if not any(_resolves_in(doc_, dotted) for doc_ in token_docs):
+            yield _finding(
+                rel, f"token pointer does not resolve in any token file: {dotted}"
             )
 
 
@@ -149,13 +136,7 @@ def _token_findings(rel: str, doc: Any, token_docs: list[Any]) -> Iterable[Findi
 )
 def ref_resolution(ctx: RuleContext) -> Iterable[Finding]:
     token_docs = _token_documents(ctx)
-    for rel in ctx.tracked_files:
-        if is_test_path(rel) or not rel.startswith(_SCANNED_ROOTS):
-            continue
-        if not rel.endswith((".yaml", ".yml")):
-            continue
-        doc = _load(ctx.repo_root / rel)
-        if doc is None:
-            continue
-        yield from _file_findings(ctx, rel, doc)
+    for rel in _scanned_files(ctx):
+        doc = load(ctx.repo_root / rel)
+        yield from _file_findings(ctx.repo_root, rel, doc)
         yield from _token_findings(rel, doc, token_docs)

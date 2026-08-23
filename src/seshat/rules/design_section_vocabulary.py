@@ -42,6 +42,7 @@ from typing import Any, Iterable
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
 from ..rule_coverage import TEST_FIXTURES, any_tracked_file
+from .yaml_tree import first_value, load, strings_for
 
 SECTION_CORPUS = any_tracked_file(
     "design/grids/*",
@@ -56,8 +57,7 @@ SECTION_CORPUS = any_tracked_file(
 
 RULE_ID = "DL10"
 
-# The authority, and the two other declaring surfaces. Each entry is
-# (path suffix, key, shape) where shape says how to read section names out.
+# The authority, then the two other declaring surfaces, each as (path, key).
 _AUTHORITY = ("design/grids/16x9-grid.yaml", "zones")
 _DECLARERS = (
     ("design/grids/mobile-grid.yaml", "safe_zones"),
@@ -65,33 +65,8 @@ _DECLARERS = (
 )
 # Filled instances live here. A positive root, not a placeholder filter.
 _INSTANCE_ROOTS = ("reports/blueprints/", "reports/backgrounds/")
-
-
-def _load_yaml(path: Path) -> Any:
-    import yaml  # lazy: keep the retail-check core stdlib-only at module scope (B1/B3)
-
-    try:
-        with path.open(encoding="utf-8-sig") as fh:
-            return yaml.safe_load(fh)
-    except (OSError, yaml.YAMLError):
-        return None
-
-
-def _find_key(node: Any, key: str) -> Any:
-    """First value for ``key`` anywhere in the tree, so a nested profile is found."""
-    if isinstance(node, dict):
-        if key in node:
-            return node[key]
-        for value in node.values():
-            found = _find_key(value, key)
-            if found is not None:
-                return found
-    elif isinstance(node, list):
-        for item in node:
-            found = _find_key(item, key)
-            if found is not None:
-                return found
-    return None
+# The keys a list-shaped declaration may use to name its section.
+_NAME_KEYS = ("band", "section", "name")
 
 
 def _names(declaration: Any) -> set[str]:
@@ -101,86 +76,74 @@ def _names(declaration: Any) -> set[str]:
     bare string). Anything else contributes nothing rather than guessing.
     """
     if isinstance(declaration, dict):
-        return {str(k) for k in declaration}
-    if isinstance(declaration, list):
-        out: set[str] = set()
-        for item in declaration:
-            if isinstance(item, str):
-                out.add(item)
-            elif isinstance(item, dict):
-                name = item.get("band") or item.get("section") or item.get("name")
-                if isinstance(name, str):
-                    out.add(name)
-        return out
-    return set()
+        return {str(key) for key in declaration}
+    if not isinstance(declaration, list):
+        return set()
+    bare = {item.strip() for item in declaration if isinstance(item, str)}
+    return bare | set(strings_for(declaration, *_NAME_KEYS))
 
 
-def _declared(repo_root: Path, suffix: str, key: str) -> set[str] | None:
+def _declared(repo_root: Path, suffix: str, key: str) -> set[str]:
     path = repo_root / suffix
     if not path.is_file():
-        return None
-    return _names(_find_key(_load_yaml(path), key))
+        return set()
+    return _names(first_value(load(path), key))
 
 
 def canonical_sections(repo_root: Path) -> set[str]:
     """The authoritative vocabulary: ``zones`` in the desktop grid."""
-    return _declared(repo_root, *_AUTHORITY) or set()
+    return _declared(repo_root, *_AUTHORITY)
 
 
-def _section_values(node: Any) -> Iterable[str]:
-    """Every ``section:`` string value in a document tree."""
-    if isinstance(node, dict):
-        for key, value in node.items():
-            if key == "section" and isinstance(value, str):
-                yield value
-            yield from _section_values(value)
-    elif isinstance(node, list):
-        for item in node:
-            yield from _section_values(item)
+def _disagreement(declared: set[str], canon: set[str]) -> str:
+    """How ``declared`` differs from the authority, or "" if it does not."""
+    parts = []
+    extra = sorted(declared - canon)
+    missing = sorted(canon - declared)
+    if extra:
+        parts.append(f"declares {', '.join(extra)} which {_AUTHORITY[0]} does not")
+    if missing:
+        parts.append(f"omits {', '.join(missing)}")
+    return "; ".join(parts)
 
 
 def _parity_findings(repo_root: Path, canon: set[str]) -> Iterable[Finding]:
     for suffix, key in _DECLARERS:
         declared = _declared(repo_root, suffix, key)
-        if declared is None or not declared:
-            continue  # absent surface: the coverage census reports it, not an error
-        extra, missing = sorted(declared - canon), sorted(canon - declared)
-        if extra or missing:
-            parts = []
-            if extra:
-                parts.append(
-                    f"declares {', '.join(extra)} which {_AUTHORITY[0]} does not"
-                )
-            if missing:
-                parts.append(f"omits {', '.join(missing)}")
+        # An absent or empty surface is a coverage gap the census reports, not drift.
+        detail = _disagreement(declared, canon) if declared else ""
+        if detail:
             yield Finding(
                 rule_id=RULE_ID,
                 severity=Severity.ERROR,
-                message=(
-                    f"section vocabulary disagrees with {_AUTHORITY[0]}: "
-                    f"{'; '.join(parts)}"
-                ),
+                message=f"section vocabulary disagrees with {_AUTHORITY[0]}: {detail}",
                 locator=suffix,
             )
 
 
+def _instance_files(ctx: RuleContext) -> Iterable[str]:
+    return (
+        rel
+        for rel in ctx.tracked_files
+        if rel.startswith(_INSTANCE_ROOTS)
+        and rel.endswith((".yaml", ".yml"))
+        and not is_test_path(rel)
+    )
+
+
 def _instance_findings(ctx: RuleContext, canon: set[str]) -> Iterable[Finding]:
-    for rel in ctx.tracked_files:
-        if is_test_path(rel) or not rel.startswith(_INSTANCE_ROOTS):
-            continue
-        if not rel.endswith((".yaml", ".yml")):
-            continue
-        for value in sorted(set(_section_values(_load_yaml(ctx.repo_root / rel)))):
-            if value not in canon:
-                yield Finding(
-                    rule_id=RULE_ID,
-                    severity=Severity.ERROR,
-                    message=(
-                        f"section '{value}' is not in the vocabulary declared by "
-                        f"{_AUTHORITY[0]}"
-                    ),
-                    locator=rel,
-                )
+    for rel in _instance_files(ctx):
+        used = set(strings_for(load(ctx.repo_root / rel), "section"))
+        for value in sorted(used - canon):
+            yield Finding(
+                rule_id=RULE_ID,
+                severity=Severity.ERROR,
+                message=(
+                    f"section '{value}' is not in the vocabulary declared by "
+                    f"{_AUTHORITY[0]}"
+                ),
+                locator=rel,
+            )
 
 
 @register(
