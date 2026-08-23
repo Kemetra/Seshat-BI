@@ -261,3 +261,46 @@ def test_a_malformed_declaring_surface_is_reported_not_skipped(tmp_path):
     findings = list(section_vocabulary(_ctx(tmp_path)))
 
     assert [f.severity for f in findings] == [Severity.ERROR]
+
+
+@pytest.mark.unit
+def test_an_unreadable_authority_is_an_error_not_a_silent_exit(tmp_path):
+    """Fails while a malformed authority ends the rule in silence.
+
+    `canonical_sections` returns an empty set for a malformed, emptied or deleted
+    `16x9-grid.yaml`, and the early return then skipped BOTH halves of the rule.
+    The any-of `SECTION_CORPUS` is still satisfied by the mobile grid, so the census
+    marks DL10 evaluated -- the authority vanishing was the quietest way to disable
+    the whole rule.
+    """
+    _write_corpus(tmp_path)
+    (tmp_path / "design" / "grids" / "16x9-grid.yaml").write_text(
+        "zones: [broken: yaml\n  ][\n", encoding="utf-8"
+    )
+
+    findings = list(section_vocabulary(_ctx(tmp_path)))
+
+    assert [f.severity for f in findings] == [Severity.ERROR]
+    assert "16x9-grid.yaml" in findings[0].locator
+
+
+@pytest.mark.unit
+def test_a_tracked_authority_declaring_nothing_is_an_error(tmp_path):
+    """An emptied authority is drift, not an untracked-corpus coverage gap."""
+    _write_corpus(tmp_path)
+    (tmp_path / "design" / "grids" / "16x9-grid.yaml").write_text(
+        "zones: {}\n", encoding="utf-8"
+    )
+
+    findings = list(section_vocabulary(_ctx(tmp_path)))
+
+    assert [f.severity for f in findings] == [Severity.ERROR]
+
+
+@pytest.mark.unit
+def test_an_untracked_authority_stays_a_coverage_gap(tmp_path):
+    """The other arm: no authority tracked at all is the census's business."""
+    _write_corpus(tmp_path)
+    (tmp_path / "design" / "grids" / "16x9-grid.yaml").unlink()
+
+    assert list(section_vocabulary(_ctx(tmp_path))) == []

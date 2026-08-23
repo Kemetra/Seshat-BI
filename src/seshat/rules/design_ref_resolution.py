@@ -55,8 +55,10 @@ REF_CORPUS = any_tracked_file(
 RULE_ID = "DL11"
 
 # Hand-verified scope. Widening either set silently is what produces false errors.
-FILE_REF_KEYS = frozenset({"grid_ref", "theme_ref"})
-TOKEN_REF_KEYS = frozenset({"value_typography_ref"})
+FILE_REF_KEYS = frozenset({"grid_ref", "theme_ref", "tokens_ref"})
+TOKEN_REF_KEYS = frozenset(
+    {"value_typography_ref", "label_typography_ref", "background_ref"}
+)
 
 _SCANNED_ROOTS = ("design/", "templates/", "reports/", "contracts/report/")
 _TOKEN_FILE_HINT = "design/tokens/"
@@ -137,10 +139,20 @@ def _file_findings(rel: str, doc: Any, tracked: frozenset[str]) -> Iterable[Find
 
 
 def _token_findings(rel: str, doc: Any, token_docs: list[Any]) -> Iterable[Finding]:
-    # No token file tracked means nothing to resolve against, which is a coverage
-    # gap the census reports rather than a dangling pointer.
-    for dotted in sorted(_claims(doc, TOKEN_REF_KEYS)) if token_docs else ():
-        if not any(_resolves_in(doc_, dotted) for doc_ in token_docs):
+    """Every dotted token claim that does not resolve in some token document.
+
+    An absent token corpus does NOT excuse the claims. `REF_CORPUS` is satisfied by
+    any design or template file, so the census never surfaces the gap, and skipping
+    the claims let a dangling pointer pass whenever the token file was missing or
+    unparseable -- the claim is unresolved either way, and that is what is reported.
+    """
+    for dotted in sorted(_claims(doc, TOKEN_REF_KEYS)):
+        if not token_docs:
+            yield _finding(
+                rel,
+                f"token pointer has no token document to resolve against: {dotted}",
+            )
+        elif not any(_resolves_in(doc_, dotted) for doc_ in token_docs):
             yield _finding(
                 rel, f"token pointer does not resolve in any token file: {dotted}"
             )

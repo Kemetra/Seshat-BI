@@ -192,9 +192,26 @@ def _instance_findings(ctx: RuleContext, canon: set[str]) -> Iterable[Finding]:
     requires=(SECTION_CORPUS,),
 )
 def section_vocabulary(ctx: RuleContext) -> Iterable[Finding]:
-    canon = canonical_sections(ctx.repo_root)
-    if not canon:
-        return  # no authority tracked; the corpus requirement reports the gap
     tracked = frozenset(rel.replace("\\", "/") for rel in ctx.tracked_files)
+    authority_path, authority_key = _AUTHORITY
+    if authority_path not in tracked:
+        return  # no authority tracked; the corpus requirement reports the gap
+    authority = _declared(ctx.repo_root, authority_path, authority_key)
+    if authority.unreadable or not authority.names:
+        # A TRACKED authority that cannot be read, or declares nothing, must not end
+        # the rule in silence: the any-of corpus is still satisfied by the other
+        # surfaces, so the census would report DL10 as evaluated either way.
+        reason = (
+            "could not be parsed"
+            if authority.unreadable
+            else "declares no section vocabulary"
+        )
+        yield _finding(
+            authority_path,
+            f"the authoritative section declaration {reason}, so no vocabulary "
+            "could be compared",
+        )
+        return
+    canon = authority.names
     yield from _parity_findings(ctx.repo_root, canon, tracked)
     yield from _instance_findings(ctx, canon)

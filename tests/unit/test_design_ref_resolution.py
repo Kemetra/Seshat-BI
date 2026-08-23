@@ -75,9 +75,16 @@ def test_the_rule_is_reachable_from_the_registry():
 
 @pytest.mark.unit
 def test_the_guarded_key_sets_are_the_hand_verified_ones():
-    """Pins scope: widening it silently is what produces false errors."""
-    assert FILE_REF_KEYS == frozenset({"grid_ref", "theme_ref"})
-    assert TOKEN_REF_KEYS == frozenset({"value_typography_ref"})
+    """Pins scope: widening it silently is what produces false errors.
+
+    The literals are the deliberate half of the scope; the corpus sweep below is the
+    other half. This asserts nobody widened the sets by accident, that one asserts
+    nobody NARROWED them relative to what the corpus actually carries.
+    """
+    assert FILE_REF_KEYS == frozenset({"grid_ref", "theme_ref", "tokens_ref"})
+    assert TOKEN_REF_KEYS == frozenset(
+        {"value_typography_ref", "label_typography_ref", "background_ref"}
+    )
 
 
 @pytest.mark.unit
@@ -244,3 +251,92 @@ def test_a_tracked_file_ref_stays_silent(tmp_path):
     (grids / "real-grid.yaml").write_text("zones: {}\n", encoding="utf-8")
 
     assert list(ref_resolution(_ctx(tmp_path))) == []
+
+
+# Keys DL11 deliberately does NOT resolve, each for a reason its module docstring
+# states. Listed here so this test pins the DOCUMENTED scope: a key may leave the
+# guarded sets only by being named as an exclusion, never by being forgotten.
+_DOCUMENTED_EXCLUSIONS = frozenset(
+    {
+        "sentiment_color_ref",  # two grammars: dotted token path AND free prose
+        "store_ref",  # "a path-or-id" in the F009/F010 stores; a bare id is legal
+        "model_ref",  # same path-or-id shape as store_ref
+        "spec_ref",  # a <placeholder> in the templates
+        "blueprint_ref",  # a <placeholder> in the templates
+        "source_file_ref",  # a <placeholder> in the templates
+        "qa_ref",  # a prose design-doc name, e.g. "visual-qa"
+    }
+)
+
+
+@pytest.mark.unit
+def test_the_guarded_sets_cover_every_resolvable_pointer_in_the_corpus():
+    """Pins the hand-verified scope against the REAL corpus, not against itself.
+
+    The previous scope test asserted the sets equal their own literals, which cannot
+    catch a resolvable key the corpus grew and the sets never learned. This walks the
+    tracked design surfaces and fails if a pointer key carrying a resolvable value
+    (a dotted token path, or a path to a tracked file) is guarded by neither set.
+    """
+    import subprocess
+
+    from seshat.rules.yaml_tree import read
+
+    tracked = frozenset(
+        subprocess.run(
+            ["git", "ls-files"], capture_output=True, text=True, cwd=REPO_ROOT
+        ).stdout.splitlines()
+    )
+    guarded = FILE_REF_KEYS | TOKEN_REF_KEYS
+    unguarded: dict[str, str] = {}
+    for rel in tracked:
+        if not rel.startswith(("design/", "templates/", "reports/")):
+            continue
+        if not rel.endswith((".yaml", ".yml")):
+            continue
+        document = read(REPO_ROOT / rel)
+        if document.failed or not isinstance(document.data, (dict, list)):
+            continue
+        for key, value in _pointer_pairs(document.data):
+            if key in guarded or key in _DOCUMENTED_EXCLUSIONS:
+                continue
+            if not isinstance(value, str):
+                continue
+            candidate = value.strip()
+            if candidate.startswith("<") or "<" in candidate:
+                continue  # an unfilled template slot claims no target
+            if candidate in tracked or ("." in candidate and " " not in candidate):
+                unguarded.setdefault(key, f"{rel}: {candidate}")
+
+    assert unguarded == {}, (
+        "resolvable pointer keys guarded by neither set -- add them to "
+        f"FILE_REF_KEYS or TOKEN_REF_KEYS, or name them in the docstring: {unguarded}"
+    )
+
+
+def _pointer_pairs(node, _depth: int = 0):
+    """Every ``(key, value)`` whose key looks like a pointer, at any depth."""
+    from seshat.rules.yaml_tree import pairs
+
+    for key, value in pairs(node):
+        if key.endswith("_ref"):
+            yield key, value
+
+
+@pytest.mark.unit
+def test_a_token_claim_with_no_token_document_is_reported(tmp_path):
+    """Fails while an absent token corpus silently excuses every token claim.
+
+    `REF_CORPUS` is satisfied by any design or template file, so the census does not
+    expose the gap: a dotted pointer with nothing to resolve against passed.
+    """
+    design = tmp_path / "design"
+    design.mkdir(parents=True, exist_ok=True)
+    (design / "under-test.yaml").write_text(
+        'value_typography_ref: "typography.scale_pt.kpi_value"\n', encoding="utf-8"
+    )
+
+    findings = list(ref_resolution(_ctx(tmp_path)))
+
+    assert [f.severity for f in findings] == [Severity.ERROR]
+    assert "typography.scale_pt.kpi_value" in findings[0].message
