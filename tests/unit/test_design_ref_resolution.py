@@ -365,3 +365,29 @@ def test_a_token_claim_with_no_token_document_is_reported(tmp_path):
 
     assert [f.severity for f in findings] == [Severity.ERROR]
     assert "typography.scale_pt.kpi_value" in findings[0].message
+
+
+@pytest.mark.unit
+def test_a_token_pointer_must_resolve_in_its_own_declaring_file(tmp_path):
+    """Fails while any tracked token document can satisfy another file's pointer.
+
+    DL11 defines `value_typography_ref` as an INTRA-file pointer, so a claim made by
+    one token file must resolve there. Resolving against the union of every token
+    document let a dangling pointer in `tower-retail-*` pass because the same dotted
+    path happened to exist in `executive-dark-*`.
+    """
+    tokens = tmp_path / "design" / "tokens"
+    tokens.mkdir(parents=True, exist_ok=True)
+    (tokens / "a-tokens.yaml").write_text(
+        "typography:\n  scale_pt: {other: 1}\n"
+        'value_typography_ref: "typography.scale_pt.kpi_value"\n',
+        encoding="utf-8",
+    )
+    (tokens / "b-tokens.yaml").write_text(
+        "typography:\n  scale_pt: {kpi_value: 28}\n", encoding="utf-8"
+    )
+
+    findings = list(ref_resolution(_ctx(tmp_path)))
+
+    assert [f.severity for f in findings] == [Severity.ERROR]
+    assert "a-tokens.yaml" in findings[0].locator

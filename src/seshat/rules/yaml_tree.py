@@ -42,7 +42,10 @@ def read(path: Path) -> Document:
     try:
         with path.open(encoding="utf-8-sig") as handle:
             return Document(yaml.safe_load(handle), failed=False)
-    except (OSError, yaml.YAMLError):
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        # UnicodeDecodeError is neither OSError nor YAMLError, so a single invalid
+        # byte in one tracked file used to escape here and abort the whole check run
+        # instead of producing the finding this path exists to produce.
         return Document(None, failed=True)
 
 

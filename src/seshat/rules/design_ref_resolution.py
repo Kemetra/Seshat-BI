@@ -138,24 +138,31 @@ def _file_findings(rel: str, doc: Any, tracked: frozenset[str]) -> Iterable[Find
             )
 
 
-def _token_findings(rel: str, doc: Any, token_docs: list[Any]) -> Iterable[Finding]:
-    """Every dotted token claim that does not resolve in some token document.
+def _token_findings(
+    rel: str, doc: Any, token_docs: list[Any], is_token_file: bool
+) -> Iterable[Finding]:
+    """Every dotted token claim that does not resolve where it must.
 
-    An absent token corpus does NOT excuse the claims. `REF_CORPUS` is satisfied by
-    any design or template file, so the census never surfaces the gap, and skipping
-    the claims let a dangling pointer pass whenever the token file was missing or
-    unparseable -- the claim is unresolved either way, and that is what is reported.
+    These are INTRA-file pointers, so a token file's OWN claims resolve against that
+    file -- not against the union of every tracked token document, which let a
+    dangling path pass because a sibling token file happened to define it. A claim
+    made from outside the token corpus resolves against that corpus.
+
+    An absent token corpus does NOT excuse the claims either. `REF_CORPUS` is
+    satisfied by any design or template file, so the census never surfaces the gap,
+    and skipping the claims let a dangling pointer pass whenever the token file was
+    missing or unparseable -- the claim is unresolved either way.
     """
+    targets = [doc] if is_token_file else token_docs
+    where = "its own file" if is_token_file else "any token file"
     for dotted in sorted(_claims(doc, TOKEN_REF_KEYS)):
-        if not token_docs:
+        if not targets:
             yield _finding(
                 rel,
                 f"token pointer has no token document to resolve against: {dotted}",
             )
-        elif not any(_resolves_in(doc_, dotted) for doc_ in token_docs):
-            yield _finding(
-                rel, f"token pointer does not resolve in any token file: {dotted}"
-            )
+        elif not any(_resolves_in(target, dotted) for target in targets):
+            yield _finding(rel, f"token pointer does not resolve in {where}: {dotted}")
 
 
 @register(
@@ -174,4 +181,6 @@ def ref_resolution(ctx: RuleContext) -> Iterable[Finding]:
             )
             continue
         yield from _file_findings(rel, document.data, tracked)
-        yield from _token_findings(rel, document.data, token_docs)
+        yield from _token_findings(
+            rel, document.data, token_docs, _TOKEN_FILE_HINT in rel
+        )

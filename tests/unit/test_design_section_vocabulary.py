@@ -304,3 +304,41 @@ def test_an_untracked_authority_stays_a_coverage_gap(tmp_path):
     (tmp_path / "design" / "grids" / "16x9-grid.yaml").unlink()
 
     assert list(section_vocabulary(_ctx(tmp_path))) == []
+
+
+@pytest.mark.unit
+def test_the_committed_authority_declares_its_zones_identically_in_every_profile():
+    """Anchors the real corpus: both desktop profiles declare the same seven."""
+    from seshat.rules.design_section_vocabulary import authority_declarations
+
+    blocks = authority_declarations(REPO_ROOT)
+
+    assert len(blocks) == 2, blocks
+    assert all(block == _SEVEN for block in blocks), blocks
+
+
+@pytest.mark.unit
+def test_a_second_authority_profile_that_disagrees_is_an_error(tmp_path):
+    """Fails while only the FIRST `zones` block is read.
+
+    `16x9-grid.yaml` carries a separate `zones` mapping per resolution profile
+    (1280x720 and 1920x1080). `first_value` returned one and ignored the rest, so
+    drift in the later profile left DL10 green while the desktop profiles disagreed.
+    """
+    _write_corpus(tmp_path)
+    grid = tmp_path / "design" / "grids" / "16x9-grid.yaml"
+    second = "\n".join(
+        f"      {k}: {{rows: 1}}" for k in sorted(_SEVEN - {"footer_status"})
+    )
+    grid.write_text(
+        grid.read_text(encoding="utf-8")
+        + f"  hi_dpi:\n    zones:\n{second}\n      extra_band: {{rows: 9}}\n",
+        encoding="utf-8",
+    )
+
+    findings = list(section_vocabulary(_ctx(tmp_path)))
+
+    assert findings, "a disagreeing second profile must be reported"
+    assert any(
+        "extra_band" in f.message or "footer_status" in f.message for f in findings
+    ), [f.message for f in findings]

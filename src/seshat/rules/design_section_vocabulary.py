@@ -43,7 +43,7 @@ from typing import Any, Iterable
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
 from ..rule_coverage import TEST_FIXTURES, any_tracked_file
-from .yaml_tree import first_value, read, strings_for
+from .yaml_tree import first_value, read, strings_for, values_for
 
 SECTION_CORPUS = any_tracked_file(
     "design/grids/*",
@@ -113,9 +113,33 @@ def _declared(repo_root: Path, suffix: str, key: str) -> Declaration:
     return Declaration(names=_names(first_value(document.data, key)), unreadable=False)
 
 
+def authority_declarations(repo_root: Path) -> list[set[str]]:
+    """EVERY ``zones`` declaration in the authority, one per resolution profile.
+
+    The desktop grid declares `zones` once per profile (1280x720 and 1920x1080).
+    Reading only the first left drift in a later profile invisible, so the profiles
+    are collected and compared against each other before any of them is treated as
+    the vocabulary.
+    """
+    document = read(repo_root / _AUTHORITY[0])
+    if document.failed:
+        return []
+    return [
+        _names(block)
+        for block in values_for(document.data, _AUTHORITY[1])
+        if isinstance(block, (dict, list))
+    ]
+
+
 def canonical_sections(repo_root: Path) -> set[str]:
-    """The authoritative vocabulary: ``zones`` in the desktop grid."""
-    return _declared(repo_root, *_AUTHORITY).names
+    """The authoritative vocabulary: ``zones`` in the desktop grid.
+
+    The union across profiles, so a caller asking "what is the vocabulary" is never
+    silently handed one profile's view. Profile DISAGREEMENT is reported separately
+    by the rule; this function does not adjudicate it.
+    """
+    blocks = authority_declarations(repo_root)
+    return set().union(*blocks) if blocks else set()
 
 
 def _disagreement(declared: set[str], canon: set[str]) -> str:
@@ -196,6 +220,17 @@ def section_vocabulary(ctx: RuleContext) -> Iterable[Finding]:
     authority_path, authority_key = _AUTHORITY
     if authority_path not in tracked:
         return  # no authority tracked; the corpus requirement reports the gap
+    profiles = authority_declarations(ctx.repo_root)
+    if len(profiles) > 1:
+        # Each profile describes the SAME grid, so they must agree with each other
+        # before any of them can serve as the authority.
+        for index, block in enumerate(profiles[1:], start=1):
+            detail = _disagreement(block, profiles[0])
+            if detail:
+                yield _finding(
+                    authority_path,
+                    f"authority profile {index} disagrees with the first: {detail}",
+                )
     authority = _declared(ctx.repo_root, authority_path, authority_key)
     if authority.unreadable or not authority.names:
         # A TRACKED authority that cannot be read, or declares nothing, must not end

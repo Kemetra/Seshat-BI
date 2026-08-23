@@ -132,3 +132,17 @@ def test_a_valid_document_round_trips_through_read(tmp_path):
 
     assert result.failed is False
     assert result.data == {"a": {"b": 1}}
+
+
+@pytest.mark.unit
+def test_invalid_utf8_is_a_parse_failure_not_a_crash(tmp_path):
+    """Fails while `UnicodeDecodeError` escapes `read`.
+
+    It is neither `OSError` nor `YAMLError`, so one invalid byte in one tracked file
+    aborted the entire check run rather than producing the finding this fail-soft
+    path exists to produce. Written as bytes because no text encoding can express it.
+    """
+    bad = tmp_path / "invalid-utf8.yaml"
+    bad.write_bytes(b"section: \xff\xfe not utf-8 \x80\n")
+
+    assert read(bad).failed is True
