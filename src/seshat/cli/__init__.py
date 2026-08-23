@@ -39,7 +39,7 @@ Structure:
 from __future__ import annotations
 
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -55,6 +55,22 @@ if TYPE_CHECKING:
     # lazily inside the handlers, never at module scope).
     from ..validate import QueryRunner
     from ..validate_targets import ValidationTargets
+
+
+def _explain_guidance(repo_root: Path) -> Mapping[str, Mapping[str, str]]:
+    """The authored reader guidance for ``--explain``, or empty if unreadable.
+
+    Display-only, and deliberately fail-soft: a missing or malformed
+    ``rule-fixes.yaml`` must degrade to the ordinary unannotated output, never
+    change a verdict or crash a check run. The file is reader guidance, so its
+    absence is a documentation gap, not a gate failure.
+    """
+    from ..rule_fix_table import RuleFixTableError, load_guidance
+
+    try:
+        return load_guidance(repo_root)
+    except (OSError, RuleFixTableError, ValueError):
+        return {}
 
 
 def _run_check(args: object) -> int:
@@ -101,6 +117,17 @@ def _run_check(args: object) -> int:
     from ..kit_lint import is_kit_self_repo
 
     bootstrapped = is_kit_self_repo(Path(args.repo))  # type: ignore[attr-defined]
+    explain = bool(getattr(args, "explain", False))
+    if explain and args.output_format != "text":  # type: ignore[attr-defined]
+        # Refuse rather than no-op: json/review/sarif are tooling contracts, and a
+        # flag that is silently ignored is worse than one that fails -- the caller
+        # believes it received guidance it never got.
+        print(
+            "error: --explain applies to --format text only "
+            f"(got '{args.output_format}')",  # type: ignore[attr-defined]
+            file=sys.stderr,
+        )
+        return 2
     # Default 'text' calls the unchanged run(); 'json' is the opt-in path.
     if args.output_format == "json":  # type: ignore[attr-defined]
         return run_json(all_rules(), ctx, bootstrapped=bootstrapped)
@@ -108,7 +135,10 @@ def _run_check(args: object) -> int:
         return run_review(all_rules(), ctx, bootstrapped=bootstrapped)
     if args.output_format == "sarif":  # type: ignore[attr-defined]
         return run_sarif(all_rules(), ctx, bootstrapped=bootstrapped)
-    return run(all_rules(), ctx, bootstrapped=bootstrapped)
+    guidance = _explain_guidance(Path(args.repo)) if explain else None  # type: ignore[attr-defined]
+    return run(
+        all_rules(), ctx, bootstrapped=bootstrapped, explain=explain, guidance=guidance
+    )
 
 
 def _run_doctor(args: object) -> int:

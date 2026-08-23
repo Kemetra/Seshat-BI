@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Callable
@@ -285,8 +286,31 @@ def coverage_census(
     return tuple(records)
 
 
+def _explain_lines(
+    finding: Finding, guidance: Mapping[str, Mapping[str, str]]
+) -> list[str]:
+    """The indented ``means``/``fix`` continuation lines for one finding, if authored.
+
+    ADDITIVE and display-only: an id with no authored entry (and an entry with neither
+    field) yields nothing, so the finding renders exactly as it does without the flag
+    rather than asserting guidance nobody wrote.
+    """
+    entry = guidance.get(finding.rule_id) or {}
+    labelled = (("means", entry.get("means")), ("fix", entry.get("fix")))
+    return [
+        f"    {label}: {str(text).strip()}"
+        for label, text in labelled
+        if str(text or "").strip()
+    ]
+
+
 def run(
-    rules: tuple[RegisteredRule, ...], ctx: RuleContext, *, bootstrapped: bool = True
+    rules: tuple[RegisteredRule, ...],
+    ctx: RuleContext,
+    *,
+    bootstrapped: bool = True,
+    explain: bool = False,
+    guidance: Mapping[str, Mapping[str, str]] | None = None,
 ) -> int:
     """Default human-readable output: one ``_format`` line per finding.
 
@@ -295,11 +319,22 @@ def run(
     its behavior stays exactly what it was before B2; the JSON output is a
     SEPARATE path (``run_json``). ``bootstrapped`` gates the KIT_SELF tier skip
     (Spec A); it defaults True so the kit's own (bootstrapped) repo is unchanged.
+
+    ``explain`` APPENDS the rule's authored ``means``/``fix`` guidance under each
+    finding; it never rewrites the finding line and never touches the exit code, so
+    the text contract above still holds line-for-line. ``guidance`` carries that
+    reader text (see ``rule_fix_table.load_guidance``) and is read for RENDERING
+    ONLY -- ``docs/rules/rule-fixes.yaml`` states that ``seshat check`` does not
+    consult it, because reader guidance must not become gate input.
     """
+    lookup = guidance or {}
     exit_code = 0
     for registered in rules:
         for finding in _rule_findings(registered, ctx, bootstrapped=bootstrapped):
             print(_format(finding))
+            if explain:
+                for line in _explain_lines(finding, lookup):
+                    print(line)
             if finding.severity is Severity.ERROR:
                 exit_code = 1
     return exit_code
