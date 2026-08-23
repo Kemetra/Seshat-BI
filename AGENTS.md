@@ -26,11 +26,16 @@ This file is the short operating contract. The full law is
   is not `CLEARED`). No `silver.*` SQL before an approved map (Principle IV).
 - **Do NOT point Power BI at gold before `retail validate` passes** (Principle VIII).
 - **Do NOT design dashboards before metric contracts exist** (roadmap rule 5).
-- **Do NOT run the Power BI execution adapter** (the official Power BI MCP /
-  connection; `pbi-cli` no longer the preferred path) -- that is feature 016, last
-  and gated on `semantic_model_ready` (Principle II). It is a later, EXECUTION-ONLY
-  adapter (it cannot define metrics, mappings, semantic logic, or dashboard design);
-  no current stage depends on it.
+- **Do NOT run the Power BI execution adapter on your own initiative** (the official
+  Power BI MCP / connection; `pbi-cli` no longer the preferred path) -- feature 016,
+  gated on `semantic_model_ready` (Principle II). It is EXECUTION-ONLY (it cannot
+  define metrics, mappings, semantic logic, or dashboard design), and no readiness
+  stage depends on it. Since ADR 0018 (ratified 2026-08-18) the LOCAL slice ships:
+  `seshat pbi-mcp plan-write` / `apply` run only against a target and operation
+  RESOLVED from the committed allowlist, never free-form, and only when the owner
+  asks for that write. The REMOTE slice remains deferred and owner-gated. Reaching
+  for either unasked is still a hard stop -- a shipped verb is not a standing
+  authorization.
 - **Do NOT self-grant an approval.** Approvals are named human actions
   (Principle V): grain, PII publish-safety, business rollups, sentinel-vs-null.
 

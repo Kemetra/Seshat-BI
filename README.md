@@ -160,15 +160,23 @@ release. The shipped system includes:
   advisory and never create readiness truth.
 - **Source-controlled Power BI workflows** with deterministic PBIR authoring helpers
   and a read-only assessment path for existing PBIP projects.
+- **Seshat Studio**, a local analyst console (`seshat-studio`, `[studio]` extra) whose
+  browser views show workspace readiness, per-table journeys and the agent
+  conversation over the same committed evidence. Operations, run history and client
+  review ship as API endpoints without browser views today. Studio surfaces the gates
+  and never grants an approval of its own.
 
 Explore the [capability inventory](docs/capabilities/capabilities.yaml),
 [release history](CHANGELOG.md), and [roadmap](docs/roadmap/roadmap.md) for the
 evidence behind each claim.
 
 > [!WARNING]
-> The Power BI execution adapter is deliberately deferred and gated. Building the
-> final approved page in Power BI Desktop remains a named human action. Neither is
-> presented as an available automated capability.
+> Power BI writes are gated, not free. The governed local write leg (F016 slice 5,
+> `seshat pbi-mcp plan-write` / `apply`) ships and refuses to act without an
+> approved, in-scope target; the remote leg remains deferred and owner-gated.
+> Building the final approved page in Power BI Desktop remains a named human
+> action. See [ADR 0018](docs/decisions/0018-unpark-f016-power-bi-mcp-execution-adapter.md)
+> for what was unparked and what was not.
 
 ## Install
 
@@ -195,6 +203,10 @@ for one deprecation cycle. Live database validation needs the optional `db` extr
 (shown above) and a DSN stored only in a gitignored `.env`. If the driver is
 missing, `seshat validate` / `seshat drift` print the exact `pipx inject` /
 `pip install` remedy rather than a raw import error.
+
+The `studio` extra installs the local analyst console's web stack (FastAPI and
+Uvicorn); a base install stays free of them, and `seshat-studio` reports the
+extra's absence as a named diagnostic rather than an import traceback.
 
 The `stats` extra enables governed descriptive, inference, correlation,
 regression, anomaly, and forecast evidence. Change-point detection additionally

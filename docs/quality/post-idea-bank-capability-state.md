@@ -32,7 +32,7 @@ confirmed from the repo is marked **Not verified**.
   `INDEX.md` → named file → artifact). Note the Python and Big-data layers are
   **initial seeds** (many routes are planned/deferred), unlike the fuller SQL/DAX
   and Retail KPI layers.
-- **KPI discoverability**: F7 decision-question sections in all 11 KPI domain docs;
+- **KPI discoverability**: F7 decision-question sections in all 12 KPI domain docs;
   F8 coverage scorecard template (statuses/blockers, never a score).
 - **The readiness spine** as docs: the model + pipeline + seven stage docs under
   `docs/readiness/`.

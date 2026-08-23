@@ -56,6 +56,16 @@ and the lane never promotes an idea onto the roadmap or assigns an F-row (Princi
 
 ## ADOPT
 
+> **SHIP-STATUS CORRECTION (2026-08-23), verified against `origin/main`.** Six of the
+> eight rows below are no longer open candidates: **c2** was ALREADY shipped when this
+> bank scored it (a routed knowledge corpus with no `src/` consumer), and **c22**, **c27**,
+> **c29**, **c41** and **c10** (PR #709) shipped after generation. Only **c19** and
+> **c35** remain open, and both are owner-gated -- c19 on
+> whether `binds_to` grows a multi-table shape, c35 on where the coverage-end date comes
+> from. Each shipped row is recorded in the SHIPPED / SETTLED appendix and in
+> `shipped-ideas.yaml`. This file is a dated snapshot and is not rewritten in place;
+> read the rows below as the 2026-08-22 panel opinion, not as current status.
+
 ### EXPLAIN-Plan Review Surface over the shipped PostgreSQL plan knowledge
 
 `NOW` - **V7 / F7** - consistency: consistent - respects principles
@@ -1031,6 +1041,12 @@ _A reframing that MIGHT make an idea eligible later, or the irreducible reason i
 - **DL5 Grid Arithmetic-Closure Self-Check** -- SHIPPED. shipped-ideas.yaml DL5: status=shipped, pr_sha='PR #147 ... @register DL5 src/seshat/rules/design_grid_closure.py', f_row=none
 - **DL2 background-spec forbidden_dynamic_content Assertion Rule** -- SHIPPED. shipped-ideas.yaml DL2: status=shipped, pr_sha='PR #124 (spec 064) src/seshat/rules/design_background.py @register DL2', f_row=none
 - **A9 Anti-Pattern Self-Check Harvester** -- SHIPPED. shipped-ideas.yaml A9: status=shipped, pr_sha='PR #180 0bb0e22 @register DL6 src/seshat/rules/design_visual_selfcheck.py', f_row=none
+- **c2 EXPLAIN-Plan Review Surface over the shipped PostgreSQL plan knowledge** -- SHIPPED. shipped-ideas.yaml c2: status=shipped, pr_sha='e6c421a4 (2026-07-25) skills/bi-sql-knowledge/ ... ROUTED live at INDEX.md:33', f_row=none. NOTE: this was already shipped when THIS bank scored it ADOPT on 2026-08-22 -- the novelty argument rested on a zero-src/-consumer check, which a routed knowledge corpus does not need
+- **c22 Fix-at-the-point-of-failure: annotate check findings with the rule's own means/fix line** -- SHIPPED. shipped-ideas.yaml c22: status=shipped, pr_sha='PR #706 5451baf1 -- `seshat check --explain`', f_row=none
+- **c27 Token Ref-Pointer Resolution Guard (dangling `*_ref` and `grid_ref` paths)** -- SHIPPED. shipped-ideas.yaml c27: status=shipped, pr_sha='PR #707/#708 9bbfcbde @register DL11 src/seshat/rules/design_ref_resolution.py', f_row=none
+- **c29 Section-Vocabulary Parity Across Grid, Mobile Grid and Blueprints** -- SHIPPED. shipped-ideas.yaml c29: status=shipped, pr_sha='PR #707/#708 9bbfcbde @register DL10 src/seshat/rules/design_section_vocabulary.py', f_row=none
+- **c41 Make ONBOARDING.md actually onboard someone to Seshat BI** -- SHIPPED. shipped-ideas.yaml c41: status=shipped, pr_sha='PR #704 1e1ea518', f_row=none
+- **c10 Domain Pack Interview Cards -- turn a KPI domain into owner questions** -- SHIPPED. shipped-ideas.yaml c10: status=shipped, pr_sha='PR #709 74349708 -- 41 owner-question cards across the 12 domain packs', f_row=none
 - **ADL Per-Contract Ambiguity Decision Ledger** -- SHIPPED. shipped-ideas.yaml ADL: status=shipped, pr_sha='PR #106 (spec 058)', f_row=none
 - **AL1-assumption-ledger Assumption Ledger Rule (AL1)** -- SHIPPED. shipped-ideas.yaml AL1: status=shipped, pr_sha='PR #107 (spec 059) @register AL1', f_row=none; corroborated by Ground row 'AL1-assumption-ledger-rule' SHIPPED
 - **B1-never-execute Never-Execute Invariant Guard (NX rule family) (appendix, MIS-MAPPED)** -- SHIPPED. Ground row 'never-execute invariant (B1/B3)' SHIPPED -- src/seshat/rules/never_execute.py, live_surface_boundary.py. Note: id collision flagged -- ledger key `B1` names a DIFFERENT idea (AP1 anti-pattern parity, PR #181); this appendix-only id is explicitly tagged MIS-MAPPED / '= ledger's true B1' in the source, a memory-integrity signal, not a state disagreement
