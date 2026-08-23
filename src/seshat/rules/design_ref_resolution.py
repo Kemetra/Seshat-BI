@@ -34,13 +34,13 @@ names only, no tenant or brand literal (Principle VII).
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any, Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
 from ..rule_coverage import TEST_FIXTURES, any_tracked_file
-from .yaml_tree import load, strings_for
+from .yaml_tree import load, read, strings_for
 
 REF_CORPUS = any_tracked_file(
     "design/*",
@@ -113,10 +113,27 @@ def _finding(rel: str, message: str) -> Finding:
     )
 
 
-def _file_findings(repo_root: Path, rel: str, doc: Any) -> Iterable[Finding]:
+def _is_committed(target: str, tracked: frozenset[str]) -> bool:
+    """Whether ``target`` names a tracked repo-relative file.
+
+    Asks the COMMIT, not the filesystem. `.exists()` accepts three things DL11 must
+    reject: a file present only in one working tree, an absolute path (``repo_root /
+    "/abs"`` discards the root entirely, so the check silently escapes the repo), and
+    a ``../`` path climbing out of it. Normalized to posix before comparison because
+    ``ctx.tracked_files`` is git's forward-slash form on every platform.
+    """
+    candidate = PurePosixPath(target.replace("\\", "/"))
+    if candidate.is_absolute() or ".." in candidate.parts:
+        return False
+    return str(candidate) in tracked
+
+
+def _file_findings(rel: str, doc: Any, tracked: frozenset[str]) -> Iterable[Finding]:
     for target in sorted(_claims(doc, FILE_REF_KEYS)):
-        if not (repo_root / target).exists():
-            yield _finding(rel, f"pointer target does not exist: {target}")
+        if not _is_committed(target, tracked):
+            yield _finding(
+                rel, f"pointer target is not a committed repo file: {target}"
+            )
 
 
 def _token_findings(rel: str, doc: Any, token_docs: list[Any]) -> Iterable[Finding]:
@@ -136,7 +153,13 @@ def _token_findings(rel: str, doc: Any, token_docs: list[Any]) -> Iterable[Findi
 )
 def ref_resolution(ctx: RuleContext) -> Iterable[Finding]:
     token_docs = _token_documents(ctx)
+    tracked = frozenset(rel.replace("\\", "/") for rel in ctx.tracked_files)
     for rel in _scanned_files(ctx):
-        doc = load(ctx.repo_root / rel)
-        yield from _file_findings(ctx.repo_root, rel, doc)
-        yield from _token_findings(rel, doc, token_docs)
+        document = read(ctx.repo_root / rel)
+        if document.failed:
+            yield _finding(
+                rel, "file could not be parsed, so its pointers are unchecked"
+            )
+            continue
+        yield from _file_findings(rel, document.data, tracked)
+        yield from _token_findings(rel, document.data, token_docs)

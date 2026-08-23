@@ -165,3 +165,82 @@ def _corpus(
     (design / "under-test.yaml").write_text(
         "\n".join(lines) + "\n" if lines else "{}\n", encoding="utf-8"
     )
+
+
+def _ctx_without(root: Path, *untracked: str) -> RuleContext:
+    """A context where ``untracked`` exists on disk but is NOT tracked.
+
+    The distinction DL11 has to make: a pointer target that a working tree happens
+    to hold is not a committed target. `_ctx` derives tracking from the disk, so it
+    cannot express this.
+    """
+    excluded = {u.replace("\\", "/") for u in untracked}
+    return RuleContext(
+        repo_root=root,
+        tracked_files=tuple(
+            rel for rel in _ctx(root).tracked_files if rel not in excluded
+        ),
+    )
+
+
+@pytest.mark.unit
+def test_a_file_ref_to_an_existing_but_untracked_target_is_an_error(tmp_path):
+    """Fails while resolution asks the filesystem instead of the commit.
+
+    DL11 promises a COMMITTED repo-relative target. A local-only file satisfies
+    `.exists()` and would let the gate pass on a machine where the artifact is
+    present while it is absent from the commit every other consumer clones.
+    """
+    _corpus(tmp_path, grid_ref="local-only.yaml")
+    (tmp_path / "local-only.yaml").write_text("x: 1\n", encoding="utf-8")
+
+    findings = list(ref_resolution(_ctx_without(tmp_path, "local-only.yaml")))
+
+    assert [f.severity for f in findings] == [Severity.ERROR]
+    assert "local-only.yaml" in findings[0].message
+
+
+@pytest.mark.unit
+def test_a_file_ref_escaping_the_repository_is_an_error(tmp_path):
+    """Fails while `repo_root / target` lets an absolute path discard the root.
+
+    `Path.__truediv__` with an absolute operand DROPS the left side, so an absolute
+    `grid_ref` is resolved against the real filesystem. On a machine where that path
+    exists the check passes -- which is why this asserts on a target the rule must
+    reject for being outside the repo, not for being absent.
+    """
+    _corpus(tmp_path, grid_ref="../outside-the-repo.yaml")
+    (tmp_path.parent / "outside-the-repo.yaml").write_text("x: 1\n", encoding="utf-8")
+
+    findings = list(ref_resolution(_ctx(tmp_path)))
+
+    assert [f.severity for f in findings] == [Severity.ERROR]
+    assert "outside-the-repo.yaml" in findings[0].message
+
+
+@pytest.mark.unit
+def test_an_absolute_file_ref_is_an_error_even_when_the_path_exists(tmp_path):
+    """The platform-independent form of the escape: an absolute path that IS real.
+
+    Pointing at a file this test just created guarantees existence on every
+    platform, so the assertion cannot go vacuous the way a hardcoded
+    `/etc/passwd` (absent on Windows, present on Linux CI) would.
+    """
+    real = tmp_path / "absolute-target.yaml"
+    real.write_text("x: 1\n", encoding="utf-8")
+    _corpus(tmp_path, grid_ref=real.as_posix())
+
+    findings = list(ref_resolution(_ctx(tmp_path)))
+
+    assert [f.severity for f in findings] == [Severity.ERROR]
+
+
+@pytest.mark.unit
+def test_a_tracked_file_ref_stays_silent(tmp_path):
+    """The other arm: a genuinely committed target must not be reported."""
+    _corpus(tmp_path, grid_ref="design/grids/real-grid.yaml")
+    grids = tmp_path / "design" / "grids"
+    grids.mkdir(parents=True, exist_ok=True)
+    (grids / "real-grid.yaml").write_text("zones: {}\n", encoding="utf-8")
+
+    assert list(ref_resolution(_ctx(tmp_path))) == []
