@@ -45,8 +45,12 @@ from ..registry import register
 from ..rule_coverage import TEST_FIXTURES, any_tracked_file
 from .yaml_tree import first_value, read, strings_for, values_for
 
+# The DECLARING surfaces themselves, not every file beside them: a repo tracking
+# only `design/grids/README.md` satisfied the old wildcard while the rule parsed no
+# vocabulary at all, and the census reported DL10 as evaluated and clean.
 SECTION_CORPUS = any_tracked_file(
-    "design/grids/*",
+    "design/grids/16x9-grid.yaml",
+    "design/grids/mobile-grid.yaml",
     "templates/dashboard-page-blueprint.yaml",
     exclude=(TEST_FIXTURES,),
     note=(
@@ -65,11 +69,16 @@ _DECLARERS = (
     ("templates/dashboard-page-blueprint.yaml", "sections"),
 )
 # Declarers `scaffold-design` installs alongside the authority. Their absence from a
-# repo that HAS the authority is a lost surface, not a partial scaffold. The mobile
-# grid is deliberately excluded: it is neither scaffolded nor packaged, so erroring
-# on it would fire on every correct downstream install (verified against
-# `design_scaffold._DESIGN_FILES`).
-_SCAFFOLDED_DECLARERS = frozenset({"templates/dashboard-page-blueprint.yaml"})
+# repo that HAS the authority is a lost surface, not a partial scaffold.
+#
+# The mobile grid was excluded here while the scaffolder did not ship it. Shipping it
+# (to fix the blueprint template's dangling `grid_ref`) made that exclusion wrong in
+# the same change, so it is required now. A test pins this set against
+# `design_scaffold._DESIGN_FILES` rather than restating it, so adding a declarer to
+# the scaffolder can never again leave this severity behind.
+_SCAFFOLDED_DECLARERS = frozenset(
+    {"design/grids/mobile-grid.yaml", "templates/dashboard-page-blueprint.yaml"}
+)
 # Filled instances live here. A positive root, not a placeholder filter.
 _INSTANCE_ROOTS = ("reports/blueprints/", "reports/backgrounds/")
 # The keys a list-shaped declaration may use to name its section.

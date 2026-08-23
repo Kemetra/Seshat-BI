@@ -67,6 +67,8 @@ _DESIGN_FILES: tuple[tuple[str, str], ...] = (
     # shipping them made a fresh `scaffold-design` fail DL11 on its own output.
     ("grids/mobile-grid.yaml", "design/grids/mobile-grid.yaml"),
     ("themes/tower-retail.theme.json", "themes/tower-retail.theme.json"),
+    ("background-spec.yaml", "templates/background-spec.yaml"),
+    ("theme-json-spec.md", "templates/theme-json-spec.md"),
     ("handoff/bi-handoff-pack.md", "templates/handoff/bi-handoff-pack.md"),
     (
         "handoff/handoff-review-checklist.md",

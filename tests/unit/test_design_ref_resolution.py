@@ -448,3 +448,21 @@ def test_the_corpus_requirement_mirrors_the_scanned_roots():
         f"corpus roots {sorted(covered)} do not mirror scanned roots {sorted(roots)}"
     )
     assert all(g.endswith((".yaml", ".yml")) for g in globs), globs
+
+
+@pytest.mark.unit
+def test_the_corpus_matches_yaml_directly_beneath_a_scanned_root():
+    """`templates/custom.yaml` is scanned, so the census must claim it.
+
+    `**/*.yaml` requires a second slash under fnmatch, so root-level YAML fell
+    outside the requirement while `_scanned_files` examined it -- the rule read as
+    unevaluable for part of its own scan.
+    """
+    import fnmatch
+
+    from seshat.rules.design_ref_resolution import REF_CORPUS
+
+    globs = [alt.pattern for alt in REF_CORPUS.any_of]
+
+    for rel in ("templates/custom.yaml", "reports/page.yaml", "design/a/b/deep.yaml"):
+        assert any(fnmatch.fnmatch(rel, g) for g in globs), (rel, globs)
