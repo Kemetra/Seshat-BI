@@ -30,15 +30,24 @@ def load(path: Path) -> Any:
         return None
 
 
+def _mapping_pairs(node: dict[Any, Any]) -> Iterator[tuple[str, Any]]:
+    for key, value in node.items():
+        yield str(key), value
+        yield from pairs(value)
+
+
+def _sequence_pairs(node: list[Any]) -> Iterator[tuple[str, Any]]:
+    for item in node:
+        yield from pairs(item)
+
+
 def pairs(node: Any) -> Iterator[tuple[str, Any]]:
     """Every ``(key, value)`` in the tree, at any depth, mappings and lists alike."""
     if isinstance(node, dict):
-        for key, value in node.items():
-            yield str(key), value
-            yield from pairs(value)
-    elif isinstance(node, list):
-        for item in node:
-            yield from pairs(item)
+        return _mapping_pairs(node)
+    if isinstance(node, list):
+        return _sequence_pairs(node)
+    return iter(())
 
 
 def values_for(node: Any, *keys: str) -> Iterator[Any]:
