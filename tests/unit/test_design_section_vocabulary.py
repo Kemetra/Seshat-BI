@@ -298,15 +298,6 @@ def test_a_tracked_authority_declaring_nothing_is_an_error(tmp_path):
 
 
 @pytest.mark.unit
-def test_an_untracked_authority_stays_a_coverage_gap(tmp_path):
-    """The other arm: no authority tracked at all is the census's business."""
-    _write_corpus(tmp_path)
-    (tmp_path / "design" / "grids" / "16x9-grid.yaml").unlink()
-
-    assert list(section_vocabulary(_ctx(tmp_path))) == []
-
-
-@pytest.mark.unit
 def test_the_committed_authority_declares_its_zones_identically_in_every_profile():
     """Anchors the real corpus: both desktop profiles declare the same seven."""
     from seshat.rules.design_section_vocabulary import authority_declarations
@@ -342,3 +333,53 @@ def test_a_second_authority_profile_that_disagrees_is_an_error(tmp_path):
     assert any(
         "extra_band" in f.message or "footer_status" in f.message for f in findings
     ), [f.message for f in findings]
+
+
+@pytest.mark.unit
+def test_a_missing_authority_is_reported_when_another_surface_is_tracked(tmp_path):
+    """Fails while an untracked authority ends the rule in silence.
+
+    The any-of `SECTION_CORPUS` is satisfied by the mobile grid alone, so the census
+    marks DL10 evaluated. Returning quietly then reports "clean" for a repo that has
+    no authoritative vocabulary at all -- the corpus requirement cannot cover this,
+    because it is satisfied by a DIFFERENT file than the one that went missing.
+    """
+    _write_corpus(tmp_path)
+    (tmp_path / "design" / "grids" / "16x9-grid.yaml").unlink()
+
+    findings = list(section_vocabulary(_ctx(tmp_path)))
+
+    assert [f.severity for f in findings] == [Severity.ERROR]
+    assert "16x9-grid.yaml" in findings[0].locator
+
+
+@pytest.mark.unit
+def test_no_declaring_surface_at_all_stays_silent(tmp_path):
+    """The boundary: with nothing tracked, the corpus requirement owns the gap."""
+    (tmp_path / "design" / "grids").mkdir(parents=True, exist_ok=True)
+
+    assert list(section_vocabulary(_ctx(tmp_path))) == []
+
+
+@pytest.mark.unit
+def test_a_named_entry_in_a_filled_sections_list_is_validated(tmp_path):
+    """Fails while only keys literally named `section` are checked.
+
+    A filled blueprint may declare its page layout as a `sections` LIST of
+    `{name: ...}` -- `reports/blueprints/branch-performance.yaml` does. A typo in one
+    of those names left the declared layout entirely outside DL10 whenever the visual
+    placements themselves stayed valid.
+    """
+    _write_corpus(tmp_path)
+    blueprints = tmp_path / "reports" / "blueprints"
+    blueprints.mkdir(parents=True, exist_ok=True)
+    (blueprints / "filled.yaml").write_text(
+        "sections:\n  - name: header\n    used: true\n"
+        "  - name: main_insigts\n    used: true\n",
+        encoding="utf-8",
+    )
+
+    findings = list(section_vocabulary(_ctx(tmp_path)))
+
+    assert [f.severity for f in findings] == [Severity.ERROR]
+    assert "main_insigts" in findings[0].message

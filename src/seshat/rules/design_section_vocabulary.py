@@ -190,6 +190,24 @@ def _instance_files(ctx: RuleContext) -> Iterable[str]:
     )
 
 
+def _named_sections(doc: Any) -> set[str]:
+    """Section names from a filled ``sections`` LIST of ``{name: ...}`` entries.
+
+    A blueprint may declare its page layout that way rather than with `section:`
+    keys, so scanning only `section` left those names unvalidated. Scoped to entries
+    under a `sections` collection: `name` is far too common a key to harvest
+    globally, which would drag unrelated names into the vocabulary check.
+    """
+    names: set[str] = set()
+    for collection in values_for(doc, "sections"):
+        if not isinstance(collection, list):
+            continue
+        for entry in collection:
+            if isinstance(entry, dict):
+                names.update(strings_for(entry, "name"))
+    return names
+
+
 def _instance_findings(ctx: RuleContext, canon: set[str]) -> Iterable[Finding]:
     for rel in _instance_files(ctx):
         document = read(ctx.repo_root / rel)
@@ -200,7 +218,9 @@ def _instance_findings(ctx: RuleContext, canon: set[str]) -> Iterable[Finding]:
                 rel, "file could not be parsed, so its sections are unchecked"
             )
             continue
-        used = set(strings_for(document.data, "section"))
+        used = set(strings_for(document.data, "section")) | _named_sections(
+            document.data
+        )
         for value in sorted(used - canon):
             yield _finding(
                 rel,
@@ -219,7 +239,17 @@ def section_vocabulary(ctx: RuleContext) -> Iterable[Finding]:
     tracked = frozenset(rel.replace("\\", "/") for rel in ctx.tracked_files)
     authority_path, authority_key = _AUTHORITY
     if authority_path not in tracked:
-        return  # no authority tracked; the corpus requirement reports the gap
+        # The any-of corpus is satisfied by a DIFFERENT file than the one missing, so
+        # it cannot cover this: with a secondary declarer tracked, a silent return
+        # reports "clean" for a repo that has no authoritative vocabulary at all.
+        # Only a repo declaring NOTHING is the census's business.
+        if any(suffix in tracked for suffix, _ in _DECLARERS):
+            yield _finding(
+                authority_path,
+                "the authoritative section declaration is not tracked, so the "
+                "vocabulary the other surfaces are compared against is missing",
+            )
+        return
     profiles = authority_declarations(ctx.repo_root)
     if len(profiles) > 1:
         # Each profile describes the SAME grid, so they must agree with each other
