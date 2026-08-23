@@ -198,14 +198,14 @@ def _named_sections(doc: Any) -> set[str]:
     under a `sections` collection: `name` is far too common a key to harvest
     globally, which would drag unrelated names into the vocabulary check.
     """
-    names: set[str] = set()
-    for collection in values_for(doc, "sections"):
-        if not isinstance(collection, list):
-            continue
-        for entry in collection:
-            if isinstance(entry, dict):
-                names.update(strings_for(entry, "name"))
-    return names
+    return {
+        name
+        for collection in values_for(doc, "sections")
+        if isinstance(collection, list)
+        for entry in collection
+        if isinstance(entry, dict)
+        for name in strings_for(entry, "name")
+    }
 
 
 def _instance_findings(ctx: RuleContext, canon: set[str]) -> Iterable[Finding]:
@@ -229,6 +229,52 @@ def _instance_findings(ctx: RuleContext, canon: set[str]) -> Iterable[Finding]:
             )
 
 
+def _missing_authority_findings(tracked: frozenset[str]) -> Iterable[Finding]:
+    """The authority is untracked while some OTHER declaring surface is not.
+
+    The any-of corpus is satisfied by a DIFFERENT file than the one missing, so it
+    cannot cover this: a silent return reports "clean" for a repo with no
+    authoritative vocabulary at all. Only a repo declaring NOTHING is the census's
+    business.
+    """
+    if not any(suffix in tracked for suffix, _ in _DECLARERS):
+        return
+    yield _finding(
+        _AUTHORITY[0],
+        "the authoritative section declaration is not tracked, so the "
+        "vocabulary the other surfaces are compared against is missing",
+    )
+
+
+def _profile_findings(profiles: list[set[str]]) -> Iterable[Finding]:
+    """Each profile describes the SAME grid, so they must agree with each other."""
+    for index, block in enumerate(profiles[1:], start=1):
+        detail = _disagreement(block, profiles[0])
+        if detail:
+            yield _finding(
+                _AUTHORITY[0],
+                f"authority profile {index} disagrees with the first: {detail}",
+            )
+
+
+def _unusable_authority_finding(authority: Declaration) -> Finding:
+    """A TRACKED authority that cannot be read, or declares nothing.
+
+    Must not end the rule in silence: the any-of corpus is still satisfied by the
+    other surfaces, so the census would report DL10 as evaluated either way.
+    """
+    reason = (
+        "could not be parsed"
+        if authority.unreadable
+        else "declares no section vocabulary"
+    )
+    return _finding(
+        _AUTHORITY[0],
+        f"the authoritative section declaration {reason}, so no vocabulary "
+        "could be compared",
+    )
+
+
 @register(
     RULE_ID,
     "Page-section vocabulary agrees across the grids, the blueprint template "
@@ -239,43 +285,12 @@ def section_vocabulary(ctx: RuleContext) -> Iterable[Finding]:
     tracked = frozenset(rel.replace("\\", "/") for rel in ctx.tracked_files)
     authority_path, authority_key = _AUTHORITY
     if authority_path not in tracked:
-        # The any-of corpus is satisfied by a DIFFERENT file than the one missing, so
-        # it cannot cover this: with a secondary declarer tracked, a silent return
-        # reports "clean" for a repo that has no authoritative vocabulary at all.
-        # Only a repo declaring NOTHING is the census's business.
-        if any(suffix in tracked for suffix, _ in _DECLARERS):
-            yield _finding(
-                authority_path,
-                "the authoritative section declaration is not tracked, so the "
-                "vocabulary the other surfaces are compared against is missing",
-            )
+        yield from _missing_authority_findings(tracked)
         return
-    profiles = authority_declarations(ctx.repo_root)
-    if len(profiles) > 1:
-        # Each profile describes the SAME grid, so they must agree with each other
-        # before any of them can serve as the authority.
-        for index, block in enumerate(profiles[1:], start=1):
-            detail = _disagreement(block, profiles[0])
-            if detail:
-                yield _finding(
-                    authority_path,
-                    f"authority profile {index} disagrees with the first: {detail}",
-                )
+    yield from _profile_findings(authority_declarations(ctx.repo_root))
     authority = _declared(ctx.repo_root, authority_path, authority_key)
     if authority.unreadable or not authority.names:
-        # A TRACKED authority that cannot be read, or declares nothing, must not end
-        # the rule in silence: the any-of corpus is still satisfied by the other
-        # surfaces, so the census would report DL10 as evaluated either way.
-        reason = (
-            "could not be parsed"
-            if authority.unreadable
-            else "declares no section vocabulary"
-        )
-        yield _finding(
-            authority_path,
-            f"the authoritative section declaration {reason}, so no vocabulary "
-            "could be compared",
-        )
+        yield _unusable_authority_finding(authority)
         return
     canon = authority.names
     yield from _parity_findings(ctx.repo_root, canon, tracked)
