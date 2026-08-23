@@ -47,7 +47,7 @@ in the row list below rather than left silent.
 | # | Ask the owner | If unanswered | Layer default (context only) | Records as |
 |---|---------------|---------------|------------------------------|------------|
 | A6 | Which cost do you want margin measured against: standard, average, or last purchase cost? | Margin moves materially with the method; two reports disagree with no data change | None -- cost method is a business ruling | `policy_ruling` |
-| A4 | Is margin measured on gross or net sales? | Margin percentage shifts with the base and cannot be compared across reports | None -- gross and net are never interchangeable | `kpi_definition` |
+| A4 | Which net-sales definition is the revenue side of margin -- which deductions are already removed? | The net-sales basis is unstated, so margin is not comparable across reports | Net sales is the base -- fixed by this domain, never gross | `kpi_definition` |
 | A2 | Do returns reduce the margin of the period they were sold in, or the period returned? | Margin is attributed to the wrong period and trends mislead | None -- the policy must be stated, not assumed | `policy_ruling` |
 | A1 | Which VAT basis is cost recorded on, and which is sales recorded on? | A pre-tax cost against a tax-inclusive sale overstates margin | Pre-tax unless you state otherwise | `kpi_definition` |
 

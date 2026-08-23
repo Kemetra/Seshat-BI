@@ -46,7 +46,7 @@ in the row list below rather than left silent.
 |---|---------------|---------------|------------------------------|------------|
 | calendar | Which calendar are targets set on, and how do its period boundaries map to the actuals calendar? | A four-week target is compared to a calendar month with no mapping rule and never matches | None -- the mapping rule is owner-supplied | `policy_ruling` |
 | grain | At what level are targets set: month by store, by category, or another grain? | Actuals and targets are compared at mismatched grain (KPI-AP-09) | None -- the target grain is owner-supplied | `table_grain` |
-| missing | How should a store or product with no target be shown? | A missing target is displayed as 0% achievement and reads as total failure | None -- must be flagged, never shown as 0% | `policy_ruling` |
+| missing | How should a missing target be FLAGGED on a report, and who is told it is missing? | A missing target is displayed as 0% achievement and reads as total failure | Must be flagged, never shown as 0% -- only the flagging is open | `policy_ruling` |
 | scope | Which channels and branches does a target cover, and how should actuals be filtered to match? | A partial-scope target is compared to full-scope actuals and always looks missed | None -- the scope must be confirmed | `policy_ruling` |
 
 ## Owner

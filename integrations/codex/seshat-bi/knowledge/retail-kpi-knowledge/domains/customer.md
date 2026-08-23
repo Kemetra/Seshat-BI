@@ -59,7 +59,7 @@ in the row list below rather than left silent.
 |---|---------------|---------------|------------------------------|------------|
 | clv | Over what horizon is customer lifetime value measured, and is future value discounted? | CLV is not comparable between reports or periods | None -- the horizon is a business definition | `policy_ruling` |
 | newrepeat | Where is the cut between a new and a returning customer? | New-vs-returning splits shift with the anchor and mislead acquisition reporting | None -- depends on your identity key ruling | `kpi_definition` |
-| identity | Which field identifies a returning customer: loyalty id, card, phone, or account? | The same person counts as several customers and every retention KPI is wrong | None -- a reserved ruling, never defaulted | `kpi_definition` |
+| identity | Which field is the canonical customer key, and how are the other identifiers linked, prioritised and deduplicated? | Unlinked identifiers leave the same person counted as several customers and every retention KPI wrong | None -- a reserved ruling, never defaulted | `kpi_definition` |
 | retention | Over what window is a customer counted as retained: rolling 12 months, calendar year, or since first purchase? | Retention rate changes with the window and is not comparable | None -- the window is a business definition | `policy_ruling` |
 
 ## Owner

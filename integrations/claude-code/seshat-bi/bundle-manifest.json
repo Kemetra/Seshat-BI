@@ -1785,28 +1785,28 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/customer.md",
-      "output_sha256": "607a94242cfd3f2931fb6dc93e34c502be6a29689be0bd2faa200db1c0d77c46",
+      "output_sha256": "94ccc3ac0ccf8a6a5422cad35acfd3191a0eb0f134e24740a199701ff930729f",
       "source": "skills/retail-kpi-knowledge/domains/customer.md",
       "source_id": "kb-177",
-      "source_sha256": "607a94242cfd3f2931fb6dc93e34c502be6a29689be0bd2faa200db1c0d77c46",
+      "source_sha256": "94ccc3ac0ccf8a6a5422cad35acfd3191a0eb0f134e24740a199701ff930729f",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/data-quality-control.md",
-      "output_sha256": "d2d20f631823eb3f7779c16b9752134041f5ae2f54f80a10d6f0ebcede97b15e",
+      "output_sha256": "cf7c6f3fe1e3a3d6a0a80e84d338d0bfaa859ac4cc1ac64f1f0b12f618e6149e",
       "source": "skills/retail-kpi-knowledge/domains/data-quality-control.md",
       "source_id": "kb-178",
-      "source_sha256": "d2d20f631823eb3f7779c16b9752134041f5ae2f54f80a10d6f0ebcede97b15e",
+      "source_sha256": "cf7c6f3fe1e3a3d6a0a80e84d338d0bfaa859ac4cc1ac64f1f0b12f618e6149e",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/discounts-and-promotions.md",
-      "output_sha256": "43dcca98df7a1d0dc12520ea3eeb614b66e794d34a7c9cddddc2b7174fc34041",
+      "output_sha256": "ac89e90d5bcba6d0af1f5803fe4f60856f8f51f0168232081d53ce09c42fa892",
       "source": "skills/retail-kpi-knowledge/domains/discounts-and-promotions.md",
       "source_id": "kb-179",
-      "source_sha256": "43dcca98df7a1d0dc12520ea3eeb614b66e794d34a7c9cddddc2b7174fc34041",
+      "source_sha256": "ac89e90d5bcba6d0af1f5803fe4f60856f8f51f0168232081d53ce09c42fa892",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1821,10 +1821,10 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/margin-profitability.md",
-      "output_sha256": "ae133e598512e316cf1d80e679eb72141a3a3c791a0da7e1330d6d6d56b8da9f",
+      "output_sha256": "fe8b1687c767a83d46dab9e4045769d10bd7fc1231002d782065d2ad91026ce0",
       "source": "skills/retail-kpi-knowledge/domains/margin-profitability.md",
       "source_id": "kb-181",
-      "source_sha256": "ae133e598512e316cf1d80e679eb72141a3a3c791a0da7e1330d6d6d56b8da9f",
+      "source_sha256": "fe8b1687c767a83d46dab9e4045769d10bd7fc1231002d782065d2ad91026ce0",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1857,10 +1857,10 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/targets-and-budgets.md",
-      "output_sha256": "fcba8fc3eabb0e3fa567c782601a0a22f452df8079c0349eb0e0fd406ee121de",
+      "output_sha256": "f74f62d11632831ebaa7f79650a240a14b7a7dae966ce561b5a9fafeb4d0a2af",
       "source": "skills/retail-kpi-knowledge/domains/targets-and-budgets.md",
       "source_id": "kb-185",
-      "source_sha256": "fcba8fc3eabb0e3fa567c782601a0a22f452df8079c0349eb0e0fd406ee121de",
+      "source_sha256": "f74f62d11632831ebaa7f79650a240a14b7a7dae966ce561b5a9fafeb4d0a2af",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2405,10 +2405,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "ca20e11380437d46cf2ec572ae7f7d8261655e48d68ecd1818d77d3c3d392b26",
+  "manifest_digest": "779ae9b9d8ea8b47b860e9484860c1ab735626ea85631dfdc1e54437bf5eb9ae",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "fe511647a338504bf61685037b42e8289dae9b65",
+  "source_revision": "e5ccd55f3643e21c08129711eb169164e06936a3",
   "target": "claude",
   "version": "2.0.0"
 }

@@ -150,6 +150,49 @@ def test_no_card_records_its_own_default_as_a_ruling(pack: Path) -> None:
 
 @pytest.mark.unit
 @pytest.mark.parametrize("pack", _packs(), ids=lambda p: p.stem)
+def test_a_fixed_rule_is_stated_not_offered_as_a_choice(pack: Path) -> None:
+    """A card must not offer the side its own pack forbids.
+
+    Where a pack states an invariant -- "aggregate on the key only", "use net
+    sales, never gross", an Unknown member is "not a valid analysis member" -- an
+    owner picking the forbidden branch would have their choice recorded as an
+    APPROVED decision that contradicts the seeded contracts (PR #709 Codex review,
+    five instances). Such a card must ask only the genuinely open part, and its
+    default column must restate the invariant rather than read "None".
+
+    The check is narrow on purpose: it pins the specific invariants the packs
+    state today, so it fails loudly if a card reintroduces the choice.
+    """
+    forbidden = {
+        "margin-profitability": ("gross or net", "net sales is the base"),
+        "discounts-and-promotions": ("gross or net", "gross sales is the denominator"),
+        "data-quality-control": (
+            "analysable category",
+            "never a valid analysis member",
+        ),
+        "targets-and-budgets": ("be shown?", "never shown as 0%"),
+    }
+    if pack.stem not in forbidden:
+        pytest.skip(f"{pack.stem} states no pinned invariant")
+    offered, restated = forbidden[pack.stem]
+
+    section = _SECTION.search(pack.read_text(encoding="utf-8"))
+    assert section
+    body = section.group(1)
+    asks = " ".join(a for _r, a, _k, _d, _t in _CARD_ROW.findall(body)).lower()
+    assert offered not in asks, (
+        f"{pack.stem}: a card offers {offered!r}, which this pack forbids -- ask "
+        f"only the open part and state the invariant in the default column"
+    )
+    defaults = " ".join(d for _r, _a, _k, d, _t in _CARD_ROW.findall(body)).lower()
+    assert restated in defaults, (
+        f"{pack.stem}: no card default restates the invariant {restated!r}, so a "
+        f"reader cannot tell the rule from an unmade decision"
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("pack", _packs(), ids=lambda p: p.stem)
 def test_every_open_ambiguity_has_a_card_or_a_declared_exclusion(pack: Path) -> None:
     """A dropped ambiguity is invisible unless something counts them."""
     text = pack.read_text(encoding="utf-8")

@@ -50,8 +50,8 @@ in the row list below rather than left silent.
 |---|---------------|---------------|------------------------------|------------|
 | writeoff | Which deduction types count as discount, and which are accounting write-offs or loyalty redemptions? | Discount rate absorbs unrelated accounting activity and misreports commercial performance | None -- the split is a business ruling | `policy_ruling` |
 | funding | Which source field distinguishes a retailer-funded discount from a supplier-funded one? | Supplier-funded discount is charged against your own margin | None -- split only if the source supports it | `policy_ruling` |
-| A5 | Are discounts recorded per line, or once on the whole transaction? | Line and header discounts double-count or vanish when summed together | None -- the storage level must be confirmed | `kpi_definition` |
-| A4 | Is discount measured against gross or net sales? | Discount rate shifts with the base and cannot be compared | None -- gross and net are never interchangeable | `kpi_definition` |
+| A5 | Which discount fields exist on a line and on the header, and how do they combine into one discount amount? | Summing line and header fields double-counts the header discount, or drops it entirely | None -- name every field and its combination rule | `kpi_definition` |
+| A4 | Which sales scope forms the gross-sales denominator -- all channels, or a subset? | The denominator scope is unstated, so discount rate is not comparable between reports | Gross sales is the denominator -- fixed by this domain, never net | `kpi_definition` |
 
 ## Owner
 
