@@ -82,7 +82,7 @@ Supporting references:
   — the stage sequence and transitions.
 - `docs/glossary.md` — terms, abbreviations, and the static rule-id families.
 - `docs/faq.md` — common questions, each answer source-cited.
-- `docs/worked-examples/README.md` — the two end-to-end worked examples (index).
+- `docs/worked-examples/README.md` — the end-to-end worked example (index).
 - `skills/retail-kpi-knowledge/` — the business-meaning reasoning layer (definition,
   additivity, grain, ambiguity, KPI packs). Route here to *reason about and review* a KPI's
   meaning and produce a governed metric contract.
