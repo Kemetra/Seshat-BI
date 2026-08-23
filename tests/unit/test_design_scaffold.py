@@ -30,6 +30,8 @@ _DESIGN_FILES = (
     "templates/visual-spec.yaml",
     "templates/report-composition.yaml",
     "design/grids/16x9-grid.yaml",
+    "design/grids/mobile-grid.yaml",
+    "themes/tower-retail.theme.json",
     "templates/handoff/bi-handoff-pack.md",
     "templates/handoff/handoff-review-checklist.md",
 )
@@ -47,6 +49,10 @@ _FORCE_INCLUDE_MAP = {
         "seshat/design_templates/report-composition.yaml"
     ),
     "design/grids/16x9-grid.yaml": "seshat/design_templates/grids/16x9-grid.yaml",
+    "design/grids/mobile-grid.yaml": ("seshat/design_templates/grids/mobile-grid.yaml"),
+    "themes/tower-retail.theme.json": (
+        "seshat/design_templates/themes/tower-retail.theme.json"
+    ),
     "templates/handoff/bi-handoff-pack.md": (
         "seshat/design_templates/handoff/bi-handoff-pack.md"
     ),

@@ -63,6 +63,10 @@ _DESIGN_FILES: tuple[tuple[str, str], ...] = (
     ("visual-spec.yaml", "templates/visual-spec.yaml"),
     ("report-composition.yaml", "templates/report-composition.yaml"),
     ("grids/16x9-grid.yaml", "design/grids/16x9-grid.yaml"),
+    # Targets the scaffolded blueprint template POINTS AT by concrete path. Not
+    # shipping them made a fresh `scaffold-design` fail DL11 on its own output.
+    ("grids/mobile-grid.yaml", "design/grids/mobile-grid.yaml"),
+    ("themes/tower-retail.theme.json", "themes/tower-retail.theme.json"),
     ("handoff/bi-handoff-pack.md", "templates/handoff/bi-handoff-pack.md"),
     (
         "handoff/handoff-review-checklist.md",
