@@ -27,6 +27,28 @@ deferred note — never a fabricated contract.
 - Missing targets (e.g., new stores) must be flagged, not shown as 0%.
 - Same filter scope (channels, branches) on actuals and targets.
 
+## Owner questions
+
+Ask these before this domain's contracts are handed off. Each card is the owner-facing
+form of an ambiguity listed above: it names the question in business language, the
+silent breakage if it goes unanswered, and the `decision_type` under which the answer is
+recorded in the Decision Store. The **layer default** is context shown to the owner, never
+a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
+(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
+make a number appear).
+
+Every ambiguity listed above has a card here UNLESS it is already marked **RULED** (a
+settled decision -- re-asking invites a contradicting answer) or states a grain/handling
+instruction rather than a question only the owner can answer. Those exclusions are named
+in the row list below rather than left silent.
+
+| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
+|---|---------------|---------------|------------------------------|------------|
+| calendar | Which calendar are targets set on, and how do its period boundaries map to the actuals calendar? | A four-week target is compared to a calendar month with no mapping rule and never matches | None -- the mapping rule is owner-supplied | `policy_ruling` |
+| grain | At what level are targets set: month by store, by category, or another grain? | Actuals and targets are compared at mismatched grain (KPI-AP-09) | None -- the target grain is owner-supplied | `table_grain` |
+| missing | How should a missing target be FLAGGED on a report, and who is told it is missing? | A missing target is displayed as 0% achievement and reads as total failure | Must be flagged, never shown as 0% -- only the flagging is open | `policy_ruling` |
+| scope | Which channels and branches does a target cover, and how should actuals be filtered to match? | A partial-scope target is compared to full-scope actuals and always looks missed | None -- the scope must be confirmed | `policy_ruling` |
+
 ## Owner
 
 Finance and Sales.

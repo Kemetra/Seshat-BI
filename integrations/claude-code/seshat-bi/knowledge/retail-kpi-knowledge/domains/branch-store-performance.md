@@ -38,6 +38,28 @@ never invents a contract.
 - Treatment of click-and-collect / e-commerce sales attributed to a store.
 - Exclude head-office / warehouse pseudo-branches.
 
+## Owner questions
+
+Ask these before this domain's contracts are handed off. Each card is the owner-facing
+form of an ambiguity listed above: it names the question in business language, the
+silent breakage if it goes unanswered, and the `decision_type` under which the answer is
+recorded in the Decision Store. The **layer default** is context shown to the owner, never
+a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
+(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
+make a number appear).
+
+Every ambiguity listed above has a card here UNLESS it is already marked **RULED** (a
+settled decision -- re-asking invites a contradicting answer) or states a grain/handling
+instruction rather than a question only the owner can answer. Those exclusions are named
+in the row list below rather than left silent.
+
+| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
+|---|---------------|---------------|------------------------------|------------|
+| channel | Which store, if any, should a click-and-collect or e-commerce sale be attributed to? | Store performance either double-counts online sales or misses them entirely | None -- attribution is a business ruling | `policy_ruling` |
+| pseudo | Which branches are not real stores (head office, warehouse) and should be excluded? | Pseudo-branches appear in store rankings and distort every per-store average | None -- exclusions are a business ruling | `data_exclusion` |
+| A9 | Which source field is the authoritative branch key that survives a rename or re-code? | Grouping falls back to the name, so a renamed branch splits in two and breaks every trend | Aggregate on the key only -- never on the name | `kpi_definition` |
+| A11 | How long must a store trade before it is same-store, and how are relocations, major refurbishments and closures treated? | Like-for-like growth is non-reproducible: new, moved, refurbished and closed stores drift in and out silently | None -- every one of the four events is a business definition | `policy_ruling` |
+
 ## Owner
 
 Operations and Finance.

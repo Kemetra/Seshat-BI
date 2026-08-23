@@ -18,6 +18,7 @@ inventory; this router is a consumer view.
 | Choose MVP dashboard KPIs | `packs/mvp-retail-kpi-pack.md` | kpi-pack-review-checklist |
 | Decide if a KPI can be summed | `knowledge/kpi-additivity-and-grain.md` | metric-contract-review-checklist |
 | Resolve VAT / returns / cost ambiguity | `knowledge/kpi-ambiguities.md` | metric-ambiguity-checklist |
+| Interview an owner about a domain's ambiguities | `domains/<domain>.md` (`## Owner questions`) | a Decision Store record per card under its named `decision_type`; an unanswered card stays `pending` and the domain stays blocked |
 | Write a brand-new KPI contract | `references/metric-contract-template.md` | metric-contract-review-checklist |
 | Explore enterprise KPI concepts beyond the seeded retail registry | `references/enterprise-kpi-knowledge-layer.md` | select one candidate and end on `checklists/kpi-extension-checklist.md`; never promote a catalog row automatically |
 | See which KPIs are base vs derived (and the base each derived KPI depends on) | `references/kpi-derivation-lineage.md` | the derivation graph (no readiness, no score) |

@@ -31,6 +31,28 @@ planned marker. A question never implies a formula and never invents a contract.
 - Separate commercial discounts from accounting write-offs and loyalty-point redemptions.
 - Retailer-funded vs supplier-funded discount — split only if the source supports it.
 
+## Owner questions
+
+Ask these before this domain's contracts are handed off. Each card is the owner-facing
+form of an ambiguity listed above: it names the question in business language, the
+silent breakage if it goes unanswered, and the `decision_type` under which the answer is
+recorded in the Decision Store. The **layer default** is context shown to the owner, never
+a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
+(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
+make a number appear).
+
+Every ambiguity listed above has a card here UNLESS it is already marked **RULED** (a
+settled decision -- re-asking invites a contradicting answer) or states a grain/handling
+instruction rather than a question only the owner can answer. Those exclusions are named
+in the row list below rather than left silent.
+
+| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
+|---|---------------|---------------|------------------------------|------------|
+| writeoff | Which deduction types count as discount, and which are accounting write-offs or loyalty redemptions? | Discount rate absorbs unrelated accounting activity and misreports commercial performance | None -- the split is a business ruling | `policy_ruling` |
+| funding | Which source field distinguishes a retailer-funded discount from a supplier-funded one? | Supplier-funded discount is charged against your own margin | None -- split only if the source supports it | `policy_ruling` |
+| A5 | Which discount fields exist on a line and on the header, and how do they combine into one discount amount? | Summing line and header fields double-counts the header discount, or drops it entirely | None -- name every field and its combination rule | `kpi_definition` |
+| A4 | Which sales scope forms the gross-sales denominator -- all channels, or a subset? | The denominator scope is unstated, so discount rate is not comparable between reports | Gross sales is the denominator -- fixed by this domain, never net | `kpi_definition` |
+
 ## Owner
 
 Commercial and Finance.
