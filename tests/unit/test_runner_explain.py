@@ -90,6 +90,22 @@ def test_explain_does_not_change_the_exit_code(capsys):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("entry", ["unfinished", ["a"], 7, None])
+def test_a_malformed_entry_degrades_instead_of_crashing(capsys, entry):
+    """Fails while a non-mapping entry reaches `.get` and raises AttributeError.
+
+    Valid YAML can still hold a half-edited entry (`rules: {D8: "unfinished"}`).
+    The promise is fail-soft, so that must render as an unannotated finding, not
+    a traceback out of a display-only path.
+    """
+    findings = (Finding("D8", Severity.ERROR, "bad partition", "model.tmdl:12"),)
+
+    run(_rules(*findings), _ctx(), annotate=explain_renderer({"D8": entry}))
+
+    assert capsys.readouterr().out == "[error] D8 bad partition (model.tmdl:12)\n"
+
+
+@pytest.mark.unit
 def test_unknown_id_renders_exactly_as_it_does_without_explain(capsys):
     """Fails if a missing entry emits a placeholder instead of staying silent."""
     findings = (Finding("ZZ9", Severity.WARNING, "no guidance", "x.yaml:1"),)

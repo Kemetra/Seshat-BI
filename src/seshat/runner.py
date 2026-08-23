@@ -308,11 +308,18 @@ def _explain_lines(
 ) -> list[str]:
     """The indented ``means``/``fix`` continuation lines for one finding, if authored.
 
-    ADDITIVE and display-only: an id with no authored entry (and an entry with neither
-    field) yields nothing, so the finding renders exactly as it does without the flag
-    rather than asserting guidance nobody wrote.
+    ADDITIVE and display-only: an id with no authored entry, an entry with neither
+    field, and an entry of the WRONG SHAPE all yield nothing, so the finding renders
+    exactly as it does without the flag rather than asserting guidance nobody wrote.
+
+    The shape check is not defensive padding: valid YAML can hold a half-edited entry
+    (``rules: {D8: "unfinished"}``), which is a string, not a mapping. Reaching
+    ``.get`` on it raised ``AttributeError`` out of a display-only path and crashed
+    the whole check run (PR #706 review).
     """
-    entry = guidance.get(finding.rule_id) or {}
+    entry = guidance.get(finding.rule_id)
+    if not isinstance(entry, Mapping):
+        return []
     labelled = (("means", entry.get("means")), ("fix", entry.get("fix")))
     return [
         f"    {label}: {str(text).strip()}"
