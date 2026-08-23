@@ -24,8 +24,8 @@ Verified against `origin/main` on 2026-08-23: **c22** (PR #706, `5451baf1`), **c
 **c29** (PRs #707/#708, `9bbfcbde`) and **c41** (PR #704, `1e1ea518`) have shipped, and
 **c2** was already live as a knowledge route (`skills/bi-sql-knowledge/INDEX.md`, commit
 `e6c421a4`) when this shortlist was written -- its ADOPT verdict rested on a
-code-consumer check that a routed knowledge corpus does not need. **c10** is built and
-under review on PR #709, not yet merged. Only **c19** (widen `dax_gen` past `base|ratio`)
+code-consumer check that a routed knowledge corpus does not need. **c10** shipped as
+PR #709 (`74349708`). Only **c19** (widen `dax_gen` past `base|ratio`)
 and **c35** (answer freshness header) remain open, and neither has been ratified.
 
 This section is a dated record; it is not rewritten as ideas ship. Read the per-idea

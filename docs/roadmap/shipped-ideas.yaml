@@ -299,9 +299,8 @@ H6:
 
 # --- 2026-08-23 idea-bank ADOPT wave (2026-08-22 bank, codes c*) ---
 # Recorded from a verified merge check against origin/main, not from the bank's own
-# verdicts: the 2026-08-22 bank still lists all of these under ## ADOPT. c10 is built
-# but UNMERGED (PR #709) and is deliberately absent -- this ledger records ships, not
-# work in flight. c19 and c35 remain open.
+# verdicts: the 2026-08-22 bank still lists all of these under ## ADOPT. c19 and c35
+# remain open.
 c2:
   status: shipped
   pr_sha: "e6c421a4 (2026-07-25) skills/bi-sql-knowledge/ -- PostgreSQL plan reasoning: knowledge/postgresql-execution-plans.md (EP-001..014) + patterns/postgresql-plan-patterns.json (EP-PAT-*) terminating on checklists/postgresql-plan-review-checklist.md, ROUTED live at INDEX.md:33. Shipped BEFORE the 2026-08-22 bank scored it ADOPT: the novelty argument rested on a zero-src/-consumer check, which a routed knowledge corpus does not need."
@@ -321,4 +320,8 @@ c29:
 c41:
   status: shipped
   pr_sha: "PR #704 1e1ea518 -- ONBOARDING.md rewritten as a four-arrival router; the former Claude-usage telemetry moved to docs/contributing/claude-code-usage-snapshot.md."
+  f_row: none
+c10:
+  status: shipped
+  pr_sha: "PR #709 74349708 -- 41 owner-question cards across the 12 retail-kpi domain packs, each recording under a real CRITICAL_DECISION_TYPE, wired at business-knowledge-interview step 4 and a retail-kpi-knowledge INDEX route; guarded by tests/unit/test_domain_owner_questions.py. Fifteen Codex P2s resolved across five waves, all one family: a card answerable without resolving its ambiguity."
   f_row: none
