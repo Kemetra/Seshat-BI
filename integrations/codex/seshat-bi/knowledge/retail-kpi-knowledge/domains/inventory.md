@@ -35,6 +35,27 @@ snapshot fact), so every question is a deferred note — never a fabricated cont
 - Out-of-stock: shelf stock vs warehouse stock; treat data-error zeros separately from
   true stockouts.
 
+## Owner questions
+
+Ask these before this domain's contracts are handed off. Each card is the owner-facing
+form of an ambiguity listed above: it names the question in business language, the
+silent breakage if it goes unanswered, and the `decision_type` under which the answer is
+recorded in the Decision Store. The **layer default** is context shown to the owner, never
+a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
+(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
+make a number appear).
+
+Every ambiguity listed above has a card here UNLESS it is already marked **RULED** (a
+settled decision -- re-asking invites a contradicting answer) or states a grain/handling
+instruction rather than a question only the owner can answer. Those exclusions are named
+in the row list below rather than left silent.
+
+| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
+|---|---------------|---------------|------------------------------|------------|
+| oos | Which stock location defines out-of-stock, and which source indicator separates a genuine zero from a data-error zero? | Availability is measured on the wrong location, or data-error zeros are counted as genuine stockouts | None -- name the location AND the rule that separates the two zero populations | `missing_value_rule` |
+| A10 | How often is stock captured, and does a snapshot mean on-hand, on-shelf, or warehouse stock? | Inventory value, turnover and GMROI are computed on a snapshot whose cadence and scope are unknown | None -- both the cadence and the meaning must be stated | `kpi_definition` |
+| A6 | Which cost should inventory be valued at? | Stock value changes materially with the method | None -- cost method is a business ruling | `policy_ruling` |
+
 ## Owner
 
 Supply Chain and Finance.

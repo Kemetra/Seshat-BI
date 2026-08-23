@@ -33,6 +33,27 @@ formula and never invents a contract.
 - A2 Returns handling for high-return SKUs (overstatement if ignored).
 - Discontinued items: include or exclude when analysing active assortment.
 
+## Owner questions
+
+Ask these before this domain's contracts are handed off. Each card is the owner-facing
+form of an ambiguity listed above: it names the question in business language, the
+silent breakage if it goes unanswered, and the `decision_type` under which the answer is
+recorded in the Decision Store. The **layer default** is context shown to the owner, never
+a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
+(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
+make a number appear).
+
+Every ambiguity listed above has a card here UNLESS it is already marked **RULED** (a
+settled decision -- re-asking invites a contradicting answer) or states a grain/handling
+instruction rather than a question only the owner can answer. Those exclusions are named
+in the row list below rather than left silent.
+
+| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
+|---|---------------|---------------|------------------------------|------------|
+| discontinued | Which items count as active assortment, and how long after discontinuation do they drop out? | Assortment performance mixes live and dead SKUs and misdirects buying | None -- exclusions are a business ruling | `data_exclusion` |
+| A8 | Which source field is the authoritative product key, and how does it map to a category path? | Grouping falls back to the name, so one product splits in two or two products merge | Group on the key only -- never on the name | `kpi_definition` |
+| A2 | How should a return be attributed to a product -- against the selling period, or the return period? | Product ranking is computed on unreturned volume and misleads buying decisions | None -- the policy must be stated, not assumed | `policy_ruling` |
+
 ## Owner
 
 Commercial and Buying (Supply Chain for sell-through / GMROI).

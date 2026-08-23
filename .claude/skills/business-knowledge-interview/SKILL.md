@@ -56,11 +56,30 @@ conversation.
    by a named human whose authority class is eligible for the decision type
    (as recorded in the `approval-authority` contract). Route any KPI-*meaning*
    question to `retail-kpi-knowledge`; never invent meaning here.
-4. **Mask suspected PII by default.** Show shape-preserving masks, cite the
+4. **Ask the domain's owner questions -- only those the scoped KPIs depend on.** For
+   each retail KPI domain the table feeds, open that domain pack in the
+   `retail-kpi-knowledge` skill and ask the cards in its `## Owner questions` section
+   that bear on a KPI actually in scope. **Do not ask a card no scoped KPI depends on:**
+   an unanswered card is recorded as a critical `pending` decision, and the decision gate
+   filters by decision type, not by KPI, so an out-of-scope card blocks the whole stage
+   (asking for Net Sales by Branch must not leave a same-store ruling pending). If scope
+   later widens, ask the cards it newly depends on then. Each card names the
+   `decision_type` its answer records under. A card's stated layer default is CONTEXT
+   shown to the owner -- never record it as their ruling. An unanswered in-scope card is
+   recorded `pending`/`needs_user_input`; this layer never invents a policy to make a
+   number appear (that layer's ambiguity Resolution rule). **Not every card type blocks:**
+   the `kpi_contracts` gate blocks on `kpi_definition`, `policy_ruling` and
+   `missing_value_rule` only, so a pending `data_exclusion` or `table_grain` card is
+   recorded but does NOT stop contract authoring. Report those to the owner explicitly as
+   open-but-not-blocking rather than implying the gate will catch them -- the gate's
+   category list is the authority, not this step.
+   This step supplies the KPI-meaning questions step 3 routes out; it does not define a
+   metric or a contract.
+5. **Mask suspected PII by default.** Show shape-preserving masks, cite the
    suspicion source. Unmasking requires an explicit owner instruction, recorded
    as a `pii_handling` decision scoped to the affected columns. Never write a raw
    suspected-PII value into a committed store file.
-5. **Record every outcome in the Decision Store**
+6. **Record every outcome in the Decision Store**
    (`.seshat/semantic-decisions.yaml`, `.seshat/kpi-contracts.yaml`,
    `.seshat/cleaning-rules.yaml`) -- answered => `proposed`/`approved`; refused =>
    `rejected`/`deferred`; unanswered => `pending`/`needs_user_input`; sample

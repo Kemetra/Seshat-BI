@@ -31,6 +31,14 @@ year (E1=A) unless a fiscal year is later declared.
 - Partial vs full period comparisons — RULED for YTD: both, to-date primary + full
   prior-year secondary (labelled) (YTD-year-start E2=C).
 
+## Owner questions
+
+None. Every ambiguity this domain lists is already **RULED** (see above), and a
+ruled decision is not re-asked -- re-opening one invites an answer that contradicts
+the contracts already built on it. If the business later reopens a ruling (for
+example declaring a fiscal year), the reopening is its own decision, recorded and
+reconciled against the existing contracts -- not a card asked during onboarding.
+
 ## Owner
 
 Finance and BI.

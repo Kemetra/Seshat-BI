@@ -33,6 +33,28 @@ planned marker. A question never implies a formula and never invents a contract.
 - Exchanges: treat as return + new sale, or netted? Needs business definition.
 - Exclude non-customer returns (warehouse corrections, stock adjustments).
 
+## Owner questions
+
+Ask these before this domain's contracts are handed off. Each card is the owner-facing
+form of an ambiguity listed above: it names the question in business language, the
+silent breakage if it goes unanswered, and the `decision_type` under which the answer is
+recorded in the Decision Store. The **layer default** is context shown to the owner, never
+a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
+(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
+make a number appear).
+
+Every ambiguity listed above has a card here UNLESS it is already marked **RULED** (a
+settled decision -- re-asking invites a contradicting answer) or states a grain/handling
+instruction rather than a question only the owner can answer. Those exclusions are named
+in the row list below rather than left silent.
+
+| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
+|---|---------------|---------------|------------------------------|------------|
+| exchange | Should an exchange be recorded as a return plus a new sale, or netted to nothing? | Return rate and gross sales both change materially with the choice | None -- needs a business definition | `policy_ruling` |
+| noncustomer | Which movement types count as a customer return, and which are warehouse or stock adjustments? | Return rate is inflated by movements no customer ever made | None -- exclusions are a business ruling | `data_exclusion` |
+| A2 | How are returns stored, and for each returns KPI must they be excluded, netted, or reported separately? | Returns are netted invisibly and true return volume is hidden | None -- storage alone is not the policy; state the treatment per KPI | `policy_ruling` |
+| A3 | Should a return be counted on the date it was returned, or the date of the original sale? | Return rate is attributed to the wrong period | None -- each contract must name its primary date | `kpi_definition` |
+
 ## Owner
 
 Operations and Finance (Quality / Buying for unit-based returns).
