@@ -196,6 +196,11 @@ artifacts = ["src/seshat/studio/static/**"]
 # package so `packs.resolve_schema_path` finds them in an installed layout.
 "schemas/seshat-extension-pack.schema.json" = "seshat/packs/schemas/seshat-extension-pack.schema.json"
 "schemas/seshat-pack-registry.schema.json" = "seshat/packs/schemas/seshat-pack-registry.schema.json"
+# `check --explain` renders the authored rule guidance next to each finding. Its
+# canonical home is `docs/rules/` (outside `packages`), so a bare wheel shipped none
+# of it and --explain annotated NOTHING in the primary installed scenario -- silently,
+# because the loader fails soft. Same class as the pack schemas above.
+"docs/rules/rule-fixes.yaml" = "seshat/rules_data/rule-fixes.yaml"
 # Studio's PREBUILT frontend (spec 139, FR-005) is deliberately NOT force-included.
 # Hatchling raises `FileNotFoundError: Forced include not found` during metadata
 # generation when a force-include source is absent, so pointing at `studio-ui/dist`
@@ -278,6 +283,9 @@ include = [
     # force-include them into the package.
     "/schemas/seshat-extension-pack.schema.json",
     "/schemas/seshat-pack-registry.schema.json",
+    # `check --explain`'s authored guidance. The wheel is built FROM this sdist, so
+    # the sdist must carry it for the wheel's force-include to find it.
+    "/docs/rules/rule-fixes.yaml",
     "/schemas/statistical-analysis-spec.schema.json",
     "/schemas/statistical-analysis-evidence.schema.json",
     # Governed-project templates the init scaffolders bundle (issue #325);

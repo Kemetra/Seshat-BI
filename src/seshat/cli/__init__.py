@@ -62,20 +62,38 @@ def _EXPLAIN_REFUSED(_finding: object) -> str:  # noqa: N802 (sentinel, not a ca
     raise AssertionError("refusal sentinel must never render")
 
 
-def _explain_guidance(repo_root: Path) -> Mapping[str, Mapping[str, str]]:
+def _explain_guidance(
+    _repo_root: Path | None = None,
+) -> Mapping[str, Mapping[str, str]]:
     """The authored reader guidance for ``--explain``, or empty if unreadable.
 
-    Display-only, and deliberately fail-soft: a missing or malformed
-    ``rule-fixes.yaml`` must degrade to the ordinary unannotated output, never
-    change a verdict or crash a check run. The file is reader guidance, so its
-    absence is a documentation gap, not a gate failure.
-    """
-    from ..rule_fix_table import RuleFixTableError, load_guidance
+    Read from the INSTALLED kit, never from the workspace being checked. Guidance
+    describes the RULES, which ship with the package; it is not a property of the
+    repo under inspection. Keying it on ``--repo`` worked only in the kit's own tree
+    and annotated nothing in the primary shipped case -- a wheel checking a consumer
+    workspace, where ``docs/rules/`` does not exist (PR #706 review).
 
+    ``_repo_root`` is accepted and ignored so callers need not care where the file
+    lives. Deliberately fail-soft: a missing or malformed file degrades to the
+    ordinary unannotated output rather than changing a verdict or crashing a run,
+    because reader guidance is a documentation gap, not a gate failure.
+    """
+    import yaml
+
+    from ..rule_fix_table import FIXES_REL
+
+    # Installed layout first (wheel force-include), then an editable/source
+    # checkout -- the same resolution `packs.resolve_schema_path` uses, except
+    # this one fails soft instead of raising: guidance is display-only.
+    packaged = Path(__file__).resolve().parent.parent / "rules_data" / FIXES_REL.name
+    source_tree = Path(__file__).resolve().parents[3] / FIXES_REL
     try:
-        return load_guidance(repo_root)
-    except (OSError, RuleFixTableError, ValueError):
+        path = packaged if packaged.is_file() else source_tree
+        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
         return {}
+    rules = (payload or {}).get("rules") if isinstance(payload, dict) else None
+    return rules if isinstance(rules, dict) else {}
 
 
 def _explain_annotator(args: object):
