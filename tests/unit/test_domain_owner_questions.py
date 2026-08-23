@@ -23,12 +23,16 @@ import pytest
 
 from seshat.decision_store import CRITICAL_DECISION_TYPES
 
-DOMAINS = Path(__file__).resolve().parents[2] / "skills" / "retail-kpi-knowledge" / "domains"
+_ROOT = Path(__file__).resolve().parents[2]
+DOMAINS = _ROOT / "skills" / "retail-kpi-knowledge" / "domains"
 
 _SECTION = re.compile(r"## Owner questions\n(.*?)(?=\n## |\Z)", re.DOTALL)
 _AMBIGUITIES = re.compile(r"## Key ambiguities.*?\n(.*?)(?=\n## )", re.DOTALL)
-_CARD_ROW = re.compile(r"^\| (?P<ref>[^|]+?) \| (?P<ask>[^|]+?) \| (?P<risk>[^|]+?) \| "
-                       r"(?P<default>[^|]+?) \| `(?P<dtype>[a-z_]+)` \|$", re.MULTILINE)
+_CARD_ROW = re.compile(
+    r"^\| (?P<ref>[^|]+?) \| (?P<ask>[^|]+?) \| (?P<risk>[^|]+?) \| "
+    r"(?P<default>[^|]+?) \| `(?P<dtype>[a-z_]+)` \|$",
+    re.MULTILINE,
+)
 _BULLET = re.compile(r"^- (.+)$", re.MULTILINE)
 
 # An ambiguity legitimately carries no card when it is already settled, or when it
@@ -83,7 +87,6 @@ def test_no_card_records_its_own_default_as_a_ruling(pack: Path) -> None:
     section = _SECTION.search(pack.read_text(encoding="utf-8"))
     assert section
     body = section.group(1)
-    assert "never record it as their ruling" not in body or True  # preamble lives in SKILL
     for _ref, _ask, _risk, default, _dtype in _CARD_ROW.findall(body):
         lowered = default.strip().lower()
         assert not lowered.startswith("ruled"), (
