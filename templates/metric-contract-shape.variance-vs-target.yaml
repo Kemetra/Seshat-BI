@@ -89,13 +89,15 @@ owner: "<named metric owner>"
 # -----------------------------------------------------------------------------
 binds_to:
   gold_table: "gold.<actuals_fact_placeholder>"   # the ACTUALS fact only.
-    # OPEN NOTE (for human / F009-owner review): a variance metric structurally
-    # needs a SECOND gold table (the target/budget fact) at the comparison
-    # grain. templates/metric-contract.yaml's binds_to block is scalar-shaped
-    # for one table today. This shape does NOT invent a second binds_to key
-    # or fork the template to add one -- it names the target table in
-    # formula_intent instead and flags the gap here for the F009 owner to
-    # decide, if ever, whether binds_to should grow a multi-table shape. This
+    # RESOLVED 2026-08-24 (F009 owner, Ahmed Shaaban): a variance metric
+    # structurally needs a SECOND gold table (the target/budget fact) at the
+    # comparison grain, and binds_to stays SCALAR -- it does not grow a
+    # multi-table shape. The second table is named in a sibling `compares_to`
+    # block of the same {gold_table, columns} shape, so the fifteen modules
+    # that read binds_to as a scalar dict are unaffected and a consumer that
+    # should follow the target opts in. Until this shape is regenerated against
+    # a compares_to-aware metric-contract.yaml it still names the target in
+    # formula_intent below; that is the pre-ruling record, not the ruling. This
     # is not a Principle-V grain/PII/business judgment call; it is a
     # template-capability note.
   columns:
@@ -207,6 +209,10 @@ action_on_breach:
 #     direction_of_good) -- business policy, no kit default exists.
 #   - The specific comparison grain for any real table (see `grain` above
 #     and docs/patterns/target-budget-fact.md Section 2).
-#   - Whether binds_to should ever grow a multi-table shape -- an F009-owner
-#     template-capability decision, not decided by this feature.
+#   - RESOLVED 2026-08-24 by the F009 owner (Ahmed Shaaban): binds_to does NOT grow
+#     a multi-table shape. A comparison metric names its second table in a SIBLING
+#     `compares_to` block of the same {gold_table, columns} shape. binds_to stays
+#     scalar and its fifteen consumers are unchanged; a consumer that should follow
+#     the target (gap_detector, impact_map_graph, rename_impact_guard) opts in
+#     deliberately rather than being silently handed a list it cannot read.
 # =============================================================================
