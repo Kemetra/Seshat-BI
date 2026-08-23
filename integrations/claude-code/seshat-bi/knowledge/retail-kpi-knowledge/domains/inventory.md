@@ -35,6 +35,21 @@ snapshot fact), so every question is a deferred note — never a fabricated cont
 - Out-of-stock: shelf stock vs warehouse stock; treat data-error zeros separately from
   true stockouts.
 
+## Owner questions
+
+Ask these before this domain's contracts are handed off. Each card is the owner-facing
+form of an ambiguity listed above: it names the question in business language, the
+silent breakage if it goes unanswered, and the `decision_type` under which the answer is
+recorded in the Decision Store. The **layer default** is context shown to the owner, never
+a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
+(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
+make a number appear).
+
+| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
+|---|---------------|---------------|------------------------------|------------|
+| A10 | Which snapshot date should stock levels be read at: period end, or a fixed day? | Stock value and cover are measured on inconsistent days and cannot be compared | None -- the snapshot date must be stated | `kpi_definition` |
+| A6 | Which cost should inventory be valued at? | Stock value changes materially with the method | None -- cost method is a business ruling | `policy_ruling` |
+
 ## Owner
 
 Supply Chain and Finance.

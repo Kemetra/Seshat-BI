@@ -33,6 +33,21 @@ planned marker. A question never implies a formula and never invents a contract.
 - Exchanges: treat as return + new sale, or netted? Needs business definition.
 - Exclude non-customer returns (warehouse corrections, stock adjustments).
 
+## Owner questions
+
+Ask these before this domain's contracts are handed off. Each card is the owner-facing
+form of an ambiguity listed above: it names the question in business language, the
+silent breakage if it goes unanswered, and the `decision_type` under which the answer is
+recorded in the Decision Store. The **layer default** is context shown to the owner, never
+a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
+(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
+make a number appear).
+
+| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
+|---|---------------|---------------|------------------------------|------------|
+| A2 | Are returns stored as negative sales lines or as a separate returns record? | Returns are netted invisibly and true return volume is hidden | None -- the policy must be stated, not assumed | `policy_ruling` |
+| A3 | Should a return be counted on the date it was returned, or the date of the original sale? | Return rate is attributed to the wrong period | None -- each contract must name its primary date | `kpi_definition` |
+
 ## Owner
 
 Operations and Finance (Quality / Buying for unit-based returns).

@@ -31,6 +31,20 @@ year (E1=A) unless a fiscal year is later declared.
 - Partial vs full period comparisons — RULED for YTD: both, to-date primary + full
   prior-year secondary (labelled) (YTD-year-start E2=C).
 
+## Owner questions
+
+Ask these before this domain's contracts are handed off. Each card is the owner-facing
+form of an ambiguity listed above: it names the question in business language, the
+silent breakage if it goes unanswered, and the `decision_type` under which the answer is
+recorded in the Decision Store. The **layer default** is context shown to the owner, never
+a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
+(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
+make a number appear).
+
+| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
+|---|---------------|---------------|------------------------------|------------|
+| A3 | Which date drives period comparisons: sale date or posting date? | Growth and prior-period comparisons do not reconcile between reports | None -- each contract must name its primary date | `kpi_definition` |
+
 ## Owner
 
 Finance and BI.

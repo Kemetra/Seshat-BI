@@ -29,6 +29,23 @@ planned marker. A question never implies a formula and never invents a contract.
 - A2 Align returns handling (COGS reversals) with the Net Sales policy.
 - A1 Exclude VAT consistently from both sales and cost.
 
+## Owner questions
+
+Ask these before this domain's contracts are handed off. Each card is the owner-facing
+form of an ambiguity listed above: it names the question in business language, the
+silent breakage if it goes unanswered, and the `decision_type` under which the answer is
+recorded in the Decision Store. The **layer default** is context shown to the owner, never
+a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
+(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
+make a number appear).
+
+| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
+|---|---------------|---------------|------------------------------|------------|
+| A6 | Which cost do you want margin measured against: standard, average, or last purchase cost? | Margin moves materially with the method; two reports disagree with no data change | None -- cost method is a business ruling | `policy_ruling` |
+| A4 | Is margin measured on gross or net sales? | Margin percentage shifts with the base and cannot be compared across reports | None -- gross and net are never interchangeable | `kpi_definition` |
+| A2 | Do returns reduce the margin of the period they were sold in, or the period returned? | Margin is attributed to the wrong period and trends mislead | None -- the policy must be stated, not assumed | `policy_ruling` |
+| A1 | Are cost and sales amounts on the same VAT basis? | A pre-tax cost against a tax-inclusive sale overstates margin | Pre-tax unless you state otherwise | `kpi_definition` |
+
 ## Owner
 
 Finance (Commercial as stakeholder).

@@ -33,6 +33,21 @@ formula and never invents a contract.
 - A2 Returns handling for high-return SKUs (overstatement if ignored).
 - Discontinued items: include or exclude when analysing active assortment.
 
+## Owner questions
+
+Ask these before this domain's contracts are handed off. Each card is the owner-facing
+form of an ambiguity listed above: it names the question in business language, the
+silent breakage if it goes unanswered, and the `decision_type` under which the answer is
+recorded in the Decision Store. The **layer default** is context shown to the owner, never
+a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
+(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
+make a number appear).
+
+| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
+|---|---------------|---------------|------------------------------|------------|
+| A8 | Should products be grouped by product key, or by product name? | The same product under two names splits into two rows, or two products merge | None -- key vs name is an identity ruling | `kpi_definition` |
+| A2 | Do returns reduce the selling product's performance? | Product ranking is computed on unreturned volume and misleads buying decisions | None -- the policy must be stated, not assumed | `policy_ruling` |
+
 ## Owner
 
 Commercial and Buying (Supply Chain for sell-through / GMROI).

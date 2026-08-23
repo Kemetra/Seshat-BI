@@ -31,6 +31,21 @@ planned marker. A question never implies a formula and never invents a contract.
 - Separate commercial discounts from accounting write-offs and loyalty-point redemptions.
 - Retailer-funded vs supplier-funded discount — split only if the source supports it.
 
+## Owner questions
+
+Ask these before this domain's contracts are handed off. Each card is the owner-facing
+form of an ambiguity listed above: it names the question in business language, the
+silent breakage if it goes unanswered, and the `decision_type` under which the answer is
+recorded in the Decision Store. The **layer default** is context shown to the owner, never
+a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
+(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
+make a number appear).
+
+| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
+|---|---------------|---------------|------------------------------|------------|
+| A5 | Are discounts recorded per line, or once on the whole transaction? | Line and header discounts double-count or vanish when summed together | None -- the storage level must be confirmed | `kpi_definition` |
+| A4 | Is discount measured against gross or net sales? | Discount rate shifts with the base and cannot be compared | None -- gross and net are never interchangeable | `kpi_definition` |
+
 ## Owner
 
 Commercial and Finance.

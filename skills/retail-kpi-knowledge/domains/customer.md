@@ -40,6 +40,21 @@ planned marker. A question never implies a formula and never invents a contract.
 - One-time vs repeat customer -- the cut between "new" and "returning" depends on the
   first-purchase anchor and the identity key above.
 
+## Owner questions
+
+Ask these before this domain's contracts are handed off. Each card is the owner-facing
+form of an ambiguity listed above: it names the question in business language, the
+silent breakage if it goes unanswered, and the `decision_type` under which the answer is
+recorded in the Decision Store. The **layer default** is context shown to the owner, never
+a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
+(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
+make a number appear).
+
+| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
+|---|---------------|---------------|------------------------------|------------|
+| identity | Which field identifies a returning customer: loyalty id, card, phone, or account? | The same person counts as several customers and every retention KPI is wrong | None -- a reserved ruling, never defaulted | `kpi_definition` |
+| retention | Over what window is a customer counted as retained: rolling 12 months, calendar year, or since first purchase? | Retention rate changes with the window and is not comparable | None -- the window is a business definition | `policy_ruling` |
+
 ## Owner
 
 Marketing / CRM and Finance (with Governance for any PII publish ruling).

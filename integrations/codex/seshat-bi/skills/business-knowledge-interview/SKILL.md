@@ -56,11 +56,19 @@ conversation.
    by a named human whose authority class is eligible for the decision type
    (as recorded in the `approval-authority` contract). Route any KPI-*meaning*
    question to `retail-kpi-knowledge`; never invent meaning here.
-4. **Mask suspected PII by default.** Show shape-preserving masks, cite the
+4. **Ask the domain's owner questions.** For each retail KPI domain the table feeds,
+   open that domain pack in the `retail-kpi-knowledge` skill and ask the cards in its
+   `## Owner questions` section. Each card names the `decision_type` its answer records
+   under. A card's stated layer default is CONTEXT shown to the owner -- never record it
+   as their ruling. An unanswered card is recorded `pending`/`needs_user_input` and
+   leaves the domain blocked; this layer never invents a policy to make a number appear
+   (that layer's ambiguity Resolution rule). This step supplies the KPI-meaning
+   questions step 3 routes out; it does not define a metric or a contract.
+5. **Mask suspected PII by default.** Show shape-preserving masks, cite the
    suspicion source. Unmasking requires an explicit owner instruction, recorded
    as a `pii_handling` decision scoped to the affected columns. Never write a raw
    suspected-PII value into a committed store file.
-5. **Record every outcome in the Decision Store**
+6. **Record every outcome in the Decision Store**
    (`.seshat/semantic-decisions.yaml`, `.seshat/kpi-contracts.yaml`,
    `.seshat/cleaning-rules.yaml`) -- answered => `proposed`/`approved`; refused =>
    `rejected`/`deferred`; unanswered => `pending`/`needs_user_input`; sample

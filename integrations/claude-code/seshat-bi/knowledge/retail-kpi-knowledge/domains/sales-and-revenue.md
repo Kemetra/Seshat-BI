@@ -35,6 +35,23 @@ planned marker. A question never implies a formula and never invents a contract.
 - A3 Sale date vs posting date — name the primary date in each contract.
 - A2 Returns handling — decide netted vs separate before reporting revenue.
 
+## Owner questions
+
+Ask these before this domain's contracts are handed off. Each card is the owner-facing
+form of an ambiguity listed above: it names the question in business language, the
+silent breakage if it goes unanswered, and the `decision_type` under which the answer is
+recorded in the Decision Store. The **layer default** is context shown to the owner, never
+a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
+(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
+make a number appear).
+
+| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
+|---|---------------|---------------|------------------------------|------------|
+| A1 | Are your sales amounts stored with VAT included, or before VAT? | Revenue and every margin built on it inflate or deflate silently | Pre-tax unless you state otherwise | `kpi_definition` |
+| A4 | When you say "sales", do you mean before or after returns and deductions? | Gross is substituted for net and the two never reconcile | None -- gross and net are never interchangeable | `kpi_definition` |
+| A3 | Which date should drive the time axis: sale date or posting date? | A KPI on sale date will not reconcile to one on posting date | None -- each contract must name its primary date | `kpi_definition` |
+| A2 | Are returns negative lines inside sales, or a separate record? | A naive sum nets returns invisibly, hiding both true sales and true returns | None -- the policy must be stated, not assumed | `policy_ruling` |
+
 ## Owner
 
 Finance (primary), with Sales / Commercial as stakeholders.

@@ -38,6 +38,21 @@ never invents a contract.
 - Treatment of click-and-collect / e-commerce sales attributed to a store.
 - Exclude head-office / warehouse pseudo-branches.
 
+## Owner questions
+
+Ask these before this domain's contracts are handed off. Each card is the owner-facing
+form of an ambiguity listed above: it names the question in business language, the
+silent breakage if it goes unanswered, and the `decision_type` under which the answer is
+recorded in the Decision Store. The **layer default** is context shown to the owner, never
+a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
+(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
+make a number appear).
+
+| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
+|---|---------------|---------------|------------------------------|------------|
+| A9 | Should branches be grouped by branch key, or by branch name? | A renamed or re-coded branch splits into two, breaking every trend | None -- key vs name is an identity ruling | `kpi_definition` |
+| A11 | Which stores count as "same-store", and after how long does a new store join? | Like-for-like growth silently includes new stores and overstates performance | None -- same-store is a business definition | `policy_ruling` |
+
 ## Owner
 
 Operations and Finance.

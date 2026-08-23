@@ -32,6 +32,22 @@ performance); all are deferred notes — never a fabricated contract.
 - SLA thresholds and time zones for late-arrival logic.
 - Back-dated corrections allowed by policy vs true lateness.
 
+## Owner questions
+
+Ask these before this domain's contracts are handed off. Each card is the owner-facing
+form of an ambiguity listed above: it names the question in business language, the
+silent breakage if it goes unanswered, and the `decision_type` under which the answer is
+recorded in the Decision Store. The **layer default** is context shown to the owner, never
+a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
+(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
+make a number appear).
+
+| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
+|---|---------------|---------------|------------------------------|------------|
+| nulls | Which blank values are legitimate (for example a walk-in customer), and which are defects? | Real defects are dismissed as expected, or valid rows are flagged as broken | None -- only you can separate allowed from defective | `missing_value_rule` |
+| late | How late may data arrive before it counts as late, and in which time zone? | Late-arrival alerts fire on healthy loads or stay silent on broken ones | None -- the SLA is owner-supplied | `policy_ruling` |
+| backdated | Are back-dated corrections allowed by policy, or do they indicate a problem? | Genuine corrections are reported as data quality failures | None -- the policy must be stated, not assumed | `policy_ruling` |
+
 ## Owner
 
 BI / Data.

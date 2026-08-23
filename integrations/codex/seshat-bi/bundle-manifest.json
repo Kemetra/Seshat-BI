@@ -1344,10 +1344,10 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/INDEX.md",
-      "output_sha256": "efc62ab62d6cdfcaea2d4ea6803782df23e9663cca20026ac8eaebd4f0433c24",
+      "output_sha256": "3f4cea66618f3326e1383e569634f0d9dbf259840354ffcd935334d8f1245dff",
       "source": "skills/retail-kpi-knowledge/INDEX.md",
       "source_id": "kb-152",
-      "source_sha256": "efc62ab62d6cdfcaea2d4ea6803782df23e9663cca20026ac8eaebd4f0433c24",
+      "source_sha256": "3f4cea66618f3326e1383e569634f0d9dbf259840354ffcd935334d8f1245dff",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1551,109 +1551,109 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/basket-and-transactions.md",
-      "output_sha256": "44a16fb0634a2e15f297c95f862b3d2a44ffce3bbe21639b0ee47a3cecab2d17",
+      "output_sha256": "dfa50b9b0e3b49948e4110b3a7e9bf071d42b4da6bd608fe80806eb00ae02ef0",
       "source": "skills/retail-kpi-knowledge/domains/basket-and-transactions.md",
       "source_id": "kb-175",
-      "source_sha256": "44a16fb0634a2e15f297c95f862b3d2a44ffce3bbe21639b0ee47a3cecab2d17",
+      "source_sha256": "dfa50b9b0e3b49948e4110b3a7e9bf071d42b4da6bd608fe80806eb00ae02ef0",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/branch-store-performance.md",
-      "output_sha256": "e964459c4ff4445ea9bfe5edc550409bd2b7a0b4c48661aeef68e2914eaa8b57",
+      "output_sha256": "93d8b502065ae62e1f2e15207689c35bc0f87e6137de3a141d58fcafb040c3cf",
       "source": "skills/retail-kpi-knowledge/domains/branch-store-performance.md",
       "source_id": "kb-176",
-      "source_sha256": "e964459c4ff4445ea9bfe5edc550409bd2b7a0b4c48661aeef68e2914eaa8b57",
+      "source_sha256": "93d8b502065ae62e1f2e15207689c35bc0f87e6137de3a141d58fcafb040c3cf",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/customer.md",
-      "output_sha256": "8b60770415250968abefd0ae08d84a6413dfea365885fbe3af922b1a238d0294",
+      "output_sha256": "ed796830d32ebba217ec587315654b2032556bdff4dd7e2b06347ba807ef2d5f",
       "source": "skills/retail-kpi-knowledge/domains/customer.md",
       "source_id": "kb-177",
-      "source_sha256": "8b60770415250968abefd0ae08d84a6413dfea365885fbe3af922b1a238d0294",
+      "source_sha256": "ed796830d32ebba217ec587315654b2032556bdff4dd7e2b06347ba807ef2d5f",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/data-quality-control.md",
-      "output_sha256": "d53db12fad225d6bb02f97e063c301318d5d26bcbca2eb20202757008b328e8c",
+      "output_sha256": "8701f754bfa709850449df95d1897d2dcb6d899e457a66c19264fce27fb737fc",
       "source": "skills/retail-kpi-knowledge/domains/data-quality-control.md",
       "source_id": "kb-178",
-      "source_sha256": "d53db12fad225d6bb02f97e063c301318d5d26bcbca2eb20202757008b328e8c",
+      "source_sha256": "8701f754bfa709850449df95d1897d2dcb6d899e457a66c19264fce27fb737fc",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/discounts-and-promotions.md",
-      "output_sha256": "adfc563e150910a97005232831a314bb7f1a44d8f7eaf6ca5cf14416b7b1077e",
+      "output_sha256": "160e69204ee32d13617e8adfc692dd2fd4b19933ebfbcf1579c7021e944215c3",
       "source": "skills/retail-kpi-knowledge/domains/discounts-and-promotions.md",
       "source_id": "kb-179",
-      "source_sha256": "adfc563e150910a97005232831a314bb7f1a44d8f7eaf6ca5cf14416b7b1077e",
+      "source_sha256": "160e69204ee32d13617e8adfc692dd2fd4b19933ebfbcf1579c7021e944215c3",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/inventory.md",
-      "output_sha256": "3495faaae2bc23fb2528663d5133e2d4a83c596b0f05571ff1e9010f1ee671ef",
+      "output_sha256": "c2d7924bd8903e21db5e028f3d54e9b788c7df41c640f56a590e015803981554",
       "source": "skills/retail-kpi-knowledge/domains/inventory.md",
       "source_id": "kb-180",
-      "source_sha256": "3495faaae2bc23fb2528663d5133e2d4a83c596b0f05571ff1e9010f1ee671ef",
+      "source_sha256": "c2d7924bd8903e21db5e028f3d54e9b788c7df41c640f56a590e015803981554",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/margin-profitability.md",
-      "output_sha256": "49002203f089ea1d1956dded3741124efc6c21fae62fcc6105c7ba3417a76153",
+      "output_sha256": "7de98c2128d289b776c04d5ef603ad994dee808f35f1de3b5c45b32e14613598",
       "source": "skills/retail-kpi-knowledge/domains/margin-profitability.md",
       "source_id": "kb-181",
-      "source_sha256": "49002203f089ea1d1956dded3741124efc6c21fae62fcc6105c7ba3417a76153",
+      "source_sha256": "7de98c2128d289b776c04d5ef603ad994dee808f35f1de3b5c45b32e14613598",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/product-category-performance.md",
-      "output_sha256": "2360603605d6c77552d270814202b02ced74fd9991079cfa6aca64fca1809691",
+      "output_sha256": "bd5b6fd16d16f249639a26c9a2931ff30d41648d18f0351108a6727a8104b200",
       "source": "skills/retail-kpi-knowledge/domains/product-category-performance.md",
       "source_id": "kb-182",
-      "source_sha256": "2360603605d6c77552d270814202b02ced74fd9991079cfa6aca64fca1809691",
+      "source_sha256": "bd5b6fd16d16f249639a26c9a2931ff30d41648d18f0351108a6727a8104b200",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/returns.md",
-      "output_sha256": "d80db4e7340b907c25e14f4c8938edc17c1ad937951475fa6751a7775ecfaf2e",
+      "output_sha256": "03e23fb063b6c328ff7532a4b516a2addb548cc6414d3ac209cece8fe541df94",
       "source": "skills/retail-kpi-knowledge/domains/returns.md",
       "source_id": "kb-183",
-      "source_sha256": "d80db4e7340b907c25e14f4c8938edc17c1ad937951475fa6751a7775ecfaf2e",
+      "source_sha256": "03e23fb063b6c328ff7532a4b516a2addb548cc6414d3ac209cece8fe541df94",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/sales-and-revenue.md",
-      "output_sha256": "0eefd4f1d376c813ecdfbff921bb244ef3c60a7d3b7c367ee9c3d48352a560db",
+      "output_sha256": "24181358563bc6cdc075088ce8e6860109efa80dce583d5ebc7685a7c8a56e36",
       "source": "skills/retail-kpi-knowledge/domains/sales-and-revenue.md",
       "source_id": "kb-184",
-      "source_sha256": "0eefd4f1d376c813ecdfbff921bb244ef3c60a7d3b7c367ee9c3d48352a560db",
+      "source_sha256": "24181358563bc6cdc075088ce8e6860109efa80dce583d5ebc7685a7c8a56e36",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/targets-and-budgets.md",
-      "output_sha256": "9d797d607a57a51bd8b404fcf2ae29f76c4a34a2d649c36765337d0ab50187c0",
+      "output_sha256": "64b05617640fd978d2e66ff9da9881b5fd9ab2b5548d5c2d8a5bd2365356a92c",
       "source": "skills/retail-kpi-knowledge/domains/targets-and-budgets.md",
       "source_id": "kb-185",
-      "source_sha256": "9d797d607a57a51bd8b404fcf2ae29f76c4a34a2d649c36765337d0ab50187c0",
+      "source_sha256": "64b05617640fd978d2e66ff9da9881b5fd9ab2b5548d5c2d8a5bd2365356a92c",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/time-intelligence.md",
-      "output_sha256": "155ac42f5691895340b25eed73365d45560e008e2820bca939d897b8658c67ab",
+      "output_sha256": "6a3bca7888566986a68702f6e531127c2dbeb4ca7e4f18df42ba9739975e8621",
       "source": "skills/retail-kpi-knowledge/domains/time-intelligence.md",
       "source_id": "kb-186",
-      "source_sha256": "155ac42f5691895340b25eed73365d45560e008e2820bca939d897b8658c67ab",
+      "source_sha256": "6a3bca7888566986a68702f6e531127c2dbeb4ca7e4f18df42ba9739975e8621",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1965,10 +1965,10 @@
     {
       "classification": "public_knowledge",
       "destination": "skills/business-knowledge-interview/SKILL.md",
-      "output_sha256": "85af6d2ab159e71a8e80c8d4f0787eef7df082d4d2007b1fc72fdf0ffb214a72",
+      "output_sha256": "9e35898a446d07af6aebd014ef0ca629dd4f90f022b6eff875ded18b1034ed9e",
       "source": ".claude/skills/business-knowledge-interview/SKILL.md",
       "source_id": "kb-145",
-      "source_sha256": "85af6d2ab159e71a8e80c8d4f0787eef7df082d4d2007b1fc72fdf0ffb214a72",
+      "source_sha256": "9e35898a446d07af6aebd014ef0ca629dd4f90f022b6eff875ded18b1034ed9e",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2189,10 +2189,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "cb4003a334fe843736ed729a83753b18d5339f377c87d71b8bc9e9a07256ab5f",
+  "manifest_digest": "cf1e07e11e2e7c451c4577052084395acb6b84a2699604439416022eb8f4f4d8",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "bd4a9f19fe7f47f60754fbd57173dad131125e95",
+  "source_revision": "cccbb8508bd1087d474b2a605eccfbee9ae86fc3",
   "target": "codex",
   "version": "2.0.0"
 }
