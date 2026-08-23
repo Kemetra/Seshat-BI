@@ -64,6 +64,12 @@ _DECLARERS = (
     ("design/grids/mobile-grid.yaml", "safe_zones"),
     ("templates/dashboard-page-blueprint.yaml", "sections"),
 )
+# Declarers `scaffold-design` installs alongside the authority. Their absence from a
+# repo that HAS the authority is a lost surface, not a partial scaffold. The mobile
+# grid is deliberately excluded: it is neither scaffolded nor packaged, so erroring
+# on it would fire on every correct downstream install (verified against
+# `design_scaffold._DESIGN_FILES`).
+_SCAFFOLDED_DECLARERS = frozenset({"templates/dashboard-page-blueprint.yaml"})
 # Filled instances live here. A positive root, not a placeholder filter.
 _INSTANCE_ROOTS = ("reports/blueprints/", "reports/backgrounds/")
 # The keys a list-shaped declaration may use to name its section.
@@ -158,9 +164,15 @@ def _parity_findings(
     repo_root: Path, canon: set[str], tracked: frozenset[str]
 ) -> Iterable[Finding]:
     for suffix, key in _DECLARERS:
-        # UNTRACKED is the only silent case: a partial scaffold is a coverage gap the
-        # census reports. A tracked surface must answer, even to say "nothing".
         if suffix not in tracked:
+            # A surface the scaffolder installs has been LOST; one it never installs
+            # was simply never there, and the any-of corpus cannot tell them apart.
+            if suffix in _SCAFFOLDED_DECLARERS:
+                yield _finding(
+                    suffix,
+                    "a scaffolded section-declaring surface is not tracked, so "
+                    "cross-surface parity could not be proved",
+                )
             continue
         declaration = _declared(repo_root, suffix, key)
         if declaration.unreadable:

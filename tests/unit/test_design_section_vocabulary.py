@@ -383,3 +383,34 @@ def test_a_named_entry_in_a_filled_sections_list_is_validated(tmp_path):
 
     assert [f.severity for f in findings] == [Severity.ERROR]
     assert "main_insigts" in findings[0].message
+
+
+@pytest.mark.unit
+def test_a_missing_scaffolded_declarer_is_reported(tmp_path):
+    """The blueprint template ships with every scaffold, so its absence is drift.
+
+    `scaffold-design` installs `templates/dashboard-page-blueprint.yaml` alongside
+    the authority, so a repo holding the authority but not the template has LOST a
+    surface rather than never having had one -- and the any-of corpus cannot say so.
+    """
+    _write_corpus(tmp_path)
+    (tmp_path / "templates" / "dashboard-page-blueprint.yaml").unlink()
+
+    findings = list(section_vocabulary(_ctx(tmp_path)))
+
+    assert [f.severity for f in findings] == [Severity.ERROR]
+    assert "dashboard-page-blueprint.yaml" in findings[0].locator
+
+
+@pytest.mark.unit
+def test_a_missing_never_scaffolded_declarer_stays_silent(tmp_path):
+    """`mobile-grid.yaml` is neither scaffolded nor packaged -- absence is normal.
+
+    Erroring here would fire on every downstream repo that ran `scaffold-design`,
+    which installs the authority and the blueprint template but no mobile grid.
+    A gate that cries wolf on a correct install gets switched off.
+    """
+    _write_corpus(tmp_path)
+    (tmp_path / "design" / "grids" / "mobile-grid.yaml").unlink()
+
+    assert list(section_vocabulary(_ctx(tmp_path))) == []
