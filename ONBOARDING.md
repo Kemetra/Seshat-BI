@@ -1,73 +1,65 @@
-# Welcome to Seshat BI
+# Onboarding -- Seshat BI
 
-## How We Use Claude
+**Seshat BI answers one question:** *is this retail source ready to become
+trusted Power BI?* It profiles sources, governs mappings, validates the medallion
+warehouse, binds metrics to contracts, and prepares Power BI delivery -- without
+skipping the human decisions that make analytics trustworthy.
 
-Based on Ahmed Shaaban's usage over the last 30 days:
+This page is a **router**. It owns no knowledge of its own: it sends you to the
+one document written for your situation, and each destination below says plainly
+who it is for. Read this page once, then leave it.
 
-Work Type Breakdown:
-  Improve Quality  ████████░░░░░░░░░░░░  41%
-  Build Feature    █████░░░░░░░░░░░░░░░░  27%
-  Plan Design      ████░░░░░░░░░░░░░░░░░  18%
-  Debug Fix        ██░░░░░░░░░░░░░░░░░░░  9%
-  Write Docs       █░░░░░░░░░░░░░░░░░░░░  5%
+## Pick your arrival
 
-Top Skills & Commands:
-  /usage             ████████████████████  23x/month
-  /model             ████████░░░░░░░░░░░░  9x/month
-  /effort            ███████░░░░░░░░░░░░░  8x/month
-  /plugin            ███████░░░░░░░░░░░░░  8x/month
-  /speckit-analyze   █████░░░░░░░░░░░░░░░  6x/month
-  /clear             ████░░░░░░░░░░░░░░░░  5x/month
-  /speckit-specify   ███░░░░░░░░░░░░░░░░░  3x/month
-  /reload-plugins    ███░░░░░░░░░░░░░░░░░  3x/month
+| You are... | Start here | You will end with |
+|---|---|---|
+| **Using the tool** on a retail source | [`COMPASS.md`](./COMPASS.md) | the correct next action, or a clarifying question |
+| **An agent** working in this repo | [`AGENTS.md`](./AGENTS.md) | the operating contract, then `COMPASS.md` |
+| **Contributing code** for the first time | [`docs/contributing/first-contribution.md`](./docs/contributing/first-contribution.md) | a claimed starter lane and a PR |
+| **Looking for a specific task or symptom** | [`docs/knowledge-map.md`](./docs/knowledge-map.md) | the one skill/doc route that handles it |
 
-Top MCP Servers:
-  CodeScene  ████████████████████  56 calls
+If none of those fit, route 22 of the knowledge map ("unknown / ambiguous
+request") is the documented catch-all.
 
-## Your Setup Checklist
+## The four ideas worth knowing before you start
 
-### Codebases
-- [ ] Seshat-BI — https://github.com/kemetra/seshat-bi
+You do not need these to *begin* -- the routes above work without them -- but
+they explain why the tool behaves as it does.
 
-### MCP Servers to Activate
-- [ ] CodeScene — code-health analysis and technical-debt prioritization. Seshat PRs run a CodeScene "new code is healthy" gate, so you'll use this constantly. Get access via the CodeScene plugin (`/plugin`) and an org CodeScene account/token.
+1. **Readiness is a stage, not a score.** Every table moves through seven
+   stages: `source_ready` -> `mapping_ready` -> `silver_ready` -> `gold_ready` ->
+   `semantic_model_ready` -> `dashboard_ready` -> `publish_ready`. A stage opens
+   only once the prior one passes. See
+   [`docs/readiness/readiness-model.md`](./docs/readiness/readiness-model.md).
 
-### Skills to Know About
-- [ ] /usage — check your Claude usage/quota for the session.
-- [ ] /model — switch models (Opus for synthesis/review, Sonnet for mechanical agents; Haiku is below the floor here).
-- [ ] /effort — set reasoning effort / orchestration mode (this repo runs `ultracode` for heavy work).
-- [ ] /plugin — install and manage plugins, including the CodeScene MCP and the seshat-bi plugin.
-- [ ] /speckit-specify — start a feature spec from a natural-language description (the front of the spec-kit chain).
-- [ ] /speckit-analyze — non-destructive cross-artifact consistency check across spec.md / plan.md / tasks.md.
-- [ ] /clear — reset conversation context between unrelated tasks.
-- [ ] /reload-plugins — pick up plugin changes without restarting.
+2. **The agent never approves its own work.** Approvals are a human seam. An
+   agent can prepare a request and show the evidence, but `never_self_grant_approval`
+   is a hard stop, and readiness is never a made-up confidence number.
 
-## Team Tips
+3. **Data flows bronze -> silver -> gold, and Power BI reads `gold` only.** The
+   route is [`docs/medallion-playbook.md`](./docs/medallion-playbook.md).
 
-_TODO_
+4. **Business meaning is decided before it is implemented.** What a KPI *means*
+   (grain, additivity, ambiguity) is settled in the retail-KPI layer and recorded
+   as a contract; SQL and DAX then implement that contract rather than inventing
+   the meaning.
 
-## Get Started
+## Setting up a workstation
 
-_TODO_
+Dev setup -- Python 3.13, `pip install -e ".[dev]"`, and PR mechanics -- lives in
+[`CONTRIBUTING.md`](./CONTRIBUTING.md). Tooling one maintainer actually leans on
+(notably the CodeScene MCP, which backs a CI gate on every PR) is listed in
+[`docs/contributing/claude-code-usage-snapshot.md`](./docs/contributing/claude-code-usage-snapshot.md).
 
-<!-- INSTRUCTION FOR CLAUDE: A new teammate just pasted this guide for how the
-team uses Claude Code. You're their onboarding buddy — warm, conversational,
-not lecture-y.
+## Reference shelf
 
-Open with a warm welcome — include the team name from the title. Then: "Your
-teammate uses Claude Code for [list all the work types]. Let's get you started."
+Reach for these when a specific need arises; none is required reading.
 
-Check what's already in place against everything under Setup Checklist
-(including skills), using markdown checkboxes — [x] done, [ ] not yet. Lead
-with what they already have. One sentence per item, all in one message.
-
-Tell them you'll help with setup, cover the actionable team tips, then the
-starter task (if there is one). Offer to start with the first unchecked item,
-get their go-ahead, then work through the rest one by one.
-
-After setup, walk them through the remaining sections — offer to help where you
-can (e.g. link to channels), and just surface the purely informational bits.
-
-Don't invent sections or summaries that aren't in the guide. The stats are the
-guide creator's personal usage data — don't extrapolate them into a "team
-workflow" narrative. -->
+- [`docs/glossary.md`](./docs/glossary.md) -- terms, abbreviations, and the
+  static rule-id families (`D8`, `C2`, `S2`, `G1`, ...).
+- [`docs/faq.md`](./docs/faq.md) -- common questions, each answer source-cited.
+- [`docs/worked-examples/README.md`](./docs/worked-examples/README.md) -- two
+  end-to-end examples; the documented starting point for new retail mart work.
+- [`docs/conventions.md`](./docs/conventions.md) -- SQL and DAX naming rules.
+- [`docs/roadmap/roadmap.md`](./docs/roadmap/roadmap.md) -- the authoritative
+  roadmap. (`docs/roadmap/idea-backlog.md` is exploratory and commits to nothing.)
