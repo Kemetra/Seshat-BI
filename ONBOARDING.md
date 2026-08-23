@@ -58,8 +58,9 @@ Reach for these when a specific need arises; none is required reading.
 - [`docs/glossary.md`](./docs/glossary.md) -- terms, abbreviations, and the
   static rule-id families (`D8`, `C2`, `S2`, `G1`, ...).
 - [`docs/faq.md`](./docs/faq.md) -- common questions, each answer source-cited.
-- [`docs/worked-examples/README.md`](./docs/worked-examples/README.md) -- two
-  end-to-end examples; the documented starting point for new retail mart work.
+- [`docs/worked-examples/README.md`](./docs/worked-examples/README.md) -- the
+  worked-example index; its full-spine example (`retail-store-sales.md`) is the
+  documented starting point for new retail mart work.
 - [`docs/conventions.md`](./docs/conventions.md) -- SQL and DAX naming rules.
 - [`docs/roadmap/roadmap.md`](./docs/roadmap/roadmap.md) -- the authoritative
   roadmap. (`docs/roadmap/idea-backlog.md` is exploratory and commits to nothing.)

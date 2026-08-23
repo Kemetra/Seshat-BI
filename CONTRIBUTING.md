@@ -110,7 +110,7 @@ Follow the medallion playbook and the readiness spine -- do not skip stages:
 
 - **New raw table:** start with the `retail-onboard-table` / `source-mapping` flow ->
   profile -> map -> **stop at the source-mapping gate** (no `silver.*` SQL until the map is
-  reviewed and approved). See `docs/worked-examples/` for two end-to-end examples.
+  reviewed and approved). See `docs/worked-examples/` for the end-to-end example.
 - **Silver/gold SQL:** `warehouse/migrations/NNNN_description.sql`, numbered, idempotent
   (`DROP+CREATE` in one transaction for rebuildable `silver`/`gold`; never bare-DROP
   `bronze`). `snake_case`; schema prefixes `vw_`/`fct_`/`dim_`.
@@ -139,7 +139,7 @@ Follow the medallion playbook and the readiness spine -- do not skip stages:
 - `docs/glossary.md` -- terms, abbreviations, and the static rule families.
 - `docs/conventions.md` -- SQL / PBIP / DAX style.
 - `docs/medallion-playbook.md` -- the 7-phase method + the retail trap-checklist.
-- `docs/worked-examples/README.md` -- two end-to-end examples to copy.
+- `docs/worked-examples/README.md` -- the end-to-end example to copy.
 - License: Apache-2.0 (see `LICENSE`).
 ## Generated public agent bundles
 
