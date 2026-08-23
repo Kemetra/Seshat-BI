@@ -18,8 +18,10 @@ who it is for. Read this page once, then leave it.
 | **Contributing code** for the first time | [`docs/contributing/first-contribution.md`](./docs/contributing/first-contribution.md) | a claimed starter lane and a PR |
 | **Looking for a specific task or symptom** | [`docs/knowledge-map.md`](./docs/knowledge-map.md) | the one skill/doc route that handles it |
 
-If none of those fit, route 22 of the knowledge map ("unknown / ambiguous
-request") is the documented catch-all.
+If none of those fit, do not keep routing -- **ask one clarifying question, or
+state a blocked verdict naming what is missing.** That is the terminating action
+both `COMPASS.md` and knowledge-map route 22 call for; each currently names the
+other as the next hop, so a reader who follows them literally will circle.
 
 ## The four ideas worth knowing before you start
 
