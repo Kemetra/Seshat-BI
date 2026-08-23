@@ -1596,10 +1596,10 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/inventory.md",
-      "output_sha256": "2af68ec476969021c37b1cd3db75f2b73f5b40ae563161e9b1ec72d2fa615c1d",
+      "output_sha256": "4058e95ad23ce193e29b5b47064e41be260c37c89ad8e6f568c9c13d9347093d",
       "source": "skills/retail-kpi-knowledge/domains/inventory.md",
       "source_id": "kb-180",
-      "source_sha256": "2af68ec476969021c37b1cd3db75f2b73f5b40ae563161e9b1ec72d2fa615c1d",
+      "source_sha256": "4058e95ad23ce193e29b5b47064e41be260c37c89ad8e6f568c9c13d9347093d",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1623,10 +1623,10 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/returns.md",
-      "output_sha256": "f66e3723432a35ad53a4b89a27bbf53c60b0ea7b97e8fb3a0cb530f97db9be91",
+      "output_sha256": "e67d4246a35956c5f222df5b871bc29bc6fb3a18780cc0321555ae421e623f41",
       "source": "skills/retail-kpi-knowledge/domains/returns.md",
       "source_id": "kb-183",
-      "source_sha256": "f66e3723432a35ad53a4b89a27bbf53c60b0ea7b97e8fb3a0cb530f97db9be91",
+      "source_sha256": "e67d4246a35956c5f222df5b871bc29bc6fb3a18780cc0321555ae421e623f41",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1965,10 +1965,10 @@
     {
       "classification": "public_knowledge",
       "destination": "skills/business-knowledge-interview/SKILL.md",
-      "output_sha256": "a91388aaefcfacb2a6973b5d33635ae3178edea61b6d9f1bf32c3601262590b9",
+      "output_sha256": "a32d5ad76f0afad39250fb0fcf252a4d9060829d1f320ba40fcda8e7b32a1748",
       "source": ".claude/skills/business-knowledge-interview/SKILL.md",
       "source_id": "kb-145",
-      "source_sha256": "a91388aaefcfacb2a6973b5d33635ae3178edea61b6d9f1bf32c3601262590b9",
+      "source_sha256": "a32d5ad76f0afad39250fb0fcf252a4d9060829d1f320ba40fcda8e7b32a1748",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2189,10 +2189,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "585c67ff9ea2c5a5924a64a244ed0864e89b8f2251407eaa5f67116bf336b518",
+  "manifest_digest": "f964c0db9f5599c54091c12bc774c94dfebf2d459dcca641da3be5a0be6ab11c",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "5c80f3874bab4efc027284d0d8b3fd71fbb4d0ab",
+  "source_revision": "b378b44c6970342ee5feef388a7484c0e1905429",
   "target": "codex",
   "version": "2.0.0"
 }

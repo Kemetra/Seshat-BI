@@ -66,8 +66,13 @@ conversation.
    later widens, ask the cards it newly depends on then. Each card names the
    `decision_type` its answer records under. A card's stated layer default is CONTEXT
    shown to the owner -- never record it as their ruling. An unanswered in-scope card is
-   recorded `pending`/`needs_user_input` and leaves the domain blocked; this layer never
-   invents a policy to make a number appear (that layer's ambiguity Resolution rule).
+   recorded `pending`/`needs_user_input`; this layer never invents a policy to make a
+   number appear (that layer's ambiguity Resolution rule). **Not every card type blocks:**
+   the `kpi_contracts` gate blocks on `kpi_definition`, `policy_ruling` and
+   `missing_value_rule` only, so a pending `data_exclusion` or `table_grain` card is
+   recorded but does NOT stop contract authoring. Report those to the owner explicitly as
+   open-but-not-blocking rather than implying the gate will catch them -- the gate's
+   category list is the authority, not this step.
    This step supplies the KPI-meaning questions step 3 routes out; it does not define a
    metric or a contract.
 5. **Mask suspected PII by default.** Show shape-preserving masks, cite the

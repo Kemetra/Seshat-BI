@@ -216,3 +216,42 @@ def test_every_open_ambiguity_has_a_card_or_a_declared_exclusion(pack: Path) -> 
         f"{pack.name}: {len(open_bullets)} open ambiguity/ies but only {cards} card(s) "
         f"and {excluded} declared exclusion(s) -- an ambiguity was dropped silently"
     )
+
+
+@pytest.mark.unit
+def test_interview_does_not_overclaim_which_card_types_block() -> None:
+    """The skill must not promise a block the gate does not enforce.
+
+    Cards record under five decision types, but the `kpi_contracts` gate blocks on
+    three. Saying "an unanswered card leaves the domain blocked" was therefore
+    false for `data_exclusion` and `table_grain` cards, which are recorded and
+    then silently skipped by the gate (PR #709 Codex review). The skill now names
+    the blocking three and says the others are recorded but non-blocking; this
+    test fails if the gate's category set and that prose diverge.
+    """
+    from seshat.decision_gate import _load_blocking_categories
+
+    blocking = _load_blocking_categories(_ROOT, "kpi_contracts") or set()
+    assert blocking, (
+        "kpi_contracts declares no blocking categories -- gate lookup broke"
+    )
+
+    skill = (
+        _ROOT / ".claude" / "skills" / "business-knowledge-interview" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    step = skill.split("4. **Ask the domain's owner questions")[1]
+    step = step.split(chr(10) + "5. ")[0]
+
+    for dtype in sorted(blocking):
+        assert dtype in step, f"step 4 does not name blocking type {dtype!r}"
+
+    used = set()
+    for pack in _packs():
+        section = _SECTION.search(pack.read_text(encoding="utf-8"))
+        if section:
+            used |= {t for *_rest, t in _CARD_ROW.findall(section.group(1))}
+    for dtype in sorted(used - blocking):
+        assert dtype in step, (
+            f"cards record under {dtype!r}, which the gate does NOT block on, and "
+            f"step 4 never says so -- a reader would expect a block that never fires"
+        )

@@ -52,7 +52,7 @@ in the row list below rather than left silent.
 |---|---------------|---------------|------------------------------|------------|
 | exchange | Should an exchange be recorded as a return plus a new sale, or netted to nothing? | Return rate and gross sales both change materially with the choice | None -- needs a business definition | `policy_ruling` |
 | noncustomer | Which movement types count as a customer return, and which are warehouse or stock adjustments? | Return rate is inflated by movements no customer ever made | None -- exclusions are a business ruling | `data_exclusion` |
-| A2 | Are returns stored as negative sales lines or as a separate returns record? | Returns are netted invisibly and true return volume is hidden | None -- the policy must be stated, not assumed | `policy_ruling` |
+| A2 | How are returns stored, and for each returns KPI must they be excluded, netted, or reported separately? | Returns are netted invisibly and true return volume is hidden | None -- storage alone is not the policy; state the treatment per KPI | `policy_ruling` |
 | A3 | Should a return be counted on the date it was returned, or the date of the original sale? | Return rate is attributed to the wrong period | None -- each contract must name its primary date | `kpi_definition` |
 
 ## Owner

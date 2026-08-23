@@ -52,7 +52,7 @@ in the row list below rather than left silent.
 
 | # | Ask the owner | If unanswered | Layer default (context only) | Records as |
 |---|---------------|---------------|------------------------------|------------|
-| oos | Does out-of-stock mean empty shelf or empty warehouse, and are zero rows real or data errors? | Availability is measured on the wrong stock location, or defects count as genuine stockouts | None -- the definition is owner-supplied | `missing_value_rule` |
+| oos | Which stock location defines out-of-stock, and which source indicator separates a genuine zero from a data-error zero? | Availability is measured on the wrong location, or data-error zeros are counted as genuine stockouts | None -- name the location AND the rule that separates the two zero populations | `missing_value_rule` |
 | A10 | How often is stock captured, and does a snapshot mean on-hand, on-shelf, or warehouse stock? | Inventory value, turnover and GMROI are computed on a snapshot whose cadence and scope are unknown | None -- both the cadence and the meaning must be stated | `kpi_definition` |
 | A6 | Which cost should inventory be valued at? | Stock value changes materially with the method | None -- cost method is a business ruling | `policy_ruling` |
 
