@@ -58,7 +58,7 @@ in the row list below rather than left silent.
 | channel | Which store, if any, should a click-and-collect or e-commerce sale be attributed to? | Store performance either double-counts online sales or misses them entirely | None -- attribution is a business ruling | `policy_ruling` |
 | pseudo | Which branches are not real stores (head office, warehouse) and should be excluded? | Pseudo-branches appear in store rankings and distort every per-store average | None -- exclusions are a business ruling | `data_exclusion` |
 | A9 | Which source field is the authoritative branch key that survives a rename or re-code? | Grouping falls back to the name, so a renamed branch splits in two and breaks every trend | Aggregate on the key only -- never on the name | `kpi_definition` |
-| A11 | Which stores count as "same-store", and after how long does a new store join? | Like-for-like growth silently includes new stores and overstates performance | None -- same-store is a business definition | `policy_ruling` |
+| A11 | How long must a store trade before it is same-store, and how are relocations, major refurbishments and closures treated? | Like-for-like growth is non-reproducible: new, moved, refurbished and closed stores drift in and out silently | None -- every one of the four events is a business definition | `policy_ruling` |
 
 ## Owner
 

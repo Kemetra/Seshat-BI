@@ -1560,10 +1560,10 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/branch-store-performance.md",
-      "output_sha256": "a5d9b79b83e2ddd10cde98e62696d907efc77d4a704773617d7715cdb4f05e97",
+      "output_sha256": "2cb9ea088b1be6611a23d4dd1d8557042466d3ea5e0e0652fff5dff13475e98e",
       "source": "skills/retail-kpi-knowledge/domains/branch-store-performance.md",
       "source_id": "kb-176",
-      "source_sha256": "a5d9b79b83e2ddd10cde98e62696d907efc77d4a704773617d7715cdb4f05e97",
+      "source_sha256": "2cb9ea088b1be6611a23d4dd1d8557042466d3ea5e0e0652fff5dff13475e98e",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1632,10 +1632,10 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/sales-and-revenue.md",
-      "output_sha256": "0a6bf23f9847ae6993c54947d363a878a4e137efd24ac23f46d13182714b8424",
+      "output_sha256": "0f01e03a581302d0aa64606c822018608b5e1b70f77302e9c36ad5a7a20c146b",
       "source": "skills/retail-kpi-knowledge/domains/sales-and-revenue.md",
       "source_id": "kb-184",
-      "source_sha256": "0a6bf23f9847ae6993c54947d363a878a4e137efd24ac23f46d13182714b8424",
+      "source_sha256": "0f01e03a581302d0aa64606c822018608b5e1b70f77302e9c36ad5a7a20c146b",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1965,10 +1965,10 @@
     {
       "classification": "public_knowledge",
       "destination": "skills/business-knowledge-interview/SKILL.md",
-      "output_sha256": "9e35898a446d07af6aebd014ef0ca629dd4f90f022b6eff875ded18b1034ed9e",
+      "output_sha256": "a91388aaefcfacb2a6973b5d33635ae3178edea61b6d9f1bf32c3601262590b9",
       "source": ".claude/skills/business-knowledge-interview/SKILL.md",
       "source_id": "kb-145",
-      "source_sha256": "9e35898a446d07af6aebd014ef0ca629dd4f90f022b6eff875ded18b1034ed9e",
+      "source_sha256": "a91388aaefcfacb2a6973b5d33635ae3178edea61b6d9f1bf32c3601262590b9",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2189,10 +2189,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "e1d0e1a1787521ab6b7488f47380ac93b16e53f6f22ce123ab8461e2be38e1a2",
+  "manifest_digest": "585c67ff9ea2c5a5924a64a244ed0864e89b8f2251407eaa5f67116bf336b518",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "e5ccd55f3643e21c08129711eb169164e06936a3",
+  "source_revision": "5c80f3874bab4efc027284d0d8b3fd71fbb4d0ab",
   "target": "codex",
   "version": "2.0.0"
 }

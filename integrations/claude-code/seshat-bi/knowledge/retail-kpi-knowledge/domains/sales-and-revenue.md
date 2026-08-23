@@ -55,7 +55,7 @@ in the row list below rather than left silent.
 | A1 | Are your sales amounts stored with VAT included, or before VAT? | Revenue and every margin built on it inflate or deflate silently | Pre-tax unless you state otherwise | `kpi_definition` |
 | A4 | When you say "sales", do you mean before or after returns and deductions? | Gross is substituted for net and the two never reconcile | None -- gross and net are never interchangeable | `kpi_definition` |
 | A3 | Which date should drive the time axis: sale date or posting date? | A KPI on sale date will not reconcile to one on posting date | None -- each contract must name its primary date | `kpi_definition` |
-| A2 | Are returns negative lines inside sales, or a separate record? | A naive sum nets returns invisibly, hiding both true sales and true returns | None -- the policy must be stated, not assumed | `policy_ruling` |
+| A2 | How are returns stored, and for each revenue KPI must they be excluded, netted, or reported separately? | A naive sum nets returns invisibly, hiding both true sales and true return volume | None -- storage alone is not the policy; state the treatment per KPI | `policy_ruling` |
 
 ## Owner
 
