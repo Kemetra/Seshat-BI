@@ -33,22 +33,11 @@ year (E1=A) unless a fiscal year is later declared.
 
 ## Owner questions
 
-Ask these before this domain's contracts are handed off. Each card is the owner-facing
-form of an ambiguity listed above: it names the question in business language, the
-silent breakage if it goes unanswered, and the `decision_type` under which the answer is
-recorded in the Decision Store. The **layer default** is context shown to the owner, never
-a recorded ruling -- an unanswered card stays `pending` and this domain stays blocked
-(`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
-make a number appear).
-
-Every ambiguity listed above has a card here UNLESS it is already marked **RULED** (a
-settled decision -- re-asking invites a contradicting answer) or states a grain/handling
-instruction rather than a question only the owner can answer. Those exclusions are named
-in the row list below rather than left silent.
-
-| # | Ask the owner | If unanswered | Layer default (context only) | Records as |
-|---|---------------|---------------|------------------------------|------------|
-| A3 | Which date drives period comparisons: sale date or posting date? | Growth and prior-period comparisons do not reconcile between reports | None -- each contract must name its primary date | `kpi_definition` |
+None. Every ambiguity this domain lists is already **RULED** (see above), and a
+ruled decision is not re-asked -- re-opening one invites an answer that contradicts
+the contracts already built on it. If the business later reopens a ruling (for
+example declaring a fiscal year), the reopening is its own decision, recorded and
+reconciled against the existing contracts -- not a card asked during onboarding.
 
 ## Owner
 

@@ -1650,10 +1650,10 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/time-intelligence.md",
-      "output_sha256": "d952bcc1456ca6f7d5f762cc2ddad06b0598d153b903df1b248d8eb9a2a0c455",
+      "output_sha256": "6971b27192018611c124ee92fc24e8f30054799f10c9a5da085a4803699f4810",
       "source": "skills/retail-kpi-knowledge/domains/time-intelligence.md",
       "source_id": "kb-186",
-      "source_sha256": "d952bcc1456ca6f7d5f762cc2ddad06b0598d153b903df1b248d8eb9a2a0c455",
+      "source_sha256": "6971b27192018611c124ee92fc24e8f30054799f10c9a5da085a4803699f4810",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2189,10 +2189,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "62254483afc17e3aef29a7ab2920edc76e7136a4ee8b18bd0127a28913727d7e",
+  "manifest_digest": "f8154f71e232d1a84d285714ff31a953c1d877fb16e6a56735f570f4185d4d60",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "123c3493ec7ab18c668fdbee43a595d4c2023d38",
+  "source_revision": "1ccd341a0e127df9537ac6485fb5daf51f0956de",
   "target": "codex",
   "version": "2.0.0"
 }

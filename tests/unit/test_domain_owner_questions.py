@@ -57,8 +57,16 @@ def test_domain_packs_are_present() -> None:
 def test_every_card_records_under_a_real_decision_type(pack: Path) -> None:
     section = _SECTION.search(pack.read_text(encoding="utf-8"))
     assert section, f"{pack.name} has no '## Owner questions' section"
-    rows = _CARD_ROW.findall(section.group(1))
-    assert rows, f"{pack.name} declares the section but lists no cards"
+    body = section.group(1)
+    rows = _CARD_ROW.findall(body)
+    if not rows:
+        # A pack whose every ambiguity is already RULED offers no cards. That is a
+        # declared state, not an empty section: it must say so, so a reader can tell
+        # "nothing to ask" from "someone forgot to write the cards".
+        assert body.lstrip().startswith("None."), (
+            f"{pack.name} declares the section but lists no cards and does not say why"
+        )
+        return
     for _ref, _ask, _risk, _default, dtype in rows:
         assert dtype in CRITICAL_DECISION_TYPES, (
             f"{pack.name} card records under '{dtype}', which is not one of the "
@@ -110,6 +118,10 @@ def test_every_open_ambiguity_has_a_card_or_a_declared_exclusion(pack: Path) -> 
 
     section = _SECTION.search(text)
     cards = len(_CARD_ROW.findall(section.group(1))) if section else 0
+
+    # No open ambiguities => no cards required; the section says so in prose.
+    if not open_bullets:
+        return
 
     assert cards + excluded >= len(open_bullets), (
         f"{pack.name}: {len(open_bullets)} open ambiguity/ies but only {cards} card(s) "
