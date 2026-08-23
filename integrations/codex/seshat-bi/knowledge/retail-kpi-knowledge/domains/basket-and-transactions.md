@@ -46,7 +46,7 @@ in the row list below rather than left silent.
 
 | # | Ask the owner | If unanswered | Layer default (context only) | Records as |
 |---|---------------|---------------|------------------------------|------------|
-| returns-only | Should receipts containing only returns count as transactions? | Transaction count and average basket value include receipts that sold nothing | None -- confirm before counting | `data_exclusion` |
+| returns-only | How should a returns-only receipt be counted -- as a transaction, or excluded? | Transaction count and average basket value include receipts that sold nothing | None -- confirm before counting | `data_exclusion` |
 | A7 | Which transactions should be excluded: cancelled, void, staff, or test? | Basket counts and averages include transactions that never happened | None -- exclusions are a business ruling | `data_exclusion` |
 | A1 | Is basket value measured pre-tax or tax-inclusive? | Average basket value is not comparable across branches on mixed bases | Pre-tax unless you state otherwise | `kpi_definition` |
 

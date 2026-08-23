@@ -48,8 +48,8 @@ in the row list below rather than left silent.
 
 | # | Ask the owner | If unanswered | Layer default (context only) | Records as |
 |---|---------------|---------------|------------------------------|------------|
-| writeoff | Should accounting write-offs and loyalty-point redemptions be counted as discounts? | Discount rate absorbs unrelated accounting activity and misreports commercial performance | None -- the split is a business ruling | `policy_ruling` |
-| funding | Should retailer-funded and supplier-funded discounts be reported separately? | Supplier-funded discount is charged against your own margin | None -- split only if the source supports it | `policy_ruling` |
+| writeoff | Which deduction types count as discount, and which are accounting write-offs or loyalty redemptions? | Discount rate absorbs unrelated accounting activity and misreports commercial performance | None -- the split is a business ruling | `policy_ruling` |
+| funding | Which source field distinguishes a retailer-funded discount from a supplier-funded one? | Supplier-funded discount is charged against your own margin | None -- split only if the source supports it | `policy_ruling` |
 | A5 | Are discounts recorded per line, or once on the whole transaction? | Line and header discounts double-count or vanish when summed together | None -- the storage level must be confirmed | `kpi_definition` |
 | A4 | Is discount measured against gross or net sales? | Discount rate shifts with the base and cannot be compared | None -- gross and net are never interchangeable | `kpi_definition` |
 

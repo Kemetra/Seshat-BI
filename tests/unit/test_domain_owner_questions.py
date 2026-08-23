@@ -35,6 +35,25 @@ _CARD_ROW = re.compile(
 )
 _BULLET = re.compile(r"^- (.+)$", re.MULTILINE)
 
+# A card opening with one of these is a closed question: it can be answered "no"
+# and recorded as a governed decision while the ambiguity stays open.
+_CLOSED_OPENERS = frozenset(
+    {
+        "do",
+        "does",
+        "did",
+        "is",
+        "are",
+        "was",
+        "were",
+        "can",
+        "will",
+        "should",
+        "has",
+        "have",
+    }
+)
+
 # An ambiguity legitimately carries no card when it is already settled, or when it
 # states how to compute something rather than asking the owner to decide. Keep this
 # list explicit: it is the exclusion ledger the section preamble promises.
@@ -82,6 +101,33 @@ def test_every_card_asks_a_question(pack: Path) -> None:
     assert section
     for _ref, ask, _risk, _default, _dtype in _CARD_ROW.findall(section.group(1)):
         assert ask.strip().endswith("?"), f"{pack.name}: {ask!r} is not a question"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("pack", _packs(), ids=lambda p: p.stem)
+def test_no_card_is_answerable_without_resolving(pack: Path) -> None:
+    """A yes/no card can be answered "no" and recorded, resolving nothing.
+
+    Three cards shipped this way (PR #709 Codex review): a closed question whose
+    wrong branch was approvable, a question narrower than its own ambiguity, and a
+    confirmation that supplied no rule. An answerable card that leaves the
+    ambiguity open unblocks the domain on a non-answer, which is the fail-open the
+    cards exist to prevent. Cards must demand the artifact that settles the
+    question -- which field, how often, which calendar -- not a yes/no.
+    """
+    section = _SECTION.search(pack.read_text(encoding="utf-8"))
+    assert section
+    for _ref, ask, _risk, _default, _dtype in _CARD_ROW.findall(section.group(1)):
+        text = ask.strip()
+        opener = text.split()[0].lower()
+        if opener not in _CLOSED_OPENERS:
+            continue
+        # "X, or Y?" names its alternatives, so an answer picks one and resolves.
+        # A bare binary does not: "no" is recordable and settles nothing.
+        assert " or " in text.lower(), (
+            f"{pack.name}: {ask!r} is answerable yes/no; name the alternatives or "
+            f"ask for the rule/field that resolves the ambiguity"
+        )
 
 
 @pytest.mark.unit

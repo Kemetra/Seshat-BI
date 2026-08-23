@@ -50,9 +50,9 @@ in the row list below rather than left silent.
 
 | # | Ask the owner | If unanswered | Layer default (context only) | Records as |
 |---|---------------|---------------|------------------------------|------------|
-| discontinued | Should discontinued items be included when analysing the active assortment? | Assortment performance mixes live and dead SKUs and misdirects buying | None -- exclusions are a business ruling | `data_exclusion` |
-| A8 | Should products be grouped by product key, or by product name? | The same product under two names splits into two rows, or two products merge | None -- key vs name is an identity ruling | `kpi_definition` |
-| A2 | Do returns reduce the selling product's performance? | Product ranking is computed on unreturned volume and misleads buying decisions | None -- the policy must be stated, not assumed | `policy_ruling` |
+| discontinued | Which items count as active assortment, and how long after discontinuation do they drop out? | Assortment performance mixes live and dead SKUs and misdirects buying | None -- exclusions are a business ruling | `data_exclusion` |
+| A8 | Which source field is the authoritative product key, and how does it map to a category path? | Grouping falls back to the name, so one product splits in two or two products merge | Group on the key only -- never on the name | `kpi_definition` |
+| A2 | How should a return be attributed to a product -- against the selling period, or the return period? | Product ranking is computed on unreturned volume and misleads buying decisions | None -- the policy must be stated, not assumed | `policy_ruling` |
 
 ## Owner
 
