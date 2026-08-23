@@ -41,6 +41,25 @@ def test_explain_is_rejected_with_a_structured_format(capsys):
 
 
 @pytest.mark.unit
+def test_the_flag_refusal_precedes_any_repo_or_commit_work(capsys):
+    """Fails while the refusal sits after commit-msg reading and the git call.
+
+    A flag-compatibility error is a USAGE error: it depends only on the arguments,
+    so it must be deterministic. Evaluated later, an unrelated failure (a missing
+    --commit-msg-file, or a git that cannot run) reports itself instead and the
+    caller never learns the two flags are incompatible.
+    """
+    from seshat.cli import _run_check
+
+    args = _parse(
+        "--explain", "--format", "json", "--commit-msg-file", "no-such-file-xyz"
+    )
+
+    assert _run_check(args) == 2
+    assert "--explain" in capsys.readouterr().err
+
+
+@pytest.mark.unit
 def test_committed_guidance_loads_and_covers_a_known_rule():
     """Fails if the CLI's guidance source stops resolving against the real repo."""
     from pathlib import Path

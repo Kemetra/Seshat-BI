@@ -123,6 +123,14 @@ def _run_check(args: object) -> int:
     -- see the module docstring for why: it reads ``build_context`` / ``run``
     / ``run_json`` / ``all_rules`` as bare module globals so test-suite
     monkeypatches on ``seshat.cli.*`` stay visible."""
+    # Usage errors first: flag compatibility depends only on the arguments, so it
+    # must not wait behind commit-message reading or the git call in
+    # `build_context`. Evaluated later, an unrelated failure reports itself and the
+    # caller never learns the flags are incompatible (PR #706 review).
+    annotate = _explain_annotator(args)
+    if annotate is _EXPLAIN_REFUSED:
+        return 2
+
     commit_message: str | None = None
     if args.commit_msg_file is not None:  # type: ignore[attr-defined]
         try:
@@ -162,9 +170,6 @@ def _run_check(args: object) -> int:
     from ..kit_lint import is_kit_self_repo
 
     bootstrapped = is_kit_self_repo(Path(args.repo))  # type: ignore[attr-defined]
-    annotate = _explain_annotator(args)
-    if annotate is _EXPLAIN_REFUSED:
-        return 2
     # Default 'text' calls the unchanged run(); 'json' is the opt-in path.
     if args.output_format == "json":  # type: ignore[attr-defined]
         return run_json(all_rules(), ctx, bootstrapped=bootstrapped)
