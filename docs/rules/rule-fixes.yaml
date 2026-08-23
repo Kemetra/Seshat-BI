@@ -104,6 +104,12 @@ rules:
   DL1:
     fix: Strip non-default content from the theme file (surface 3) (`design_theme.py`)
     means: Theme JSON is impure (carries more than styling defaults)
+  DL10:
+    fix: Align the section keys across `design/grids/16x9-grid.yaml`, `mobile-grid.yaml` and `templates/dashboard-page-blueprint.yaml`, or fix the offending `section:` value in the filled blueprint (`design_section_vocabulary.py`)
+    means: A page-section name is declared on one design surface but not the others, or a filled blueprint uses a section outside the declared vocabulary
+  DL11:
+    fix: Point the `*_ref` at a committed target, or set it to `none` if there deliberately is not one (`design_ref_resolution.py`)
+    means: A design `grid_ref`/`theme_ref` names a file that does not exist, or a `value_typography_ref` dotted path resolves in no token file
   DL2:
     fix: Remove the dynamic content from the background spec (surface 2) (`design_background.py`)
     means: A page background spec carries dynamic/data-bound content (not static structure)

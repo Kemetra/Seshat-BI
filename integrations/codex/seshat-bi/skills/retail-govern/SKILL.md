@@ -53,7 +53,7 @@ locator; the rule id tells you which fix below applies.
 ## Rule id → meaning → where to fix
 
 <!-- SESHAT-RULE-FIX-TABLE START -->
-This table covers all **80** registered rules. It is GENERATED from
+This table covers all **82** registered rules. It is GENERATED from
 `rule-fixes.yaml` -- edit that file and run
 `python scripts/export_rule_fix_table.py`, never this table.
 
@@ -95,6 +95,8 @@ This table covers all **80** registered rules. It is GENERATED from
 | `DL7` | formatting-plan rows cite a real principle/token, use allowed statuses, and never self-ratify | fix the row's `principle_cited`/`token_cited`/`status`/`ratified_by` in `formatting-plan.md` |
 | `DL8` | theme sentiment colours stay faithful to a human-declared `meta.sentiment_map` | correct the drifted theme sentiment value, or the `meta.sentiment_map` entry in the tokens YAML |
 | `DL9` | a filled Report Intent record carries every required field, non-placeholder | fill the missing field (audience, purpose, owner, evidence) in `report-intent.yaml`, creating the file if absent |
+| `DL10` | A page-section name is declared on one design surface but not the others, or a filled blueprint uses a section outside the declared vocabulary | Align the section keys across `design/grids/16x9-grid.yaml`, `mobile-grid.yaml` and `templates/dashboard-page-blueprint.yaml`, or fix the offending `section:` value in the filled blueprint (`design_section_vocabulary.py`) |
+| `DL11` | A design `grid_ref`/`theme_ref` names a file that does not exist, or a `value_typography_ref` dotted path resolves in no token file | Point the `*_ref` at a committed target, or set it to `none` if there deliberately is not one (`design_ref_resolution.py`) |
 | `DR1` | no tracked file sits under a known-bad path prefix and no known-stale prose phrase survives | delete the file under the flagged prefix, or remove the phrase named in `design-stale-phrases.yaml` |
 | `DS1` | Decision Store records carry a valid id/status/decision_type/scope and leak no PII or secrets | fix the malformed field or mask the PII/secret value in `.seshat/semantic-decisions.yaml` |
 | `DS2` | an approved decision's approval block is complete, named-human-shaped, and evidence-identified | fill the missing `approved_by`/`evidence_identity` in `.seshat/semantic-decisions.yaml` |

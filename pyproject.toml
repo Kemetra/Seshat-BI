@@ -255,13 +255,15 @@ artifacts = ["src/seshat/studio/static/**"]
 # dashboard_coordinator, the publish_pack rule) read these as REPO-RELATIVE
 # paths, so the packaged layout is deliberately flattened under
 # seshat/design_templates/ while the materializer reproduces the original
-# templates/ + design/grids/ destinations (only these seven ship; the other
+# templates/ + design/grids/ + themes/ destinations (only these nine ship; the other
 # design/handoff templates stay dev-only, constitution VII).
 "templates/narrative-brief.md" = "seshat/design_templates/narrative-brief.md"
 "templates/dashboard-page-blueprint.yaml" = "seshat/design_templates/dashboard-page-blueprint.yaml"
 "templates/visual-spec.yaml" = "seshat/design_templates/visual-spec.yaml"
 "templates/report-composition.yaml" = "seshat/design_templates/report-composition.yaml"
 "design/grids/16x9-grid.yaml" = "seshat/design_templates/grids/16x9-grid.yaml"
+"design/grids/mobile-grid.yaml" = "seshat/design_templates/grids/mobile-grid.yaml"
+"themes/tower-retail.theme.json" = "seshat/design_templates/themes/tower-retail.theme.json"
 "templates/handoff/bi-handoff-pack.md" = "seshat/design_templates/handoff/bi-handoff-pack.md"
 "templates/handoff/handoff-review-checklist.md" = "seshat/design_templates/handoff/handoff-review-checklist.md"
 
@@ -317,6 +319,8 @@ include = [
     "/templates/visual-spec.yaml",
     "/templates/report-composition.yaml",
     "/design/grids/16x9-grid.yaml",
+    "/design/grids/mobile-grid.yaml",
+    "/themes/tower-retail.theme.json",
     "/templates/handoff/bi-handoff-pack.md",
     "/templates/handoff/handoff-review-checklist.md",
     "/README.md",

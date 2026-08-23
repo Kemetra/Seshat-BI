@@ -112,6 +112,14 @@
     "title": "Theme JSON carries styling defaults only, no business logic"
   },
   {
+    "id": "DL10",
+    "title": "Page-section vocabulary agrees across the grids, the blueprint template and filled blueprints"
+  },
+  {
+    "id": "DL11",
+    "title": "Design file and token pointers resolve to a committed target"
+  },
+  {
     "id": "DL2",
     "title": "Background spec declares no baked-in dynamic content"
   },
