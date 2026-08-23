@@ -4,11 +4,16 @@ The design corpora carry ten ``*_ref`` keys. The suffix does NOT mean "file path
 enumerated by hand against the real key set rather than assumed from the convention,
 they fall into three buckets:
 
-* repo-relative FILE paths -- ``grid_ref``, ``theme_ref``.
-* an intra-file TOKEN pointer -- ``value_typography_ref``
-  (``typography.scale_pt.kpi_value``): a DOTTED KEY PATH into the design-token
-  file, not a file.
-* not resolvable here -- ``blueprint_ref``, ``spec_ref``, ``source_file_ref``
+* repo-relative FILE paths -- ``grid_ref``, ``theme_ref``, ``tokens_ref`` and
+  ``spec_ref``. ``spec_ref`` carries BOTH concrete values (the blueprint template
+  names ``templates/background-spec.yaml``) and unfilled ``<placeholders>``; the
+  placeholder filter already excuses the latter, so guarding the key costs no false
+  errors and stops a renamed spec from dangling.
+* intra-file TOKEN pointers -- ``value_typography_ref``, ``label_typography_ref``
+  and ``background_ref``. Each is a DOTTED KEY PATH into the design-token file
+  (``typography.scale_pt.kpi_value``), not a file, and resolves against the file
+  that DECLARES it rather than the union of every tracked token document.
+* not resolvable here -- ``blueprint_ref`` and ``source_file_ref``
   (``<placeholders>`` in the templates), ``store_ref`` and ``model_ref``
   ("a path-or-id" in the F009/F010 stores, so a bare id is legitimate), and
   ``qa_ref`` (a prose design-doc name, e.g. ``visual-qa``), and
@@ -42,25 +47,30 @@ from ..registry import register
 from ..rule_coverage import TEST_FIXTURES, any_tracked_file
 from .yaml_tree import load, read, strings_for
 
+RULE_ID = "DL11"
+
+_SCANNED_ROOTS = ("design/", "templates/", "reports/", "contracts/report/")
+
+# The census must claim exactly what the rule EXAMINES. Accepting any `design/*`
+# file (including non-YAML, which `_scanned_files` rejects) while omitting the
+# `reports/` and `contracts/report/` roots it does scan was wrong in both
+# directions: a repo of only `reports/` pointers read as unevaluable, and a repo of
+# only `design/*.md` read as evaluated and clean without a document being examined.
 REF_CORPUS = any_tracked_file(
-    "design/*",
-    "templates/*",
+    *(f"{root}**/*.{suffix}" for root in _SCANNED_ROOTS for suffix in ("yaml", "yml")),
     exclude=(TEST_FIXTURES,),
     note=(
-        "no non-fixture design or template file is tracked, so this rule resolved "
-        "no pointer and its silence is not a pass"
+        "no non-fixture YAML is tracked under any scanned design root, so this rule "
+        "resolved no pointer and its silence is not a pass"
     ),
 )
 
-RULE_ID = "DL11"
-
 # Hand-verified scope. Widening either set silently is what produces false errors.
-FILE_REF_KEYS = frozenset({"grid_ref", "theme_ref", "tokens_ref"})
+FILE_REF_KEYS = frozenset({"grid_ref", "theme_ref", "tokens_ref", "spec_ref"})
 TOKEN_REF_KEYS = frozenset(
     {"value_typography_ref", "label_typography_ref", "background_ref"}
 )
 
-_SCANNED_ROOTS = ("design/", "templates/", "reports/", "contracts/report/")
 _TOKEN_FILE_HINT = "design/tokens/"
 # A value that makes no claim about a target: an unfilled template slot, or the
 # documented literal for "there deliberately isn't one".

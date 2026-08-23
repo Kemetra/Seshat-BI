@@ -81,7 +81,9 @@ def test_the_guarded_key_sets_are_the_hand_verified_ones():
     other half. This asserts nobody widened the sets by accident, that one asserts
     nobody NARROWED them relative to what the corpus actually carries.
     """
-    assert FILE_REF_KEYS == frozenset({"grid_ref", "theme_ref", "tokens_ref"})
+    assert FILE_REF_KEYS == frozenset(
+        {"grid_ref", "theme_ref", "tokens_ref", "spec_ref"}
+    )
     assert TOKEN_REF_KEYS == frozenset(
         {"value_typography_ref", "label_typography_ref", "background_ref"}
     )
@@ -261,7 +263,6 @@ _DOCUMENTED_EXCLUSIONS = frozenset(
         "sentiment_color_ref",  # two grammars: dotted token path AND free prose
         "store_ref",  # "a path-or-id" in the F009/F010 stores; a bare id is legal
         "model_ref",  # same path-or-id shape as store_ref
-        "spec_ref",  # a <placeholder> in the templates
         "blueprint_ref",  # a <placeholder> in the templates
         "source_file_ref",  # a <placeholder> in the templates
         "qa_ref",  # a prose design-doc name, e.g. "visual-qa"
@@ -391,3 +392,59 @@ def test_a_token_pointer_must_resolve_in_its_own_declaring_file(tmp_path):
 
     assert [f.severity for f in findings] == [Severity.ERROR]
     assert "a-tokens.yaml" in findings[0].locator
+
+
+@pytest.mark.unit
+def test_a_concrete_spec_ref_is_resolved(tmp_path):
+    """Fails while `spec_ref` is excluded wholesale.
+
+    It was excluded as "a <placeholder> in the templates", but the committed
+    blueprint template also carries CONCRETE values (`templates/background-spec.yaml`,
+    `templates/theme-json-spec.md`). The placeholder filter already excuses unfilled
+    slots, so the key can be guarded without false errors on the templates.
+    """
+    design = tmp_path / "design"
+    design.mkdir(parents=True, exist_ok=True)
+    (design / "under-test.yaml").write_text(
+        'spec_ref: "templates/gone-spec.yaml"\n', encoding="utf-8"
+    )
+
+    findings = list(ref_resolution(_ctx(tmp_path)))
+
+    assert [f.severity for f in findings] == [Severity.ERROR]
+    assert "gone-spec.yaml" in findings[0].message
+
+
+@pytest.mark.unit
+def test_a_placeholder_spec_ref_is_still_silent(tmp_path):
+    """The other arm: unfilled template slots must stay unreported."""
+    design = tmp_path / "design"
+    design.mkdir(parents=True, exist_ok=True)
+    (design / "under-test.yaml").write_text(
+        'spec_ref: "<path to the filled visual-spec for this visual>"\n',
+        encoding="utf-8",
+    )
+
+    assert list(ref_resolution(_ctx(tmp_path))) == []
+
+
+@pytest.mark.unit
+def test_the_corpus_requirement_mirrors_the_scanned_roots():
+    """The census must claim exactly what the rule examines.
+
+    `REF_CORPUS` accepted any `design/*` or `templates/*` file -- including non-YAML,
+    which `_scanned_files` rejects -- while omitting `reports/` and
+    `contracts/report/`, which it scans. Both directions are wrong: a repo of only
+    `reports/` pointers reads as unevaluable, and a repo of only `design/*.md` reads
+    as evaluated and clean without a document being examined.
+    """
+    from seshat.rules.design_ref_resolution import _SCANNED_ROOTS, REF_CORPUS
+
+    globs = [alt.pattern for alt in REF_CORPUS.any_of]
+    roots = {r.rstrip("/") for r in _SCANNED_ROOTS}
+    covered = {g.split("/*", 1)[0] for g in globs}
+
+    assert covered == roots, (
+        f"corpus roots {sorted(covered)} do not mirror scanned roots {sorted(roots)}"
+    )
+    assert all(g.endswith((".yaml", ".yml")) for g in globs), globs

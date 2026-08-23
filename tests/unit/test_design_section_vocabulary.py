@@ -414,3 +414,47 @@ def test_a_missing_never_scaffolded_declarer_stays_silent(tmp_path):
     (tmp_path / "design" / "grids" / "mobile-grid.yaml").unlink()
 
     assert list(section_vocabulary(_ctx(tmp_path))) == []
+
+
+@pytest.mark.unit
+def test_an_id_shaped_entry_in_a_filled_sections_list_is_validated(tmp_path):
+    """Fails while only `name` entries are harvested.
+
+    `reports/blueprints/data-quality-control-room.yaml` declares its sections as
+    `{id: ..., purpose: ...}`, so a typo in one of those ids left the declared page
+    layout outside DL10 exactly as the `name` shape did.
+    """
+    _write_corpus(tmp_path)
+    blueprints = tmp_path / "reports" / "blueprints"
+    blueprints.mkdir(parents=True, exist_ok=True)
+    (blueprints / "filled.yaml").write_text(
+        'sections:\n  - id: "header"\n    purpose: ok\n'
+        '  - id: "kpi_strp"\n    purpose: typo\n',
+        encoding="utf-8",
+    )
+
+    findings = list(section_vocabulary(_ctx(tmp_path)))
+
+    assert [f.severity for f in findings] == [Severity.ERROR]
+    assert "kpi_strp" in findings[0].message
+
+
+@pytest.mark.unit
+def test_a_malformed_profile_zones_block_participates_as_empty(tmp_path):
+    """Fails while an unsupported `zones` shape is dropped from the comparison.
+
+    A later profile whose `zones` is null or a scalar was filtered out entirely, so
+    the remaining valid profile supplied the canonical set and the profile that LOST
+    its vocabulary was never compared against it.
+    """
+    _write_corpus(tmp_path)
+    grid = tmp_path / "design" / "grids" / "16x9-grid.yaml"
+    grid.write_text(
+        grid.read_text(encoding="utf-8") + "  hi_dpi:\n    zones: null\n",
+        encoding="utf-8",
+    )
+
+    findings = list(section_vocabulary(_ctx(tmp_path)))
+
+    assert findings, "a profile that declares no zones must be reported"
+    assert any("profile" in f.message for f in findings), [f.message for f in findings]

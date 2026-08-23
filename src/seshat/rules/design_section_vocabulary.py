@@ -74,6 +74,9 @@ _SCAFFOLDED_DECLARERS = frozenset({"templates/dashboard-page-blueprint.yaml"})
 _INSTANCE_ROOTS = ("reports/blueprints/", "reports/backgrounds/")
 # The keys a list-shaped declaration may use to name its section.
 _NAME_KEYS = ("band", "section", "name")
+# A filled `sections` entry names itself with either key: `branch-performance`
+# uses `name:`, `data-quality-control-room` uses `id:`.
+_ENTRY_NAME_KEYS = ("name", "id")
 
 
 @dataclass(frozen=True)
@@ -130,11 +133,11 @@ def authority_declarations(repo_root: Path) -> list[set[str]]:
     document = read(repo_root / _AUTHORITY[0])
     if document.failed:
         return []
-    return [
-        _names(block)
-        for block in values_for(document.data, _AUTHORITY[1])
-        if isinstance(block, (dict, list))
-    ]
+    # EVERY discovered value participates, `_names` mapping an unsupported shape
+    # (null, a scalar) to the empty set. Filtering those out let a profile that LOST
+    # its vocabulary vanish from the comparison while a valid sibling supplied the
+    # canonical set.
+    return [_names(block) for block in values_for(document.data, _AUTHORITY[1])]
 
 
 def canonical_sections(repo_root: Path) -> set[str]:
@@ -216,7 +219,7 @@ def _named_sections(doc: Any) -> set[str]:
         if isinstance(collection, list)
         for entry in collection
         if isinstance(entry, dict)
-        for name in strings_for(entry, "name")
+        for name in strings_for(entry, *_ENTRY_NAME_KEYS)
     }
 
 
