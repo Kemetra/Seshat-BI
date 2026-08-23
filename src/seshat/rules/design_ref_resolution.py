@@ -57,7 +57,11 @@ _SCANNED_ROOTS = ("design/", "templates/", "reports/", "contracts/report/")
 # directions: a repo of only `reports/` pointers read as unevaluable, and a repo of
 # only `design/*.md` read as evaluated and clean without a document being examined.
 REF_CORPUS = any_tracked_file(
-    *(f"{root}**/*.{suffix}" for root in _SCANNED_ROOTS for suffix in ("yaml", "yml")),
+    # `fnmatch`'s `*` crosses slashes, so one pattern per root covers both a
+    # root-level `templates/custom.yaml` and a nested `templates/handoff/x.yaml`.
+    # `**/*.yaml` did NOT: it requires a second slash, leaving root-level YAML
+    # outside the requirement while `_scanned_files` examined it.
+    *(f"{root}*.{suffix}" for root in _SCANNED_ROOTS for suffix in ("yaml", "yml")),
     exclude=(TEST_FIXTURES,),
     note=(
         "no non-fixture YAML is tracked under any scanned design root, so this rule "

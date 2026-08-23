@@ -223,22 +223,30 @@ def test_a_tracked_surface_that_loses_its_declaration_key_is_an_error(tmp_path):
 
 
 @pytest.mark.unit
-def test_a_surface_that_is_not_tracked_at_all_is_a_coverage_gap_not_drift(tmp_path):
-    """The other arm, and the reason this is not just "empty means error".
+def test_an_untracked_scaffolded_surface_is_reported(tmp_path):
+    """A scaffolded declarer that went missing is a LOST surface, not a gap.
 
-    A downstream repo that scaffolded the desktop grid but never created a mobile
-    grid is a legitimate partial corpus, not vocabulary drift. Untracked stays
-    silent; tracked-but-empty is the error above.
+    This asserted silence while the mobile grid was unscaffolded. Shipping it (so
+    the blueprint template's `grid_ref` resolves) made its absence a real loss, and
+    the any-of corpus cannot say so. Tracked-but-empty is the error above; this is
+    the untracked arm of the same requirement.
     """
     _write_corpus(tmp_path)
     (tmp_path / "design" / "grids" / "mobile-grid.yaml").unlink()
 
-    assert list(section_vocabulary(_ctx(tmp_path))) == []
+    findings = list(section_vocabulary(_ctx(tmp_path)))
+
+    assert [f.severity for f in findings] == [Severity.ERROR]
+    assert "mobile-grid.yaml" in findings[0].locator
 
 
 @pytest.mark.unit
 def test_a_surface_present_on_disk_but_untracked_is_a_coverage_gap(tmp_path):
-    """Tracking, not mere presence, is what makes a surface answerable."""
+    """Tracking, not mere presence, is what makes a surface answerable.
+
+    The file sits on disk, so only the COMMIT distinguishes this from a healthy
+    repo -- and an untracked scaffolded declarer is reported.
+    """
     _write_corpus(tmp_path)
 
     findings = list(
@@ -247,7 +255,7 @@ def test_a_surface_present_on_disk_but_untracked_is_a_coverage_gap(tmp_path):
         )
     )
 
-    assert findings == [], [f.message for f in findings]
+    assert [f.severity for f in findings] == [Severity.ERROR]
 
 
 @pytest.mark.unit
@@ -403,20 +411,6 @@ def test_a_missing_scaffolded_declarer_is_reported(tmp_path):
 
 
 @pytest.mark.unit
-def test_a_missing_never_scaffolded_declarer_stays_silent(tmp_path):
-    """`mobile-grid.yaml` is neither scaffolded nor packaged -- absence is normal.
-
-    Erroring here would fire on every downstream repo that ran `scaffold-design`,
-    which installs the authority and the blueprint template but no mobile grid.
-    A gate that cries wolf on a correct install gets switched off.
-    """
-    _write_corpus(tmp_path)
-    (tmp_path / "design" / "grids" / "mobile-grid.yaml").unlink()
-
-    assert list(section_vocabulary(_ctx(tmp_path))) == []
-
-
-@pytest.mark.unit
 def test_an_id_shaped_entry_in_a_filled_sections_list_is_validated(tmp_path):
     """Fails while only `name` entries are harvested.
 
@@ -458,3 +452,39 @@ def test_a_malformed_profile_zones_block_participates_as_empty(tmp_path):
 
     assert findings, "a profile that declares no zones must be reported"
     assert any("profile" in f.message for f in findings), [f.message for f in findings]
+
+
+@pytest.mark.unit
+def test_the_mobile_grid_is_treated_as_scaffolded():
+    """The scaffolder now ships it, so its absence is a lost surface.
+
+    Pins the two constants against each other: `scaffold-design` installing a
+    declaring surface is exactly what makes that surface required. Without this,
+    adding a declarer to the scaffolder silently leaves DL10's severity behind.
+    """
+    from seshat.design_scaffold import _DESIGN_FILES
+    from seshat.rules.design_section_vocabulary import (
+        _DECLARERS,
+        _SCAFFOLDED_DECLARERS,
+    )
+
+    scaffolded = {repo_path for _, repo_path in _DESIGN_FILES}
+    declarers = {suffix for suffix, _ in _DECLARERS}
+
+    assert _SCAFFOLDED_DECLARERS == declarers & scaffolded
+
+
+@pytest.mark.unit
+def test_a_non_declaring_file_alone_does_not_satisfy_the_corpus():
+    """`design/grids/README.md` must not make DL10 look evaluated.
+
+    The wildcard accepted any file under `design/grids/`, so a repo tracking only a
+    non-declaring file satisfied the requirement while the rule parsed no vocabulary
+    at all -- reported as evaluated and clean.
+    """
+    from seshat.rules.design_section_vocabulary import SECTION_CORPUS
+
+    globs = [alt.pattern for alt in SECTION_CORPUS.any_of]
+
+    assert all(g.endswith((".yaml", ".yml")) for g in globs), globs
+    assert "design/grids/*" not in globs

@@ -32,6 +32,8 @@ _DESIGN_FILES = (
     "design/grids/16x9-grid.yaml",
     "design/grids/mobile-grid.yaml",
     "themes/tower-retail.theme.json",
+    "templates/background-spec.yaml",
+    "templates/theme-json-spec.md",
     "templates/handoff/bi-handoff-pack.md",
     "templates/handoff/handoff-review-checklist.md",
 )
@@ -53,6 +55,8 @@ _FORCE_INCLUDE_MAP = {
     "themes/tower-retail.theme.json": (
         "seshat/design_templates/themes/tower-retail.theme.json"
     ),
+    "templates/background-spec.yaml": "seshat/design_templates/background-spec.yaml",
+    "templates/theme-json-spec.md": "seshat/design_templates/theme-json-spec.md",
     "templates/handoff/bi-handoff-pack.md": (
         "seshat/design_templates/handoff/bi-handoff-pack.md"
     ),
@@ -213,3 +217,51 @@ def test_cli_scaffold_design_refuses_a_non_directory_repo(
 
     assert exit_code == 1
     assert "[refused]" in capsys.readouterr().err
+
+
+@pytest.mark.unit
+def test_every_pointer_in_a_scaffolded_file_resolves_within_the_scaffold(tmp_path):
+    """A fresh scaffold must pass the gate that ships with it.
+
+    This defect has now recurred twice: guarding `theme_ref`/`grid_ref` exposed two
+    unshipped targets, and guarding `spec_ref` later exposed two more. Both times a
+    downstream `scaffold-design` produced DL11 errors on untouched output, and both
+    times CI stayed green because THIS repo holds the targets.
+
+    So the check is derived, not enumerated: scaffold into a temp repo, then assert
+    every guarded pointer in the result names a file the scaffold actually wrote.
+    Guarding a new key, or adding a concrete pointer to a template, now fails here
+    rather than in a downstream install.
+    """
+    from seshat.design_scaffold import scaffold_design
+    from seshat.rules.design_ref_resolution import FILE_REF_KEYS
+    from seshat.rules.yaml_tree import read, strings_for
+
+    scaffold_design(tmp_path)
+    written = {
+        p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*") if p.is_file()
+    }
+
+    def claims(rel: str) -> set[str]:
+        """Concrete pointer targets in one scaffolded file, placeholders excluded."""
+        document = read(tmp_path / rel)
+        if document.failed:
+            return set()
+        return {
+            target
+            for target in strings_for(document.data, *FILE_REF_KEYS)
+            if not target.startswith("<") and target.lower() not in {"none", "n/a"}
+        }
+
+    yaml_files = [r for r in sorted(written) if r.endswith((".yaml", ".yml"))]
+    dangling = {
+        target: rel
+        for rel in yaml_files
+        for target in claims(rel)
+        if target not in written
+    }
+
+    assert dangling == {}, (
+        "scaffolded files point at targets the scaffold does not write -- ship them "
+        f"in _DESIGN_FILES or make the reference a <placeholder>: {dangling}"
+    )
