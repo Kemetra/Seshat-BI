@@ -101,6 +101,8 @@ EXPECTED_RULE_IDS = frozenset(
         "DL7",  # design-lint: formatting-plan ledger well-formedness
         "DL8",  # design-lint: sentiment 4->3 fidelity, inert until owner map
         "DL9",  # design-lint: Report Intent well-formedness (spec 123, US1)
+        "DL10",  # design-lint: one page-section vocabulary across surfaces
+        "DL11",  # design-lint: design pointers resolve to a committed target
         "CT1",  # contrast: token text/background pairs meet the declared WCAG floor
         "CT2",  # contrast: adjacent data_colors/ramp entries clear the deltaE76 floor
         "CT3",  # categorical distinctness: whole-set data_colors dE76 floor (opt-in)

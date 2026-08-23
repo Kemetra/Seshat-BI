@@ -112,6 +112,14 @@
     "title": "Theme JSON carries styling defaults only, no business logic"
   },
   {
+    "id": "DL10",
+    "title": "Page-section vocabulary agrees across the grids, the blueprint template and filled blueprints"
+  },
+  {
+    "id": "DL11",
+    "title": "Design file and token pointers resolve to a committed target"
+  },
+  {
     "id": "DL2",
     "title": "Background spec declares no baked-in dynamic content"
   },
@@ -142,14 +150,6 @@
   {
     "id": "DL9",
     "title": "A filled Report Intent record carries every required field"
-  },
-  {
-    "id": "DL10",
-    "title": "Page-section vocabulary agrees across the grids, the blueprint template and filled blueprints"
-  },
-  {
-    "id": "DL11",
-    "title": "Design file and token pointers resolve to a committed target"
   },
   {
     "id": "DR1",
@@ -204,6 +204,18 @@
     "title": "cross-star conformed-dimension conformance"
   },
   {
+    "id": "HR11",
+    "title": "summed measure inputs share a unit"
+  },
+  {
+    "id": "HR12",
+    "title": "forward source data-contract presence"
+  },
+  {
+    "id": "HR13",
+    "title": "every dim: gold_placement prefix resolves to a declared dimension"
+  },
+  {
     "id": "HR4",
     "title": "source freshness declaration"
   },
@@ -226,18 +238,6 @@
   {
     "id": "HR9",
     "title": "rename-impact orphaned-reference guard"
-  },
-  {
-    "id": "HR11",
-    "title": "summed measure inputs share a unit"
-  },
-  {
-    "id": "HR12",
-    "title": "forward source data-contract presence"
-  },
-  {
-    "id": "HR13",
-    "title": "every dim: gold_placement prefix resolves to a declared dimension"
   },
   {
     "id": "KP1",
