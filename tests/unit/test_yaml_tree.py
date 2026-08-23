@@ -9,7 +9,14 @@ from __future__ import annotations
 
 import pytest
 
-from seshat.rules.yaml_tree import first_value, load, pairs, strings_for, values_for
+from seshat.rules.yaml_tree import (
+    first_value,
+    load,
+    pairs,
+    read,
+    strings_for,
+    values_for,
+)
 
 _TREE = {
     "profiles": {
@@ -79,3 +86,49 @@ def test_load_reads_a_utf8_bom_file(tmp_path):
     path.write_text("zones:\n  header: 1\n", encoding="utf-8-sig")
 
     assert load(path) == {"zones": {"header": 1}}
+
+
+@pytest.mark.unit
+def test_a_malformed_document_reports_a_parse_failure_rather_than_an_empty_tree(
+    tmp_path,
+):
+    """Fails while `load` swallows a YAMLError and returns None.
+
+    A rule that cannot parse a file must not behave as though the file contained no
+    relevant keys: that turns an UNEXAMINED file into a clean result while the
+    coverage census still reports the rule as evaluated. The parse status has to be
+    distinguishable from a legitimately empty document.
+    """
+    bad = tmp_path / "malformed.yaml"
+    bad.write_text("this: [is: not: valid: yaml\n  ][\n", encoding="utf-8")
+
+    assert read(bad).failed is True
+
+
+@pytest.mark.unit
+def test_an_unreadable_path_reports_a_parse_failure(tmp_path):
+    """A missing file is a failure to read, not an empty document."""
+    assert read(tmp_path / "absent.yaml").failed is True
+
+
+@pytest.mark.unit
+def test_a_legitimately_empty_document_is_not_a_parse_failure(tmp_path):
+    """The distinction that matters: empty is clean, malformed is not."""
+    empty = tmp_path / "empty.yaml"
+    empty.write_text("", encoding="utf-8")
+
+    result = read(empty)
+
+    assert result.failed is False
+    assert result.data is None
+
+
+@pytest.mark.unit
+def test_a_valid_document_round_trips_through_read(tmp_path):
+    good = tmp_path / "good.yaml"
+    good.write_text("a:\n  b: 1\n", encoding="utf-8")
+
+    result = read(good)
+
+    assert result.failed is False
+    assert result.data == {"a": {"b": 1}}
