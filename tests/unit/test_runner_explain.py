@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 
 from seshat.core import Finding, RegisteredRule, RuleContext, Severity
-from seshat.runner import run
+from seshat.runner import explain_renderer, run
 
 
 def _ctx() -> RuleContext:
@@ -52,7 +52,7 @@ def test_explain_appends_the_rules_means_and_fix(capsys):
     """Fails until `run` accepts `explain=` and renders the guidance lines."""
     findings = (Finding("D8", Severity.ERROR, "bad partition", "model.tmdl:12"),)
 
-    run(_rules(*findings), _ctx(), explain=True, guidance=_GUIDANCE)
+    run(_rules(*findings), _ctx(), annotate=explain_renderer(_GUIDANCE))
 
     out = capsys.readouterr().out
     assert "A model partition sources from outside `gold`" in out
@@ -67,7 +67,7 @@ def test_explain_leaves_the_finding_line_byte_identical(capsys):
     run(_rules(*findings), _ctx())
     plain = capsys.readouterr().out.splitlines()
 
-    run(_rules(*findings), _ctx(), explain=True, guidance=_GUIDANCE)
+    run(_rules(*findings), _ctx(), annotate=explain_renderer(_GUIDANCE))
     annotated = capsys.readouterr().out.splitlines()
 
     assert plain == ["[error] D8 bad partition (model.tmdl:12)"]
@@ -84,7 +84,7 @@ def test_explain_does_not_change_the_exit_code(capsys):
     for finding in (error, warning):
         rules = _rules(finding)
         assert run(rules, _ctx()) == run(
-            rules, _ctx(), explain=True, guidance=_GUIDANCE
+            rules, _ctx(), annotate=explain_renderer(_GUIDANCE)
         )
     capsys.readouterr()
 
@@ -97,17 +97,17 @@ def test_unknown_id_renders_exactly_as_it_does_without_explain(capsys):
     run(_rules(*findings), _ctx())
     plain = capsys.readouterr().out
 
-    run(_rules(*findings), _ctx(), explain=True, guidance=_GUIDANCE)
+    run(_rules(*findings), _ctx(), annotate=explain_renderer(_GUIDANCE))
     annotated = capsys.readouterr().out
 
     assert annotated == plain
 
 
 @pytest.mark.unit
-def test_without_explain_guidance_is_never_rendered(capsys):
+def test_without_an_annotator_guidance_is_never_rendered(capsys):
     """Fails if the annotation leaks into the default output CI diffs against."""
     findings = (Finding("D8", Severity.ERROR, "bad partition", "model.tmdl:12"),)
 
-    run(_rules(*findings), _ctx(), guidance=_GUIDANCE)
+    run(_rules(*findings), _ctx())
 
     assert "Repoint the partition" not in capsys.readouterr().out

@@ -286,6 +286,23 @@ def coverage_census(
     return tuple(records)
 
 
+def explain_renderer(
+    guidance: Mapping[str, Mapping[str, str]],
+) -> Callable[[Finding], str]:
+    """A finding -> annotation renderer bound to one guidance mapping.
+
+    Passing ``run`` a single optional renderer (rather than an ``explain`` flag plus
+    its data) keeps the annotation decision in ONE argument and the rendering out of
+    the emit loop: ``run`` prints whatever string comes back and never branches on
+    whether guidance exists.
+    """
+
+    def render(finding: Finding) -> str:
+        return "\n".join(_explain_lines(finding, guidance))
+
+    return render
+
+
 def _explain_lines(
     finding: Finding, guidance: Mapping[str, Mapping[str, str]]
 ) -> list[str]:
@@ -309,8 +326,7 @@ def run(
     ctx: RuleContext,
     *,
     bootstrapped: bool = True,
-    explain: bool = False,
-    guidance: Mapping[str, Mapping[str, str]] | None = None,
+    annotate: Callable[[Finding], str] | None = None,
 ) -> int:
     """Default human-readable output: one ``_format`` line per finding.
 
@@ -320,21 +336,19 @@ def run(
     SEPARATE path (``run_json``). ``bootstrapped`` gates the KIT_SELF tier skip
     (Spec A); it defaults True so the kit's own (bootstrapped) repo is unchanged.
 
-    ``explain`` APPENDS the rule's authored ``means``/``fix`` guidance under each
-    finding; it never rewrites the finding line and never touches the exit code, so
-    the text contract above still holds line-for-line. ``guidance`` carries that
-    reader text (see ``rule_fix_table.load_guidance``) and is read for RENDERING
-    ONLY -- ``docs/rules/rule-fixes.yaml`` states that ``seshat check`` does not
-    consult it, because reader guidance must not become gate input.
+    ``annotate`` (see ``explain_renderer``) APPENDS text under each finding and is
+    the ``--explain`` seam. It never rewrites the finding line and never touches the
+    exit code, so the text contract above still holds line-for-line. Its guidance is
+    read for RENDERING ONLY -- ``docs/rules/rule-fixes.yaml`` states that ``seshat
+    check`` does not consult it, because reader guidance must not become gate input.
     """
-    lookup = guidance or {}
     exit_code = 0
     for registered in rules:
         for finding in _rule_findings(registered, ctx, bootstrapped=bootstrapped):
             print(_format(finding))
-            if explain:
-                for line in _explain_lines(finding, lookup):
-                    print(line)
+            annotation = annotate(finding) if annotate else ""
+            if annotation:
+                print(annotation)
             if finding.severity is Severity.ERROR:
                 exit_code = 1
     return exit_code

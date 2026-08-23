@@ -57,6 +57,11 @@ if TYPE_CHECKING:
     from ..validate_targets import ValidationTargets
 
 
+def _EXPLAIN_REFUSED(_finding: object) -> str:  # noqa: N802 (sentinel, not a callable API)
+    """Sentinel: ``--explain`` was asked for in a format that cannot carry it."""
+    raise AssertionError("refusal sentinel must never render")
+
+
 def _explain_guidance(repo_root: Path) -> Mapping[str, Mapping[str, str]]:
     """The authored reader guidance for ``--explain``, or empty if unreadable.
 
@@ -71,6 +76,28 @@ def _explain_guidance(repo_root: Path) -> Mapping[str, Mapping[str, str]]:
         return load_guidance(repo_root)
     except (OSError, RuleFixTableError, ValueError):
         return {}
+
+
+def _explain_annotator(args: object):
+    """Resolve ``--explain`` into a renderer, ``None``, or the refusal sentinel.
+
+    Refusing an unsupported ``--format`` here (rather than ignoring the flag) keeps
+    the caller honest: json/review/sarif are tooling output contracts, and a flag
+    that silently does nothing is worse than one that fails, because the caller
+    believes it received guidance it never got.
+    """
+    from ..runner import explain_renderer
+
+    if not getattr(args, "explain", False):
+        return None
+    output_format = getattr(args, "output_format", "text")
+    if output_format != "text":
+        print(
+            f"error: --explain applies to --format text only (got '{output_format}')",
+            file=sys.stderr,
+        )
+        return _EXPLAIN_REFUSED
+    return explain_renderer(_explain_guidance(Path(getattr(args, "repo", "."))))
 
 
 def _run_check(args: object) -> int:
@@ -117,16 +144,8 @@ def _run_check(args: object) -> int:
     from ..kit_lint import is_kit_self_repo
 
     bootstrapped = is_kit_self_repo(Path(args.repo))  # type: ignore[attr-defined]
-    explain = bool(getattr(args, "explain", False))
-    if explain and args.output_format != "text":  # type: ignore[attr-defined]
-        # Refuse rather than no-op: json/review/sarif are tooling contracts, and a
-        # flag that is silently ignored is worse than one that fails -- the caller
-        # believes it received guidance it never got.
-        print(
-            "error: --explain applies to --format text only "
-            f"(got '{args.output_format}')",  # type: ignore[attr-defined]
-            file=sys.stderr,
-        )
+    annotate = _explain_annotator(args)
+    if annotate is _EXPLAIN_REFUSED:
         return 2
     # Default 'text' calls the unchanged run(); 'json' is the opt-in path.
     if args.output_format == "json":  # type: ignore[attr-defined]
@@ -135,10 +154,7 @@ def _run_check(args: object) -> int:
         return run_review(all_rules(), ctx, bootstrapped=bootstrapped)
     if args.output_format == "sarif":  # type: ignore[attr-defined]
         return run_sarif(all_rules(), ctx, bootstrapped=bootstrapped)
-    guidance = _explain_guidance(Path(args.repo)) if explain else None  # type: ignore[attr-defined]
-    return run(
-        all_rules(), ctx, bootstrapped=bootstrapped, explain=explain, guidance=guidance
-    )
+    return run(all_rules(), ctx, bootstrapped=bootstrapped, annotate=annotate)
 
 
 def _run_doctor(args: object) -> int:
