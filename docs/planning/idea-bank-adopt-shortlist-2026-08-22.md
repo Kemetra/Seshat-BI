@@ -19,7 +19,17 @@ work, and nothing more.
 - The V/F numbers are the panel's carried-forward triage opinion, never a readiness
   or confidence score (hard rule #9).
 
-**Status**: Recorded, not ratified. No owner decision has been taken on any row.
+**Status**: Recorded, not ratified as a batch -- but SUPERSEDED IN PART by delivery.
+Verified against `origin/main` on 2026-08-23: **c22** (PR #706, `5451baf1`), **c27** and
+**c29** (PRs #707/#708, `9bbfcbde`) and **c41** (PR #704, `1e1ea518`) have shipped, and
+**c2** was already live as a knowledge route (`skills/bi-sql-knowledge/INDEX.md`, commit
+`e6c421a4`) when this shortlist was written -- its ADOPT verdict rested on a
+code-consumer check that a routed knowledge corpus does not need. **c10** is built and
+under review on PR #709, not yet merged. Only **c19** (widen `dax_gen` past `base|ratio`)
+and **c35** (answer freshness header) remain open, and neither has been ratified.
+
+This section is a dated record; it is not rewritten as ideas ship. Read the per-idea
+rows below as the panel's 2026-08-22 opinion, not as current ship status.
 
 ## 2. Why these eight, and why the count is not comparable to prior runs
 
