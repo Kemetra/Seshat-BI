@@ -50,8 +50,15 @@ a recorded ruling -- an unanswered card stays `pending` and this domain stays bl
 (`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
 make a number appear).
 
+Every ambiguity listed above has a card here UNLESS it is already marked **RULED** (a
+settled decision -- re-asking invites a contradicting answer) or states a grain/handling
+instruction rather than a question only the owner can answer. Those exclusions are named
+in the row list below rather than left silent.
+
 | # | Ask the owner | If unanswered | Layer default (context only) | Records as |
 |---|---------------|---------------|------------------------------|------------|
+| clv | Over what horizon is customer lifetime value measured, and is future value discounted? | CLV is not comparable between reports or periods | None -- the horizon is a business definition | `policy_ruling` |
+| newrepeat | Where is the cut between a new and a returning customer? | New-vs-returning splits shift with the anchor and mislead acquisition reporting | None -- depends on your identity key ruling | `kpi_definition` |
 | identity | Which field identifies a returning customer: loyalty id, card, phone, or account? | The same person counts as several customers and every retention KPI is wrong | None -- a reserved ruling, never defaulted | `kpi_definition` |
 | retention | Over what window is a customer counted as retained: rolling 12 months, calendar year, or since first purchase? | Retention rate changes with the window and is not comparable | None -- the window is a business definition | `policy_ruling` |
 

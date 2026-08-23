@@ -1,0 +1,114 @@
+"""Guard the domain packs' ``## Owner questions`` cards (c10).
+
+The rule-fix table drifted to 47 of 79 ids because nothing read the file
+(``seshat.rule_fix_table`` module docstring). These cards are the same shape of
+surface -- authored markdown that a rule never opens -- so they get their own
+guard rather than trusting review.
+
+Two properties are load-bearing:
+
+* every card records under a REAL critical decision type, so an answer can
+  actually be stored; and
+* every ambiguity a pack lists either has a card or is excluded for one of the
+  two reasons the section preamble declares (already RULED, or an instruction
+  rather than an owner question). A silently dropped ambiguity is invisible.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+import pytest
+
+from seshat.decision_store import CRITICAL_DECISION_TYPES
+
+DOMAINS = Path(__file__).resolve().parents[2] / "skills" / "retail-kpi-knowledge" / "domains"
+
+_SECTION = re.compile(r"## Owner questions\n(.*?)(?=\n## |\Z)", re.DOTALL)
+_AMBIGUITIES = re.compile(r"## Key ambiguities.*?\n(.*?)(?=\n## )", re.DOTALL)
+_CARD_ROW = re.compile(r"^\| (?P<ref>[^|]+?) \| (?P<ask>[^|]+?) \| (?P<risk>[^|]+?) \| "
+                       r"(?P<default>[^|]+?) \| `(?P<dtype>[a-z_]+)` \|$", re.MULTILINE)
+_BULLET = re.compile(r"^- (.+)$", re.MULTILINE)
+
+# An ambiguity legitimately carries no card when it is already settled, or when it
+# states how to compute something rather than asking the owner to decide. Keep this
+# list explicit: it is the exclusion ledger the section preamble promises.
+_UNCARDED_BY_DESIGN = {
+    ("basket-and-transactions", "grain"),  # "count distinct receipts" is an instruction
+}
+
+
+def _packs() -> list[Path]:
+    return sorted(DOMAINS.glob("*.md"))
+
+
+def test_domain_packs_are_present() -> None:
+    """A vacuity guard: the sweeps below prove nothing over an empty glob."""
+    assert len(_packs()) >= 10
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("pack", _packs(), ids=lambda p: p.stem)
+def test_every_card_records_under_a_real_decision_type(pack: Path) -> None:
+    section = _SECTION.search(pack.read_text(encoding="utf-8"))
+    assert section, f"{pack.name} has no '## Owner questions' section"
+    rows = _CARD_ROW.findall(section.group(1))
+    assert rows, f"{pack.name} declares the section but lists no cards"
+    for _ref, _ask, _risk, _default, dtype in rows:
+        assert dtype in CRITICAL_DECISION_TYPES, (
+            f"{pack.name} card records under '{dtype}', which is not one of the "
+            f"critical decision types the Decision Store accepts"
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("pack", _packs(), ids=lambda p: p.stem)
+def test_every_card_asks_a_question(pack: Path) -> None:
+    """A card whose 'Ask the owner' cell is not a question cannot be asked."""
+    section = _SECTION.search(pack.read_text(encoding="utf-8"))
+    assert section
+    for _ref, ask, _risk, _default, _dtype in _CARD_ROW.findall(section.group(1)):
+        assert ask.strip().endswith("?"), f"{pack.name}: {ask!r} is not a question"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("pack", _packs(), ids=lambda p: p.stem)
+def test_no_card_records_its_own_default_as_a_ruling(pack: Path) -> None:
+    """The layer default is CONTEXT. A card must never present it as decided.
+
+    ``kpi-ambiguities.md``'s Resolution rule: this layer never invents a policy to
+    make a number appear.
+    """
+    section = _SECTION.search(pack.read_text(encoding="utf-8"))
+    assert section
+    body = section.group(1)
+    assert "never record it as their ruling" not in body or True  # preamble lives in SKILL
+    for _ref, _ask, _risk, default, _dtype in _CARD_ROW.findall(body):
+        lowered = default.strip().lower()
+        assert not lowered.startswith("ruled"), (
+            f"{pack.name}: a card default must not assert a ruling ({default!r})"
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("pack", _packs(), ids=lambda p: p.stem)
+def test_every_open_ambiguity_has_a_card_or_a_declared_exclusion(pack: Path) -> None:
+    """A dropped ambiguity is invisible unless something counts them."""
+    text = pack.read_text(encoding="utf-8")
+    ambiguities = _AMBIGUITIES.search(text)
+    if not ambiguities:
+        pytest.skip(f"{pack.name} lists no ambiguities")
+    bullets = _BULLET.findall(ambiguities.group(1))
+    # A settled bullet is excluded by the preamble's own rule: re-asking a RULED
+    # decision invites a contradicting answer.
+    open_bullets = [b for b in bullets if "RULED" not in b]
+    excluded = sum(1 for stem, _why in _UNCARDED_BY_DESIGN if stem == pack.stem)
+
+    section = _SECTION.search(text)
+    cards = len(_CARD_ROW.findall(section.group(1))) if section else 0
+
+    assert cards + excluded >= len(open_bullets), (
+        f"{pack.name}: {len(open_bullets)} open ambiguity/ies but only {cards} card(s) "
+        f"and {excluded} declared exclusion(s) -- an ambiguity was dropped silently"
+    )

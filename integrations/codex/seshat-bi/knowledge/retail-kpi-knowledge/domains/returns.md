@@ -43,8 +43,15 @@ a recorded ruling -- an unanswered card stays `pending` and this domain stays bl
 (`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
 make a number appear).
 
+Every ambiguity listed above has a card here UNLESS it is already marked **RULED** (a
+settled decision -- re-asking invites a contradicting answer) or states a grain/handling
+instruction rather than a question only the owner can answer. Those exclusions are named
+in the row list below rather than left silent.
+
 | # | Ask the owner | If unanswered | Layer default (context only) | Records as |
 |---|---------------|---------------|------------------------------|------------|
+| exchange | Should an exchange be recorded as a return plus a new sale, or netted to nothing? | Return rate and gross sales both change materially with the choice | None -- needs a business definition | `policy_ruling` |
+| noncustomer | Should warehouse corrections and stock adjustments count as customer returns? | Return rate is inflated by movements no customer ever made | None -- exclusions are a business ruling | `data_exclusion` |
 | A2 | Are returns stored as negative sales lines or as a separate returns record? | Returns are netted invisibly and true return volume is hidden | None -- the policy must be stated, not assumed | `policy_ruling` |
 | A3 | Should a return be counted on the date it was returned, or the date of the original sale? | Return rate is attributed to the wrong period | None -- each contract must name its primary date | `kpi_definition` |
 

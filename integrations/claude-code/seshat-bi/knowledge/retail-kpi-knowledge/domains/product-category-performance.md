@@ -43,8 +43,14 @@ a recorded ruling -- an unanswered card stays `pending` and this domain stays bl
 (`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
 make a number appear).
 
+Every ambiguity listed above has a card here UNLESS it is already marked **RULED** (a
+settled decision -- re-asking invites a contradicting answer) or states a grain/handling
+instruction rather than a question only the owner can answer. Those exclusions are named
+in the row list below rather than left silent.
+
 | # | Ask the owner | If unanswered | Layer default (context only) | Records as |
 |---|---------------|---------------|------------------------------|------------|
+| discontinued | Should discontinued items be included when analysing the active assortment? | Assortment performance mixes live and dead SKUs and misdirects buying | None -- exclusions are a business ruling | `data_exclusion` |
 | A8 | Should products be grouped by product key, or by product name? | The same product under two names splits into two rows, or two products merge | None -- key vs name is an identity ruling | `kpi_definition` |
 | A2 | Do returns reduce the selling product's performance? | Product ranking is computed on unreturned volume and misleads buying decisions | None -- the policy must be stated, not assumed | `policy_ruling` |
 

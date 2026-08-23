@@ -1767,109 +1767,109 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/basket-and-transactions.md",
-      "output_sha256": "dfa50b9b0e3b49948e4110b3a7e9bf071d42b4da6bd608fe80806eb00ae02ef0",
+      "output_sha256": "62fae27928306cd376ba4bf75647a5db7c028262a7d6304b5288328b948b1868",
       "source": "skills/retail-kpi-knowledge/domains/basket-and-transactions.md",
       "source_id": "kb-175",
-      "source_sha256": "dfa50b9b0e3b49948e4110b3a7e9bf071d42b4da6bd608fe80806eb00ae02ef0",
+      "source_sha256": "62fae27928306cd376ba4bf75647a5db7c028262a7d6304b5288328b948b1868",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/branch-store-performance.md",
-      "output_sha256": "93d8b502065ae62e1f2e15207689c35bc0f87e6137de3a141d58fcafb040c3cf",
+      "output_sha256": "c22bc1c2f0e45d7af11d6c062a6f94890877eed6a54f2092386bf2593ba19eda",
       "source": "skills/retail-kpi-knowledge/domains/branch-store-performance.md",
       "source_id": "kb-176",
-      "source_sha256": "93d8b502065ae62e1f2e15207689c35bc0f87e6137de3a141d58fcafb040c3cf",
+      "source_sha256": "c22bc1c2f0e45d7af11d6c062a6f94890877eed6a54f2092386bf2593ba19eda",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/customer.md",
-      "output_sha256": "ed796830d32ebba217ec587315654b2032556bdff4dd7e2b06347ba807ef2d5f",
+      "output_sha256": "607a94242cfd3f2931fb6dc93e34c502be6a29689be0bd2faa200db1c0d77c46",
       "source": "skills/retail-kpi-knowledge/domains/customer.md",
       "source_id": "kb-177",
-      "source_sha256": "ed796830d32ebba217ec587315654b2032556bdff4dd7e2b06347ba807ef2d5f",
+      "source_sha256": "607a94242cfd3f2931fb6dc93e34c502be6a29689be0bd2faa200db1c0d77c46",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/data-quality-control.md",
-      "output_sha256": "8701f754bfa709850449df95d1897d2dcb6d899e457a66c19264fce27fb737fc",
+      "output_sha256": "26c8177fd4d80d364860964f017c323a00d2f2a9d5ea1b3f1f0a744ac34f5781",
       "source": "skills/retail-kpi-knowledge/domains/data-quality-control.md",
       "source_id": "kb-178",
-      "source_sha256": "8701f754bfa709850449df95d1897d2dcb6d899e457a66c19264fce27fb737fc",
+      "source_sha256": "26c8177fd4d80d364860964f017c323a00d2f2a9d5ea1b3f1f0a744ac34f5781",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/discounts-and-promotions.md",
-      "output_sha256": "160e69204ee32d13617e8adfc692dd2fd4b19933ebfbcf1579c7021e944215c3",
+      "output_sha256": "dd757b9f71e529b7baff530f1ee469657f7e1fcb205c145c3c7d5999f8f5dbc5",
       "source": "skills/retail-kpi-knowledge/domains/discounts-and-promotions.md",
       "source_id": "kb-179",
-      "source_sha256": "160e69204ee32d13617e8adfc692dd2fd4b19933ebfbcf1579c7021e944215c3",
+      "source_sha256": "dd757b9f71e529b7baff530f1ee469657f7e1fcb205c145c3c7d5999f8f5dbc5",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/inventory.md",
-      "output_sha256": "c2d7924bd8903e21db5e028f3d54e9b788c7df41c640f56a590e015803981554",
+      "output_sha256": "ad5b1e23c3b5fa815e3c1f8f98d8929262f6a5b1c7557f4b3a3e190d75da39ec",
       "source": "skills/retail-kpi-knowledge/domains/inventory.md",
       "source_id": "kb-180",
-      "source_sha256": "c2d7924bd8903e21db5e028f3d54e9b788c7df41c640f56a590e015803981554",
+      "source_sha256": "ad5b1e23c3b5fa815e3c1f8f98d8929262f6a5b1c7557f4b3a3e190d75da39ec",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/margin-profitability.md",
-      "output_sha256": "7de98c2128d289b776c04d5ef603ad994dee808f35f1de3b5c45b32e14613598",
+      "output_sha256": "8772caad2417d236df9af0ae94ab196c8c5f418a6e8dde385502a1f3aa6bcdfd",
       "source": "skills/retail-kpi-knowledge/domains/margin-profitability.md",
       "source_id": "kb-181",
-      "source_sha256": "7de98c2128d289b776c04d5ef603ad994dee808f35f1de3b5c45b32e14613598",
+      "source_sha256": "8772caad2417d236df9af0ae94ab196c8c5f418a6e8dde385502a1f3aa6bcdfd",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/product-category-performance.md",
-      "output_sha256": "bd5b6fd16d16f249639a26c9a2931ff30d41648d18f0351108a6727a8104b200",
+      "output_sha256": "f713f84481e32120fe0595e955f7c5a1f27454a78e9488b6b4eed610ed2fa1c4",
       "source": "skills/retail-kpi-knowledge/domains/product-category-performance.md",
       "source_id": "kb-182",
-      "source_sha256": "bd5b6fd16d16f249639a26c9a2931ff30d41648d18f0351108a6727a8104b200",
+      "source_sha256": "f713f84481e32120fe0595e955f7c5a1f27454a78e9488b6b4eed610ed2fa1c4",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/returns.md",
-      "output_sha256": "03e23fb063b6c328ff7532a4b516a2addb548cc6414d3ac209cece8fe541df94",
+      "output_sha256": "1960705c2d56494573269b7166761cf745173d083e26cc30e8dd6fb926b2cfcb",
       "source": "skills/retail-kpi-knowledge/domains/returns.md",
       "source_id": "kb-183",
-      "source_sha256": "03e23fb063b6c328ff7532a4b516a2addb548cc6414d3ac209cece8fe541df94",
+      "source_sha256": "1960705c2d56494573269b7166761cf745173d083e26cc30e8dd6fb926b2cfcb",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/sales-and-revenue.md",
-      "output_sha256": "24181358563bc6cdc075088ce8e6860109efa80dce583d5ebc7685a7c8a56e36",
+      "output_sha256": "0a6bf23f9847ae6993c54947d363a878a4e137efd24ac23f46d13182714b8424",
       "source": "skills/retail-kpi-knowledge/domains/sales-and-revenue.md",
       "source_id": "kb-184",
-      "source_sha256": "24181358563bc6cdc075088ce8e6860109efa80dce583d5ebc7685a7c8a56e36",
+      "source_sha256": "0a6bf23f9847ae6993c54947d363a878a4e137efd24ac23f46d13182714b8424",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/targets-and-budgets.md",
-      "output_sha256": "64b05617640fd978d2e66ff9da9881b5fd9ab2b5548d5c2d8a5bd2365356a92c",
+      "output_sha256": "22aa22a211130f53d9afef13378643e1ab4d34ca399b4941db0c1a7520960c41",
       "source": "skills/retail-kpi-knowledge/domains/targets-and-budgets.md",
       "source_id": "kb-185",
-      "source_sha256": "64b05617640fd978d2e66ff9da9881b5fd9ab2b5548d5c2d8a5bd2365356a92c",
+      "source_sha256": "22aa22a211130f53d9afef13378643e1ab4d34ca399b4941db0c1a7520960c41",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/domains/time-intelligence.md",
-      "output_sha256": "6a3bca7888566986a68702f6e531127c2dbeb4ca7e4f18df42ba9739975e8621",
+      "output_sha256": "d952bcc1456ca6f7d5f762cc2ddad06b0598d153b903df1b248d8eb9a2a0c455",
       "source": "skills/retail-kpi-knowledge/domains/time-intelligence.md",
       "source_id": "kb-186",
-      "source_sha256": "6a3bca7888566986a68702f6e531127c2dbeb4ca7e4f18df42ba9739975e8621",
+      "source_sha256": "d952bcc1456ca6f7d5f762cc2ddad06b0598d153b903df1b248d8eb9a2a0c455",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2405,10 +2405,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "f4cdc99a21360b27301380dcb1654281480c586c226f52d870ca10031170beeb",
+  "manifest_digest": "bd3c9b60b151ccc2d5d975d35dc8da427109c5a723477865a60861ffcac8dc4c",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "cccbb8508bd1087d474b2a605eccfbee9ae86fc3",
+  "source_revision": "123c3493ec7ab18c668fdbee43a595d4c2023d38",
   "target": "claude",
   "version": "2.0.0"
 }

@@ -39,8 +39,14 @@ a recorded ruling -- an unanswered card stays `pending` and this domain stays bl
 (`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
 make a number appear).
 
+Every ambiguity listed above has a card here UNLESS it is already marked **RULED** (a
+settled decision -- re-asking invites a contradicting answer) or states a grain/handling
+instruction rather than a question only the owner can answer. Those exclusions are named
+in the row list below rather than left silent.
+
 | # | Ask the owner | If unanswered | Layer default (context only) | Records as |
 |---|---------------|---------------|------------------------------|------------|
+| returns-only | Should receipts containing only returns count as transactions? | Transaction count and average basket value include receipts that sold nothing | None -- confirm before counting | `data_exclusion` |
 | A7 | Which transactions should be excluded: cancelled, void, staff, or test? | Basket counts and averages include transactions that never happened | None -- exclusions are a business ruling | `data_exclusion` |
 | A1 | Is basket value measured pre-tax or tax-inclusive? | Average basket value is not comparable across branches on mixed bases | Pre-tax unless you state otherwise | `kpi_definition` |
 

@@ -48,8 +48,15 @@ a recorded ruling -- an unanswered card stays `pending` and this domain stays bl
 (`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
 make a number appear).
 
+Every ambiguity listed above has a card here UNLESS it is already marked **RULED** (a
+settled decision -- re-asking invites a contradicting answer) or states a grain/handling
+instruction rather than a question only the owner can answer. Those exclusions are named
+in the row list below rather than left silent.
+
 | # | Ask the owner | If unanswered | Layer default (context only) | Records as |
 |---|---------------|---------------|------------------------------|------------|
+| channel | Should click-and-collect and e-commerce sales be attributed to a store? | Store performance either double-counts online sales or misses them entirely | None -- attribution is a business ruling | `policy_ruling` |
+| pseudo | Which branches are not real stores (head office, warehouse) and should be excluded? | Pseudo-branches appear in store rankings and distort every per-store average | None -- exclusions are a business ruling | `data_exclusion` |
 | A9 | Should branches be grouped by branch key, or by branch name? | A renamed or re-coded branch splits into two, breaking every trend | None -- key vs name is an identity ruling | `kpi_definition` |
 | A11 | Which stores count as "same-store", and after how long does a new store join? | Like-for-like growth silently includes new stores and overstates performance | None -- same-store is a business definition | `policy_ruling` |
 

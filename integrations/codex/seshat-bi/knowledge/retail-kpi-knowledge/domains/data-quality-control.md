@@ -42,8 +42,14 @@ a recorded ruling -- an unanswered card stays `pending` and this domain stays bl
 (`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
 make a number appear).
 
+Every ambiguity listed above has a card here UNLESS it is already marked **RULED** (a
+settled decision -- re-asking invites a contradicting answer) or states a grain/handling
+instruction rather than a question only the owner can answer. Those exclusions are named
+in the row list below rather than left silent.
+
 | # | Ask the owner | If unanswered | Layer default (context only) | Records as |
 |---|---------------|---------------|------------------------------|------------|
+| unknown | Should an "Unknown" member be treated as a data-quality signal rather than a real category? | "Unknown" is analysed as a genuine product or branch and hides the underlying defect | None -- must be recognised, not analysed as valid | `policy_ruling` |
 | nulls | Which blank values are legitimate (for example a walk-in customer), and which are defects? | Real defects are dismissed as expected, or valid rows are flagged as broken | None -- only you can separate allowed from defective | `missing_value_rule` |
 | late | How late may data arrive before it counts as late, and in which time zone? | Late-arrival alerts fire on healthy loads or stay silent on broken ones | None -- the SLA is owner-supplied | `policy_ruling` |
 | backdated | Are back-dated corrections allowed by policy, or do they indicate a problem? | Genuine corrections are reported as data quality failures | None -- the policy must be stated, not assumed | `policy_ruling` |

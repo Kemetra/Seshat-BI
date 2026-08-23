@@ -41,8 +41,15 @@ a recorded ruling -- an unanswered card stays `pending` and this domain stays bl
 (`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
 make a number appear).
 
+Every ambiguity listed above has a card here UNLESS it is already marked **RULED** (a
+settled decision -- re-asking invites a contradicting answer) or states a grain/handling
+instruction rather than a question only the owner can answer. Those exclusions are named
+in the row list below rather than left silent.
+
 | # | Ask the owner | If unanswered | Layer default (context only) | Records as |
 |---|---------------|---------------|------------------------------|------------|
+| writeoff | Should accounting write-offs and loyalty-point redemptions be counted as discounts? | Discount rate absorbs unrelated accounting activity and misreports commercial performance | None -- the split is a business ruling | `policy_ruling` |
+| funding | Should retailer-funded and supplier-funded discounts be reported separately? | Supplier-funded discount is charged against your own margin | None -- split only if the source supports it | `policy_ruling` |
 | A5 | Are discounts recorded per line, or once on the whole transaction? | Line and header discounts double-count or vanish when summed together | None -- the storage level must be confirmed | `kpi_definition` |
 | A4 | Is discount measured against gross or net sales? | Discount rate shifts with the base and cannot be compared | None -- gross and net are never interchangeable | `kpi_definition` |
 

@@ -37,8 +37,14 @@ a recorded ruling -- an unanswered card stays `pending` and this domain stays bl
 (`knowledge/kpi-ambiguities.md`, Resolution rule: this layer never invents a policy to
 make a number appear).
 
+Every ambiguity listed above has a card here UNLESS it is already marked **RULED** (a
+settled decision -- re-asking invites a contradicting answer) or states a grain/handling
+instruction rather than a question only the owner can answer. Those exclusions are named
+in the row list below rather than left silent.
+
 | # | Ask the owner | If unanswered | Layer default (context only) | Records as |
 |---|---------------|---------------|------------------------------|------------|
+| calendar | Do your target periods line up with the calendar the actuals are reported on? | A four-week target is compared to a calendar month and never matches | None -- alignment must be confirmed | `policy_ruling` |
 | grain | At what level are targets set: month by store, by category, or another grain? | Actuals and targets are compared at mismatched grain (KPI-AP-09) | None -- the target grain is owner-supplied | `table_grain` |
 | missing | How should a store or product with no target be shown? | A missing target is displayed as 0% achievement and reads as total failure | None -- must be flagged, never shown as 0% | `policy_ruling` |
 | scope | Do targets cover the same channels and branches as the actuals they are compared to? | A partial-scope target is compared to full-scope actuals and always looks missed | None -- the scope must be confirmed | `policy_ruling` |
