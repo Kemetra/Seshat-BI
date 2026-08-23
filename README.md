@@ -160,9 +160,11 @@ release. The shipped system includes:
   advisory and never create readiness truth.
 - **Source-controlled Power BI workflows** with deterministic PBIR authoring helpers
   and a read-only assessment path for existing PBIP projects.
-- **Seshat Studio**, a local analyst console (`seshat-studio`, `[studio]` extra) that
-  shows readiness, operations and client review over the same committed evidence --
-  it surfaces the gates, and never grants an approval of its own.
+- **Seshat Studio**, a local analyst console (`seshat-studio`, `[studio]` extra) whose
+  browser views show workspace readiness, per-table journeys and the agent
+  conversation over the same committed evidence. Operations, run history and client
+  review ship as API endpoints without browser views today. Studio surfaces the gates
+  and never grants an approval of its own.
 
 Explore the [capability inventory](docs/capabilities/capabilities.yaml),
 [release history](CHANGELOG.md), and [roadmap](docs/roadmap/roadmap.md) for the
