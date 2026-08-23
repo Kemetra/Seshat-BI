@@ -181,3 +181,83 @@ def _write_corpus(
     (templates / "dashboard-page-blueprint.yaml").write_text(
         "sections:\n" + "".join(f"  {k}: keep\n" for k in keys), encoding="utf-8"
     )
+
+
+def _ctx_tracking(root: Path, *, drop: str = "") -> RuleContext:
+    """A context whose tracked set can omit a file that exists on disk."""
+    tracked = tuple(rel for rel in _ctx(root).tracked_files if rel != drop)
+    return RuleContext(repo_root=root, tracked_files=tracked)
+
+
+@pytest.mark.unit
+def test_a_tracked_surface_that_declares_nothing_is_an_error(tmp_path):
+    """Fails while an emptied declaration is read as a coverage gap.
+
+    `safe_zones: []` is a TRACKED surface asserting an empty vocabulary, which
+    disagrees with the authority's seven. The old branch suppressed the
+    disagreement whenever `declared` was falsy, so deleting the contents of a
+    declaring file silently passed a three-way parity check.
+    """
+    _write_corpus(tmp_path)
+    (tmp_path / "design" / "grids" / "mobile-grid.yaml").write_text(
+        "safe_zones: []\n", encoding="utf-8"
+    )
+
+    findings = list(section_vocabulary(_ctx(tmp_path)))
+
+    assert [f.severity for f in findings] == [Severity.ERROR]
+    assert "mobile-grid.yaml" in findings[0].locator
+
+
+@pytest.mark.unit
+def test_a_tracked_surface_that_loses_its_declaration_key_is_an_error(tmp_path):
+    """The same fail-open reached by removing the key rather than emptying it."""
+    _write_corpus(tmp_path)
+    (tmp_path / "design" / "grids" / "mobile-grid.yaml").write_text(
+        "unrelated_key: 1\n", encoding="utf-8"
+    )
+
+    findings = list(section_vocabulary(_ctx(tmp_path)))
+
+    assert [f.severity for f in findings] == [Severity.ERROR]
+
+
+@pytest.mark.unit
+def test_a_surface_that_is_not_tracked_at_all_is_a_coverage_gap_not_drift(tmp_path):
+    """The other arm, and the reason this is not just "empty means error".
+
+    A downstream repo that scaffolded the desktop grid but never created a mobile
+    grid is a legitimate partial corpus, not vocabulary drift. Untracked stays
+    silent; tracked-but-empty is the error above.
+    """
+    _write_corpus(tmp_path)
+    (tmp_path / "design" / "grids" / "mobile-grid.yaml").unlink()
+
+    assert list(section_vocabulary(_ctx(tmp_path))) == []
+
+
+@pytest.mark.unit
+def test_a_surface_present_on_disk_but_untracked_is_a_coverage_gap(tmp_path):
+    """Tracking, not mere presence, is what makes a surface answerable."""
+    _write_corpus(tmp_path)
+
+    findings = list(
+        section_vocabulary(
+            _ctx_tracking(tmp_path, drop="design/grids/mobile-grid.yaml")
+        )
+    )
+
+    assert findings == [], [f.message for f in findings]
+
+
+@pytest.mark.unit
+def test_a_malformed_declaring_surface_is_reported_not_skipped(tmp_path):
+    """A file the rule could not parse must not read as agreement."""
+    _write_corpus(tmp_path)
+    (tmp_path / "design" / "grids" / "mobile-grid.yaml").write_text(
+        "safe_zones: [oops: bad\n  ][\n", encoding="utf-8"
+    )
+
+    findings = list(section_vocabulary(_ctx(tmp_path)))
+
+    assert [f.severity for f in findings] == [Severity.ERROR]

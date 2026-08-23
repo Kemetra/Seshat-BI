@@ -36,13 +36,14 @@ tenant or brand literal (Principle VII).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
 from ..rule_coverage import TEST_FIXTURES, any_tracked_file
-from .yaml_tree import first_value, load, strings_for
+from .yaml_tree import first_value, read, strings_for
 
 SECTION_CORPUS = any_tracked_file(
     "design/grids/*",
@@ -69,6 +70,20 @@ _INSTANCE_ROOTS = ("reports/blueprints/", "reports/backgrounds/")
 _NAME_KEYS = ("band", "section", "name")
 
 
+@dataclass(frozen=True)
+class Declaration:
+    """A declaring surface's vocabulary, plus whether it could be read."""
+
+    names: set[str]
+    unreadable: bool
+
+
+def _finding(locator: str, message: str) -> Finding:
+    return Finding(
+        rule_id=RULE_ID, severity=Severity.ERROR, message=message, locator=locator
+    )
+
+
 def _names(declaration: Any) -> set[str]:
     """Section names out of any of the three committed shapes.
 
@@ -83,16 +98,24 @@ def _names(declaration: Any) -> set[str]:
     return bare | set(strings_for(declaration, *_NAME_KEYS))
 
 
-def _declared(repo_root: Path, suffix: str, key: str) -> set[str]:
+def _declared(repo_root: Path, suffix: str, key: str) -> Declaration:
+    """What a declaring surface says, and whether it was answerable at all.
+
+    Three outcomes, deliberately not two. An untracked surface is a coverage gap the
+    census reports; a TRACKED surface that declares nothing (emptied, or its key
+    removed) is real drift; an unparseable one is a file that cannot be read as
+    agreement. Collapsing the first two is what let an emptied file pass parity.
+    """
     path = repo_root / suffix
-    if not path.is_file():
-        return set()
-    return _names(first_value(load(path), key))
+    document = read(path)
+    if document.failed:
+        return Declaration(names=set(), unreadable=True)
+    return Declaration(names=_names(first_value(document.data, key)), unreadable=False)
 
 
 def canonical_sections(repo_root: Path) -> set[str]:
     """The authoritative vocabulary: ``zones`` in the desktop grid."""
-    return _declared(repo_root, *_AUTHORITY)
+    return _declared(repo_root, *_AUTHORITY).names
 
 
 def _disagreement(declared: set[str], canon: set[str]) -> str:
@@ -107,17 +130,29 @@ def _disagreement(declared: set[str], canon: set[str]) -> str:
     return "; ".join(parts)
 
 
-def _parity_findings(repo_root: Path, canon: set[str]) -> Iterable[Finding]:
+def _parity_findings(
+    repo_root: Path, canon: set[str], tracked: frozenset[str]
+) -> Iterable[Finding]:
     for suffix, key in _DECLARERS:
-        declared = _declared(repo_root, suffix, key)
-        # An absent or empty surface is a coverage gap the census reports, not drift.
-        detail = _disagreement(declared, canon) if declared else ""
+        # UNTRACKED is the only silent case: a partial scaffold is a coverage gap the
+        # census reports. A tracked surface must answer, even to say "nothing".
+        if suffix not in tracked:
+            continue
+        declaration = _declared(repo_root, suffix, key)
+        if declaration.unreadable:
+            yield _finding(
+                suffix, "surface could not be parsed, so its vocabulary is unchecked"
+            )
+            continue
+        detail = _disagreement(declaration.names, canon) or (
+            f"declares no section vocabulary, while {_AUTHORITY[0]} declares "
+            f"{len(canon)}"
+            if not declaration.names
+            else ""
+        )
         if detail:
-            yield Finding(
-                rule_id=RULE_ID,
-                severity=Severity.ERROR,
-                message=f"section vocabulary disagrees with {_AUTHORITY[0]}: {detail}",
-                locator=suffix,
+            yield _finding(
+                suffix, f"section vocabulary disagrees with {_AUTHORITY[0]}: {detail}"
             )
 
 
@@ -133,16 +168,20 @@ def _instance_files(ctx: RuleContext) -> Iterable[str]:
 
 def _instance_findings(ctx: RuleContext, canon: set[str]) -> Iterable[Finding]:
     for rel in _instance_files(ctx):
-        used = set(strings_for(load(ctx.repo_root / rel), "section"))
+        document = read(ctx.repo_root / rel)
+        if document.failed:
+            # An unexamined instance is not a compliant one. Skipping it here is the
+            # fail-open Codex flagged: the census still counts DL10 as evaluated.
+            yield _finding(
+                rel, "file could not be parsed, so its sections are unchecked"
+            )
+            continue
+        used = set(strings_for(document.data, "section"))
         for value in sorted(used - canon):
-            yield Finding(
-                rule_id=RULE_ID,
-                severity=Severity.ERROR,
-                message=(
-                    f"section '{value}' is not in the vocabulary declared by "
-                    f"{_AUTHORITY[0]}"
-                ),
-                locator=rel,
+            yield _finding(
+                rel,
+                f"section '{value}' is not in the vocabulary declared by "
+                f"{_AUTHORITY[0]}",
             )
 
 
@@ -156,5 +195,6 @@ def section_vocabulary(ctx: RuleContext) -> Iterable[Finding]:
     canon = canonical_sections(ctx.repo_root)
     if not canon:
         return  # no authority tracked; the corpus requirement reports the gap
-    yield from _parity_findings(ctx.repo_root, canon)
+    tracked = frozenset(rel.replace("\\", "/") for rel in ctx.tracked_files)
+    yield from _parity_findings(ctx.repo_root, canon, tracked)
     yield from _instance_findings(ctx, canon)
