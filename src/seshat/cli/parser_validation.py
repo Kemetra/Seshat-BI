@@ -47,6 +47,16 @@ def _add_check_parser(sub: argparse._SubParsersAction) -> None:
             "stable digest; 'sarif' emits SARIF 2.1.0. Exit policy is identical."
         ),
     )
+    check.add_argument(
+        "--explain",
+        action="store_true",
+        help=(
+            "append each finding's authored means/fix guidance (docs/rules/"
+            "rule-fixes.yaml) under its line. Additive and text-only: the finding "
+            "lines, severities and exit code are unchanged. Rejected with --format "
+            "json/review/sarif, whose output contracts are consumed by tooling."
+        ),
+    )
 
 
 def _add_validate_parser(sub: argparse._SubParsersAction) -> None:

@@ -39,7 +39,7 @@ Structure:
 from __future__ import annotations
 
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -57,11 +57,80 @@ if TYPE_CHECKING:
     from ..validate_targets import ValidationTargets
 
 
+def _EXPLAIN_REFUSED(_finding: object) -> str:  # noqa: N802 (sentinel, not a callable API)
+    """Sentinel: ``--explain`` was asked for in a format that cannot carry it."""
+    raise AssertionError("refusal sentinel must never render")
+
+
+def _explain_guidance(
+    _repo_root: Path | None = None,
+) -> Mapping[str, Mapping[str, str]]:
+    """The authored reader guidance for ``--explain``, or empty if unreadable.
+
+    Read from the INSTALLED kit, never from the workspace being checked. Guidance
+    describes the RULES, which ship with the package; it is not a property of the
+    repo under inspection. Keying it on ``--repo`` worked only in the kit's own tree
+    and annotated nothing in the primary shipped case -- a wheel checking a consumer
+    workspace, where ``docs/rules/`` does not exist (PR #706 review).
+
+    ``_repo_root`` is accepted and ignored so callers need not care where the file
+    lives. Deliberately fail-soft: a missing or malformed file degrades to the
+    ordinary unannotated output rather than changing a verdict or crashing a run,
+    because reader guidance is a documentation gap, not a gate failure.
+    """
+    import yaml
+
+    from ..rule_fix_table import FIXES_REL
+
+    # Installed layout first (wheel force-include), then an editable/source
+    # checkout -- the same resolution `packs.resolve_schema_path` uses, except
+    # this one fails soft instead of raising: guidance is display-only.
+    packaged = Path(__file__).resolve().parent.parent / "rules_data" / FIXES_REL.name
+    source_tree = Path(__file__).resolve().parents[3] / FIXES_REL
+    try:
+        path = packaged if packaged.is_file() else source_tree
+        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return {}
+    rules = (payload or {}).get("rules") if isinstance(payload, dict) else None
+    return rules if isinstance(rules, dict) else {}
+
+
+def _explain_annotator(args: object):
+    """Resolve ``--explain`` into a renderer, ``None``, or the refusal sentinel.
+
+    Refusing an unsupported ``--format`` here (rather than ignoring the flag) keeps
+    the caller honest: json/review/sarif are tooling output contracts, and a flag
+    that silently does nothing is worse than one that fails, because the caller
+    believes it received guidance it never got.
+    """
+    from ..runner import explain_renderer
+
+    if not getattr(args, "explain", False):
+        return None
+    output_format = getattr(args, "output_format", "text")
+    if output_format != "text":
+        print(
+            f"error: --explain applies to --format text only (got '{output_format}')",
+            file=sys.stderr,
+        )
+        return _EXPLAIN_REFUSED
+    return explain_renderer(_explain_guidance(Path(getattr(args, "repo", "."))))
+
+
 def _run_check(args: object) -> int:
     """Handler for ``check``. Kept as a wrapper (not a lazy-imported handler)
     -- see the module docstring for why: it reads ``build_context`` / ``run``
     / ``run_json`` / ``all_rules`` as bare module globals so test-suite
     monkeypatches on ``seshat.cli.*`` stay visible."""
+    # Usage errors first: flag compatibility depends only on the arguments, so it
+    # must not wait behind commit-message reading or the git call in
+    # `build_context`. Evaluated later, an unrelated failure reports itself and the
+    # caller never learns the flags are incompatible (PR #706 review).
+    annotate = _explain_annotator(args)
+    if annotate is _EXPLAIN_REFUSED:
+        return 2
+
     commit_message: str | None = None
     if args.commit_msg_file is not None:  # type: ignore[attr-defined]
         try:
@@ -108,7 +177,7 @@ def _run_check(args: object) -> int:
         return run_review(all_rules(), ctx, bootstrapped=bootstrapped)
     if args.output_format == "sarif":  # type: ignore[attr-defined]
         return run_sarif(all_rules(), ctx, bootstrapped=bootstrapped)
-    return run(all_rules(), ctx, bootstrapped=bootstrapped)
+    return run(all_rules(), ctx, bootstrapped=bootstrapped, annotate=annotate)
 
 
 def _run_doctor(args: object) -> int:

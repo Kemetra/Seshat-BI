@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Callable
@@ -285,8 +286,54 @@ def coverage_census(
     return tuple(records)
 
 
+def explain_renderer(
+    guidance: Mapping[str, Mapping[str, str]],
+) -> Callable[[Finding], str]:
+    """A finding -> annotation renderer bound to one guidance mapping.
+
+    Passing ``run`` a single optional renderer (rather than an ``explain`` flag plus
+    its data) keeps the annotation decision in ONE argument and the rendering out of
+    the emit loop: ``run`` prints whatever string comes back and never branches on
+    whether guidance exists.
+    """
+
+    def render(finding: Finding) -> str:
+        return "\n".join(_explain_lines(finding, guidance))
+
+    return render
+
+
+def _explain_lines(
+    finding: Finding, guidance: Mapping[str, Mapping[str, str]]
+) -> list[str]:
+    """The indented ``means``/``fix`` continuation lines for one finding, if authored.
+
+    ADDITIVE and display-only: an id with no authored entry, an entry with neither
+    field, and an entry of the WRONG SHAPE all yield nothing, so the finding renders
+    exactly as it does without the flag rather than asserting guidance nobody wrote.
+
+    The shape check is not defensive padding: valid YAML can hold a half-edited entry
+    (``rules: {D8: "unfinished"}``), which is a string, not a mapping. Reaching
+    ``.get`` on it raised ``AttributeError`` out of a display-only path and crashed
+    the whole check run (PR #706 review).
+    """
+    entry = guidance.get(finding.rule_id)
+    if not isinstance(entry, Mapping):
+        return []
+    labelled = (("means", entry.get("means")), ("fix", entry.get("fix")))
+    return [
+        f"    {label}: {str(text).strip()}"
+        for label, text in labelled
+        if str(text or "").strip()
+    ]
+
+
 def run(
-    rules: tuple[RegisteredRule, ...], ctx: RuleContext, *, bootstrapped: bool = True
+    rules: tuple[RegisteredRule, ...],
+    ctx: RuleContext,
+    *,
+    bootstrapped: bool = True,
+    annotate: Callable[[Finding], str] | None = None,
 ) -> int:
     """Default human-readable output: one ``_format`` line per finding.
 
@@ -295,11 +342,20 @@ def run(
     its behavior stays exactly what it was before B2; the JSON output is a
     SEPARATE path (``run_json``). ``bootstrapped`` gates the KIT_SELF tier skip
     (Spec A); it defaults True so the kit's own (bootstrapped) repo is unchanged.
+
+    ``annotate`` (see ``explain_renderer``) APPENDS text under each finding and is
+    the ``--explain`` seam. It never rewrites the finding line and never touches the
+    exit code, so the text contract above still holds line-for-line. Its guidance is
+    read for RENDERING ONLY -- ``docs/rules/rule-fixes.yaml`` states that ``seshat
+    check`` does not consult it, because reader guidance must not become gate input.
     """
     exit_code = 0
     for registered in rules:
         for finding in _rule_findings(registered, ctx, bootstrapped=bootstrapped):
             print(_format(finding))
+            annotation = annotate(finding) if annotate else ""
+            if annotation:
+                print(annotation)
             if finding.severity is Severity.ERROR:
                 exit_code = 1
     return exit_code
