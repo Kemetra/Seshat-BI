@@ -2,9 +2,9 @@
 
 **Spec**: `specs/157-answer-evidence-dates/spec.md`
 **Plan**: `specs/157-answer-evidence-dates/plan.md`
-**Status**: Parked until spec 156 is accepted and its fence is closed
+**Status**: Ratified; implementation active after spec 156 acceptance
 
-- [ ] T001 Confirm spec 156 closure, record named-owner ratification, and move the singleton fence to spec 157.
+- [x] T001 Confirm spec 156 closure, record named-owner ratification, and move the singleton fence to spec 157.
 - [ ] T002 Add RED source-profile disclosure tests, then update the generic and filled profiles from committed evidence only.
 - [ ] T003 Add RED answerability disclosure tests, then add the three-date and GAP contract.
 - [ ] T004 Add RED documentation-route tests, then document the optional disclosure in Publish Ready guidance.

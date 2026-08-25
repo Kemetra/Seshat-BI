@@ -34,7 +34,10 @@ No live DB provisioning, no automated ingestion code, no orchestrator integratio
 unless explicitly requested. Add the seam, not the implementation.
 
 <!-- SPECKIT START -->
-No active Spec Kit implementation plan.
+Active plan: `specs/157-answer-evidence-dates/plan.md` (Answer Evidence Dates).
+Ratified by owner Ahmed Shaaban on 2026-08-25 for FR-157-001 through
+FR-157-008 after spec 156 acceptance. Spec 141 remains paused, not completed or
+rejected, while this singleton fence is active.
 <!-- SPECKIT END -->
 <!-- SESHAT-KIT START -->
 **Seshat BI kit router** (v0.2.0) -- generated from `.seshat/kit-source.yaml`; do not edit here.

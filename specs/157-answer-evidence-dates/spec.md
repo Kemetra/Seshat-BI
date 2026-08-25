@@ -2,7 +2,7 @@
 
 **Feature**: 157
 **Idea**: c35 -- Answer Freshness Header
-**Status**: Parked behind spec 156; design approved 2026-08-25
+**Status**: Ratified by owner Ahmed Shaaban on 2026-08-25
 
 ## Goal
 
