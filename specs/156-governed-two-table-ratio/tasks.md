@@ -2,9 +2,9 @@
 
 **Spec**: `specs/156-governed-two-table-ratio/spec.md`
 **Plan**: `specs/156-governed-two-table-ratio/plan.md`
-**Status**: Awaiting named-owner ratification
+**Status**: Ratified; implementation active
 
-- [ ] T001 Record named-owner ratification, park spec 141, and move the singleton fence to spec 156.
+- [x] T001 Record named-owner ratification, park spec 141, and move the singleton fence to spec 156.
 - [ ] T002 Add RED tests for the shared two-table binding validator.
 - [ ] T003 Implement the minimal stdlib-only validator and make its focused tests green.
 - [ ] T004 Add RED inventory and CLI tests, then integrate the shared validator in both paths.

@@ -2,7 +2,7 @@
 
 **Feature**: 156
 **Idea**: c19 -- Widen DAX generation to the actual-vs-target two-table shape
-**Status**: Design approved 2026-08-25; named-owner ratification required before implementation
+**Status**: Ratified by owner Ahmed Shaaban on 2026-08-25
 
 ## Goal
 
