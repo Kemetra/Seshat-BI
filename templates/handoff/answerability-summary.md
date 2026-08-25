@@ -10,6 +10,21 @@
 > NOT listed in Publish Ready's Required artifacts / Required checks / Blocking reasons, and it
 > changes no Stage 7 pass condition.
 
+## Evidence dates
+
+| Evidence fact | Measured date | Committed source |
+|---|---|---|
+| **Data coverage ends** | `<YYYY-MM-DD or GAP -- observed coverage end not established>` | `mappings/<table>/source-profile.md` -> `Observed coverage end` |
+| **Readiness last checked** | `<YYYY-MM-DD or GAP -- last_checked_at absent or malformed>` | `mappings/<table>/readiness-status.yaml` -> `last_checked_at` |
+| **Publish approval recorded** | `<YYYY-MM-DD or GAP -- no shape-valid publish_ready approval>` | `mappings/<table>/readiness-status.yaml` -> latest `approvals[]` entry with `stage: publish_ready` |
+
+**Elapsed calendar time:** The readiness check is `<N>` calendar days after the
+observed data coverage end; the publish approval is `<M>` calendar days after
+that readiness check.
+
+When a required date is a GAP, omit its dependent arithmetic and write:
+`GAP -- cannot calculate <named difference> because <named date> is absent or malformed.`
+
 ## What this is / is not
 
 - **Is**: a presentation over the human publish-approval seam. For each business decision

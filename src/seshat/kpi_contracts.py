@@ -393,11 +393,15 @@ def _is_approved_pii_handling(reference: object, ctx: FinalizationContext) -> bo
 
 
 def _pii_handling_blockers(
-    binds_to: object, refs: object, ctx: FinalizationContext
+    bindings: tuple[object, ...], refs: object, ctx: FinalizationContext
 ) -> list[str]:
     """Block a PII-sensitive binding until pii_handling is approved and referenced."""
 
-    if not isinstance(binds_to, dict) or binds_to.get("pii_sensitive") is not True:
+    sensitive = any(
+        isinstance(binding, dict) and binding.get("pii_sensitive") is True
+        for binding in bindings
+    )
+    if not sensitive:
         return []
     references = refs if isinstance(refs, list) else []
     if any(_is_approved_pii_handling(reference, ctx) for reference in references):
@@ -444,7 +448,9 @@ def _finalization_blockers(
     blockers.extend(_binding_blockers(binds_to))
     blockers.extend(_declared_blockers(result.get("readiness")))
     blockers.extend(_decision_blockers(refs, ctx))
-    blockers.extend(_pii_handling_blockers(binds_to, refs, ctx))
+    blockers.extend(
+        _pii_handling_blockers((binds_to, result.get("compares_to")), refs, ctx)
+    )
     blockers.extend(_evidence_blockers(result.get("source_evidence"), ctx))
     blockers.extend(_approval_blockers(ctx))
     return blockers

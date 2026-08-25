@@ -82,6 +82,24 @@ and STOP; there is no automated publish today.
 - Mark `pass` while any prior stage is not `pass`, or with caveats/reconciliation missing.
 - Edit the deployed schema or metric contracts to make the pack "tie" -- escalate instead.
 
+## Optional evidence-date companion
+
+The answerability summary may disclose three evidence dates for a reader. This
+companion is optional, does not change readiness, and does not grant or alter a
+publish approval:
+
+- Data coverage comes only from `Observed coverage end` in the table's committed
+  `source-profile.md`.
+- The audit date comes only from `last_checked_at` in the table's committed
+  `readiness-status.yaml`.
+- The approval date is the latest shape-valid `approvals[]` entry whose stage is
+  `publish_ready` in that same readiness status.
+
+Each value is an ISO date or an explicit GAP. Calendar-day differences may be
+shown only when both required dates are present; otherwise the dependent
+arithmetic is omitted with a named GAP. These facts carry no age threshold,
+judgment label, badge, verdict, traffic light, or score.
+
 ## See also
 
 - The state model: `readiness-model.md`

@@ -55,6 +55,33 @@ readiness:
 '''
 
 
+def _approved_two_table() -> str:
+    return """\
+name: "TotalSales"
+owner: metric_owner
+binds_to:
+  gold_table: "gold.actuals"
+  columns: [amount]
+  pii_sensitive: false
+compares_to:
+  gold_table: "gold.targets"
+  columns: [amount]
+  pii_sensitive: false
+definition:
+  kind: ratio
+  numerator:
+    aggregation: sum
+    source: {table: gold.actuals, column: amount}
+  denominator:
+    aggregation: sum
+    source: {table: gold.targets, column: amount}
+readiness:
+  status: pass
+  evidence: ["approved by the named metric owner on 2026-07-22"]
+  blocking_reasons: []
+"""
+
+
 def test_approved_contract_is_indexed_by_scope_and_name(tmp_path: Path) -> None:
     _write_approval(tmp_path, "sales")
     path = _write(_contract_path(tmp_path, "sales"), _approved())
@@ -95,6 +122,74 @@ def test_approved_contract_exposes_statistical_authority_fields(
     assert contract.grain == "one row per completed week"
     assert contract.unit == "USD"
     assert contract.time_additivity == "additive"
+
+
+def test_approved_two_table_ratio_requires_coherent_comparison_binding(
+    tmp_path: Path,
+) -> None:
+    _write_approval(tmp_path, "sales", ("TotalSales",))
+    path = _write(_contract_path(tmp_path, "sales"), _approved_two_table())
+
+    inventory = load_contract_inventory([path], tmp_path)
+
+    assert inventory.errors == ()
+    contract = inventory.approved[("sales", "TotalSales")]
+    assert contract.comparison_gold_table == "gold.targets"
+    assert contract.comparison_columns == ("amount",)
+
+
+def test_comparison_pii_is_effective_for_the_approved_inventory(tmp_path: Path) -> None:
+    _write_approval(tmp_path, "sales", ("TotalSales",))
+    body = _approved_two_table().replace(
+        "compares_to:\n"
+        '  gold_table: "gold.targets"\n'
+        "  columns: [amount]\n"
+        "  pii_sensitive: false\n",
+        "compares_to:\n"
+        '  gold_table: "gold.targets"\n'
+        "  columns: [amount]\n"
+        "  pii_sensitive: true\n",
+    )
+    path = _write(_contract_path(tmp_path, "sales"), body)
+
+    inventory = load_contract_inventory([path], tmp_path)
+
+    assert inventory.errors == ()
+    assert inventory.approved[("sales", "TotalSales")].pii_sensitive is True
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    (
+        (
+            _approved_two_table().replace(
+                "compares_to:\n"
+                '  gold_table: "gold.targets"\n'
+                "  columns: [amount]\n"
+                "  pii_sensitive: false\n",
+                "",
+            ),
+            "two-table ratio requires compares_to",
+        ),
+        (
+            _approved_two_table().replace(
+                '  gold_table: "gold.targets"',
+                '  gold_table: "gold.plan"',
+            ),
+            "denominator source table must equal compares_to.gold_table",
+        ),
+    ),
+)
+def test_incoherent_two_table_ratio_never_enters_approved_inventory(
+    tmp_path: Path, body: str, expected: str
+) -> None:
+    _write_approval(tmp_path, "sales", ("TotalSales",))
+    path = _write(_contract_path(tmp_path, "sales"), body)
+
+    inventory = load_contract_inventory([path], tmp_path)
+
+    assert inventory.approved == {}
+    assert inventory.errors == (f"mappings/sales/metrics/TotalSales.yaml: {expected}",)
 
 
 def test_zero_contracts_is_an_empty_valid_inventory(tmp_path: Path) -> None:

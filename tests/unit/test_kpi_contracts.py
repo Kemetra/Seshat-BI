@@ -398,6 +398,22 @@ def test_finalization_blocks_pii_binding_without_approved_pii_handling() -> None
     )
 
 
+def test_finalization_blocks_pii_comparison_without_approved_handling() -> None:
+    draft = _bound_draft()
+    draft["compares_to"] = {
+        "gold_table": "gold.fct_targets",
+        "columns": ["target_amount"],
+        "pii_sensitive": True,
+    }
+
+    result = _finalize(draft, decisions=_net_sales_decisions())
+
+    assert result["readiness"]["status"] == "blocked"
+    assert any(
+        "pii_handling" in item for item in result["readiness"]["blocking_reasons"]
+    )
+
+
 def test_finalization_blocks_pii_when_handling_decision_is_unreferenced() -> None:
     decisions = [
         *_net_sales_decisions(),

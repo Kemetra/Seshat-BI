@@ -134,6 +134,22 @@ binds_to:
                                       #   blocking_reasons until governance signs off.
 
 # -----------------------------------------------------------------------------
+# compares_to -- OPTIONAL scalar binding for the second side of a governed
+# comparison metric. It deliberately mirrors binds_to rather than turning
+# binds_to into a list. Omit this entire block for a one-table metric. When it
+# is present, definition.kind MUST be ratio: numerator reads binds_to and
+# denominator reads compares_to. Both bindings remain gold-only, and every
+# definition/filter column must be declared on its own side.
+# -----------------------------------------------------------------------------
+compares_to:
+  gold_table: "gold.<comparison_fact_or_dim>"
+  columns:
+    - "<comparison_gold_column_a>"
+  pii_sensitive: false                # same governance rule as binds_to; a
+                                      # true value requires human publish-safety
+                                      # review and never grants approval.
+
+# -----------------------------------------------------------------------------
 # time_additivity -- how the metric composes over the DATE axis (read by HR5,
 # spec 091). REQUIRED for a metric on a SNAPSHOT-grain fact (e.g. inventory-on-
 # hand), where summing across days is wrong. Owner-DECLARED, never agent-inferred
@@ -301,6 +317,11 @@ action_on_breach:
 #                 filter: [{column: flag, op: is_true}]}
 #   denominator: {aggregation: count_rows, source: {table: gold.fct_x},
 #                 filter: [{column: flag, op: is_not_null}]}
+#
+# For a two-table ratio, numerator.source.table MUST equal
+# binds_to.gold_table and denominator.source.table MUST equal
+# compares_to.gold_table; each used source/filter column MUST occur in that
+# binding's columns list. The generator and approved inventory refuse drift.
 #
 # The generator REFUSES to emit anything it cannot verify (`retail generate`
 # round-trips its own output through the L3 drift check + D1-D11). A contract

@@ -9,6 +9,15 @@
 - Rows: 24. Columns: 9.
 - Grain candidate: `order_id` (one row per order line).
 
+## Reporting-date coverage
+
+| Fact | Value |
+|---|---|
+| Primary reporting-date column | `order_date` |
+| Observed coverage start | 2026-01-02 |
+| Observed coverage end | 2026-01-13 |
+| Coverage evidence | Committed `tests/fixtures/demo/demo_sample_orders.csv`, rows 2-25 |
+
 ## Columns (as landed, faithful TEXT)
 
 | Column | Kind | Notes |

@@ -1,0 +1,18 @@
+name: "ActualToTarget"
+formula_intent: "actual amount divided by target amount"
+binds_to:
+  gold_table: gold.fct_actuals
+  columns: [amount]
+  pii_sensitive: false
+compares_to:
+  gold_table: gold.fct_targets
+  columns: [amount]
+  pii_sensitive: false
+definition:
+  kind: ratio
+  numerator:
+    aggregation: sum
+    source: {table: gold.fct_actuals, column: amount}
+  denominator:
+    aggregation: sum
+    source: {table: gold.fct_targets, column: amount}

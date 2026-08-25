@@ -25,6 +25,7 @@ def run_generate(args: argparse.Namespace) -> int:
     import json
 
     from seshat.dax_gen import generate_measure, load_contract
+    from seshat.metric_contract_bindings import definition_binding_errors
 
     # 1. Read and parse the contract file.
     try:
@@ -37,6 +38,11 @@ def run_generate(args: argparse.Namespace) -> int:
     name = contract.get("name")
     if not name:
         print("[error] contract has no `name`", file=sys.stderr)
+        return 1
+
+    binding_errors = definition_binding_errors(contract)
+    if binding_errors:
+        print(f"[refused] {name}: {binding_errors[0]}", file=sys.stderr)
         return 1
 
     # 3. Generate the measure (fail-closed: refuses bad contracts).

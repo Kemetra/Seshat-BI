@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Iterable
 
+from seshat.metric_contract_bindings import definition_binding_errors
+
 ContractKey = tuple[str, str]
 MeasureBinding = tuple[str, str]
 
@@ -27,6 +29,8 @@ class MetricContract:
     definition: dict
     evidence: tuple[str, ...]
     columns: tuple[str, ...] = ()
+    comparison_gold_table: str | None = None
+    comparison_columns: tuple[str, ...] = ()
     pii_sensitive: bool = False
     grain: str = ""
     unit: str | None = None
@@ -160,6 +164,9 @@ def _definition_error(raw: dict, relative: str) -> str | None:
     gold_table = binding.get("gold_table")
     if not isinstance(gold_table, str) or not gold_table.strip():
         return f"{relative}: approved contract requires binds_to.gold_table"
+    binding_errors = definition_binding_errors(raw)
+    if binding_errors:
+        return f"{relative}: {binding_errors[0]}"
     return None
 
 
@@ -200,6 +207,8 @@ def _contract_error(
 def _metric_contract(raw: dict, path: Path, scope: str) -> MetricContract:
     readiness = raw["readiness"]
     binding = raw["binds_to"]
+    comparison = raw.get("compares_to")
+    comparison_binding = comparison if isinstance(comparison, dict) else {}
     return MetricContract(
         name=raw["name"],
         scope=scope,
@@ -208,7 +217,18 @@ def _metric_contract(raw: dict, path: Path, scope: str) -> MetricContract:
         definition=raw["definition"],
         evidence=tuple(readiness["evidence"]),
         columns=tuple(item.strip() for item in binding.get("columns", [])),
-        pii_sensitive=binding.get("pii_sensitive") is True,
+        comparison_gold_table=(
+            comparison_binding["gold_table"]
+            if isinstance(comparison_binding.get("gold_table"), str)
+            else None
+        ),
+        comparison_columns=tuple(
+            item.strip() for item in comparison_binding.get("columns", [])
+        ),
+        pii_sensitive=(
+            binding.get("pii_sensitive") is True
+            or comparison_binding.get("pii_sensitive") is True
+        ),
         grain=raw.get("grain", "").strip(),
         unit=raw.get("unit"),
         time_additivity=raw.get("time_additivity"),
