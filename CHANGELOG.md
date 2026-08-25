@@ -27,6 +27,8 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+## [2.1.0] -- 2026-08-25
+
 ### Added
 
 - **Governed two-table ratio generation** (spec 156; #711, #712). Metric
