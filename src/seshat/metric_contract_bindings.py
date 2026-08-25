@@ -37,32 +37,54 @@ def _binding_error(name: str, value: object) -> str | None:
     return None
 
 
+def _source_columns(
+    label: str, side: Mapping[str, object]
+) -> tuple[tuple[str, ...], str | None]:
+    source = side.get("source")
+    if not isinstance(source, Mapping):
+        return (), f"{label}.source must be a mapping"
+    source_column = source.get("column")
+    if source_column is None:
+        return (), None
+    if not isinstance(source_column, str) or not source_column.strip():
+        return (), f"{label} source.column must be a non-empty string"
+    return (source_column.strip(),), None
+
+
+def _filter_column(label: str, entry: object) -> tuple[str | None, str | None]:
+    if not isinstance(entry, Mapping):
+        return None, f"{label} filter entries must be mappings"
+    column = entry.get("column")
+    if not isinstance(column, str) or not column.strip():
+        return None, f"{label} filter columns must be non-empty strings"
+    return column.strip(), None
+
+
+def _filter_columns(label: str, filters: object) -> tuple[tuple[str, ...], str | None]:
+    if filters is None:
+        return (), None
+    if not isinstance(filters, list):
+        return (), f"{label}.filter must be a list"
+    columns: list[str] = []
+    for entry in filters:
+        column, error = _filter_column(label, entry)
+        if error is not None:
+            return (), error
+        assert column is not None
+        columns.append(column)
+    return tuple(columns), None
+
+
 def _side_columns(
     label: str, side: Mapping[str, object]
 ) -> tuple[tuple[str, ...] | None, str | None]:
-    columns: list[str] = []
-    source = side.get("source")
-    if not isinstance(source, Mapping):
-        return None, f"{label}.source must be a mapping"
-    source_column = source.get("column")
-    if source_column is not None:
-        if not isinstance(source_column, str) or not source_column.strip():
-            return None, f"{label} source.column must be a non-empty string"
-        columns.append(source_column.strip())
-
-    filters = side.get("filter")
-    if filters is None:
-        return tuple(columns), None
-    if not isinstance(filters, list):
-        return None, f"{label}.filter must be a list"
-    for entry in filters:
-        if not isinstance(entry, Mapping):
-            return None, f"{label} filter entries must be mappings"
-        column = entry.get("column")
-        if not isinstance(column, str) or not column.strip():
-            return None, f"{label} filter columns must be non-empty strings"
-        columns.append(column.strip())
-    return tuple(columns), None
+    source_columns, error = _source_columns(label, side)
+    if error is not None:
+        return None, error
+    filter_columns, error = _filter_columns(label, side.get("filter"))
+    if error is not None:
+        return None, error
+    return source_columns + filter_columns, None
 
 
 def _comparison_bindings(
