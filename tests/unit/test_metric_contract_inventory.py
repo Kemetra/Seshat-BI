@@ -56,7 +56,7 @@ readiness:
 
 
 def _approved_two_table() -> str:
-    return '''\
+    return """\
 name: "TotalSales"
 owner: metric_owner
 binds_to:
@@ -79,7 +79,7 @@ readiness:
   status: pass
   evidence: ["approved by the named metric owner on 2026-07-22"]
   blocking_reasons: []
-'''
+"""
 
 
 def test_approved_contract_is_indexed_by_scope_and_name(tmp_path: Path) -> None:
@@ -167,9 +167,7 @@ def test_incoherent_two_table_ratio_never_enters_approved_inventory(
     inventory = load_contract_inventory([path], tmp_path)
 
     assert inventory.approved == {}
-    assert inventory.errors == (
-        f"mappings/sales/metrics/TotalSales.yaml: {expected}",
-    )
+    assert inventory.errors == (f"mappings/sales/metrics/TotalSales.yaml: {expected}",)
 
 
 def test_zero_contracts_is_an_empty_valid_inventory(tmp_path: Path) -> None:

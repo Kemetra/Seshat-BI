@@ -387,14 +387,11 @@ def test_cli_generate_json_format() -> None:
 
 
 def test_cli_generate_two_table_ratio_roundtrips() -> None:
-    result = _run_cli(
-        "generate", "--contract", str(CONTRACTS / "ratio_two_table.yaml")
-    )
+    result = _run_cli("generate", "--contract", str(CONTRACTS / "ratio_two_table.yaml"))
 
     assert result.returncode == 0
     assert (
-        "DIVIDE(SUM('gold fct_actuals'[amount]), "
-        "SUM('gold fct_targets'[amount]))"
+        "DIVIDE(SUM('gold fct_actuals'[amount]), SUM('gold fct_targets'[amount]))"
     ) in result.stdout
     assert result.stderr == ""
 

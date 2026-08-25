@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-
 ROOT = Path(__file__).parents[2]
 SUMMARY = ROOT / "templates" / "handoff" / "answerability-summary.md"
 PUBLISH_READY = ROOT / "docs" / "readiness" / "publish-ready.md"

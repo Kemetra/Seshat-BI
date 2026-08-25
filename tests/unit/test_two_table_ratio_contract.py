@@ -4,7 +4,6 @@ from pathlib import Path
 
 import yaml
 
-
 ROOT = Path(__file__).parents[2]
 CONTRACT = ROOT / "templates" / "metric-contract.yaml"
 VARIANCE = ROOT / "templates" / "metric-contract-shape.variance-vs-target.yaml"
@@ -42,12 +41,14 @@ def test_variance_shape_uses_comparison_binding_and_ratio_definition() -> None:
         document["definition"]["denominator"]["source"]["table"]
         == document["compares_to"]["gold_table"]
     )
-    assert document["definition"]["numerator"]["source"]["column"] in document[
-        "binds_to"
-    ]["columns"]
-    assert document["definition"]["denominator"]["source"]["column"] in document[
-        "compares_to"
-    ]["columns"]
+    assert (
+        document["definition"]["numerator"]["source"]["column"]
+        in document["binds_to"]["columns"]
+    )
+    assert (
+        document["definition"]["denominator"]["source"]["column"]
+        in document["compares_to"]["columns"]
+    )
 
 
 def test_variance_shape_keeps_owner_decisions_unfilled_and_generic() -> None:
@@ -58,8 +59,7 @@ def test_variance_shape_keeps_owner_decisions_unfilled_and_generic() -> None:
     assert "retail_store_sales" not in serialized
     assert "target_value" not in document
     assert all(
-        value == "none" or "<" in value
-        for value in document["thresholds"].values()
+        value == "none" or "<" in value for value in document["thresholds"].values()
     )
     assert document["readiness"]["status"] == "blocked"
     assert document["readiness"]["blocking_reasons"]
