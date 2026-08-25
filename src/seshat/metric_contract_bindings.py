@@ -18,23 +18,41 @@ def _source_table(side: Mapping[str, object]) -> str | None:
     return table.strip()
 
 
+def _gold_table_error(name: str, binding: Mapping[str, object]) -> str | None:
+    table = binding.get("gold_table")
+    if isinstance(table, str) and table.strip().startswith("gold."):
+        return None
+    return f"{name}.gold_table must be a non-empty gold.* string"
+
+
+def _non_empty_string(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _columns_error(name: str, binding: Mapping[str, object]) -> str | None:
+    columns = binding.get("columns")
+    if isinstance(columns, list) and columns and all(map(_non_empty_string, columns)):
+        return None
+    return f"{name}.columns must be a non-empty list of strings"
+
+
+def _pii_sensitive_error(name: str, binding: Mapping[str, object]) -> str | None:
+    pii_sensitive = binding.get("pii_sensitive")
+    if pii_sensitive is None or isinstance(pii_sensitive, bool):
+        return None
+    return f"{name}.pii_sensitive must be boolean"
+
+
 def _binding_error(name: str, value: object) -> str | None:
     if not isinstance(value, Mapping):
         return f"two-table ratio requires {name}"
-    table = value.get("gold_table")
-    if not isinstance(table, str) or not table.strip().startswith("gold."):
-        return f"{name}.gold_table must be a non-empty gold.* string"
-    columns = value.get("columns")
-    if (
-        not isinstance(columns, list)
-        or not columns
-        or not all(isinstance(item, str) and item.strip() for item in columns)
-    ):
-        return f"{name}.columns must be a non-empty list of strings"
-    pii_sensitive = value.get("pii_sensitive")
-    if pii_sensitive is not None and not isinstance(pii_sensitive, bool):
-        return f"{name}.pii_sensitive must be boolean"
-    return None
+    binding = cast(Mapping[str, object], value)
+    errors = (
+        _gold_table_error(name, binding),
+        _columns_error(name, binding),
+        _pii_sensitive_error(name, binding),
+    )
+    return next((error for error in errors if error is not None), None)
 
 
 def _source_columns(
