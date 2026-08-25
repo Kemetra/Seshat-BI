@@ -26,3 +26,9 @@ completed, rejected, superseded, or otherwise reclassified.
 - A profile date never substitutes for observed data coverage.
 - The optional disclosure changes no readiness state or approval.
 - Missing evidence remains a GAP and is never inferred.
+
+## Acceptance
+
+Accepted on 2026-08-25 after focused verification. The implementation anchor is
+`48a547a4`; the final lifecycle/tracker commit follows this record. At the
+owner's direction, the full repository matrix is delegated to PR CI.

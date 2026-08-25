@@ -89,10 +89,7 @@ wiring -- the authoring sibling of `retail-govern`, which interprets rule findin
 - Roadmap: `docs/roadmap/roadmap.md`. Architecture: `docs/architecture/`.
 - Repo rules (secrets, PBIP, Windows): `CLAUDE.md`.
 <!-- SPECKIT START -->
-Active plan: `specs/157-answer-evidence-dates/plan.md` (Answer Evidence Dates).
-Ratified by owner Ahmed Shaaban on 2026-08-25 for FR-157-001 through
-FR-157-008 after spec 156 acceptance. Spec 141 remains paused, not completed or
-rejected, while this singleton fence is active.
+No active Spec Kit implementation plan.
 <!-- SPECKIT END -->
 <!-- SESHAT-KIT START -->
 **Seshat BI kit router** (v0.2.0) -- generated from `.seshat/kit-source.yaml`; do not edit here.

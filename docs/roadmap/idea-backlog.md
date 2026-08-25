@@ -56,14 +56,12 @@ and the lane never promotes an idea onto the roadmap or assigns an F-row (Princi
 
 ## ADOPT
 
-> **SHIP-STATUS CORRECTION (updated 2026-08-25).** Seven of the eight rows below
-> are no longer open candidates. In addition to the six ships recorded on
-> 2026-08-23, **c19** shipped in spec 156 at `f18cd239`: `binds_to` stays scalar,
-> sibling `compares_to` governs the second table, and generation plus approved
-> inventory fail closed on binding drift. Only **c35** remains open; its evidence-date
-> source and no-judgment design were owner-ratified for sequential spec 157 execution.
-> This file is a dated snapshot and is not rewritten in place; read the rows below as
-> the 2026-08-22 panel opinion, not as current status.
+> **SHIP-STATUS CORRECTION (updated 2026-08-25).** All eight rows below are now
+> settled. In addition to the six ships recorded on 2026-08-23, **c19** shipped
+> in spec 156 at `f18cd239`, and **c35** shipped in spec 157 at `48a547a4` with
+> committed coverage dates/GAPs and a three-date, no-judgment answerability
+> disclosure. This file is a dated snapshot and is not rewritten in place; read
+> the rows below as the 2026-08-22 panel opinion, not as current status.
 
 ### EXPLAIN-Plan Review Surface over the shipped PostgreSQL plan knowledge
 
