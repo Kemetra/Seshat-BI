@@ -27,6 +27,64 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Added
+
+- **Governed two-table ratio generation** (spec 156; #711, #712). Metric
+  contracts keep scalar `binds_to` authority and name the comparison relation in
+  a sibling `compares_to` binding. Inventory and DAX generation share one
+  fail-closed coherence validator, every used source/filter column must belong to
+  its own binding, comparison-side PII contributes to the effective sensitivity,
+  and statistical authority remains separated by Gold table. Generated measures
+  still write no PBIP and execute nothing.
+- **Answer evidence dates** (spec 157; #712). Source profiles disclose the
+  reporting date, coverage end, and committed-evidence observation date when the
+  evidence can prove them, otherwise an explicit GAP. The optional answerability
+  summary carries exactly three cited dates without adding a readiness-status
+  field, freshness threshold, score, or inferred approval.
+- **`seshat check --explain`** (c22; #706) appends the existing governed
+  `means`/`fix` guidance beneath text findings. Default finding lines and exit
+  codes are byte-identical; structured formats refuse the unsupported flag
+  combination instead of silently ignoring it.
+- **Design contract guards DL10 and DL11** (c27/c29; #707, #708). DL10 reconciles
+  the page-section vocabulary across desktop/mobile grids, templates, and filled
+  blueprints. DL11 resolves governed design file and token pointers. Both rules
+  are wired through the normal manifest, severity, and fix-guidance surfaces.
+- **Owner-question coverage across the twelve retail KPI domain packs** (c10; #709).
+  Forty-one ambiguity cards route answers to existing critical Decision Store
+  types; defaults remain context only and unanswered questions remain pending.
+
+### Fixed
+
+- **An exhausted Power BI MCP session deadline now stalls before reading the
+  transport** (#702). The boundary uses `>=`, so a zero wait budget cannot consume
+  a frame or fall into an unbounded read on Windows clock granularity.
+- **Fresh design scaffolds no longer fail their own DL11 gate** (#708). The two
+  referenced spec targets ship with the scaffold, mobile-grid declaration
+  coverage is derived from the actual scaffold set, and the design glob census
+  covers files directly below `templates/`.
+- **Two-table contract boundaries fail closed on malformed identifiers and filter
+  operators** (#712 review follow-up). Bare `gold.`, surrounding whitespace, and
+  unhashable operators are refused before DAX emission; HR9 now checks both the
+  primary and comparison bindings for orphaned columns.
+- **Idea-engine candidate identity and execution stability** (#703). Candidate
+  IDs are assigned and schema-validated instead of reconstructed from free-text
+  titles, unknown reviewer IDs fail closed, and the unsupported Opus effort tier
+  is removed. The additive fast workflow keeps the same verdict gates with fewer
+  generation barriers.
+
+### Docs
+
+- Replace the generated personal-telemetry onboarding page with a short Seshat BI
+  router for users, agents, contributors, and symptom-driven readers; preserve the
+  historical telemetry as an explicitly scoped contributor snapshot (c41; #704).
+- Reconcile README capability claims, Studio installation guidance, and the
+  shipped-idea ledger with the features actually present on `main` (#710-#712).
+
+### Internal
+
+- The public rule registry grows additively from 80 to 82 rule IDs. No existing
+  rule is removed or renamed, and no default CLI text or exit contract changes.
+
 ## [2.0.0] -- 2026-08-22
 
 ### Changed -- BREAKING
