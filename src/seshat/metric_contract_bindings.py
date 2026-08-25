@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import cast
 
 __all__ = ["definition_binding_errors"]
 
@@ -64,48 +65,113 @@ def _side_columns(
     return tuple(columns), None
 
 
-def _validate_two_table_ratio(
+def _comparison_bindings(
     contract: Mapping[str, object],
-    numerator: Mapping[str, object],
-    denominator: Mapping[str, object],
-) -> tuple[str, ...]:
+) -> tuple[tuple[Mapping[str, object], Mapping[str, object]] | None, str | None]:
     binds_to = contract.get("binds_to")
     compares_to = contract.get("compares_to")
     for name, binding in (("binds_to", binds_to), ("compares_to", compares_to)):
         error = _binding_error(name, binding)
         if error is not None:
-            return (error,)
-    assert isinstance(binds_to, Mapping)
-    assert isinstance(compares_to, Mapping)
+            return None, error
+    return (
+        cast(Mapping[str, object], binds_to),
+        cast(Mapping[str, object], compares_to),
+    ), None
 
+
+def _ratio_source_tables(
+    numerator: Mapping[str, object], denominator: Mapping[str, object]
+) -> tuple[tuple[str, str] | None, str | None]:
     numerator_table = _source_table(numerator)
-    denominator_table = _source_table(denominator)
     if numerator_table is None or not numerator_table.startswith("gold."):
-        return ("numerator source.table must be a non-empty gold.* string",)
+        return None, "numerator source.table must be a non-empty gold.* string"
+    denominator_table = _source_table(denominator)
     if denominator_table is None or not denominator_table.startswith("gold."):
-        return ("denominator source.table must be a non-empty gold.* string",)
+        return None, "denominator source.table must be a non-empty gold.* string"
+    return (numerator_table, denominator_table), None
 
+
+def _table_alignment_errors(
+    numerator_table: str,
+    denominator_table: str,
+    binds_to: Mapping[str, object],
+    compares_to: Mapping[str, object],
+) -> tuple[str, ...]:
     errors: list[str] = []
     if numerator_table != str(binds_to["gold_table"]).strip():
         errors.append("numerator source table must equal binds_to.gold_table")
     if denominator_table != str(compares_to["gold_table"]).strip():
         errors.append("denominator source table must equal compares_to.gold_table")
-
-    for label, side, binding_name, binding in (
-        ("numerator", numerator, "binds_to", binds_to),
-        ("denominator", denominator, "compares_to", compares_to),
-    ):
-        used_columns, error = _side_columns(label, side)
-        if error is not None:
-            return (error,)
-        assert used_columns is not None
-        bound_columns = {str(item).strip() for item in binding["columns"]}
-        for column in used_columns:
-            if column not in bound_columns:
-                errors.append(
-                    f"{label} column {column!r} is absent from {binding_name}.columns"
-                )
     return tuple(errors)
+
+
+def _side_binding_errors(
+    label: str,
+    side: Mapping[str, object],
+    binding_name: str,
+    binding: Mapping[str, object],
+) -> tuple[tuple[str, ...], str | None]:
+    used_columns, error = _side_columns(label, side)
+    if error is not None:
+        return (), error
+    assert used_columns is not None
+    bound_columns = {str(item).strip() for item in binding["columns"]}
+    return (
+        tuple(
+            f"{label} column {column!r} is absent from {binding_name}.columns"
+            for column in used_columns
+            if column not in bound_columns
+        ),
+        None,
+    )
+
+
+def _column_binding_errors(
+    numerator: Mapping[str, object],
+    denominator: Mapping[str, object],
+    binds_to: Mapping[str, object],
+    compares_to: Mapping[str, object],
+) -> tuple[tuple[str, ...], str | None]:
+    numerator_errors, error = _side_binding_errors(
+        "numerator", numerator, "binds_to", binds_to
+    )
+    if error is not None:
+        return (), error
+    denominator_errors, error = _side_binding_errors(
+        "denominator", denominator, "compares_to", compares_to
+    )
+    if error is not None:
+        return (), error
+    return numerator_errors + denominator_errors, None
+
+
+def _validate_two_table_ratio(
+    contract: Mapping[str, object],
+    numerator: Mapping[str, object],
+    denominator: Mapping[str, object],
+) -> tuple[str, ...]:
+    bindings, error = _comparison_bindings(contract)
+    if error is not None:
+        return (error,)
+    assert bindings is not None
+    binds_to, compares_to = bindings
+
+    source_tables, error = _ratio_source_tables(numerator, denominator)
+    if error is not None:
+        return (error,)
+    assert source_tables is not None
+    numerator_table, denominator_table = source_tables
+
+    errors = _table_alignment_errors(
+        numerator_table, denominator_table, binds_to, compares_to
+    )
+    column_errors, error = _column_binding_errors(
+        numerator, denominator, binds_to, compares_to
+    )
+    if error is not None:
+        return (error,)
+    return errors + column_errors
 
 
 def definition_binding_errors(
