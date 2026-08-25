@@ -29,9 +29,17 @@ def _non_empty_string(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
+def _valid_columns(value: object) -> bool:
+    if not isinstance(value, list):
+        return False
+    if not value:
+        return False
+    return all(map(_non_empty_string, value))
+
+
 def _columns_error(name: str, binding: Mapping[str, object]) -> str | None:
     columns = binding.get("columns")
-    if isinstance(columns, list) and columns and all(map(_non_empty_string, columns)):
+    if _valid_columns(columns):
         return None
     return f"{name}.columns must be a non-empty list of strings"
 
