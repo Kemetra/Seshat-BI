@@ -214,6 +214,70 @@ def _validate_two_table_ratio(
     return errors + column_errors
 
 
+def _definition_scope_result(
+    contract: Mapping[str, object],
+) -> tuple[str, ...] | None:
+    return None if isinstance(contract.get("definition"), Mapping) else ()
+
+
+def _ratio_sides(
+    contract: Mapping[str, object],
+) -> tuple[Mapping[str, object], Mapping[str, object]] | None:
+    definition = cast(Mapping[str, object], contract["definition"])
+    numerator = definition.get("numerator")
+    denominator = definition.get("denominator")
+    if isinstance(numerator, Mapping) and isinstance(denominator, Mapping):
+        return (
+            cast(Mapping[str, object], numerator),
+            cast(Mapping[str, object], denominator),
+        )
+    return None
+
+
+def _side_shape_result(contract: Mapping[str, object]) -> tuple[str, ...] | None:
+    if _ratio_sides(contract) is not None:
+        return None
+    if contract.get("compares_to") is not None:
+        return ("compares_to requires a ratio numerator and denominator",)
+    return ()
+
+
+def _is_two_table_contract(contract: Mapping[str, object]) -> bool:
+    if contract.get("compares_to") is not None:
+        return True
+    numerator, denominator = cast(
+        tuple[Mapping[str, object], Mapping[str, object]], _ratio_sides(contract)
+    )
+    numerator_table = _source_table(numerator)
+    denominator_table = _source_table(denominator)
+    return (
+        numerator_table is not None
+        and denominator_table is not None
+        and numerator_table != denominator_table
+    )
+
+
+def _two_table_scope_result(
+    contract: Mapping[str, object],
+) -> tuple[str, ...] | None:
+    return None if _is_two_table_contract(contract) else ()
+
+
+def _ratio_kind_result(contract: Mapping[str, object]) -> tuple[str, ...] | None:
+    definition = cast(Mapping[str, object], contract["definition"])
+    if definition.get("kind") == "ratio":
+        return None
+    return ("two-table comparison definition.kind must be ratio",)
+
+
+_PRECHECKS = (
+    _definition_scope_result,
+    _side_shape_result,
+    _two_table_scope_result,
+    _ratio_kind_result,
+)
+
+
 def definition_binding_errors(
     contract: Mapping[str, object],
 ) -> tuple[str, ...]:
@@ -222,27 +286,11 @@ def definition_binding_errors(
     Legacy one-table contracts are intentionally outside this validator's scope;
     their existing definition validation and generated output remain unchanged.
     """
-    definition = contract.get("definition")
-    if not isinstance(definition, Mapping):
-        return ()
-    numerator = definition.get("numerator")
-    denominator = definition.get("denominator")
-    compares_to = contract.get("compares_to")
-    if not isinstance(numerator, Mapping) or not isinstance(denominator, Mapping):
-        return (
-            ("compares_to requires a ratio numerator and denominator",)
-            if compares_to is not None
-            else ()
-        )
-    numerator_table = _source_table(numerator)
-    denominator_table = _source_table(denominator)
-    is_two_table = compares_to is not None or (
-        numerator_table is not None
-        and denominator_table is not None
-        and numerator_table != denominator_table
+    for precheck in _PRECHECKS:
+        result = precheck(contract)
+        if result is not None:
+            return result
+    numerator, denominator = cast(
+        tuple[Mapping[str, object], Mapping[str, object]], _ratio_sides(contract)
     )
-    if not is_two_table:
-        return ()
-    if definition.get("kind") != "ratio":
-        return ("two-table comparison definition.kind must be ratio",)
     return _validate_two_table_ratio(contract, numerator, denominator)
