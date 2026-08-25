@@ -2379,10 +2379,10 @@
     {
       "classification": "public_knowledge",
       "destination": "templates/metric-contract.yaml",
-      "output_sha256": "d87086b74f4f7ff7d4982c0db3b36b92c76ecf3d1a0116542cabba3cbdc66558",
+      "output_sha256": "4dec5874d2fa9d164bd483b8c148c2782d833b25df1ddcb58a041a8b256ec58c",
       "source": "templates/metric-contract.yaml",
       "source_id": "kb-226",
-      "source_sha256": "d87086b74f4f7ff7d4982c0db3b36b92c76ecf3d1a0116542cabba3cbdc66558",
+      "source_sha256": "4dec5874d2fa9d164bd483b8c148c2782d833b25df1ddcb58a041a8b256ec58c",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2405,10 +2405,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "3673f900bf0b4165da76e159517a70bde4ee4074bd5f03096d84224b738831bc",
+  "manifest_digest": "3646044ffa50a430184ff5f0a21eaaa55727597a99dcf459e8e339c02a2b127d",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "b378b44c6970342ee5feef388a7484c0e1905429",
+  "source_revision": "d2e8603bcf6279f69862a75ed7080f156eda41f0",
   "target": "claude",
   "version": "2.0.0"
 }

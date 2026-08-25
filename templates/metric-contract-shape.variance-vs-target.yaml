@@ -4,9 +4,9 @@
 # metric, e.g. "Net Sales vs Target %".
 # =============================================================================
 # Feature 095 (actuals-vs-target budget fact + variance readiness). This is a
-# SHAPE, not a real, filled contract: it uses the EXACT field set of
-# templates/metric-contract.yaml (F009) as read on 2026-07-04 -- ZERO new
-# fields, ZERO renamed fields, ZERO forked template. See
+# SHAPE, not a real, filled contract: it uses the governed fields documented by
+# templates/metric-contract.yaml (F009), including the optional comparison
+# binding and generatable definition -- ZERO forked fields. See
 # docs/patterns/target-budget-fact.md for the modelling pattern this contract
 # shape files into, and skills/retail-kpi-knowledge/domains/targets-and-budgets.md
 # for the domain this closes the gap for.
@@ -23,11 +23,10 @@
 # WHAT A VARIANCE METRIC FILLS DIFFERENTLY FROM A SIMPLE ADDITIVE-SUM METRIC:
 #   - `grain` names a COMPARISON grain (the coarser, target-side rollup), not
 #     the fact's own base grain.
-#   - `formula_intent` must name a SECOND gold table (the target fact) in
-#     plain language, because `binds_to` is scalar-shaped for one table.
-#   - `binds_to.gold_table` is filled with the actuals table only (the
-#     existing single-table shape, used as-is); the two-table tension is
-#     flagged as an open note, never a forced second key.
+#   - `binds_to.gold_table` names the actuals fact; sibling
+#     `compares_to.gold_table` names the target fact. Both remain scalar.
+#   - `definition.kind: ratio` binds the actuals numerator and target
+#     denominator to those two governed tables.
 #   - `ambiguities[]` carries a required missing-target entry.
 #   - `readiness.blocking_reasons[]` carries two required entries (missing
 #     target case + missing RAG threshold) rather than starting empty.
@@ -60,9 +59,8 @@ grain: "<the comparison grain -- e.g. 'valid at the target fact's own grain
         reverse'>"
 
 # -----------------------------------------------------------------------------
-# formula_intent -- plain-language INTENT, never DAX/SQL. For a variance
-# metric this ALSO names, in plain language, the SECOND (target) gold table
-# this metric compares against, since binds_to below names only one table.
+# formula_intent -- plain-language INTENT, never DAX/SQL. The structured
+# bindings and definition below carry implementation-side table identity.
 # -----------------------------------------------------------------------------
 formula_intent: "<plain-language meaning, e.g.: 'The ratio of actual net sales
                  to planned/target net sales at the comparison grain,
@@ -71,11 +69,8 @@ formula_intent: "<plain-language meaning, e.g.: 'The ratio of actual net sales
                  comparison grain, then divide -- never average two
                  already-computed percentages (see
                  skills/retail-kpi-knowledge/domains/targets-and-budgets.md).
-                 Reads actuals from the gold_table named below AND from a
-                 SECOND gold table, the target/budget fact
-                 (<gold.target_fact_placeholder> -- name TBD per table), which
-                 is not itself a binds_to entry because binds_to is
-                 single-table-shaped; see the OPEN NOTE on binds_to below.'>"
+                 Reads actuals from the binds_to gold table and targets from
+                 the sibling compares_to gold table.'>"
 
 # -----------------------------------------------------------------------------
 # owner -- named human; never "the agent", never blank.
@@ -83,23 +78,10 @@ formula_intent: "<plain-language meaning, e.g.: 'The ratio of actual net sales
 owner: "<named metric owner>"
 
 # -----------------------------------------------------------------------------
-# binds_to -- the template's EXISTING single-table shape, used as-is. Filled
-# with the PRIMARY (actuals) gold table only. The target (second) table's
-# identity is carried in formula_intent above, not as a second binds_to key.
+# binds_to -- scalar PRIMARY binding for the actuals side.
 # -----------------------------------------------------------------------------
 binds_to:
   gold_table: "gold.<actuals_fact_placeholder>"   # the ACTUALS fact only.
-    # RESOLVED 2026-08-24 (F009 owner, Ahmed Shaaban): a variance metric
-    # structurally needs a SECOND gold table (the target/budget fact) at the
-    # comparison grain, and binds_to stays SCALAR -- it does not grow a
-    # multi-table shape. The second table is named in a sibling `compares_to`
-    # block of the same {gold_table, columns} shape, so the fifteen modules
-    # that read binds_to as a scalar dict are unaffected and a consumer that
-    # should follow the target opts in. Until this shape is regenerated against
-    # a compares_to-aware metric-contract.yaml it still names the target in
-    # formula_intent below; that is the pre-ruling record, not the ruling. This
-    # is not a Principle-V grain/PII/business judgment call; it is a
-    # template-capability note.
   columns:
     - "<actuals_measure_column_placeholder>"      # e.g. net_amount; the
                                                     #   actuals-side measure
@@ -109,6 +91,34 @@ binds_to:
                                                     #   table's PII status is
                                                     #   that table's own
                                                     #   determination.
+
+# -----------------------------------------------------------------------------
+# compares_to -- scalar SECONDARY binding for the target/budget side. The
+# owner-approved sibling preserves every existing binds_to consumer.
+# -----------------------------------------------------------------------------
+compares_to:
+  gold_table: "gold.<target_fact_placeholder>"
+  columns:
+    - "<target_measure_column_placeholder>"
+  pii_sensitive: false
+
+# -----------------------------------------------------------------------------
+# definition -- generatable actual-to-target ratio. These placeholders encode
+# structure only; a real contract still needs owner-supplied table, column,
+# grain, missing-target, and RAG decisions before it can pass readiness.
+# -----------------------------------------------------------------------------
+definition:
+  kind: ratio
+  numerator:
+    aggregation: sum
+    source:
+      table: "gold.<actuals_fact_placeholder>"
+      column: "<actuals_measure_column_placeholder>"
+  denominator:
+    aggregation: sum
+    source:
+      table: "gold.<target_fact_placeholder>"
+      column: "<target_measure_column_placeholder>"
 
 # -----------------------------------------------------------------------------
 # readiness -- FOUR explicit statuses only. A variance contract shape starts
@@ -199,9 +209,10 @@ action_on_breach:
 #     items below being unresolved on any real filled copy of this shape.
 #   - missing-target-must-flag -- recorded as a required ambiguities[] entry,
 #     never a silent default (see the entry above).
-#   - binds_to.gold_table filled with the actuals table only, per the
-#     template's existing single-table shape; the target table is named in
-#     formula_intent, not forced into a second binds_to key.
+#   - binds_to.gold_table names actuals and sibling compares_to.gold_table
+#     names targets; both remain scalar.
+#   - definition.kind: ratio binds the actuals numerator to binds_to and the
+#     target denominator to compares_to.
 #
 # OPEN, owner-supplied (this shape deliberately leaves these unresolved on
 # ANY real filled copy until a named owner supplies them):
@@ -210,9 +221,6 @@ action_on_breach:
 #   - The specific comparison grain for any real table (see `grain` above
 #     and docs/patterns/target-budget-fact.md Section 2).
 #   - RESOLVED 2026-08-24 by the F009 owner (Ahmed Shaaban): binds_to does NOT grow
-#     a multi-table shape. A comparison metric names its second table in a SIBLING
-#     `compares_to` block of the same {gold_table, columns} shape. binds_to stays
-#     scalar and its fifteen consumers are unchanged; a consumer that should follow
-#     the target (gap_detector, impact_map_graph, rename_impact_guard) opts in
-#     deliberately rather than being silently handed a list it cannot read.
+#     a multi-table shape. The second table uses scalar sibling compares_to;
+#     consumers opt in deliberately rather than receiving a list.
 # =============================================================================
