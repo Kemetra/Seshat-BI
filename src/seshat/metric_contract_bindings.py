@@ -7,26 +7,41 @@ from typing import cast
 
 __all__ = ["definition_binding_errors"]
 
+_FILTER_OPERATORS = frozenset({"is_not_null", "is_true"})
+
+
+def _valid_identifier(value: object) -> bool:
+    return isinstance(value, str) and bool(value) and value == value.strip()
+
+
+def _valid_gold_table(value: object) -> bool:
+    return (
+        _valid_identifier(value)
+        and isinstance(value, str)
+        and value.startswith("gold.")
+        and len(value) > len("gold.")
+    )
+
 
 def _source_table(side: Mapping[str, object]) -> str | None:
     source = side.get("source")
     if not isinstance(source, Mapping):
         return None
     table = source.get("table")
-    if not isinstance(table, str) or not table.strip():
+    if not _valid_identifier(table):
         return None
-    return table.strip()
+    return cast(str, table)
 
 
 def _gold_table_error(name: str, binding: Mapping[str, object]) -> str | None:
     table = binding.get("gold_table")
-    if isinstance(table, str) and table.strip().startswith("gold."):
+    if _valid_gold_table(table):
         return None
     return f"{name}.gold_table must be a non-empty gold.* string"
 
 
 def _non_empty_string(value: object) -> bool:
-    return isinstance(value, str) and bool(value.strip())
+    return _valid_identifier(value)
 
 
 def _valid_columns(value: object) -> bool:
@@ -74,7 +89,9 @@ def _source_columns(
         return (), None
     if not isinstance(source_column, str) or not source_column.strip():
         return (), f"{label} source.column must be a non-empty string"
-    return (source_column.strip(),), None
+    if source_column != source_column.strip():
+        return (), f"{label} source.column must not contain surrounding whitespace"
+    return (source_column,), None
 
 
 def _filter_column(label: str, entry: object) -> tuple[str | None, str | None]:
@@ -83,7 +100,12 @@ def _filter_column(label: str, entry: object) -> tuple[str | None, str | None]:
     column = entry.get("column")
     if not isinstance(column, str) or not column.strip():
         return None, f"{label} filter columns must be non-empty strings"
-    return column.strip(), None
+    if column != column.strip():
+        return None, f"{label} filter column must not contain surrounding whitespace"
+    operator = entry.get("op")
+    if not isinstance(operator, str) or operator not in _FILTER_OPERATORS:
+        return None, f"{label} filter op must be a supported string"
+    return column, None
 
 
 def _filter_columns(label: str, filters: object) -> tuple[tuple[str, ...], str | None]:
@@ -132,12 +154,12 @@ def _ratio_source_tables(
     numerator: Mapping[str, object], denominator: Mapping[str, object]
 ) -> tuple[tuple[str, str] | None, str | None]:
     numerator_table = _source_table(numerator)
-    if numerator_table is None or not numerator_table.startswith("gold."):
+    if not _valid_gold_table(numerator_table):
         return None, "numerator source.table must be a non-empty gold.* string"
     denominator_table = _source_table(denominator)
-    if denominator_table is None or not denominator_table.startswith("gold."):
+    if not _valid_gold_table(denominator_table):
         return None, "denominator source.table must be a non-empty gold.* string"
-    return (numerator_table, denominator_table), None
+    return cast(tuple[str, str], (numerator_table, denominator_table)), None
 
 
 def _table_alignment_errors(
@@ -147,9 +169,9 @@ def _table_alignment_errors(
     compares_to: Mapping[str, object],
 ) -> tuple[str, ...]:
     errors: list[str] = []
-    if numerator_table != str(binds_to["gold_table"]).strip():
+    if numerator_table != binds_to["gold_table"]:
         errors.append("numerator source table must equal binds_to.gold_table")
-    if denominator_table != str(compares_to["gold_table"]).strip():
+    if denominator_table != compares_to["gold_table"]:
         errors.append("denominator source table must equal compares_to.gold_table")
     return tuple(errors)
 
@@ -164,7 +186,7 @@ def _side_binding_errors(
     if error is not None:
         return (), error
     assert used_columns is not None
-    bound_columns = {str(item).strip() for item in binding["columns"]}
+    bound_columns = set(cast(list[str], binding["columns"]))
     return (
         tuple(
             f"{label} column {column!r} is absent from {binding_name}.columns"

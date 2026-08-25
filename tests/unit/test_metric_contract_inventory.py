@@ -133,7 +133,29 @@ def test_approved_two_table_ratio_requires_coherent_comparison_binding(
     inventory = load_contract_inventory([path], tmp_path)
 
     assert inventory.errors == ()
-    assert ("sales", "TotalSales") in inventory.approved
+    contract = inventory.approved[("sales", "TotalSales")]
+    assert contract.comparison_gold_table == "gold.targets"
+    assert contract.comparison_columns == ("amount",)
+
+
+def test_comparison_pii_is_effective_for_the_approved_inventory(tmp_path: Path) -> None:
+    _write_approval(tmp_path, "sales", ("TotalSales",))
+    body = _approved_two_table().replace(
+        "compares_to:\n"
+        '  gold_table: "gold.targets"\n'
+        "  columns: [amount]\n"
+        "  pii_sensitive: false\n",
+        "compares_to:\n"
+        '  gold_table: "gold.targets"\n'
+        "  columns: [amount]\n"
+        "  pii_sensitive: true\n",
+    )
+    path = _write(_contract_path(tmp_path, "sales"), body)
+
+    inventory = load_contract_inventory([path], tmp_path)
+
+    assert inventory.errors == ()
+    assert inventory.approved[("sales", "TotalSales")].pii_sensitive is True
 
 
 @pytest.mark.parametrize(

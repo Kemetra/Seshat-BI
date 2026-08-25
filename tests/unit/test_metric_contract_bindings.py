@@ -80,6 +80,15 @@ def test_definition_tables_must_match_their_governed_bindings() -> None:
     )
 
 
+def test_definition_source_table_rejects_surrounding_whitespace() -> None:
+    contract = _two_table_contract()
+    contract["definition"]["numerator"]["source"]["table"] = " gold.fct_actuals"
+
+    assert definition_binding_errors(contract) == (
+        "numerator source.table must be a non-empty gold.* string",
+    )
+
+
 def test_every_used_column_must_be_declared_by_its_binding() -> None:
     contract = _two_table_contract()
     contract["compares_to"]["columns"] = ["amount"]
@@ -90,9 +99,14 @@ def test_every_used_column_must_be_declared_by_its_binding() -> None:
 
 
 @pytest.mark.parametrize("binding_name", ("binds_to", "compares_to"))
-def test_two_table_bindings_require_gold_tables(binding_name: str) -> None:
+@pytest.mark.parametrize(
+    "gold_table", ("silver.fct_values", "gold.", " gold.fct_values")
+)
+def test_two_table_bindings_require_gold_tables(
+    binding_name: str, gold_table: str
+) -> None:
     contract = _two_table_contract()
-    contract[binding_name]["gold_table"] = "silver.fct_values"
+    contract[binding_name]["gold_table"] = gold_table
 
     assert definition_binding_errors(contract) == (
         f"{binding_name}.gold_table must be a non-empty gold.* string",
@@ -130,6 +144,41 @@ def test_malformed_side_columns_are_refused_without_raising() -> None:
 
     assert definition_binding_errors(contract) == (
         "numerator filter columns must be non-empty strings",
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "expected"),
+    (
+        (
+            "source",
+            "numerator source.column must not contain surrounding whitespace",
+        ),
+        (
+            "filter",
+            "numerator filter column must not contain surrounding whitespace",
+        ),
+    ),
+)
+def test_definition_columns_reject_surrounding_whitespace(
+    field: str, expected: str
+) -> None:
+    contract = _two_table_contract()
+    numerator = contract["definition"]["numerator"]
+    if field == "source":
+        numerator["source"]["column"] = " amount "
+    else:
+        numerator["filter"][0]["column"] = " is_posted "
+
+    assert definition_binding_errors(contract) == (expected,)
+
+
+def test_unhashable_filter_operator_is_refused_without_raising() -> None:
+    contract = _two_table_contract()
+    contract["definition"]["numerator"]["filter"][0]["op"] = ["is_true"]
+
+    assert definition_binding_errors(contract) == (
+        "numerator filter op must be a supported string",
     )
 
 

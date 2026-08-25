@@ -137,7 +137,7 @@ def _emit_filters(filters: object, table: str) -> tuple[list[str] | None, str | 
             return None, f"filter entry is not an object: {f!r}"
         col = f.get("column")
         op = f.get("op")
-        tmpl = _OP_TO_DAX.get(op) if op else None
+        tmpl = _OP_TO_DAX.get(op) if isinstance(op, str) else None
         if not col or tmpl is None:
             return None, f"unrecognized filter op {op!r} on column {col!r}"
         preds.append(tmpl.format(col=f"{tbl}[{col}]"))

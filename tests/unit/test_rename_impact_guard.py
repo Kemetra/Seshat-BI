@@ -102,6 +102,32 @@ def test_hr9_metric_contract_orphaned_column_fails_closed(tmp_path: Path) -> Non
     assert "renamed_amount" in findings[0].message
 
 
+def test_hr9_metric_contract_checks_comparison_binding(tmp_path: Path) -> None:
+    actuals = _tmdl(tmp_path, "fct.tmdl", _FCT_TMDL)
+    targets = _tmdl(
+        tmp_path,
+        "targets.tmdl",
+        "table 'gold targets'\n\tcolumn target_amount\n\t\tdataType: double\n",
+    )
+    metric = _metric(
+        tmp_path,
+        "t1",
+        "ActualToTarget.yaml",
+        "binds_to:\n"
+        "  gold_table: gold.fct\n"
+        "  columns: [total_spent]\n"
+        "compares_to:\n"
+        "  gold_table: gold.targets\n"
+        "  columns: [renamed_target]\n",
+    )
+
+    findings = list(check_hr9(_ctx(tmp_path, actuals, targets, metric)))
+
+    assert len(findings) == 1
+    assert findings[0].severity is Severity.ERROR
+    assert "compares_to column 'renamed_target'" in findings[0].message
+
+
 def test_hr9_metric_contract_checked_regardless_of_status(tmp_path: Path) -> None:
     # FR-008: referential integrity is independent of readiness.status
     t = _tmdl(tmp_path, "fct.tmdl", _FCT_TMDL)

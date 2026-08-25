@@ -12,9 +12,9 @@ What HR9 does (STATIC, fail-closed; per table, engages only with >=1 TMDL file):
   - Derives the TRUTH SET from the committed TMDL under
     ``powerbi/*.SemanticModel/definition/tables/*.tmdl``: every ``column <name>``
     (per table) and every ``measure <name>`` (unioned across the model's tables).
-  - FR-003: resolves each ``binds_to.columns`` entry in every
-    ``mappings/<table>/metrics/*.yaml`` against the cited gold table's TMDL
-    columns; an unresolved column is an ORPHAN -> ``Severity.ERROR``.
+  - FR-003: resolves each ``binds_to.columns`` and ``compares_to.columns``
+    entry in every ``mappings/<table>/metrics/*.yaml`` against the cited gold
+    table's TMDL columns; an unresolved column is an ORPHAN -> ``Severity.ERROR``.
   - FR-004: resolves each reference inside a TMDL measure's own DAX expression --
     a bare ``[Measure]`` (against the model-wide measure set) and a
     ``'table'[column]`` (against that named table's own columns) -- an unresolved
@@ -184,18 +184,15 @@ def _build_model(ctx: RuleContext) -> _Model:
     return model
 
 
-def _metric_binds(text: str, model: _Model) -> tuple[str, list, set] | None:
-    """Parse a metric YAML and return (gold_table, columns, known-column-set), or
-    None when any guard fails (bad YAML, no binds_to, or no TMDL for the table)."""
-    import yaml  # lazy
+class _MetricBinding(NamedTuple):
+    name: str
+    gold_table: str
+    columns: list
+    known_columns: set
 
-    try:
-        data = yaml.safe_load(text)
-    except yaml.YAMLError:
-        return None
-    if not isinstance(data, dict):
-        return None
-    binds = data.get("binds_to")
+
+def _metric_binding(data: dict, name: str, model: _Model) -> _MetricBinding | None:
+    binds = data.get(name)
     if not isinstance(binds, dict):
         return None
     gold_table = binds.get("gold_table")
@@ -205,11 +202,27 @@ def _metric_binds(text: str, model: _Model) -> tuple[str, list, set] | None:
     known = model.columns_by_bare.get(_strip_table_prefix(gold_table))
     if known is None:
         return None  # no TMDL for this table yet -> FR-007 no-op
-    return gold_table, cols, known
+    return _MetricBinding(name, gold_table, cols, known)
+
+
+def _metric_binds(text: str, model: _Model) -> tuple[_MetricBinding, ...]:
+    """Return every governed table binding whose committed TMDL can be checked."""
+    import yaml  # lazy
+
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return ()
+    if not isinstance(data, dict):
+        return ()
+    bindings = (
+        _metric_binding(data, name, model) for name in ("binds_to", "compares_to")
+    )
+    return tuple(binding for binding in bindings if binding is not None)
 
 
 def _orphan_col_findings(
-    rel: str, gold_table: str, cols: list, known: set
+    rel: str, binding_name: str, gold_table: str, cols: list, known: set
 ) -> list[Finding]:
     findings: list[Finding] = []
     for col in cols:
@@ -219,7 +232,7 @@ def _orphan_col_findings(
                     rule_id=RULE_ID,
                     severity=Severity.ERROR,
                     message=(
-                        f"metric contract binds_to column {col!r} does not "
+                        f"metric contract {binding_name} column {col!r} does not "
                         f"resolve to any column of {gold_table} in the "
                         "committed TMDL (orphaned reference -- a rename left it "
                         "dangling)"
@@ -239,11 +252,16 @@ def _check_metric_contracts(ctx: RuleContext, model: _Model) -> list[Finding]:
         text = _read(ctx, rel)
         if text is None:
             continue
-        binds = _metric_binds(text, model)
-        if binds is None:
-            continue
-        gold_table, cols, known = binds
-        findings.extend(_orphan_col_findings(rel, gold_table, cols, known))
+        for binding in _metric_binds(text, model):
+            findings.extend(
+                _orphan_col_findings(
+                    rel,
+                    binding.name,
+                    binding.gold_table,
+                    binding.columns,
+                    binding.known_columns,
+                )
+            )
     return findings
 
 

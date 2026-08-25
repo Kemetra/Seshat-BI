@@ -57,6 +57,51 @@ def test_valid_policy_resolves_immutable_authority_context(tmp_path: Path) -> No
     )
 
 
+def test_two_table_contract_preserves_per_table_statistical_authority(
+    tmp_path: Path,
+) -> None:
+    root = _repo(tmp_path)
+    contract_path = root / "mappings/sample/metrics/ApprovedMetric.yaml"
+    spec_path = root / "mappings/sample/analyses/weekly_metric_signal.yaml"
+
+    def comparison_contract(doc: dict) -> None:
+        doc["binds_to"]["columns"] = ["actual_value"]
+        doc["compares_to"] = {
+            "gold_table": "gold.targets",
+            "columns": ["target_value"],
+            "pii_sensitive": False,
+        }
+        doc["definition"] = {
+            "kind": "ratio",
+            "numerator": {
+                "aggregation": "sum",
+                "source": {"table": "gold.sample", "column": "actual_value"},
+            },
+            "denominator": {
+                "aggregation": "sum",
+                "source": {"table": "gold.targets", "column": "target_value"},
+            },
+        }
+
+    _edit(contract_path, comparison_contract)
+    _edit(
+        spec_path,
+        lambda doc: doc["roles"]["response"].update(column="actual_value"),
+    )
+
+    decision = evaluate_policy(root, _load(root))
+
+    assert decision.allowed is True
+    assert decision.context is not None
+    assert decision.context.approved_tables == frozenset(
+        {"gold.sample", "gold.targets"}
+    )
+    assert decision.context.approved_columns == {
+        "gold.sample": frozenset({"actual_value"}),
+        "gold.targets": frozenset({"target_value"}),
+    }
+
+
 @pytest.mark.parametrize(
     ("mutation", "expected"),
     [

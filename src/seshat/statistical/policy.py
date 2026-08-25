@@ -143,9 +143,13 @@ def _contract_authority(
 
 
 def _gold_binding_blocker(contracts: tuple[MetricContract, ...]) -> list[Blocker]:
-    outside_gold = any(
-        not contract.gold_table.casefold().startswith("gold.") for contract in contracts
+    tables = (
+        table
+        for contract in contracts
+        for table in (contract.gold_table, contract.comparison_gold_table)
+        if table is not None
     )
+    outside_gold = any(not table.casefold().startswith("gold.") for table in tables)
     if not contracts or not outside_gold:
         return []
     return [
@@ -192,6 +196,19 @@ def _pii_blocker(
             "Cite an existing repo-relative PII approval artifact.",
         )
     ]
+
+
+def _add_contract_authority(
+    approved_columns: dict[str, set[str]], contract: MetricContract
+) -> None:
+    primary = approved_columns.setdefault(contract.gold_table, set())
+    primary.update(contract.columns)
+    if contract.comparison_gold_table is None:
+        primary.update(_definition_columns(contract.definition))
+        return
+    approved_columns.setdefault(contract.comparison_gold_table, set()).update(
+        contract.comparison_columns
+    )
 
 
 def _grain_blocker(
@@ -308,10 +325,7 @@ def evaluate_policy(repo_root: Path, spec: AnalysisSpec) -> PolicyDecision:
     readiness = _readiness_document(readiness_path)
     approved_columns: dict[str, set[str]] = {}
     for contract in contracts:
-        approved_columns.setdefault(contract.gold_table, set()).update(contract.columns)
-        approved_columns[contract.gold_table].update(
-            _definition_columns(contract.definition)
-        )
+        _add_contract_authority(approved_columns, contract)
     frozen_columns = MappingProxyType(
         {
             table_name: frozenset(columns)
@@ -323,7 +337,7 @@ def evaluate_policy(repo_root: Path, spec: AnalysisSpec) -> PolicyDecision:
         readiness_path=readiness_path,
         readiness_revision=str(readiness.get("mapping_version", "")),
         contracts=contracts,
-        approved_tables=frozenset(contract.gold_table for contract in contracts),
+        approved_tables=frozenset(approved_columns),
         approved_columns=frozen_columns,
     )
     return PolicyDecision(allowed=True, blockers=(), context=context)

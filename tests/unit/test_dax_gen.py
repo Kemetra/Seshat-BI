@@ -428,6 +428,28 @@ def test_cli_generate_refuses_incoherent_two_table_binding(
     assert result.stderr.strip() == f"[refused] ActualToTarget: {expected}"
 
 
+def test_cli_generate_refuses_unhashable_filter_operator(tmp_path: Path) -> None:
+    source = (CONTRACTS / "ratio_two_table.yaml").read_text(encoding="utf-8")
+    source = source.replace(
+        "columns: [amount]", "columns: [amount, is_posted]", 1
+    ).replace(
+        "source: {table: gold.fct_actuals, column: amount}",
+        "source: {table: gold.fct_actuals, column: amount}\n"
+        "    filter:\n"
+        "      - {column: is_posted, op: [is_true]}",
+    )
+    mutated = tmp_path / "ratio_two_table.yaml"
+    mutated.write_text(source, encoding="utf-8")
+
+    result = _run_cli("generate", "--contract", str(mutated))
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr.strip() == (
+        "[refused] ActualToTarget: numerator filter op must be a supported string"
+    )
+
+
 _REPO_ROOT = Path(__file__).parents[2]
 
 
