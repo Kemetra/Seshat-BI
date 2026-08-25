@@ -56,15 +56,14 @@ and the lane never promotes an idea onto the roadmap or assigns an F-row (Princi
 
 ## ADOPT
 
-> **SHIP-STATUS CORRECTION (2026-08-23), verified against `origin/main`.** Six of the
-> eight rows below are no longer open candidates: **c2** was ALREADY shipped when this
-> bank scored it (a routed knowledge corpus with no `src/` consumer), and **c22**, **c27**,
-> **c29**, **c41** and **c10** (PR #709) shipped after generation. Only **c19** and
-> **c35** remain open, and both are owner-gated -- c19 on
-> whether `binds_to` grows a multi-table shape, c35 on where the coverage-end date comes
-> from. Each shipped row is recorded in the SHIPPED / SETTLED appendix and in
-> `shipped-ideas.yaml`. This file is a dated snapshot and is not rewritten in place;
-> read the rows below as the 2026-08-22 panel opinion, not as current status.
+> **SHIP-STATUS CORRECTION (updated 2026-08-25).** Seven of the eight rows below
+> are no longer open candidates. In addition to the six ships recorded on
+> 2026-08-23, **c19** shipped in spec 156 at `f18cd239`: `binds_to` stays scalar,
+> sibling `compares_to` governs the second table, and generation plus approved
+> inventory fail closed on binding drift. Only **c35** remains open; its evidence-date
+> source and no-judgment design were owner-ratified for sequential spec 157 execution.
+> This file is a dated snapshot and is not rewritten in place; read the rows below as
+> the 2026-08-22 panel opinion, not as current status.
 
 ### EXPLAIN-Plan Review Surface over the shipped PostgreSQL plan knowledge
 

@@ -34,10 +34,7 @@ No live DB provisioning, no automated ingestion code, no orchestrator integratio
 unless explicitly requested. Add the seam, not the implementation.
 
 <!-- SPECKIT START -->
-Active plan: `specs/156-governed-two-table-ratio/plan.md` (Governed Two-Table
-Ratio Generation). Ratified by owner Ahmed Shaaban on 2026-08-25 for FR-156-001
-through FR-156-011. Spec 141 is paused, not completed or rejected, while this
-singleton fence is active.
+No active Spec Kit implementation plan.
 <!-- SPECKIT END -->
 <!-- SESHAT-KIT START -->
 **Seshat BI kit router** (v0.2.0) -- generated from `.seshat/kit-source.yaml`; do not edit here.

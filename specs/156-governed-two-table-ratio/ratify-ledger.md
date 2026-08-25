@@ -21,3 +21,9 @@ rejected, superseded, or otherwise reclassified by this ratification.
 - No target value, grain, threshold, missing-target ruling, or approval is
   inferred or self-granted.
 - Existing one-table contracts retain their current behavior.
+
+## Acceptance
+
+Accepted on 2026-08-25 after focused verification. The implementation anchor is
+`f18cd239`; the final lifecycle/tracker commit follows this record. At the
+owner's direction, the full repository unit matrix is delegated to PR CI.
