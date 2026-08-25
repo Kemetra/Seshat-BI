@@ -101,6 +101,18 @@
 | Profiled by | `<analyst / agent>` |
 | Source files folded in | `<N>` files / `<single export>` (relevant to the cross-file drift check below) |
 
+## Reporting-date coverage
+
+`Profiled on` records when this artifact was checked; it must not substitute for
+the source data's observed coverage end. Record only committed profile evidence.
+
+| Fact | Value |
+|---|---|
+| Primary reporting-date column | `<column or GAP -- source is non-temporal or not established>` |
+| Observed coverage start | `<YYYY-MM-DD or GAP -- not established>` |
+| Observed coverage end | `<YYYY-MM-DD or GAP -- not established>` |
+| Coverage evidence | `<committed profile query/result citation or GAP -- not established>` |
+
 ---
 
 ## Shape

@@ -20,6 +20,15 @@
 | Profiled by | agent (`retail.profile`, read-only session) |
 | Source files folded in | single export (`retail_store_sales.csv`, 12,575 data rows) |
 
+## Reporting-date coverage
+
+| Fact | Value |
+|---|---|
+| Primary reporting-date column | `transaction_date` |
+| Observed coverage start | 2022-01-01 |
+| Observed coverage end | 2025-01-18 |
+| Coverage evidence | Committed Per-column profile `transaction_date` row below |
+
 ---
 
 ## Shape

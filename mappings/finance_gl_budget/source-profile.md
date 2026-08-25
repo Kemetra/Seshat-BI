@@ -10,6 +10,15 @@ map rests on. ASCII only. Every number was COMPUTED from the generated source, n
 - **Profiled by:** agent
 - **Live DB profile:** `[PENDING LIVE PROFILE]`
 
+## Reporting-date coverage
+
+| Fact | Value |
+|---|---|
+| Primary reporting-date column | GAP -- source is fiscal-quarter grain and has no calendar date column |
+| Observed coverage start | GAP -- source is fiscal-quarter grain and has no calendar date column |
+| Observed coverage end | GAP -- source is fiscal-quarter grain and has no calendar date column |
+| Coverage evidence | Committed source profile: fiscal-quarter grain and no calendar date column in the seven-column Shape/Per-column profile |
+
 ## Why this is a SEPARATE source with its own profile
 
 `finance_gl_budget` arrives at a **coarser grain** than `finance_gl_actuals` and is a
