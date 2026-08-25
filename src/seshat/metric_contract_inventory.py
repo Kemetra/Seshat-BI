@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Iterable
 
+from seshat.metric_contract_bindings import definition_binding_errors
+
 ContractKey = tuple[str, str]
 MeasureBinding = tuple[str, str]
 
@@ -160,6 +162,9 @@ def _definition_error(raw: dict, relative: str) -> str | None:
     gold_table = binding.get("gold_table")
     if not isinstance(gold_table, str) or not gold_table.strip():
         return f"{relative}: approved contract requires binds_to.gold_table"
+    binding_errors = definition_binding_errors(raw)
+    if binding_errors:
+        return f"{relative}: {binding_errors[0]}"
     return None
 
 
