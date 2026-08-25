@@ -64,3 +64,13 @@ def test_gap_suppresses_dependent_calendar_arithmetic() -> None:
     assert "omit its dependent arithmetic" in section
     assert "cannot calculate <named difference>" in section
     assert "absent or malformed" in section
+
+
+def test_publish_ready_routes_each_evidence_date_to_its_authority() -> None:
+    text = PUBLISH_READY.read_text(encoding="utf-8")
+
+    assert "Observed coverage end" in text
+    assert "last_checked_at" in text
+    assert "publish_ready" in text
+    assert "optional" in text.lower()
+    assert "does not change" in text.lower()
