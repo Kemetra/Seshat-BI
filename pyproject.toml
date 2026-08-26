@@ -107,7 +107,7 @@ stats-change = [
 # together because Seshat validates their artifact schema and selector behavior
 # as one compatibility boundary. Imports remain lazy; base installs load no dbt.
 dbt = [
-    "dbt-core==1.12.0",
+    "dbt-core==1.12.3",
     "dbt-postgres==1.10.2",
 ]
 # Additional per-engine extras for `retail validate`'s multi-engine LIVE run
