@@ -27,7 +27,7 @@ requires-python = ">=3.13"
 #   uv venv .venv
 #   uv pip install -p .venv -e "../..[dbt]" -e ".[dev]"
 dependencies = [
-    "dagster==1.13.17",
+    "dagster==1.13.20",
     "psycopg2-binary>=2.9",
     "pyyaml>=6",
 ]
