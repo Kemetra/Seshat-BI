@@ -6,8 +6,10 @@ Filled instance of `templates/unresolved-questions.md` (ADR 0003 location). ASCI
 - **Date raised:** 2026-07-30
 - **Raised by:** agent
 - **Maps to playbook phases:** Phase 2 (decision points) + Phase 4 (review gate)
-- **Gate status:** `OPEN` -- Q3 is unanswered and the source still needs the RS1 owner
-  confirmation. No `silver.*` SQL until a named human clears the gate (spec 137 OD-4).
+- **Gate status:** `CLEARED` -- mapping-gate questions Q1-Q3 were answered by Ahmed Shaaban
+  on 2026-07-30 (`approval-decision-mapping-gate.md`). Silver SQL is authored. Gold Ready
+  remains blocked on the joint time-conformance ruling L19 in
+  `mappings/finance_gl_actuals/approval-request-model-integrity.md`.
 
 ---
 
@@ -17,7 +19,8 @@ Filled instance of `templates/unresolved-questions.md` (ADR 0003 location). ASCI
 |----|----------|---------------|-----------------|----------------------------------|--------|------------|
 | Q1 | Which budget version is the BASELINE for variance -- `ORIGINAL`, a later revision, or both as separate metrics? | Every variance measure changes meaning. With 2 versions in the source, an unpinned query sums the plan TWICE (268.3M instead of 136.4M) | analyst | `ORIGINAL` -- the plan of record | `answered` | **2026-07-30, Ahmed Shaaban (owner): `ORIGINAL`.** `REVISION-1` stays in the source to exercise version identity (FR-011) and variant D10, and never moves the headline measures. Spec 137 OD-2 |
 | Q2 | May a MONTHLY view be derived from the quarterly budget, and if so under what allocation policy? | A monthly budget number does not exist in the source; any derivation invents precision the plan never had | analyst | refuse -- no allocation policy exists and none may be inferred | `answered` | **2026-07-30, Ahmed Shaaban (owner): NO.** Monthly actuals may display; budget and variance stay quarter-grain. A monthly-budget request is refused with the reason named (variant D11). Spec 137 OD-3 |
-| Q3 | Are the 241 budgeted (quarter, account, department) combos with NO posted actuals expected business states, or do they indicate missing actuals data? | Determines whether they surface as a report exception or as a data-quality blocker -- and whether the gate refusing them would be correct or an over-refusal | data-owner | expected business state; surface as a report exception, never as a mapping failure | `open` | |
+| Q3 | Are the 241 budgeted (quarter, account, department) combos with NO posted actuals expected business states, or do they indicate missing actuals data? | Determines whether they surface as a report exception or as a data-quality blocker -- and whether the gate refusing them would be correct or an over-refusal | data-owner | expected business state; surface as a report exception, never as a mapping failure | `answered` | **2026-07-30, Ahmed Shaaban (data-owner): Option A.** Expected business state. They surface as a report exception, never as a mapping failure or data-quality blocker. Transcribed from `approval-decision-mapping-gate.md` sub-decision C; not re-decided here. |
+| L19 | Actuals are keyed to daily `dim_date_fgl`; budget is keyed to `dim_fiscal_period_fgl`. How should the two time dimensions be conformed (A1 / A2 / A3)? | `retail validate` cannot start: `validate_targets.load_targets()` requires `gold_star.date_dimension`, which this map omits by design (fiscal-period grain) | data-owner | (none -- Principle V; pick A1/A2/A3 in `mappings/finance_gl_actuals/approval-request-model-integrity.md`) | `open` | |
 
 > Answered rows are never deleted -- `Status` flips and `Resolution` records the decision, the
 > date, and who made it.
@@ -25,10 +28,10 @@ Filled instance of `templates/unresolved-questions.md` (ADR 0003 location). ASCI
 ### Note on Q3
 
 This is the mirror of the Missing Budget Flag metric and it matters for correctness of the
-GATE, not just the report. If the proposed default is right, a gate that refuses these rows is
-**over-refusing**, which spec 137 FR-023 counts as a failure rather than as safety. Variant D12
-is built to observe exactly this behaviour. The agent cannot decide whether a budgeted line
-with no activity is normal for this business -- only the data owner can.
+GATE, not just the report. The mapping-gate decision (2026-07-30, Ahmed Shaaban) ruled
+Option A: expected business state, surface as a report exception. A check that REFUSES
+these rows is therefore **over-refusing**, which spec 137 FR-023 counts as a failure --
+variant D12 exists to observe exactly that. Transcribed above; not re-decided here.
 
 ---
 

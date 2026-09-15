@@ -93,9 +93,10 @@ blocking_reasons:
   - "gold_ready is blocked on TWO model-integrity rulings, both raised in mappings/finance_gl_actuals/approval-request-model-integrity.md: sub-decision B (L21 -- the -1 unknown member hides the required D1/D2 refusal, so a live orphan-FK PASS would be reported for the wrong reason) and sub-decision C (L22 / defect-matrix D14 -- a contradictory department/cost-center pair passes every shipped check). A live run before these are ruled would manufacture green evidence for semantically invalid data."
 
 # --- approvals (named human sign-offs; the agent cannot self-grant) ---------
-# EMPTY BY DESIGN. Two approvals are outstanding and both are requested in
-# approval-request-mapping-gate.md. Spec 137's ratification by the owner on 2026-07-30
-# approved THE SPEC; it granted neither of these stage approvals.
+# source_ready and mapping_ready are recorded from
+# approval-decision-mapping-gate.md (Ahmed Shaaban, 2026-07-30). Gold Ready is
+# blocked on model-integrity sub-decisions A/B/C in
+# approval-request-model-integrity.md; those rulings are NOT recorded here.
 approvals:
   - stage: "source_ready"
     owner: "Ahmed Shaaban (data_owner)"
