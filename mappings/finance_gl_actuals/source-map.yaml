@@ -211,6 +211,18 @@ gold_star:
         - "cost_center_name"
         - "department_code"                # flat denorm rollup to the conformed level (RC12)
 
+    # --- CONFORMED with budget (A1, 2026-09-15): actuals carry fiscal_period_sk
+    # alongside daily date_sk so both facts can slice by fiscal period (FR-010
+    # upward aggregation). dim_date_fgl stays the RC15 marked date table.
+    - name: "gold.dim_fiscal_period_fgl"
+      surrogate_key: "fiscal_period_sk"
+      has_unknown_member: true
+      attributes:
+        - "fiscal_year"
+        - "fiscal_quarter"
+        - "period_start_date"
+        - "period_end_date"
+
   degenerate_dimensions:
     - "journal_entry_id"                   # grain key, no attributes of its own
     - "line_id"                            # grain key

@@ -55,17 +55,16 @@ stages:
     blocking_reasons: []
 
   gold_ready:
-    # BLOCKED, not merely not_started: the live leg cannot even begin for this table.
-    # validate_targets.load_targets() unconditionally requires gold_star.date_dimension
-    # (src/seshat/validate_targets.py:183), which this map deliberately omits because
-    # budget lives at fiscal-period grain, not daily. Reproduced: loading the map
-    # raises ValueError: missing required 'date_dimension' in gold_star. See ledger
-    # rows L19/L19b -- one time-conformance ruling settles this.
+    # BLOCKED: A1 is recorded (fiscal_period_sk on actuals) but this map still
+    # omits gold_star.date_dimension by design (fiscal-period grain; FR-010).
+    # validate_targets.load_targets() still raises ValueError. Live validate
+    # also needs a DSN.
     status: "blocked"
     evidence:
-      - "warehouse/migrations/0008_create_gold_finance_gl_star.sql committed (shared with finance_gl_actuals); authored, never executed"
+      - "warehouse/migrations/0008_create_gold_finance_gl_star.sql (shared with finance_gl_actuals; A1 adds fiscal_period_sk on actuals)"
+      - "mappings/finance_gl_actuals/approval-decision-model-integrity.md (A1, 2026-09-15)"
     blocking_reasons:
-      - "retail validate cannot run: validate_targets.load_targets() requires gold_star.date_dimension, which this map omits by design (budget is at fiscal-period grain). Verified -- it raises ValueError before any check executes. Needs the time-conformance ruling recorded as ledger L19/L19b; no agent may decide it (Principle V, cross-star dimension conformance is a human modelling judgment)."
+      - "retail validate cannot start: validate_targets.load_targets() requires gold_star.date_dimension, which this map omits because budget is fiscal-period grain (FR-010 forbids a daily date_sk on budget). A1 does not add that date dim. Also [PENDING LIVE PROFILE]: no DSN."
 
   semantic_model_ready:
     status: "not_started"
@@ -90,7 +89,7 @@ evidence:
   - "docs/worked-examples/finance-gl-genericity-ledger.md"
   - "specs/137-finance-gl-genericity-proof/spec.md"
 blocking_reasons:
-  - "gold_ready is blocked: retail validate cannot start on this table at all -- validate_targets.load_targets() requires gold_star.date_dimension, which this map omits by design because budget lives at fiscal-period grain (verified ValueError). Needs the sub-decision A time-conformance ruling (mappings/finance_gl_actuals/approval-request-model-integrity.md; ledger L19/L19b)."
+  - "gold_ready is blocked: retail validate cannot start -- validate_targets.load_targets() requires gold_star.date_dimension, omitted because budget is fiscal-period grain (FR-010). A1 (2026-09-15) adds fiscal_period_sk to actuals and does not invent a daily date dim on budget. Also [PENDING LIVE PROFILE]: no DSN."
 
 # --- approvals (named human sign-offs; the agent cannot self-grant) ---------
 approvals:
@@ -102,18 +101,16 @@ approvals:
     owner: "Ahmed Shaaban (data_owner)"
     at: "2026-07-30"
     note: "mapping gate CLEARED -- declared grain, PK and gold star approved; open questions ruled; HR1 conformance ruled conformed. See approval-decision-mapping-gate.md"
+  - stage: "gold_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-09-15"
+    note: "model-integrity A1 (fiscal_period_sk on actuals) -- see mappings/finance_gl_actuals/approval-decision-model-integrity.md. Does NOT pass gold_ready."
 
 # --- the single next allowed action -----------------------------------------
-# silver_ready is PASS: Stage 3 is authoring-only and 0007 is committed from a
-# cleared map with `seshat check` exit 0 (docs/readiness/silver-ready.md:9-11, :37).
-# gold_ready is BLOCKED, not merely next: `retail validate` cannot start on this
-# table at all, so the next action is a HUMAN RULING, not an agent step.
-#
-# The metric_owner approval (Stage 5) is not next either -- it sits behind the
-# blocked Gold stage, and the seven contracts were split to branch
-# 137-metric-contracts-held (ledger rows L14, L17).
-next_action: "OBTAIN THE TIME-CONFORMANCE RULING (ledger L19/L19b). gold_ready is blocked: validate_targets.load_targets() requires gold_star.date_dimension, which this map omits by design because budget lives at fiscal-period grain -- verified to raise ValueError before any check runs. No agent may decide it; cross-star dimension conformance is a Principle-V human modelling judgment (docs/quality/conformed-dimension-map.yaml). Until it is ruled, do NOT route an agent into `retail validate` for this table -- the action cannot start."
+# A1 is recorded. gold_ready stays blocked: validate cannot load this map
+# (no date_dimension) and there is no DSN.
+next_action: "A1 is recorded. gold_ready stays blocked: `retail validate` cannot load this map (missing gold_star.date_dimension; FR-010) and there is no DSN ([PENDING LIVE PROFILE]). Do not invent a daily date_sk on budget."
 
 # --- audit ------------------------------------------------------------------
-last_checked_at: "2026-07-30"
+last_checked_at: "2026-09-15"
 checked_by: "agent"

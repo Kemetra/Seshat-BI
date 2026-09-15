@@ -12,7 +12,8 @@
 --   gold.fct_gl_actuals_fgl  -- grain: one journal line within one journal entry
 --   gold.fct_gl_budget_fgl   -- grain: one amount per account x dept x fiscal
 --                                quarter x budget_version
--- sharing CONFORMED dimensions gold.dim_account_fgl and gold.dim_department_fgl
+-- sharing CONFORMED dimensions gold.dim_account_fgl, gold.dim_department_fgl,
+-- and gold.dim_fiscal_period_fgl (A1)
 -- (ruled `conformed` by Ahmed Shaaban, 2026-07-30 -- docs/quality/
 -- conformed-dimension-map.yaml; HR1 verified matching surrogate_key + shared
 -- attribute types across both stars, FR-005). Declared IDENTICALLY in both
@@ -24,9 +25,14 @@
 -- concept; the two facts meet at DEPARTMENT level, per sub-decision C2).
 -- gold.dim_date_fgl (daily, RC15 contiguous) is ACTUALS-ONLY.
 -- gold.dim_fiscal_period_fgl (quarter grain, sourced from fiscal_calendar) is
--- BUDGET-ONLY -- the RC15 daily calendar is a closed Gregorian contract that cannot
--- carry a fiscal period (ledger row L5), so budget keys on its own period dimension
--- instead of the daily calendar.
+-- CONFORMED across both facts (A1, 2026-09-15): actuals carry fiscal_period_sk
+-- alongside daily date_sk so Actual-vs-Budget can slice by period. Budget still
+-- has no daily date_sk (FR-010 forbids downward disaggregation).
+--
+-- B1 (2026-09-15): entity FKs COALESCE to -1 only when the source natural key is
+-- null/blank. A present unmatched key is refused (NULL into NOT NULL).
+-- C1 (2026-09-15): dim_cost_center_fgl is joined on cost_center_code AND
+-- department_code so a contradictory pair cannot produce two valid FKs.
 --
 -- FR-010: actuals MAY be aggregated UP to the budget's comparison grain (quarter x
 -- account x department) in downstream DAX/SQL; nothing in this migration
@@ -137,9 +143,10 @@ SELECT
 FROM generate_series(DATE '2024-01-01', DATE '2025-12-31', INTERVAL '1 day') AS g(d);
 
 -- ============================================================ dim_fiscal_period_fgl
--- BUDGET-ONLY. Quarter-grain period dimension sourced from bronze.fiscal_calendar --
+-- CONFORMED (A1). Quarter-grain period dimension sourced from bronze.fiscal_calendar --
 -- NOT the daily RC15 calendar, which is a closed Gregorian contract that cannot
 -- carry a fiscal period (ledger row L5). Smart key YYYYQ (e.g. 20241).
+-- Actuals attach fiscal_period_sk by posting_date falling in period_start/end.
 CREATE TABLE gold.dim_fiscal_period_fgl (
   fiscal_period_sk  INT PRIMARY KEY,
   fiscal_year       SMALLINT,
@@ -173,6 +180,7 @@ CREATE TABLE gold.fct_gl_actuals_fgl (
   department_sk         INT NOT NULL,
   cost_center_sk        INT NOT NULL,
   date_sk               INT NOT NULL,
+  fiscal_period_sk      INT NOT NULL,
   -- measures (RC9: independent landed measures)
   debit_amount          NUMERIC(18,2),
   credit_amount         NUMERIC(18,2),
@@ -185,16 +193,28 @@ CREATE TABLE gold.fct_gl_actuals_fgl (
 );
 INSERT INTO gold.fct_gl_actuals_fgl
   (journal_entry_id, line_id, currency_code, description,
-   account_sk, department_sk, cost_center_sk, date_sk,
+   account_sk, department_sk, cost_center_sk, date_sk, fiscal_period_sk,
    debit_amount, credit_amount, amount)
 SELECT
   s.journal_entry_id, s.line_id, s.currency_code, s.description,
-  COALESCE(da.account_sk, -1),
-  COALESCE(dd.department_sk, -1),
-  COALESCE(dc.cost_center_sk, -1),
+  -- B1: COALESCE to -1 only when the source key is null/blank. A present
+  -- unmatched key stays NULL and is refused by the NOT NULL fact column.
+  CASE
+    WHEN s.account_code IS NULL OR btrim(s.account_code) = '' THEN COALESCE(da.account_sk, -1)
+    ELSE da.account_sk
+  END,
+  CASE
+    WHEN s.department_code IS NULL OR btrim(s.department_code) = '' THEN COALESCE(dd.department_sk, -1)
+    ELSE dd.department_sk
+  END,
+  CASE
+    WHEN s.cost_center_code IS NULL OR btrim(s.cost_center_code) = '' THEN COALESCE(dc.cost_center_sk, -1)
+    ELSE dc.cost_center_sk
+  END,
   dt.date_sk,     -- NO COALESCE to a -1 date member: an unmatched/NULL fact date
                   -- yields NULL and is rejected by date_sk NOT NULL (fail loud,
                   -- mirrors gold.fct_sales_rss's dim_date_rss convention).
+  dfp.fiscal_period_sk,  -- A1: no COALESCE; unmatched posting_date refuses
   s.debit_amount, s.credit_amount,
   -- Read from silver, NOT recomputed: `amount` is a derived column materialized in
   -- 0006 (build step 7) per the cleared map's `derived_columns`. Recomputing it here
@@ -204,7 +224,12 @@ FROM silver.finance_gl_actuals s
 LEFT JOIN gold.dim_account_fgl      da ON da.account_code    = s.account_code
 LEFT JOIN gold.dim_department_fgl   dd ON dd.department_code = s.department_code
 LEFT JOIN gold.dim_cost_center_fgl  dc ON dc.cost_center_code = s.cost_center_code
-LEFT JOIN gold.dim_date_fgl         dt ON dt.full_date        = s.posting_date;
+                                      AND dc.department_code = s.department_code  -- C1
+LEFT JOIN gold.dim_date_fgl         dt ON dt.full_date        = s.posting_date
+LEFT JOIN gold.dim_fiscal_period_fgl dfp
+       ON dfp.period_start_date IS NOT NULL
+      AND s.posting_date >= dfp.period_start_date
+      AND s.posting_date <= dfp.period_end_date;
 
 -- Declared grain enforced physically (audit C36 -- a double-insert / partial re-run
 -- would otherwise silently duplicate rows with no constraint failing).
@@ -215,10 +240,12 @@ ALTER TABLE gold.fct_gl_actuals_fgl ADD CONSTRAINT fk_fct_gl_actuals_account    
 ALTER TABLE gold.fct_gl_actuals_fgl ADD CONSTRAINT fk_fct_gl_actuals_department    FOREIGN KEY (department_sk)  REFERENCES gold.dim_department_fgl (department_sk);
 ALTER TABLE gold.fct_gl_actuals_fgl ADD CONSTRAINT fk_fct_gl_actuals_cost_center   FOREIGN KEY (cost_center_sk) REFERENCES gold.dim_cost_center_fgl (cost_center_sk);
 ALTER TABLE gold.fct_gl_actuals_fgl ADD CONSTRAINT fk_fct_gl_actuals_date          FOREIGN KEY (date_sk)        REFERENCES gold.dim_date_fgl (date_sk);
+ALTER TABLE gold.fct_gl_actuals_fgl ADD CONSTRAINT fk_fct_gl_actuals_fiscal_period FOREIGN KEY (fiscal_period_sk) REFERENCES gold.dim_fiscal_period_fgl (fiscal_period_sk);
 
-CREATE INDEX idx_fct_gl_actuals_account_sk    ON gold.fct_gl_actuals_fgl (account_sk);
-CREATE INDEX idx_fct_gl_actuals_department_sk ON gold.fct_gl_actuals_fgl (department_sk);
-CREATE INDEX idx_fct_gl_actuals_date_sk       ON gold.fct_gl_actuals_fgl (date_sk);
+CREATE INDEX idx_fct_gl_actuals_account_sk       ON gold.fct_gl_actuals_fgl (account_sk);
+CREATE INDEX idx_fct_gl_actuals_department_sk    ON gold.fct_gl_actuals_fgl (department_sk);
+CREATE INDEX idx_fct_gl_actuals_date_sk          ON gold.fct_gl_actuals_fgl (date_sk);
+CREATE INDEX idx_fct_gl_actuals_fiscal_period_sk ON gold.fct_gl_actuals_fgl (fiscal_period_sk);
 
 -- ============================================================ fct_gl_budget_fgl
 -- Grain: one amount per account x department x fiscal quarter x budget_version
@@ -243,9 +270,15 @@ INSERT INTO gold.fct_gl_budget_fgl
   (budget_version, currency_code, account_sk, department_sk, fiscal_period_sk, budget_amount)
 SELECT
   s.budget_version, s.currency_code,
-  COALESCE(da.account_sk, -1),
-  COALESCE(dd.department_sk, -1),
-  COALESCE(dfp.fiscal_period_sk, -1),
+  CASE
+    WHEN s.account_code IS NULL OR btrim(s.account_code) = '' THEN COALESCE(da.account_sk, -1)
+    ELSE da.account_sk
+  END,
+  CASE
+    WHEN s.department_code IS NULL OR btrim(s.department_code) = '' THEN COALESCE(dd.department_sk, -1)
+    ELSE dd.department_sk
+  END,
+  dfp.fiscal_period_sk,  -- time key: unmatched period refuses (B1), not -1
   s.budget_amount
 FROM silver.finance_gl_budget s
 LEFT JOIN gold.dim_account_fgl        da  ON da.account_code    = s.account_code
