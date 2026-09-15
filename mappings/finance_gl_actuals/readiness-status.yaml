@@ -57,15 +57,14 @@ stages:
     blocking_reasons: []
 
   gold_ready:
-    # BLOCKED, not not_started. A live run is possible for this table (unlike
-    # finance_gl_budget, whose map cannot even load) -- but it would produce GREEN
-    # evidence for semantically invalid data, which is worse than no evidence.
+    # BLOCKED: A1/B1/C1 are recorded, gold SQL is updated, but the live gate has
+    # not run. Do not flip to pass without retail validate evidence.
     status: "blocked"
     evidence:
-      - "warehouse/migrations/0008_create_gold_finance_gl_star.sql committed (shared with finance_gl_budget); authored, never executed"
+      - "warehouse/migrations/0008_create_gold_finance_gl_star.sql (A1 fiscal_period_sk on actuals; B1 refuse unmatched non-null keys; C1 cost-center join on code AND department)"
+      - "mappings/finance_gl_actuals/approval-decision-model-integrity.md (A1, B1, C1; Ahmed Shaaban, 2026-09-15)"
     blocking_reasons:
-      - "L21: the -1 unknown member hides the defect matrix's required D1/D2 refusal. COALESCE(da.account_sk, -1) rewrites a FAILED natural-key lookup into a valid dimension row, and check_orphan_fks is a plain LEFT JOIN ... WHERE d.pk IS NULL (src/seshat/validate.py:236-239), so the orphan is invisible. A live orphan-FK PASS would be reported for the wrong reason. Needs the sub-decision B ruling in approval-request-model-integrity.md."
-      - "L22 / defect-matrix D14: a valid department_code paired with a cost_center_code belonging to a DIFFERENT department resolves through both lookups, so the fact carries a contradictory department_sk / cost_center_sk pair that no shipped check can see (both FKs are valid). Needs the sub-decision C ruling."
+      - "Live retail validate has not run ([PENDING LIVE PROFILE]; no DSN). Apply 0006 AND 0007 THEN 0008, then `retail validate`. A1/B1/C1 are recorded and do not themselves pass this stage."
 
   semantic_model_ready:
     status: "not_started"
@@ -90,13 +89,12 @@ evidence:
   - "docs/worked-examples/finance-gl-genericity-ledger.md"
   - "specs/137-finance-gl-genericity-proof/spec.md"
 blocking_reasons:
-  - "gold_ready is blocked on TWO model-integrity rulings, both raised in mappings/finance_gl_actuals/approval-request-model-integrity.md: sub-decision B (L21 -- the -1 unknown member hides the required D1/D2 refusal, so a live orphan-FK PASS would be reported for the wrong reason) and sub-decision C (L22 / defect-matrix D14 -- a contradictory department/cost-center pair passes every shipped check). A live run before these are ruled would manufacture green evidence for semantically invalid data."
+  - "gold_ready is blocked on the live retail validate gate ([PENDING LIVE PROFILE]; no DSN). Model-integrity A1/B1/C1 are recorded in approval-decision-model-integrity.md and do not pass this stage."
 
 # --- approvals (named human sign-offs; the agent cannot self-grant) ---------
-# source_ready and mapping_ready are recorded from
-# approval-decision-mapping-gate.md (Ahmed Shaaban, 2026-07-30). Gold Ready is
-# blocked on model-integrity sub-decisions A/B/C in
-# approval-request-model-integrity.md; those rulings are NOT recorded here.
+# source_ready and mapping_ready from approval-decision-mapping-gate.md
+# (2026-07-30). gold_ready approval below records A1/B1/C1; it does NOT
+# flip gold_ready to pass (live validate still required).
 approvals:
   - stage: "source_ready"
     owner: "Ahmed Shaaban (data_owner)"
@@ -106,20 +104,23 @@ approvals:
     owner: "Ahmed Shaaban (data_owner)"
     at: "2026-07-30"
     note: "mapping gate CLEARED -- declared grain, PK and gold star approved; open questions ruled; HR1 conformance ruled conformed. See approval-decision-mapping-gate.md"
+  - stage: "gold_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-09-15"
+    note: "model-integrity A1, B1, C1 -- see approval-decision-model-integrity.md. Does NOT pass gold_ready; live retail validate still required."
 
 # --- the single next allowed action -----------------------------------------
 # silver_ready is PASS: Stage 3 is authoring-only and 0006 is committed from a
 # cleared map with `seshat check` exit 0 (docs/readiness/silver-ready.md:9-11, :37).
 # current_stage is therefore gold_ready -- which is BLOCKED, not merely pending.
-# The next action is a HUMAN RULING, not a live run: see the blocking_reasons on
-# the gold_ready stage and at the top level.
+# A1/B1/C1 are recorded; the remaining gap is live retail validate.
 #
 # The metric_owner approval is Stage 5 and is NOT next -- it sits behind the
 # blocked Gold stage. The seven contracts it would cover are not in this commit
 # at all: they were split out to branch 137-metric-contracts-held (ledger rows
 # L14, L17), so no metrics/ path under this table exists here.
-next_action: "OBTAIN THE MODEL-INTEGRITY RULINGS B and C (mappings/finance_gl_actuals/approval-request-model-integrity.md). gold_ready is BLOCKED, so a live run is NOT the next action: L21 means a green orphan-FK result would be reported for the wrong reason, and L22/D14 means a contradictory department/cost-center pair passes every shipped check. Running validate now would manufacture green evidence for semantically invalid data. Once ruled, the live sequence is: apply 0006 AND 0007 AND THEN 0008 (0008 builds BOTH facts and reads silver.finance_gl_budget at line 247, so applying only 0006+0008 aborts with an undefined-table error), then run `retail validate`."
+next_action: "Apply warehouse/migrations/0006 AND 0007 THEN 0008, then run `retail validate` against a Postgres DSN. Model-integrity A1/B1/C1 are recorded (approval-decision-model-integrity.md). Without a DSN, gold_ready stays blocked as [PENDING LIVE PROFILE]."
 
 # --- audit ------------------------------------------------------------------
-last_checked_at: "2026-07-30"
+last_checked_at: "2026-09-15"
 checked_by: "agent"

@@ -47,3 +47,13 @@ dimensions:
     stars:
       - finance_gl_actuals
       - finance_gl_budget
+
+  # Ruled by Ahmed Shaaban (data_owner) on 2026-09-15 as A1 of
+  # mappings/finance_gl_actuals/approval-request-model-integrity.md.
+  # Actuals carry fiscal_period_sk alongside daily date_sk so both facts
+  # can slice by fiscal period. The agent transcribed the ruling.
+  dim_fiscal_period_fgl:
+    status: conformed
+    stars:
+      - finance_gl_actuals
+      - finance_gl_budget
