@@ -29,7 +29,7 @@ REAL_MIGRATION_SHAPES = {
     "dim_date_fgl": 10,
     "dim_department_fgl": 3,
     "dim_fiscal_period_fgl": 5,
-    "fct_gl_actuals_fgl": 12,
+    "fct_gl_actuals_fgl": 13,
     "fct_gl_budget_fgl": 7,
 }
 
