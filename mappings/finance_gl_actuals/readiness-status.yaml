@@ -13,7 +13,7 @@ source_id: "finance_gl_actuals"
 source_family: "finance_gl_synthetic"
 
 # --- where we are -----------------------------------------------------------
-current_stage: "gold_ready"
+current_stage: "semantic_model_ready"
 mapping_version: "1"
 
 # --- the seven stages -------------------------------------------------------
@@ -57,14 +57,14 @@ stages:
     blocking_reasons: []
 
   gold_ready:
-    # BLOCKED: A1/B1/C1 are recorded, gold SQL is updated, but the live gate has
-    # not run. Do not flip to pass without retail validate evidence.
-    status: "blocked"
+    status: "pass"
     evidence:
-      - "warehouse/migrations/0008_create_gold_finance_gl_star.sql (A1 fiscal_period_sk on actuals; B1 refuse unmatched non-null keys; C1 cost-center join on code AND department)"
+      - "warehouse/migrations/0008_create_gold_finance_gl_star.sql applied (A1/B1/C1); silver 0006+0007 then gold 0008"
+      - "seshat validate --source-map mappings/finance_gl_actuals/source-map.yaml exit 0, 0 findings (2026-09-15)"
+      - "mappings/finance_gl_actuals/reconciliation-report.md (filled, PASS: 5000=5000 PK, 731-day calendar, 0 orphans, penny-exact debit/credit/amount)"
+      - "mappings/finance_gl_actuals/db-provenance.json (server-confirmed identity digest; no raw host)"
       - "mappings/finance_gl_actuals/approval-decision-model-integrity.md (A1, B1, C1; Ahmed Shaaban, 2026-09-15)"
-    blocking_reasons:
-      - "Live retail validate has not run ([PENDING LIVE PROFILE]; no DSN). Apply 0006 AND 0007 THEN 0008, then `retail validate`. A1/B1/C1 are recorded and do not themselves pass this stage."
+    blocking_reasons: []
 
   semantic_model_ready:
     status: "not_started"
@@ -88,8 +88,7 @@ stages:
 evidence:
   - "docs/worked-examples/finance-gl-genericity-ledger.md"
   - "specs/137-finance-gl-genericity-proof/spec.md"
-blocking_reasons:
-  - "gold_ready is blocked on the live retail validate gate ([PENDING LIVE PROFILE]; no DSN). Model-integrity A1/B1/C1 are recorded in approval-decision-model-integrity.md and do not pass this stage."
+blocking_reasons: []
 
 # --- approvals (named human sign-offs; the agent cannot self-grant) ---------
 # source_ready and mapping_ready from approval-decision-mapping-gate.md
@@ -107,19 +106,13 @@ approvals:
   - stage: "gold_ready"
     owner: "Ahmed Shaaban (data_owner)"
     at: "2026-09-15"
-    note: "model-integrity A1, B1, C1 -- see approval-decision-model-integrity.md. Does NOT pass gold_ready; live retail validate still required."
+    note: "model-integrity A1, B1, C1 -- see approval-decision-model-integrity.md. Live seshat validate passed 2026-09-15 (0 findings); gold_ready pass is the mechanical gate, not this ruling alone."
 
 # --- the single next allowed action -----------------------------------------
-# silver_ready is PASS: Stage 3 is authoring-only and 0006 is committed from a
-# cleared map with `seshat check` exit 0 (docs/readiness/silver-ready.md:9-11, :37).
-# current_stage is therefore gold_ready -- which is BLOCKED, not merely pending.
-# A1/B1/C1 are recorded; the remaining gap is live retail validate.
-#
-# The metric_owner approval is Stage 5 and is NOT next -- it sits behind the
-# blocked Gold stage. The seven contracts it would cover are not in this commit
-# at all: they were split out to branch 137-metric-contracts-held (ledger rows
-# L14, L17), so no metrics/ path under this table exists here.
-next_action: "Apply warehouse/migrations/0006 AND 0007 THEN 0008, then run `retail validate` against a Postgres DSN. Model-integrity A1/B1/C1 are recorded (approval-decision-model-integrity.md). Without a DSN, gold_ready stays blocked as [PENDING LIVE PROFILE]."
+# gold_ready is PASS (live validate 2026-09-15). Next is Semantic Model Ready.
+# The seven metric contracts for this table were split to branch
+# 137-metric-contracts-held (ledger L14, L17); no metrics/ path exists here yet.
+next_action: "Semantic Model Ready: bring the held metric contracts onto this table (or draft via kpi-contract-builder) and bind measures 1:1. Do not design a dashboard until contracts exist."
 
 # --- audit ------------------------------------------------------------------
 last_checked_at: "2026-09-15"
