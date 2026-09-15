@@ -1,0 +1,18 @@
+{
+  "captured_at": "2026-09-15T10:08:30+00:00",
+  "captured_by": "seshat validate",
+  "database_identity_digest": "b9f0de842e01b9a248c0a137045a41cc",
+  "database_name_server_confirmed": true,
+  "digest_algorithm": "sha256-unsalted-truncated-32",
+  "engine": "postgres",
+  "identity_components": [
+    "normalized_configured_host",
+    "port",
+    "database_name"
+  ],
+  "schema_version": 1,
+  "scope": "a digest of the canonical identity (normalized configured host, port, database name) of the live system that answered this table's validate run. The database-name component was CONFIRMED by the server's own report at capture time, so this record could only be written by a process holding a live connection. The digest itself is offline-reproducible on purpose, so a correctly-configured repo can never look wrong. No raw host, port, or database name is recorded.",
+  "server_endpoint_agreed_with_config": false,
+  "source": "server_echo",
+  "table": "finance_gl_actuals"
+}
