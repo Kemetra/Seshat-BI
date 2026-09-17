@@ -587,7 +587,7 @@ def test_a_refused_handshake_records_no_version_rather_than_a_guess(
 
 def test_the_argv_floors_the_version_npx_may_resolve() -> None:
     """A floor, not a pin: the package publishes only prereleases (measured
-    2026-08-20 -- 0.5.0-beta.2 through beta.12, no stable release), so there is
+    2026-09-17 -- 0.5.0-beta.2 through beta.13, no stable release), so there is
     nothing to pin to. The range still refuses a surprise jump to an
     incompatible future major.
     """
