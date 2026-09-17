@@ -52,7 +52,7 @@ Stages:
 | PBIP model audit / TMDL PR diff / unused-field question | `.claude/skills/pbip-xray/SKILL.md` | advisory findings report (no readiness effect) |
 | Dashboard / visual design / audience / layout | `.claude/skills/powerbi-dashboard-design/` (gated "design from contracts" verb: `.claude/skills/dashboard-design/`) | dashboard blueprint |
 | Power BI execution / publish | STOP unless `semantic_model_ready` and publish gates have passed | blocked verdict or BI handoff pack |
-| Unknown or ambiguous task | `docs/knowledge-map.md` | clarifying question or blocked verdict |
+| Unknown or ambiguous task | Ask one clarifying question naming the missing input; if no specific input can be named, emit the documented blocked verdict | clarifying question or blocked verdict |
 
 Power BI execution remains execution-only and gated: **F016** advances only when
 `semantic_model_ready` and the publish gates have passed.
