@@ -159,7 +159,7 @@ livetest = [
 # Keep the stable v1 line pinned below v2 so a normal install and the static
 # governance core never acquire the protocol SDK or a pre-release major.
 mcp = [
-    "mcp>=1.28,<2",
+    "mcp>=1.28,<3",
 ]
 # Browser verification for generated offline HTML. Kept out of `dev` so the
 # normal unit-test environment does not download or provision browser tooling.
