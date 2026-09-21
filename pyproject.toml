@@ -98,7 +98,7 @@ db = [
 stats = [
     "numpy==2.5.2",
     "scipy==1.18.0",
-    "statsmodels==0.14.6",
+    "statsmodels==0.15.0",
 ]
 stats-change = [
     "ruptures==1.1.10",
