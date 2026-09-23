@@ -237,6 +237,19 @@ def test_approval_for_another_report_does_not_approve_this_intent(
     assert "owner-approved" in b.what
 
 
+def test_report_intent_prefixed_scope_spelling_is_accepted(tmp_path: Path) -> None:
+    """The store also records report scopes as `report_intent.<report_id>`."""
+    root, tracked = _materialize(tmp_path)
+    store = root / _STORE_REL
+    store.write_text(
+        store.read_text(encoding="utf-8").replace(
+            "[demo_report_weekly]", "[report_intent.demo_report_weekly]"
+        ),
+        encoding="utf-8",
+    )
+    assert _next_action(root, tracked).outcome == "next_action"
+
+
 def test_uncommitted_contract_and_binding_edits_are_invisible(tmp_path: Path) -> None:
     """Audit F025: the coordinator reads COMMITTED state. An uncommitted edit that
     adds a self-asserted `readiness.status: pass` contract and binds a visual to it

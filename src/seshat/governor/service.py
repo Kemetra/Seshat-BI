@@ -77,10 +77,16 @@ def _scrub(text: str, root: Path) -> str:
     """The shared boundary chain for one string (audit F079/F137): workspace
     paths (OS and posix spellings), then DSN components (layer one), then every
     secret-shaped span (layer two, incl. tenant GUIDs)."""
+    from seshat.pbi_mcp.scan import SECRET_PATTERNS
     from seshat.pbi_mcp_adapter.evidence import redact, scrub_secret_shaped
 
     for form in {str(root), root.as_posix()}:
         text = text.replace(form, "<workspace>")
+    # Whole database URIs first: the credential-URL pattern alone strips only
+    # `scheme://user:pass@` and would leave host, port and database behind.
+    for label, pattern in SECRET_PATTERNS:
+        if label == "database connection URL":
+            text = pattern.sub("[REDACTED]", text)
     scrubbed, _labels = scrub_secret_shaped(redact(text))
     return scrubbed
 

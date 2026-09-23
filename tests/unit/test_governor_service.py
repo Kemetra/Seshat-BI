@@ -2,7 +2,11 @@ import builtins
 from argparse import Namespace
 from pathlib import Path
 
+import pytest
+
 from seshat.governor.service import OPERATIONS, GovernorService
+
+pytestmark = pytest.mark.unit
 
 FIXTURE = Path(__file__).parents[1] / "fixtures/readiness/run_next/us1_blocked.yaml"
 
@@ -139,7 +143,10 @@ def test_a_committed_keyword_dsn_never_leaves_the_governor(tmp_path: Path) -> No
     """Audit F079/F137: success payloads are scrubbed, not just error text."""
     root = _workspace(tmp_path)
     status = root / "mappings/example_table/readiness-status.yaml"
-    secret = "connect failed: host=db.prod user=svc password=hunter2"
+    secret = (
+        "connect failed: host=db.prod user=svc password=hunter2 "
+        "via postgresql://svc:hunter2@db.prod.internal:5432/salesdb"
+    )
     guid = "12345678-1234-1234-1234-1234567890ab"
     status.write_text(
         status.read_text(encoding="utf-8").replace(
@@ -160,8 +167,22 @@ def test_a_committed_keyword_dsn_never_leaves_the_governor(tmp_path: Path) -> No
     }
     for operation in OPERATIONS:
         text = repr(_call(root, operation, **requests[operation]))
-        for leaked in ("hunter2", "db.prod", "svc", guid):
+        for leaked in ("hunter2", "db.prod", "svc", "5432", "salesdb", guid):
             assert leaked not in text, (operation, leaked)
+
+
+def test_error_path_scrubs_a_uri_dsn(tmp_path: Path, monkeypatch) -> None:
+    root = _workspace(tmp_path)
+    service = GovernorService(root)
+
+    def explode(_request: dict) -> dict:
+        raise RuntimeError("boom postgresql://svc:pw1@db.prod.internal:5432/salesdb")
+
+    monkeypatch.setitem(service._operations, "seshat_get_status", explode)
+    result = service.call("seshat_get_status", {"workspace": str(root)})
+    assert result["outcome"] == "input_defect"
+    for leaked in ("pw1", "db.prod", "5432", "salesdb"):
+        assert leaked not in result["error"]
 
 
 def test_mcp_parser_binds_repo_without_starting_sdk() -> None:

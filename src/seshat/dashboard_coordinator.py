@@ -375,7 +375,9 @@ def _intent_scope(intent: dict[str, Any]) -> tuple[str, ...]:
     the gate stays blocked rather than borrowing another report's approval."""
     report_id = intent.get("report_id")
     if isinstance(report_id, str) and report_id.strip():
-        return (f"artifacts:{report_id.strip()}",)
+        # Both spellings in use: `artifacts: [<id>]` and `[report_intent.<id>]`.
+        rid = report_id.strip()
+        return (f"artifacts:{rid}", f"artifacts:report_intent.{rid}")
     return ()
 
 
