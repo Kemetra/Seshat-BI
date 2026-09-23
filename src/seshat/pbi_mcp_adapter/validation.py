@@ -602,7 +602,11 @@ def validate_bindings_for(
     crashed check that reads clean is exactly the fail-open this module exists
     to prevent.
     """
-    from seshat.pbi_mcp_adapter.validation_plan import BINDING_CHECK, paired_reports
+    from seshat.pbi_mcp_adapter.validation_plan import (
+        BINDING_CHECK,
+        MAX_REPORT_DEPTH,
+        paired_reports,
+    )
 
     paired, skipped_pairs = paired_reports(repo_root, model_dir)
     skipped = list(skipped_pairs)
@@ -610,8 +614,9 @@ def validate_bindings_for(
         skipped.append(
             (
                 BINDING_CHECK,
-                "no report in this repository is bound to the mutated model, so "
-                "no binding check ran",
+                "no report found within the bounded search (depth "
+                f"{MAX_REPORT_DEPTH}, excluding VCS, vendored, cache and test "
+                "trees) is bound to the mutated model, so no binding check ran",
             )
         )
         return (), (), tuple(skipped)
