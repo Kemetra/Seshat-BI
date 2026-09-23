@@ -33,25 +33,28 @@ _APPROVERS = {
 _REASON = "metric owner rejected net_sales definition"
 
 
+def _stage_line(stage: str, position: int, index: int) -> str:
+    if position < index:
+        return f'  {stage}: {{status: "pass", evidence: ["{stage}"]}}'
+    if position == index:
+        return f'  {stage}: {{status: "blocked", blocking_reasons: ["{_REASON}"]}}'
+    return f'  {stage}: {{status: "not_started"}}'
+
+
+def _approval_lines(stages: tuple[str, ...]) -> list[str]:
+    return [
+        f'  - {{stage: {stage}, owner: "{_APPROVERS[stage]}", at: "2026-07-01"}}'
+        for stage in stages
+        if stage in _APPROVERS
+    ]
+
+
 def _status_yaml(blocked_stage: str) -> str:
     index = _STAGES.index(blocked_stage)
     lines = ['table: "silver.orders"', f'current_stage: "{blocked_stage}"', "stages:"]
-    for position, stage in enumerate(_STAGES):
-        if position < index:
-            lines.append(f'  {stage}: {{status: "pass", evidence: ["{stage}"]}}')
-        elif position == index:
-            lines.append(
-                f'  {stage}: {{status: "blocked", blocking_reasons: ["{_REASON}"]}}'
-            )
-        else:
-            lines.append(f'  {stage}: {{status: "not_started"}}')
+    lines += [_stage_line(s, pos, index) for pos, s in enumerate(_STAGES)]
     lines.append("approvals:")
-    for stage in _STAGES[:index]:
-        if stage in _APPROVERS:
-            lines.append(
-                f'  - {{stage: {stage}, owner: "{_APPROVERS[stage]}", '
-                'at: "2026-07-01"}'
-            )
+    lines += _approval_lines(_STAGES[:index])
     lines.append('next_action: "resolve the blocker"')
     return "\n".join(lines) + "\n"
 
