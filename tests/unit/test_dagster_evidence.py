@@ -257,6 +257,43 @@ class TestWriteRunEvidence:
                 evidence.RunMeta(started="2026-07-17T00:00:00Z"),
             )
 
+    def test_clean_exit_with_zero_recorded_assets_is_not_succeeded(
+        self, tmp_path: Path
+    ) -> None:
+        """A table the child never ran (a typo'd or wrong-case --table narrows
+        the selection to nothing) must not finalize green on a clean exit."""
+        summary = evidence.finalize_run(
+            tmp_path,
+            "20260923T000000Z-deadbeef",
+            ["typo_table"],
+            evidence.RunMeta(started="2026-07-17T00:00:00Z", child_exit_code=0),
+        )
+        assert summary["run_status"] == "failed"
+        records = evidence.EvidenceWriter(
+            tmp_path, "20260923T000000Z-deadbeef"
+        ).records()
+        assert all("no asset recorded" in row["blocking_reason"] for row in records)
+
+    def test_one_unrun_table_fails_a_run_that_ran_another(self, tmp_path: Path) -> None:
+        run_id = "run-partial"
+        evidence.EvidenceWriter(tmp_path, run_id).record(
+            evidence.AssetOutcome(
+                asset="source_map",
+                table="demo_table",
+                gate_command="reads Gate status",
+                exit_code=None,
+                measured={},
+                outcome="materialized",
+            )
+        )
+        summary = evidence.finalize_run(
+            tmp_path,
+            run_id,
+            ["demo_table", "other_table"],
+            evidence.RunMeta(started="2026-07-17T00:00:00Z", child_exit_code=0),
+        )
+        assert summary["run_status"] == "failed"
+
     def test_green_child_exit_keeps_succeeded(self, tmp_path: Path) -> None:
         summary = _finalized_green_run(tmp_path, "run-ok", child_exit_code=0)
         assert summary["run_status"] == "succeeded"
