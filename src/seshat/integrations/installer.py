@@ -59,6 +59,7 @@ from seshat.integrations.presence import (
     _is_installed,
     _profile_env,
     _skill_dir,
+    installed_coordinate,
 )
 from seshat.integrations.procs import _run
 from seshat.integrations.resolvers import Resolution, Resolvers, resolve
@@ -354,6 +355,8 @@ def _settled_row(
             item, resolved, resolved.status or UNAVAILABLE, resolved.reason or item.role
         )
     if _is_installed(root, item, profile):
+        if _upgrade_from(root, item, resolved, profile) is not None:
+            return None
         return _row(item, resolved, PRESENT, _present_detail(item, resolved))
     if item.source_type is SourceType.BUNDLED:
         relative = _BUNDLED_SKILLS.get(item.id, "")
@@ -372,7 +375,65 @@ def _plan_row(
     detail = _planned_detail(item, resolved, profile)
     if resolved.reason:
         detail = f"{detail} ({resolved.reason})"
+    previous = _upgrade_from(root, item, resolved, profile)
+    if previous is not None:
+        return _row(item, resolved, UPGRADE, f"upgrade from {previous}: {detail}")
     return _row(item, resolved, PLANNED, detail)
+
+
+def _wanted_coordinates(item: Component, resolved: Resolution) -> set[str]:
+    if item.source_type is SourceType.GITHUB and not item.mcp_server:
+        return {ref for ref in (resolved.tag, resolved.commit) if ref}
+    return {resolved.version} if resolved.version else set()
+
+
+def _upgrade_from(
+    root: Path, item: Component, resolved: Resolution, profile: str
+) -> str | None:
+    """The installed coordinate when it differs from the resolved one, else None."""
+    if not _is_installed(root, item, profile):
+        return None
+    on_disk = installed_coordinate(root, item, profile)
+    wanted = _wanted_coordinates(item, resolved)
+    if on_disk and wanted and on_disk not in wanted:
+        return on_disk
+    return None
+
+
+def _on_disk_resolution(
+    root: Path, item: Component, resolved: Resolution, profile: str
+) -> Resolution | None:
+    """What the lock should say for a component whose install did not land.
+
+    The component may still be installed at its PREVIOUS coordinate (a failed
+    upgrade); the lock then records that coordinate, with no digest, because the
+    lock is evidence of what is on disk, not of what was resolved this run.
+    """
+    if not _is_installed(root, item, profile):
+        return None
+    on_disk = installed_coordinate(root, item, profile)
+    if on_disk is None:
+        return None
+    return _disk_resolution(item, resolved, on_disk)
+
+
+def _disk_resolution(item: Component, resolved: Resolution, on_disk: str) -> Resolution:
+    """A digest-free resolution describing the coordinate found on disk."""
+    is_ref = item.source_type is SourceType.GITHUB and not item.mcp_server
+    is_commit = (
+        is_ref
+        and len(on_disk) == 40
+        and all(char in "0123456789abcdef" for char in on_disk)
+    )
+    return Resolution(
+        component_id=item.id,
+        ok=True,
+        channel=resolved.channel or item.channel,
+        version=None if is_ref else on_disk,
+        tag=on_disk if is_ref and not is_commit else None,
+        commit=on_disk if is_commit else None,
+        status="installed",
+    )
 
 
 def _present_detail(item: Component, resolved: Resolution) -> str:
@@ -458,9 +519,9 @@ def apply(
     outcome.notes.extend(verdict.reasons)
 
     envs = {item.id: _env_profile(root, item, profile, derived) for item in components}
-    installed: list[tuple[str, str, str, Resolution]] = []
+    landed: dict[str, tuple] = {}
     for item, resolved in zip(components, verdict.resolutions):
-        row, landed = _install_one(
+        row, resolution = _install_one(
             _Install(
                 root=root,
                 item=item,
@@ -470,8 +531,13 @@ def apply(
             )
         )
         outcome.rows.append(row)
-        if landed is not None:
-            installed.append((item.id, item.source_type.value, item.source, landed))
+        if resolution is not None:
+            landed[item.id] = (item, envs[item.id], resolution)
+    _verify_landed(root, outcome.rows, landed)
+    installed = [
+        (item.id, item.source_type.value, item.source, resolution)
+        for item, _profile, resolution in landed.values()
+    ]
 
     # The lock records what LANDED, and only after the installs above returned.
     # A run in which nothing installed writes nothing, so a failed apply leaves
@@ -618,7 +684,44 @@ def _install_one(req: _Install) -> tuple[ComponentPlan, Resolution | None]:
 
     status, detail = _handler_for(req.item)(req)
     row = _row(req.item, req.resolved, status, detail)
-    return row, (req.resolved if status == INSTALLED else None)
+    if status == INSTALLED:
+        return row, req.resolved
+    return row, _on_disk_resolution(req.root, req.item, req.resolved, req.profile)
+
+
+def _verify_landed(
+    root: Path, rows: list[ComponentPlan], landed: dict[str, tuple]
+) -> None:
+    """Re-read each installed distribution once EVERY install has run.
+
+    Components install one `uv pip install` at a time into a shared environment,
+    so a later install can move an earlier one. A distribution whose on-disk
+    version no longer matches what was installed is reported FAILED and locked
+    at the version actually present, instead of at the one resolved.
+    """
+    for index, row in enumerate(rows):
+        if row.status != INSTALLED or row.component not in landed:
+            continue
+        item, profile, resolution = landed[row.component]
+        if item.source_type is not SourceType.PYPI or item.mcp_server:
+            continue
+        on_disk = installed_coordinate(root, item, profile)
+        if on_disk is None or on_disk == resolution.version:
+            continue
+        rows[index] = replace(
+            row,
+            status=FAILED,
+            detail=(
+                f"{item.coordinate}=={resolution.version} was installed but "
+                f"{on_disk} is now on disk; a later install in the same "
+                "environment changed it"
+            ),
+        )
+        landed[row.component] = (
+            item,
+            profile,
+            _disk_resolution(item, resolution, on_disk),
+        )
 
 
 # `DAGSTER_PROJECT` is re-exported for the docs and tests that name the governed

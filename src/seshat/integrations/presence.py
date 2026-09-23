@@ -131,3 +131,38 @@ def _distribution_present(env: Path, dist: str) -> bool:
         for site in env.glob(pattern)
         for info in site.glob("*.dist-info")
     )
+
+
+def _distribution_version(env: Path, dist: str) -> str | None:
+    """The version in `dist`'s `name-version.dist-info` directory, if installed."""
+    canonical = _canonical_dist(dist)
+    for pattern in _SITE_PACKAGES:
+        for site in env.glob(pattern):
+            for info in site.glob("*.dist-info"):
+                name, _, version = info.name[: -len(".dist-info")].partition("-")
+                if _canonical_dist(name) == canonical:
+                    return version or None
+    return None
+
+
+def _marker_text(marker: Path) -> str | None:
+    try:
+        return marker.read_text(encoding="utf-8").strip() or None
+    except OSError:
+        return None
+
+
+def installed_coordinate(root: Path, item: Component, profile: str) -> str | None:
+    """The coordinate actually on disk: a ref, a version, or None when unknown.
+
+    A skill bundle's marker records the ref it was cloned at, an MCP marker the
+    registered version, and a distribution's metadata directory its version.
+    Bundled artifacts ship with Seshat and carry no coordinate of their own.
+    """
+    if item.source_type is SourceType.BUNDLED:
+        return None
+    if item.mcp_server:
+        return _marker_text(root / NODE_DIR / item.id / ".seshat-installed")
+    if item.source_type is SourceType.GITHUB:
+        return _marker_text(root / _skill_dir(item) / ".seshat-installed")
+    return _distribution_version(root / _profile_env(profile), item.coordinate)

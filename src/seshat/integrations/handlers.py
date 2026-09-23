@@ -29,6 +29,7 @@ from seshat.integrations.presence import (
     _profile_env,
     _skill_dir,
     _venv_python,
+    installed_coordinate,
 )
 from seshat.integrations.procs import _detail, remove_tree
 from seshat.integrations.resolvers import Resolution
@@ -218,6 +219,19 @@ _MCP_ENTRIES = {
 }
 
 
+def _own_older_entry(req: _Install, config: dict) -> bool:
+    """Whether the registered entry is exactly the one THIS installer wrote.
+
+    Only an entry byte-identical to our own entry for the version our marker
+    records may be replaced; anything an operator changed stays a conflict.
+    """
+    previous = installed_coordinate(req.root, req.item, req.profile)
+    if not previous:
+        return False
+    existing = config.get("mcpServers", {}).get(req.item.id)
+    return existing == _MCP_ENTRIES[req.item.id](previous)
+
+
 def _install_mcp_server(req: _Install) -> tuple[str, str]:
     """Register an MCP server at an exact version, refusing a name conflict.
 
@@ -236,6 +250,8 @@ def _install_mcp_server(req: _Install) -> tuple[str, str]:
     except mcp_config.McpConfigError as exc:
         return FAILED, str(exc)
     verdict = mcp_config.classify(config, item.id, entry)
+    if verdict == mcp_config.CONFLICT and _own_older_entry(req, config):
+        verdict = None  # our own registration at the previous version: upgrade it
     if verdict == mcp_config.PRESENT:
         return PRESENT, f"already registered at {version}"
     if verdict == mcp_config.CONFLICT:

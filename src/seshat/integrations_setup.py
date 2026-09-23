@@ -212,7 +212,7 @@ def needs_operator_action(results: list[IntegrationResult]) -> bool:
 
 
 def _summary(results: list[IntegrationResult]) -> str:
-    if any(item.status == "planned" for item in results):
+    if any(item.status in {"planned", "upgrade"} for item in results):
         return "Dry run only. Approve explicitly (--refresh --apply) to install."
     if needs_operator_action(results):
         return "Some integrations need operator action; no readiness stage is changed."
