@@ -125,11 +125,7 @@ def format_digest(findings: list[Finding], prog: str = "seshat") -> str:
         for f in group:
             lines.append(f"  [{f.severity.value}] {f.message} ({f.locator})")
         lines.append(f"  hint: {repair_hint(rule_id)}")
-    lines.append(
-        f"\n(advisory digest -- the `{prog} check` gate exit code remains the "
-        "authority; run it to gate.)"
-    )
-    return "\n".join(lines)
+    return "\n".join(lines) + _GATE_POINTER.format(prog=prog)
 
 
 #: Non-mutating repair guidance, keyed by the rule area that raised the finding.
@@ -215,6 +211,23 @@ def next_allowed_action(repo_root: Path) -> str:
     return str(action) if action else "(no action available)"
 
 
+def build_json_digest(
+    findings: list[Finding], repo_root: Path, prog: str = "seshat"
+) -> dict[str, object]:
+    """The ``--format json`` document: the digest plus the Principle-I marker.
+
+    The text surface never drops the gate pointer (even when clean); the machine
+    surface must not either, or ``finding_count: 0`` reads as a gate pass
+    (audit F148). Same next action as the text digest.
+    """
+    return {
+        **build_digest_payload(findings),
+        "advisory": True,
+        "gate_authority": f"{prog} check",
+        "next_allowed_action": next_allowed_action(repo_root),
+    }
+
+
 def format_digest_with_next_action(
     findings: list[Finding], repo_root: Path, prog: str = "seshat"
 ) -> str:
@@ -268,7 +281,7 @@ def run_doctor(
     if output_format == "json":
         import json
 
-        print(json.dumps(build_digest_payload(findings), indent=2))
+        print(json.dumps(build_json_digest(findings, repo_root, prog), indent=2))
     else:
         print(format_digest_with_next_action(findings, repo_root, prog))
     actionable = [
