@@ -151,3 +151,43 @@ def test_invalid_json_raises(tmp_path: Path) -> None:
     vj.write_text("{not json")
     with pytest.raises(PbirFormatError, match="valid JSON"):
         apply_visual_format(vj, {"objects": {"legend": {"show": True}}})
+
+
+# --- F141: a measure-bound property is a data binding, even under force ------
+
+_MEASURE_TITLE = {
+    "expr": {
+        "Measure": {
+            "Expression": {"SourceRef": {"Entity": "Sales"}},
+            "Property": "Dynamic Title",
+        }
+    }
+}
+
+
+def _with_measure_title(tmp: Path) -> Path:
+    vj = _copy(tmp)
+    doc = json.loads(vj.read_text(encoding="utf-8"))
+    vco = doc["visual"].setdefault("visualContainerObjects", {})
+    vco["title"] = [{"properties": {"text": _MEASURE_TITLE}}]
+    vj.write_text(json.dumps(doc), encoding="utf-8")
+    return vj
+
+
+def test_force_never_overwrites_a_measure_bound_property(tmp_path: Path) -> None:
+    vj = _with_measure_title(tmp_path)
+    before = vj.read_text(encoding="utf-8")
+    fmt = {"visualContainerObjects": {"title": {"text": "Sales"}}}
+    with pytest.raises(PbirFormatError, match="data binding"):
+        apply_visual_format(vj, fmt, force=True)
+    assert vj.read_text(encoding="utf-8") == before
+
+
+def test_non_ascii_title_is_written_verbatim(tmp_path: Path) -> None:
+    vj = _copy(tmp_path)
+    arabic = "\u0645\u0628\u064a\u0639\u0627\u062a"
+    fmt = {"objects": {"labels": {"text": arabic}}}
+    apply_visual_format(vj, fmt)
+    raw = vj.read_text(encoding="utf-8")
+    assert arabic in raw
+    assert "\\u0645" not in raw  # not ASCII-escaped
