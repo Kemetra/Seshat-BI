@@ -418,7 +418,7 @@ def test_s4b_qualified_alter_column_outside_txn_still_warns(tmp_path: Path) -> N
 
 
 def test_s4b_bronze_drop_after_psql_metacommand_still_errors(tmp_path: Path) -> None:
-    """#442 follow-up (Codex P1): a line-oriented psql meta-command (`\set
+    r"""#442 follow-up (Codex P1): a line-oriented psql meta-command (`\set
     ON_ERROR_STOP on`) carries no `;`, so a following `DROP TABLE bronze.<t>` must
     NOT be mistaken for a sub-clause and skipped -- that would let an unguarded
     source-of-truth deletion pass the gate. warehouse/README.md applies these files
@@ -426,7 +426,7 @@ def test_s4b_bronze_drop_after_psql_metacommand_still_errors(tmp_path: Path) -> 
     query buffer, so it is not a terminator; the statement-open tracker treats the
     DROP as a new statement (no DDL statement is open) and still fires the bronze
     ERROR."""
-    sql = "\set ON_ERROR_STOP on\nDROP TABLE bronze.raw_sales;\n"
+    sql = "\\set ON_ERROR_STOP on\nDROP TABLE bronze.raw_sales;\n"
     rel = _write(tmp_path, "warehouse/error_s4b_psql_bronze.sql", sql)
     findings = list(s4b_guard_form(_ctx(tmp_path, rel)))
     s4b = [f for f in findings if f.rule_id == "S4b"]
