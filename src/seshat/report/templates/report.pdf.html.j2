@@ -8,8 +8,8 @@
 {% extends "report.html.j2" %}
 {% import "_chart.j2" as charts %}
 {% block styles %}
-  <style>{{ screen_stylesheet }}</style>
-  <style>{{ print_stylesheet }}</style>
+  <style>{% include "report.css" %}</style>
+  <style>{% include "report.print.css" %}</style>
 {% endblock %}
 {% block body %}
 {% for section in sections %}

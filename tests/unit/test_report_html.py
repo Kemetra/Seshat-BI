@@ -223,3 +223,15 @@ sections:
     assert 'id="title-second"' in document
     assert document.count('aria-labelledby="title-first"') == 1
     assert "title-bar" not in document
+
+
+def test_inlined_stylesheet_is_not_html_escaped(tmp_path: Path) -> None:
+    """#738: entities are not decoded inside <style>, so escaped quotes break
+    the RTL selector and the font stack."""
+    from seshat.report.html import HtmlReportRenderer
+
+    bundle, layout = _artifacts(tmp_path)
+    document = HtmlReportRenderer().render(bundle, layout, _vocab("en")).document
+    assert '.report[dir="rtl"]' in document
+    assert '"Segoe UI"' in document
+    assert "&#34;" not in document.split("</style>")[0]
