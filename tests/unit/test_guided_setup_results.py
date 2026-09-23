@@ -22,12 +22,20 @@ from tests.unit._curated_stack_fixtures import (
     FakeGitHub,
     FakeNpm,
     FakePypi,
+    _grant_provisioning,
     _no_network,
     _release,
     _tools_on_path,
 )
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.fixture(autouse=True)
+def _provisioning_granted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests exercise authorized installs; see `_grant_provisioning`."""
+    _grant_provisioning(monkeypatch)
+
 
 _SCOPE = ("connectorx", "powerbi-modeling-mcp", "fabric-skills")
 

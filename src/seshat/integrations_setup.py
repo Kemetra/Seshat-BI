@@ -8,7 +8,8 @@ Python import surface without maintaining another installer.
 
 The default compatibility call is a network-free, write-free plan. A direct
 caller requesting apply must supply exact resolvers explicitly; the facade
-never creates live resolvers or infers approval.
+never creates live resolvers or infers approval; the installer enforces the
+committed provisioning approval itself.
 """
 
 from __future__ import annotations
@@ -167,7 +168,9 @@ def setup_integrations(
 
     ``apply=True`` is an explicit write request, but it is not permission to
     discover moving coordinates. Exact resolvers must be supplied by the
-    caller, matching the CLI's separate ``--refresh`` gate.
+    caller, matching the CLI's separate ``--refresh`` gate. Nor is it authority:
+    ``installer.apply`` itself refuses unless a committed named-human approval
+    covers every component, so this facade cannot install on a caller's word.
     """
 
     root = Path(root).resolve()

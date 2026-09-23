@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -97,6 +97,10 @@ class SetupOutcome:
     lock_written: Path | None = None
     notes: list[str] = field(default_factory=list)
     discovery: list[SkillDiscovery] = field(default_factory=list)
+    # The exact resolutions this outcome reports, keyed by component id. A plan
+    # a human confirmed is passed back to `apply(pinned=...)` so the install is
+    # bound to what was shown rather than to a fresh lookup (not rendered).
+    resolutions: dict[str, Resolution] = field(default_factory=dict)
 
     @property
     def needs_action(self) -> bool:
@@ -250,17 +254,7 @@ def plan(
     except LockError as exc:
         # Fail closed: a lock we cannot trust stops the run rather than being
         # treated as absent.
-        outcome.rows.append(
-            ComponentPlan(
-                component="lock",
-                profile=label,
-                channel="-",
-                pinned="-",
-                source=LOCK_FILE.as_posix(),
-                status=FAILED,
-                detail=str(exc),
-            )
-        )
+        outcome.rows.append(_refusal_row("lock", label, LOCK_FILE.as_posix(), str(exc)))
         return outcome
 
     resolutions = _resolve_all(components, resolvers, lock)
@@ -269,6 +263,9 @@ def plan(
         python_version=resolvers.python_version if resolvers else None,
     )
     outcome.notes.extend(verdict.reasons)
+    outcome.resolutions = {
+        item.id: resolved for item, resolved in zip(components, verdict.resolutions)
+    }
 
     envs = {item.id: _env_profile(root, item, profile, derived) for item in components}
     for item, resolved in zip(components, verdict.resolutions):
@@ -290,6 +287,19 @@ def plan(
         )
     )
     return outcome
+
+
+def _refusal_row(component: str, label: str, source: str, detail: str) -> ComponentPlan:
+    """A run-level FAILED row that stops the run before any component is touched."""
+    return ComponentPlan(
+        component=component,
+        profile=label,
+        channel="-",
+        pinned="-",
+        source=source,
+        status=FAILED,
+        detail=detail,
+    )
 
 
 def _resolve_all(
@@ -439,12 +449,20 @@ def apply(
     discovery_runner=None,
     harness_roots: dict[str, Path] | None = None,
     discovery_tool_lookup=None,
+    pinned: Mapping[str, Resolution] | None = None,
 ) -> SetupOutcome:
     """Install the approved plan into isolation, validate, then write the lock.
 
     `resolvers` is REQUIRED: installing without having resolved exact
     coordinates is the thing this whole module exists to prevent. `runner` is
     the subprocess seam, injected so tests never spawn a real clone or venv.
+
+    Authority is checked HERE, at the mutation site, against the component set
+    this function derives itself: a committed named-human approval must cover
+    every component, or nothing runs (the #671 argument -- a gate that lives in
+    a caller is a precondition the caller supplies). `pinned` is the confirmed
+    plan's resolutions; when given, apply installs exactly those coordinates and
+    refuses any component the plan did not show, instead of re-resolving live.
     """
     root = Path(root).resolve()
     runner = runner or _run
@@ -453,23 +471,17 @@ def apply(
     outcome = SetupOutcome(profile=label)
     components = components if derived else profile_components(profile)
 
-    try:
-        read_lock(root)
-    except LockError as exc:
-        outcome.rows.append(
-            ComponentPlan(
-                component="lock",
-                profile=label,
-                channel="-",
-                pinned="-",
-                source=LOCK_FILE.as_posix(),
-                status=FAILED,
-                detail=str(exc),
-            )
-        )
+    refusal = _authorization_refusal(root, components, label)
+    if refusal is None:
+        try:
+            read_lock(root)
+        except LockError as exc:
+            refusal = _refusal_row("lock", label, LOCK_FILE.as_posix(), str(exc))
+    if refusal is not None:
+        outcome.rows.append(refusal)
         return outcome
 
-    resolutions = [resolve(item, resolvers) for item in components]
+    resolutions = [_apply_resolution(item, resolvers, pinned) for item in components]
     verdict = apply_policy(
         list(zip(components, resolutions)),
         python_version=resolvers.python_version,
@@ -513,6 +525,51 @@ def apply(
         )
     )
     return outcome
+
+
+def _authorize(root: Path, component_ids: tuple[str, ...]):
+    """The committed provisioning-approval verdict for exactly these components."""
+    from seshat.integrations.approval import evaluate  # lazy: HEAD + yaml readers
+
+    return evaluate(root, component_ids)
+
+
+def _authorization_refusal(
+    root: Path, components: tuple[Component, ...], label: str
+) -> ComponentPlan | None:
+    """A FAILED `approval` row unless a committed approval covers `components`."""
+    from seshat.integrations.approval import PROVISIONING_APPROVALS_RELPATH
+
+    verdict = _authorize(root, tuple(item.id for item in components))
+    if verdict.authorized:
+        return None
+    return _refusal_row(
+        "approval",
+        label,
+        PROVISIONING_APPROVALS_RELPATH,
+        "provisioning needs a committed named-human approval -- "
+        f"{verdict.next_action}; nothing was installed",
+    )
+
+
+def _apply_resolution(
+    item: Component,
+    resolvers: Resolvers,
+    pinned: Mapping[str, Resolution] | None,
+) -> Resolution:
+    """The confirmed plan's resolution for `item`, or a live one when unbound."""
+    if pinned is None:
+        return resolve(item, resolvers)
+    confirmed = pinned.get(item.id)
+    if confirmed is not None:
+        return confirmed
+    return Resolution(
+        component_id=item.id,
+        ok=False,
+        channel=item.channel,
+        status=FAILED,
+        reason="not part of the confirmed plan; re-run the plan and confirm it",
+    )
 
 
 def verified_present(root: Path, item: Component) -> bool:

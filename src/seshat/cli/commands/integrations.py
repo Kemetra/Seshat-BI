@@ -245,7 +245,14 @@ def integrations_main(args: Namespace) -> int:
             )
             return 2
         try:
-            apply_kwargs = {"profile": profile, "resolvers": resolvers}
+            # `pinned` binds the install to the resolutions the operator just
+            # confirmed; without it apply would re-resolve live and could install
+            # a release published after the prompt was answered.
+            apply_kwargs = {
+                "profile": profile,
+                "resolvers": resolvers,
+                "pinned": getattr(outcome, "resolutions", None),
+            }
             if harnesses:
                 apply_kwargs["harnesses"] = harnesses
             outcome = apply_profile(root, **apply_kwargs)

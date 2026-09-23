@@ -157,6 +157,25 @@ def _tools_on_path(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(installer.shutil, "which", lambda name: f"/bin/{name}")
 
 
+def _grant_provisioning(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stand in a committed provisioning approval for INSTALL-BEHAVIOUR tests.
+
+    `installer.apply` consults the committed approval at the mutation site. The
+    tests using this helper are about what an authorized install does on disk,
+    on a plain tmp_path with no git history, so the gate is replaced at the one
+    name `apply` looks up. That the gate itself refuses without a committed
+    approval is proved against a real repository in
+    test_integrations_apply_gate.py.
+    """
+    from seshat.integrations.approval import ApprovalVerdict
+
+    monkeypatch.setattr(
+        installer,
+        "_authorize",
+        lambda root, ids: ApprovalVerdict(True, "authorized", "", owner="T (gov)"),
+    )
+
+
 def _install_mcp(
     root: Path, monkeypatch: pytest.MonkeyPatch | None = None
 ) -> installer.SetupOutcome:
