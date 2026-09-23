@@ -289,6 +289,52 @@ def _find_table_header(lines: list[str]) -> tuple[str | None, int]:
     return None, 0
 
 
+#: A property line at the first child level: ``key: value``, an assignment-
+#: shaped property (``annotation`` / ``changedProperty`` / ``extendedProperty``),
+#: or a bare flag. Desktop writes all of these under measures and columns.
+_PROPERTY_LINE = re.compile(
+    r"(?:\w+:\s|(?:annotation|changedProperty|extendedProperty)\s)"
+)
+_BARE_FLAGS = frozenset({"isHidden", "isKey", "isAvailableInMdx", "isNullable"})
+
+
+def _is_property_line(child: str) -> bool:
+    return child in _BARE_FLAGS or _PROPERTY_LINE.match(child) is not None
+
+
+def _split_block_body(
+    lines: list[str], i: int, n: int, ind: int
+) -> tuple[list[str], list[str], int]:
+    """Split a measure/column block into (expression lines, property lines, next).
+
+    TMDL separates an expression continuation (indented deeper) from the
+    block's properties (first child level). A property at the first child
+    level ends the expression, and anything deeper that follows belongs to
+    THAT property (a multi-line ``extendedProperty`` value), not to the body.
+    Folding ``isHidden`` / ``changedProperty`` / ``annotation`` lines into the
+    body made a hidden duplicate measure look different to D3 and a
+    visibility toggle read as a logic change in X-Ray diff.
+
+    ``key: value`` lines are never expression at any depth (unchanged rule).
+    """
+    expr: list[str] = []
+    props: list[str] = []
+    in_property = False
+    j = i + 1
+    while _continues_block(lines, j, n, ind):
+        raw = lines[j]
+        child = raw.strip()
+        j += 1
+        if not child:
+            continue
+        if _indent(raw) <= ind + 1:
+            in_property = _is_property_line(child)
+            (props if in_property else expr).append(child)
+        elif not in_property and not re.match(r"\w+:\s", child):
+            expr.append(child)
+    return expr, props, j
+
+
 def _parse_measure_block(
     lines: list[str], i: int, n: int, match: re.Match[str]
 ) -> tuple[TmdlMeasure, int]:
@@ -305,20 +351,15 @@ def _parse_measure_block(
     """
     ind = _indent(lines[i])
     name = match.group("name").strip()
-    expr_parts = [match.group("expr").rstrip()]
+    body, prop_lines, j = _split_block_body(lines, i, n, ind)
+    expr_parts = [match.group("expr").rstrip(), *body]
     props: dict[str, str] = {}
-    j = i + 1
-    while _continues_block(lines, j, n, ind):
-        child = lines[j].strip()
+    for child in prop_lines:
         pm = re.match(
             r"(?P<k>displayFolder|formatString|description):\s*(?P<v>.+)$", child
         )
         if pm:
             props[pm.group("k")] = pm.group("v").strip()
-        elif child and not re.match(r"\w+:\s", child):
-            # continuation of a multi-line expression
-            expr_parts.append(child)
-        j += 1
     measure = TmdlMeasure(
         name=name,
         # Continuation lines are joined with "\n", NOT " ": a `//` line comment
@@ -356,24 +397,18 @@ def _parse_column_block(
     # continuation lines, so an empty header expression must still collect them
     # the way _parse_measure_block does (PR #551 review).
     is_calculated = match.groupdict().get("expr") is not None
+    body, prop_lines, j = _split_block_body(lines, i, n, ind)
     expr_parts = [(match.groupdict().get("expr") or "").strip()]
+    if is_calculated:
+        expr_parts.extend(body)  # continuation of a multi-line DAX body
     props: dict[str, str] = {}
-    is_key = False
-    is_hidden = False
-    j = i + 1
-    while _continues_block(lines, j, n, ind):
-        child = lines[j].strip()
+    for child in prop_lines:
         pm = re.match(r"(?P<k>dataType|summarizeBy|sortByColumn):\s*(?P<v>.+)$", child)
         if pm:
             props[pm.group("k")] = pm.group("v").strip()
-        # ``isKey`` / ``isHidden`` are bare flag lines (no value) in TMDL.
-        if child == "isKey":
-            is_key = True
-        if child == "isHidden":
-            is_hidden = True
-        elif is_calculated and _is_dax_continuation(child, pm):
-            expr_parts.append(child)  # continuation of a multi-line DAX body
-        j += 1
+    # ``isKey`` / ``isHidden`` are bare flag lines (no value) in TMDL.
+    is_key = "isKey" in prop_lines
+    is_hidden = "isHidden" in prop_lines
     calc_expr = "\n".join(p for p in expr_parts if p).strip() or None
     column = TmdlColumn(
         name=name,
@@ -424,17 +459,6 @@ def _is_column_header(stripped: str) -> re.Match[str] | None:
     if quoted is not None:
         return quoted
     return re.match(r"column\s+(?P<name>[^'=\n]+?)\s*(?:=\s*(?P<expr>.*))?$", stripped)
-
-
-def _is_dax_continuation(child: str, matched_property: re.Match[str] | None) -> bool:
-    """True when a block line continues a multi-line DAX body.
-
-    A continuation is any non-blank line that is neither a recognized property
-    nor any other ``word: value`` property line.
-    """
-    if matched_property is not None or not child:
-        return False
-    return re.match(r"\w+:\s", child) is None
 
 
 def _is_hierarchy_header(stripped: str) -> re.Match[str] | None:

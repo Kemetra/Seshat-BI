@@ -257,3 +257,75 @@ def test_parse_tmdl_data_category_defaults_none() -> None:
     table = parse_tmdl("table Sales\n\tcolumn Amount\n\t\tdataType: decimal\n")
     assert table is not None
     assert table.data_category is None
+
+
+# ---------------------------------------------------------------------------
+# Desktop-saved property lines are NOT part of a measure / calc-column body
+# ---------------------------------------------------------------------------
+
+_DESKTOP_MEASURE = (
+    "table Sales\n"
+    "\tmeasure Hidden = SUM(Sales[Amount])\n"
+    "\t\tformatString: 0\n"
+    "\t\tisHidden\n"
+    "\t\tlineageTag: 1b2c\n"
+    "\t\tchangedProperty = IsHidden\n"
+    '\t\tannotation PBI_FormatHint = {"isGeneralNumber":true}\n'
+    "\t\textendedProperty X =\n"
+    "\t\t\t\t{\n"
+    '\t\t\t\t  "k": 1\n'
+    "\t\t\t\t}\n"
+    "\tmeasure Visible = SUM(Sales[Amount])\n"
+    "\t\tformatString: 0\n"
+)
+
+
+@pytest.mark.unit
+def test_measure_property_lines_are_not_folded_into_the_expression() -> None:
+    table = parse_tmdl(_DESKTOP_MEASURE)
+    assert table is not None
+    by_name = {m.name: m for m in table.measures}
+    assert by_name["Hidden"].expression == "SUM(Sales[Amount])"
+    assert by_name["Hidden"].format_string == "0"
+
+
+@pytest.mark.unit
+def test_a_hidden_duplicate_normalizes_to_the_same_body() -> None:
+    """D3 duplicate detection compares normalized bodies; a visibility flag
+    must not make two identical measures look different."""
+    table = parse_tmdl(_DESKTOP_MEASURE)
+    assert table is not None
+    bodies = {normalize_measure_body(m.expression) for m in table.measures}
+    assert len(bodies) == 1
+
+
+@pytest.mark.unit
+def test_a_multiline_measure_body_still_ends_at_its_first_property() -> None:
+    text = (
+        "table Sales\n"
+        "\tmeasure Margin =\n"
+        "\t\t\tVAR x = SUM(Sales[Amount])\n"
+        "\t\t\tRETURN x\n"
+        "\t\tisHidden\n"
+        "\t\tannotation A = 1\n"
+    )
+    table = parse_tmdl(text)
+    assert table is not None
+    assert table.measures[0].expression == "VAR x = SUM(Sales[Amount])\nRETURN x"
+
+
+@pytest.mark.unit
+def test_calc_column_property_lines_are_not_folded_into_the_expression() -> None:
+    text = (
+        "table Sales\n"
+        "\tcolumn Margin = [Price] - [Cost]\n"
+        "\t\tdataType: decimal\n"
+        "\t\tisKey\n"
+        "\t\tchangedProperty = DataType\n"
+        "\t\tannotation SummarizationSetBy = Automatic\n"
+    )
+    table = parse_tmdl(text)
+    assert table is not None
+    column = table.columns[0]
+    assert column.expression == "[Price] - [Cost]"
+    assert column.is_key is True
