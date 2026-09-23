@@ -57,6 +57,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import tempfile
 from dataclasses import dataclass
@@ -206,6 +207,28 @@ class _StagedBatch:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8", newline="\n")
 
+    def write_new(self, rel_path: Path, text: str) -> None:
+        """Stage a NEW element, refusing to replace a different existing one.
+
+        Ids are minted deterministically, so a rerun with identical inputs
+        re-stages identical content (idempotent). A file already present under
+        the minted id with DIFFERENT content -- a hand-edited page, or a new
+        display name for the same slug -- is refused rather than replaced with
+        a blank shell.
+        """
+        target = self.staging_root / rel_path
+        if target.is_file():
+            try:
+                existing = json.loads(target.read_text(encoding="utf-8-sig"))
+            except (OSError, json.JSONDecodeError):
+                existing = None
+            if existing != json.loads(text):
+                raise PbirCompileError(
+                    f"{rel_path} already exists with different content; refusing "
+                    "to overwrite it"
+                )
+        self.write(rel_path, text)
+
     def read_json(self, rel_path: Path) -> Any:
         target = self.staging_root / rel_path
         try:
@@ -217,20 +240,59 @@ class _StagedBatch:
             ) from exc
 
     def commit(self, written_rel_paths: list[Path]) -> list[Path]:
-        """Move the staged tree over the real report dir; return real written paths.
+        """Publish the staged files into the real report dir; return their paths.
 
-        Only called after the whole batch validates -- this is the one moment the
-        real report directory changes."""
+        Only called after the whole batch validates. TWO phases, so a failure
+        cannot leave half a batch behind: every staged file is first copied to
+        a temporary sibling beside its destination (the step that can fail on
+        permissions or space), and only once all copies exist is each one
+        renamed into place with ``os.replace``. A failure in the copy phase
+        removes the temporaries and any directories it created, leaving the
+        report byte-identical."""
         _validate_staged_batch(self.staging_root)
-        for rel in written_rel_paths:
-            src = self.staging_root / rel
-            dst = self.report_dir / rel
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(src, dst)
+        pending: list[tuple[Path, Path]] = []
+        created: list[Path] = []
+        try:
+            for rel in written_rel_paths:
+                dst = self.report_dir / rel
+                created.extend(_make_parents(dst.parent))
+                temporary = dst.with_name(f".{dst.name}.pbir_compile.tmp")
+                pending.append((temporary, dst))
+                shutil.copyfile(self.staging_root / rel, temporary)
+        except OSError as exc:
+            _discard(pending, created)
+            raise PbirCompileError(
+                f"could not stage the batch for commit: {exc}"
+            ) from exc
+        for temporary, dst in pending:
+            os.replace(temporary, dst)
         return [self.report_dir / rel for rel in written_rel_paths]
 
     def cleanup(self) -> None:
         shutil.rmtree(self._tmp, ignore_errors=True)
+
+
+def _make_parents(directory: Path) -> list[Path]:
+    """Create ``directory`` and missing parents; return those created, deepest last."""
+    missing: list[Path] = []
+    current = directory
+    while not current.exists():
+        missing.append(current)
+        current = current.parent
+    for path in reversed(missing):
+        path.mkdir()
+    return list(reversed(missing))
+
+
+def _discard(pending: list[tuple[Path, Path]], created: list[Path]) -> None:
+    """Undo a failed copy phase: temporaries first, then created directories."""
+    for temporary, _dst in pending:
+        temporary.unlink(missing_ok=True)
+    for directory in reversed(created):
+        try:
+            directory.rmdir()
+        except OSError:
+            pass
 
 
 def _within(root: Path, target: Path) -> bool:
@@ -242,11 +304,12 @@ def _within(root: Path, target: Path) -> bool:
 
 
 def _validate_staged_batch(staging_root: Path) -> None:
-    """Re-parse and round-trip every JSON file that was just written.
+    """Re-parse every staged JSON file and require a top-level JSON object.
 
     A hook point tests may monkeypatch to inject a validation-phase failure and
-    prove no-partial-write -- the real per-file check is: valid JSON, and
-    re-dumping it is byte-identical (round-trip stability)."""
+    prove no-partial-write. Every PBIR definition document is an object; the
+    earlier round-trip comparison (dump, load, dump) could never differ and so
+    checked nothing."""
     for path in staging_root.rglob("*.json"):
         try:
             with path.open(encoding="utf-8-sig") as fh:
@@ -255,9 +318,8 @@ def _validate_staged_batch(staging_root: Path) -> None:
             raise PbirCompileError(
                 f"staged {path.name} is not valid JSON ({exc.__class__.__name__})"
             ) from exc
-        text = _dump(doc)
-        if _dump(json.loads(text)) != text:
-            raise PbirCompileError(f"staged {path.name} is not round-trip stable")
+        if not isinstance(doc, dict):
+            raise PbirCompileError(f"staged {path.name} is not a JSON object")
 
 
 def create_page(
@@ -279,7 +341,7 @@ def create_page(
         "width": 1280,
     }
     page_rel = Path("definition") / "pages" / page_name / "page.json"
-    batch.write(page_rel, _dump(page_doc))
+    batch.write_new(page_rel, _dump(page_doc))
 
     pages_rel = Path("definition") / "pages" / "pages.json"
     pages_doc = batch.read_json(pages_rel)
@@ -391,7 +453,7 @@ def create_visual_container(
         / visual_name
         / "visual.json"
     )
-    batch.write(visual_rel, _dump(visual_doc))
+    batch.write_new(visual_rel, _dump(visual_doc))
     return visual_name, [visual_rel]
 
 
