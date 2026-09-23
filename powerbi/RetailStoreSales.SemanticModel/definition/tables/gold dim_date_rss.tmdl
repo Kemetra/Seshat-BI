@@ -56,6 +56,7 @@ table 'gold dim_date_rss'
 		lineageTag: 3d4e7f60-8192-4dae-bfc2-3b4c5d6e7f80
 		summarizeBy: none
 		sourceColumn: month_name
+		sortByColumn: month
 
 		annotation SummarizationSetBy = Automatic
 

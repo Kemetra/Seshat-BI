@@ -40,6 +40,11 @@ _GOLDEN_SQL_DIR = Path(__file__).parent.parent / "fixtures" / "golden" / "sql"
 _LOCKED_MIGRATIONS = (
     "0003_create_silver_retail_store_sales.sql",
     "0004_create_gold_retail_store_sales_star.sql",
+    # Follow-up migrations for already-applied 0004/0005/0006/0008 (the applied
+    # files are never edited in place); locked so a later edit is deliberate.
+    "0009_harden_gold_finance_gl_star.sql",
+    "0010_fix_gold_retail_store_sales_date_labels.sql",
+    "0011_enforce_silver_demo_sample_orders_pk.sql",
 )
 
 
