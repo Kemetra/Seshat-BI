@@ -165,3 +165,21 @@ def test_load_live_leg_redacts_dsn_on_connect_failure(tmp_path, monkeypatch, cap
     assert "secretuser" not in out
     assert "secretpass" not in out
     assert "unreachable.example" not in out
+
+
+def test_reachable_database_never_passes_through_an_unvalidated_gold_pass():
+    """#738: reachability is not live validation; gold_ready+ never reads pass
+    from the committed fixture without a validate result."""
+    from seshat.demo.run import compute_offline_status
+
+    committed = {
+        "stages": {
+            "silver_ready": {"status": "pass"},
+            "gold_ready": {"status": "pass"},
+            "semantic_model_ready": {"status": "pass"},
+        }
+    }
+    snapshot = compute_offline_status(committed, live_reachable=True)
+    assert snapshot["stages"]["silver_ready"]["status"] == "pass"
+    assert snapshot["stages"]["gold_ready"]["status"] == "blocked"
+    assert snapshot["stages"]["semantic_model_ready"]["status"] == "blocked"
