@@ -140,6 +140,14 @@ class McpSession:
                 )
             try:
                 frame = proto.decode_frame(line)
+            except proto.McpFrameTooLarge as exc:
+                # Fail FAST. This may be the reply we are waiting for; skipping
+                # it would wait out the deadline and report a stall for a call
+                # that completed.
+                raise SessionError(
+                    f"a vendor frame exceeded the limit while awaiting "
+                    f"{request_id}: {exc}"
+                ) from exc
             except proto.McpFrameError:
                 continue
             if frame.get("id") == request_id:
@@ -312,7 +320,7 @@ class SubprocessTransport:
         stream = self._proc.stdout
         try:
             if stream is not None:
-                for raw in stream:
+                while raw := _bounded_line(stream):
                     self._stdout_q.put(raw)
         except (OSError, ValueError):  # pragma: no cover - stream torn down
             pass
@@ -431,3 +439,21 @@ def _kill_tree(pid: int) -> None:
             os.killpg(pid, signal.SIGKILL)
     except (OSError, subprocess.SubprocessError):  # pragma: no cover
         pass
+
+
+def _bounded_line(stream: Any) -> bytes:
+    """One line, capped at ``MAX_FRAME_BYTES + 1`` bytes; ``b""`` at EOF.
+
+    ``for raw in stream`` buffered a whole line before the frame-size check
+    ever ran, so the cap bounded nothing. Here an over-long line is returned
+    TRUNCATED -- one byte past the cap, so :func:`protocol.decode_frame` still
+    classifies it as oversized -- and the rest of that line is drained and
+    discarded, so the next frame starts on a clean boundary.
+    """
+    limit = proto.MAX_FRAME_BYTES + 1
+    line = stream.readline(limit)
+    if len(line) < limit or line.endswith(b"\n"):
+        return line
+    while (rest := stream.readline(limit)) and not rest.endswith(b"\n"):
+        pass
+    return line

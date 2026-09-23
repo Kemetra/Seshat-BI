@@ -37,6 +37,7 @@ __all__ = [
     "MAX_FRAME_BYTES",
     "PROTOCOL_VERSION",
     "McpFrameError",
+    "McpFrameTooLarge",
     "ToolOutcome",
     "decode_frame",
     "encode_frame",
@@ -62,6 +63,16 @@ class McpFrameError(ValueError):
     """A vendor frame violated the JSON-RPC envelope."""
 
 
+class McpFrameTooLarge(McpFrameError):
+    """A frame exceeded :data:`MAX_FRAME_BYTES`.
+
+    A distinct TYPE because the session must not treat it like a log line: an
+    oversized frame may be the very reply being awaited, and skipping it turns
+    a completed call into a 900s "stall". Dispatch is on the type, never on
+    message text.
+    """
+
+
 def encode_frame(obj: dict[str, Any]) -> bytes:
     """One outbound frame: compact JSON plus the terminating newline."""
     return (json.dumps(obj) + "\n").encode("utf-8")
@@ -74,7 +85,7 @@ def _frame_text(line: bytes) -> str:
     validation -- transport here, JSON shape there.
     """
     if len(line) > MAX_FRAME_BYTES:
-        raise McpFrameError(f"frame exceeds {MAX_FRAME_BYTES} bytes")
+        raise McpFrameTooLarge(f"frame exceeds {MAX_FRAME_BYTES} bytes")
     text = line.decode("utf-8", errors="replace").strip()
     if not text:
         raise McpFrameError("empty frame")

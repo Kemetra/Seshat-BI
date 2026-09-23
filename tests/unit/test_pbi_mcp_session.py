@@ -388,6 +388,54 @@ def test_a_malformed_tools_list_reply_raises_rather_than_reading_as_empty():
 # --------------------------------------------------------------------------
 
 
+def test_an_oversized_reply_fails_fast_instead_of_stalling():
+    """A >1MB line was skipped like a log line, so the call waited out the
+    900s deadline and was recorded as a stall for a call that had completed."""
+
+    class _Oversize(FakeTransport):
+        def read_line(self) -> bytes:
+            if self.reads == 1:  # after the handshake frame
+                self.reads += 1
+                return b"x" * (protocol.MAX_FRAME_BYTES + 1)
+            return super().read_line()
+
+    # The valid reply queued AFTER the oversized line is what makes this
+    # non-vacuous: skipping the oversized frame would return it successfully.
+    transport = _Oversize([_init_reply(), _ok_reply(2, "done")])
+    sess = session.McpSession(transport)
+    sess.handshake()
+    with pytest.raises(session.SessionError) as raised:
+        sess.call("measure_operations", {"operation": "List"})
+    assert not isinstance(raised.value, session.SessionStalled)
+
+
+def test_the_pump_bounds_a_newline_less_line(tmp_path: Path) -> None:
+    """The cap must bind BEFORE the whole line is in memory, and the rest of
+    the long line must be drained so the next frame still arrives intact."""
+    child = tmp_path / "long.py"
+    size = protocol.MAX_FRAME_BYTES * 2
+    child.write_text(
+        chr(10).join(
+            [
+                "import sys",
+                f"sys.stdout.buffer.write(b'x' * {size} + b'\\n')",
+                "sys.stdout.buffer.write(b'next\\n')",
+                "sys.stdout.flush()",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    transport = session.SubprocessTransport(
+        [sys.executable, "-u", str(child)], tmp_path, _child_env(), read_timeout=20
+    )
+    try:
+        first = transport.read_line()
+        assert len(first) == protocol.MAX_FRAME_BYTES + 1
+        assert transport.read_line() == b"next\n"
+    finally:
+        transport.terminate()
+
+
 def _pid_alive(pid: int) -> bool:
     """Liveness without signalling: ``os.kill(pid, 0)`` TERMINATES on win32."""
     if sys.platform == "win32":
