@@ -1,5 +1,11 @@
 """PBIR blueprint-to-PBIR compiler (US7, ADR 0017 -- the creation primitive).
 
+**STATUS: LIBRARY ONLY, NOT WIRED.** No CLI verb, skill module, or other package
+module calls this compiler (only its tests do), so the gates below protect nothing
+a user can reach today: report creation is not an exposed capability. Wiring it
+behind an explicit verb with a capability-inventory entry -- or moving it out of
+the shipped package -- is an owner decision recorded against audit F226 / #740.
+
 Orchestrates the FOUR shipped authoring adapters (theme/format/background/geometry
 -- ``pbir_theme_apply.py`` / ``pbir_visual_format.py`` / ``pbir_page_background.py``
 / ``pbir_geometry.py``) and adds exactly ONE new capability those adapters
