@@ -658,3 +658,21 @@ def test_an_apply_records_the_runtime_build_that_ran(ready_repo: Path) -> None:
     assert payload["runtime_version"] == "0.5.0.0", (
         f"the resolved runtime version never reached the record: {payload}"
     )
+
+
+def test_a_vendor_failure_carries_the_vendor_diagnosis(ready_repo: Path) -> None:
+    """The runner builds a redacted transcript precisely so a vendor refusal
+    has a diagnosis. It must reach the report and the record, not be dropped
+    between the runner and the operator."""
+    report = _apply(ready_repo, mcp_runner=_mcp_session(returncode=1))
+
+    assert report.vendor_detail, "the vendor diagnosis was discarded"
+    assert "isError" in report.vendor_detail
+    payload = json.loads(report.evidence_path.read_text(encoding="utf-8"))  # type: ignore[union-attr]
+    assert payload["vendor_detail"] == report.vendor_detail
+
+
+def test_a_successful_apply_carries_no_vendor_detail(ready_repo: Path) -> None:
+    report = _apply(ready_repo)
+    assert report.succeeded, report.blockers
+    assert report.vendor_detail is None

@@ -215,6 +215,8 @@ class WriteReport:
     #: The vendor build that ran (issue #658); None if the runtime was never
     #: reached.
     runtime_version: str | None = None
+    #: The vendor's own diagnosis on a runtime failure, bounded and redacted.
+    vendor_detail: str | None = None
 
     @property
     def succeeded(self) -> bool:
@@ -246,6 +248,13 @@ class _Ending:
     #: The vendor build that ran, from the handshake (issue #658). None on every
     #: path that never reached the runtime -- honestly, since none measured it.
     runtime_version: str | None = None
+    #: The vendor's diagnosis, only on a runtime failure (see `_runtime_failure`).
+    vendor_detail: str | None = None
+
+
+#: Bound on the vendor diagnosis carried to the record and the report. The
+#: runner keeps a longer redacted tail; this is what an operator needs to read.
+VENDOR_DETAIL_CHARS = 2_000
 
 
 def _terminate(
@@ -271,6 +280,7 @@ def _terminate(
         rollback_guidance=ending.rollback_guidance,
         checks_skipped=ending.checks_skipped,
         runtime_version=ending.runtime_version,
+        vendor_detail=ending.vendor_detail,
     )
     path = evidence.finalize(repo_root, record)
     return WriteReport(
@@ -286,6 +296,7 @@ def _terminate(
         validation_failed=ending.validation_failed,
         checks_skipped=ending.checks_skipped,
         runtime_version=ending.runtime_version,
+        vendor_detail=ending.vendor_detail,
     )
 
 
@@ -326,6 +337,10 @@ def _runtime_failure(result, terminal, guidance: tuple[str, ...]) -> WriteReport
     not define for exit 1 (Codex review, PR #659).
     """
     indeterminate = result.mutation_attempted
+    # The runner already redacted this through BOTH layers; the evidence writer
+    # scrubs it again. Carried so a vendor refusal reaches the operator with
+    # its diagnosis rather than as a bare blocker id.
+    detail = (result.output or "").strip()[-VENDOR_DETAIL_CHARS:] or None
     return terminal(
         exit_code=EXIT_INDETERMINATE if indeterminate else EXIT_REFUSED,
         outcome="blocked",
@@ -334,6 +349,7 @@ def _runtime_failure(result, terminal, guidance: tuple[str, ...]) -> WriteReport
         mutation_attempted=result.mutation_attempted,
         blockers=result.blockers or (runner.BLOCKER_RUNTIME_UNEXPLAINED,),
         rollback_guidance=guidance,
+        vendor_detail=detail,
     )
 
 

@@ -516,6 +516,23 @@ def test_json_verdict_names_its_target_and_mode() -> None:
     assert payload["mode"] == "readonly"
 
 
+def test_json_verdict_carries_the_scrubbed_vendor_detail() -> None:
+    from seshat.cli.commands import pbi_mcp as command
+
+    guid = "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
+    payload = command._write_leg_payload(
+        _write_report(
+            outcome="blocked",
+            exit_code=1,
+            vendor_detail=f"vendor error: folder {guid} is not a TMDL model",
+        )
+    )
+
+    assert payload["vendor_detail"].startswith("vendor error: folder")
+    assert guid not in payload["vendor_detail"]
+    assert command._write_leg_payload(_write_report())["vendor_detail"] is None
+
+
 def test_json_verdict_reports_which_checks_ran_and_failed() -> None:
     """`validation` must carry both halves, so a pass is distinguishable.
 

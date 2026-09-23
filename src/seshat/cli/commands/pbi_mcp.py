@@ -326,6 +326,12 @@ def _write_leg_payload(report) -> dict[str, object]:
             if getattr(report, "runtime_version", None)
             else None
         ),
+        # The vendor's own diagnosis on a runtime failure; null otherwise.
+        "vendor_detail": (
+            clean(report.vendor_detail)
+            if getattr(report, "vendor_detail", None)
+            else None
+        ),
     }
 
 
@@ -358,6 +364,8 @@ def _report_write_leg(args, report) -> int:
     )
     for blocker in report.blockers:
         print(f"{prog}:   blocker {clean(blocker)}", file=sys.stderr)
+    if getattr(report, "vendor_detail", None):
+        print(f"{prog}: vendor said: {clean(report.vendor_detail)}", file=sys.stderr)
     if report.rollback_guidance:
         print(f"{prog}: rollback:", file=sys.stderr)
         for line in report.rollback_guidance:

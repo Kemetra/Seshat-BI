@@ -685,6 +685,25 @@ def test_a_guid_target_on_a_refusal_path_is_scrubbed_and_recorded(
     assert GUID_REF not in history
 
 
+def test_vendor_detail_on_a_refusal_is_scrubbed_not_refused(tmp_path: Path) -> None:
+    """Vendor output is untrusted text; refusing on it would drop the record of
+    the very failure it diagnoses."""
+    path = evidence.finalize(
+        tmp_path,
+        _record(
+            outcome="blocked",
+            mutation_attempted=False,
+            blockers=("PBIMCP-RUN-05",),
+            vendor_detail=f"vendor error: workspace {GUID_REF} not found",
+        ),
+    )
+    written = path.read_text(encoding="utf-8")
+    assert GUID_REF not in written
+    payload = json.loads(written)
+    assert payload["vendor_detail"].startswith("vendor error: workspace")
+    assert payload["redactions_applied"]
+
+
 def test_a_guid_target_does_not_excuse_a_secret_elsewhere(tmp_path: Path) -> None:
     """Scrubbing the target id must not widen into scrubbing every field."""
     with pytest.raises(GeneratedSecretError):
