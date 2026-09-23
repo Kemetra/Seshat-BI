@@ -27,6 +27,28 @@ def _blocker(code: str, message: str, recovery: str) -> dict[str, str]:
     return {"code": code, "message": message, "recovery": recovery}
 
 
+#: Recovery text for an unexpected failure. This command writes no log file, so
+#: the blocker message itself names what failed (audit F149).
+_UNEXPECTED_RECOVERY = (
+    "Correct the cause named in the message and retry; this command writes no log file."
+)
+
+
+def _failure_summary(exc: BaseException, *, with_message: bool = True) -> str:
+    """The exception class, plus a scrubbed message when ``with_message``.
+
+    Callers near a live database pass ``with_message=False``: driver errors name
+    hosts and users in prose that DSN-derived redaction cannot see.
+    """
+    name = exc.__class__.__name__
+    if not with_message:
+        return name
+    from seshat.pbi_mcp_adapter.evidence import redact, scrub_secret_shaped
+
+    scrubbed, _ = scrub_secret_shaped(redact(" ".join(str(exc).split())[:200]))
+    return f"{name}: {scrubbed}" if scrubbed else name
+
+
 @dataclass(frozen=True, slots=True)
 class _Artifacts:
     """Where this run wrote its evidence and review, when it wrote them."""
@@ -147,15 +169,16 @@ def _validate_command(root: Path, args: argparse.Namespace) -> dict[str, object]
         return _spec_failure(exc.errors)
     except ValueError as exc:
         return _spec_failure((str(exc),))
-    except Exception:
+    except Exception as exc:
         return _response(
             analysis_id=None,
             outcome="failed",
             blockers=(
                 _blocker(
                     "STAT_RUNTIME_FAILED",
-                    "Statistical specification validation failed safely.",
-                    "Inspect local logs, correct the workspace, and retry.",
+                    "Statistical specification validation failed safely "
+                    f"({_failure_summary(exc)}).",
+                    _UNEXPECTED_RECOVERY,
                 ),
             ),
         )
@@ -225,10 +248,11 @@ def _gold_provider():
             config, statement_timeout_ms=limits.timeout_seconds * 1000
         )
         return GoldProvider(runner, dialect, limits=limits)
-    except Exception:
+    except Exception as exc:
         return _unavailable_provider(
             "STAT_PROVIDER_UNAVAILABLE",
-            "The read-only Gold database connection could not be opened.",
+            "The read-only Gold database connection could not be opened "
+            f"({_failure_summary(exc, with_message=False)}).",
             "Verify the gitignored .env, network access, and database availability.",
         )
 
@@ -283,11 +307,12 @@ def _loaded_spec(root: Path, raw: str):
         return None, _spec_failure(exc.errors)
     except ValueError as exc:
         return None, _spec_failure((str(exc),))
-    except Exception:
+    except Exception as exc:
         return None, _failed_response(
             None,
-            "The analysis specification could not be loaded safely.",
-            "Inspect local logs, correct the workspace, and retry.",
+            "The analysis specification could not be loaded safely "
+            f"({_failure_summary(exc)}).",
+            _UNEXPECTED_RECOVERY,
         )
 
 
@@ -342,11 +367,12 @@ def _evidence(root: Path, spec, args: argparse.Namespace):
                 ),
             ),
         )
-    except Exception:
+    except Exception as exc:
         return None, _failed_response(
             spec.analysis_id,
-            "Statistical execution failed safely.",
-            "Inspect local logs and retry after correcting the runtime.",
+            "Statistical execution failed safely "
+            f"({_failure_summary(exc, with_message=False)}).",
+            _UNEXPECTED_RECOVERY,
         )
 
 
@@ -372,14 +398,15 @@ def _run_command(root: Path, args: argparse.Namespace) -> dict[str, object]:
         return failure
     try:
         evidence_path, review_path = _write_artifacts(root, spec, evidence)
-    except Exception:
+    except Exception as exc:
         return _response(
             analysis_id=spec.analysis_id,
             outcome="failed",
             blockers=(
                 _blocker(
                     "STAT_ARTIFACT_WRITE_FAILED",
-                    "Schema-valid statistical artifacts could not be written.",
+                    "Schema-valid statistical artifacts could not be written "
+                    f"({_failure_summary(exc)}).",
                     "Correct the evidence contract or workspace permissions and retry.",
                 ),
             ),
@@ -489,15 +516,15 @@ def _render_command(root: Path, args: argparse.Namespace) -> dict[str, object]:
                 ),
             ),
         )
-    except Exception:
+    except Exception as exc:
         return _response(
             analysis_id=None,
             outcome="failed",
             blockers=(
                 _blocker(
                     "STAT_RUNTIME_FAILED",
-                    "Human review rendering failed safely.",
-                    "Inspect local logs, correct the workspace, and retry.",
+                    f"Human review rendering failed safely ({_failure_summary(exc)}).",
+                    _UNEXPECTED_RECOVERY,
                 ),
             ),
         )
