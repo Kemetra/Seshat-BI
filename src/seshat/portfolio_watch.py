@@ -373,28 +373,32 @@ def _scope_dir(root: Path, scope: GovernedScope) -> Path:
     return root / Path(scope.source_path).parent
 
 
-def _semantic_inputs(root: Path, scope_dir: str) -> tuple[tuple[Path, ...], bool]:
-    """Return committed semantic paths and whether their worktree is dirty."""
-    from .cli.commands.semantic import _semantic_files
-    from .gitutil import git_output
+def _semantic_inputs(root: Path, scope_dir: str) -> tuple[Path, ...] | None:
+    """Committed semantic paths, or None when committed state is unknowable.
 
-    inputs = _semantic_files(root, include_untracked=False)
+    None (-> ``blocked``) covers a git failure, a dirty or untracked input, and
+    a workspace with no git at all: none of them is committed truth, and a git
+    error is never read as a clean worktree.
+    """
+    from .semantic_inputs import (
+        MODE_GIT,
+        SemanticInputsUnavailable,
+        discover_semantic_inputs,
+        git_worktree_dirty,
+    )
+
     try:
-        dirty = bool(
-            git_output(
-                root,
-                "status",
-                "--porcelain",
-                "--untracked-files=all",
-                "--",
-                f"mappings/{scope_dir}/metrics",
-                f"mappings/{scope_dir}/readiness-status.yaml",
-                "powerbi",
-            )
-        )
-    except RuntimeError:
-        dirty = False
-    return inputs, dirty
+        inputs, mode = discover_semantic_inputs(root, include_untracked=False)
+        if mode != MODE_GIT or git_worktree_dirty(
+            root,
+            f"mappings/{scope_dir}/metrics",
+            f"mappings/{scope_dir}/readiness-status.yaml",
+            "powerbi",
+        ):
+            return None
+    except SemanticInputsUnavailable:
+        return None
+    return inputs
 
 
 def _tmdl_measure_bindings(paths: tuple[Path, ...]) -> set[tuple[str, str]]:
@@ -433,8 +437,8 @@ def contract_binding_state(
     metrics_dir = root / "mappings" / scope_dir / "metrics"
     if not metrics_dir.is_dir():
         return "missing"
-    inputs, dirty = _semantic_inputs(root, scope_dir)
-    if dirty:
+    inputs = _semantic_inputs(root, scope_dir)
+    if inputs is None:
         return "blocked"
     contract_paths = tuple(
         path

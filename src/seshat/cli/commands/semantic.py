@@ -11,39 +11,43 @@ from pathlib import Path
 
 
 def _semantic_files(repo: Path, include_untracked: bool) -> tuple[Path, ...]:
-    """Discover semantic inputs from Git, with a non-Git filesystem fallback."""
+    """Discover semantic inputs; raises when committed inputs are unknowable.
 
-    def is_input(path: Path) -> bool:
-        try:
-            rel = path.relative_to(repo).as_posix()
-        except ValueError:
-            return False
-        if rel.startswith("tests/") or "/tests/" in rel:
-            return False
-        return ("/metrics/" in f"/{rel}" and rel.endswith(".yaml")) or (
-            ".SemanticModel/definition/" in rel and rel.endswith(".tmdl")
+    Thin alias of :func:`seshat.semantic_inputs.semantic_files` (the domain
+    home), kept for existing callers.
+    """
+    from seshat.semantic_inputs import semantic_files
+
+    return semantic_files(repo, include_untracked)
+
+
+def _discover_or_report(args: argparse.Namespace, repo: Path):
+    """Discover inputs, printing a refusal (None) or a degraded-mode notice."""
+    from seshat.semantic_inputs import (
+        MODE_FILESYSTEM,
+        SemanticInputsUnavailable,
+        discover_semantic_inputs,
+    )
+
+    prog = getattr(args, "prog", "seshat")
+    try:
+        inputs, mode = discover_semantic_inputs(
+            repo, getattr(args, "include_untracked", False)
         )
-
-    if not include_untracked:
-        from seshat.gitutil import git_output
-
-        try:
-            git_root = Path(git_output(repo, "rev-parse", "--show-toplevel").strip())
-            if git_root.resolve() != repo:
-                raise RuntimeError(
-                    "semantic repository is a subdirectory of another Git root"
-                )
-            raw = git_output(repo, "ls-files", "-z")
-        except RuntimeError:
-            pass
-        else:
-            return tuple(
-                repo / Path(rel)
-                for rel in raw.split("\0")
-                if rel and is_input(repo / Path(rel))
-            )
-    candidates = sorted(repo.rglob("*.yaml")) + sorted(repo.rglob("*.tmdl"))
-    return tuple(path for path in candidates if is_input(path))
+    except SemanticInputsUnavailable as exc:
+        print(
+            f"{prog} semantic-check: [blocked] committed semantic inputs could not "
+            f"be read from git ({exc}); refusing to fall back to the working tree.",
+            file=sys.stderr,
+        )
+        return None
+    if mode == MODE_FILESYSTEM:
+        print(
+            f"{prog} semantic-check: [degraded] no git repository: inspecting the "
+            "working tree, not committed state.",
+            file=sys.stderr,
+        )
+    return inputs
 
 
 def run_semantic_check(args: argparse.Namespace) -> int:
@@ -78,7 +82,9 @@ def run_semantic_check(args: argparse.Namespace) -> int:
         )
         return 1
 
-    inputs = _semantic_files(repo, getattr(args, "include_untracked", False))
+    inputs = _discover_or_report(args, repo)
+    if inputs is None:
+        return 1
     # A gate that discovered NOTHING has not verified anything, so it must not
     # report the clean-repo success message: "zero findings" and "zero inputs"
     # are different states and collapsing them is a fail-open (this command runs
