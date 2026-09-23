@@ -169,7 +169,7 @@ def test_haldane_anscombe_is_used_only_when_explicit() -> None:
 
 def test_missing_status_policy_is_explicit() -> None:
     with pytest.raises(AnalysisWithheld) as exc_info:
-        run_proportion(_context([(1, 2), (None, 3)], missing_policy="fail"))
+        run_proportion(_context([(1, 2), (None, 3)], missing_policy="explicit_status"))
     assert exc_info.value.blockers[0].code == "STAT_MISSING_DATA"
 
     result = run_proportion(_context([(1, 2), (None, 3)]))

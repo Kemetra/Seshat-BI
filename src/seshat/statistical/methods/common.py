@@ -102,13 +102,55 @@ def _column_index(context: MethodContext, role: str) -> int:
         ) from exc
 
 
-def _present_values(context: MethodContext, index: int):
-    """Split one column into its present values, their rows, and a missing count."""
+# The governed missing_data.policy enum (schemas/statistical-analysis-spec).
+MISSING_POLICIES = frozenset({"complete_case", "available_case", "explicit_status"})
 
+
+def enforce_missing_policy(context: MethodContext, missing: int, message: str) -> None:
+    """Apply the approved missing_data.policy to `missing` excluded rows (#735).
+
+    explicit_status refuses any missing value (the spec declares no status that
+    could explain one); complete_case and available_case permit the exclusion,
+    which the evidence records. An ungoverned value is refused outright.
+    """
+    policy = context.spec.missing_policy
+    require(
+        policy in MISSING_POLICIES,
+        "STAT_MISSING_POLICY_INVALID",
+        f"The missing-data policy {policy!r} is not a governed policy.",
+        "Declare complete_case, available_case, or explicit_status.",
+    )
+    require(
+        not missing or policy != "explicit_status",
+        "STAT_MISSING_DATA",
+        message,
+        "Resolve missing values or approve complete_case/available_case exclusion.",
+    )
+
+
+def _row_complete(context: MethodContext, row: tuple) -> bool:
+    """True when every bound role column present in the data is non-missing."""
+    columns = context.data.columns
+    return all(
+        _is_missing(row[columns.index(binding.column)]) is False
+        for binding in context.spec.roles.values()
+        if binding.column in columns
+    )
+
+
+def _present_values(context: MethodContext, index: int):
+    """Split one column into its present values, their rows, and a missing count.
+
+    Under complete_case a row counts as present only when every bound role is
+    present; available_case and explicit_status use per-column availability.
+    """
+
+    complete_case = context.spec.missing_policy == "complete_case"
     present = [
         (row_index, row[index])
         for row_index, row in enumerate(context.data.rows)
         if not _is_missing(row[index])
+        and (not complete_case or _row_complete(context, row))
     ]
     missing_count = len(context.data.rows) - len(present)
     return present, missing_count
@@ -119,11 +161,8 @@ def numeric_role(context: MethodContext, role: str) -> NumericSample:
 
     index = _column_index(context, role)
     present, missing_count = _present_values(context, index)
-    require(
-        not missing_count or context.spec.missing_policy != "fail",
-        "STAT_MISSING_DATA",
-        f"The {role} role contains missing observations.",
-        "Resolve missing values or approve a non-failing missing-data policy.",
+    enforce_missing_policy(
+        context, missing_count, f"The {role} role contains missing observations."
     )
     values = finite_array([value for _, value in present], role)
     minimum = context.spec.minimum_data.get("observations", 1)

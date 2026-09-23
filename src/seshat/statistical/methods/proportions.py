@@ -18,6 +18,7 @@ from ..contracts import (
     withheld,
 )
 from ..evidence import decimal_text
+from .common import enforce_missing_policy
 
 _UNGROUPED = "__all__"
 
@@ -128,11 +129,10 @@ def _counts(context: MethodContext):
         bucket = grouped.setdefault(str(cells[2]), [0, 0])
         bucket[0] += successes
         bucket[1] += trials
-    require(
-        not missing or context.spec.missing_policy != "fail",
-        "STAT_MISSING_DATA",
+    enforce_missing_policy(
+        context,
+        missing,
         "Proportion input contains missing numerator, denominator, or group values.",
-        "Resolve missing values or approve a non-failing missing-data policy.",
     )
     return grouped, missing
 
