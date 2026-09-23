@@ -34,6 +34,7 @@ EXIT_INDETERMINATE = 3
 #: A runtime exit of 0 is a claim, not proof. These name what the claim failed.
 BLOCKER_TARGET_UNCHANGED = "PBIMCP-EFF-01"
 BLOCKER_OUT_OF_SCOPE_CHANGE = "PBIMCP-EFF-02"
+BLOCKER_SCOPE_UNOBSERVABLE = "PBIMCP-EFF-03"
 
 BLOCKER_DETAIL: dict[str, str] = {
     BLOCKER_TARGET_UNCHANGED: (
@@ -43,6 +44,10 @@ BLOCKER_DETAIL: dict[str, str] = {
     BLOCKER_OUT_OF_SCOPE_CHANGE: (
         "the run modified files outside the authorized target; only the resolved "
         "allowlist path may change"
+    ),
+    BLOCKER_SCOPE_UNOBSERVABLE: (
+        "git could not list every file a run could touch (a directory it cannot "
+        "open, or a git failure), so an out-of-scope change could not be seen"
     ),
 }
 
@@ -118,7 +123,7 @@ def _list_files(repo_root: Path, *extra: str) -> list[str] | None:
     return [rel for rel in listed.stdout.split("\0") if rel]
 
 
-def _snapshot(repo_root: Path) -> dict[str, str]:
+def _snapshot(repo_root: Path) -> dict[str, str] | None:
     """Digest every file a vendor run could touch, so scope creep is visible.
 
     TWO listings unioned, because ``--ignored`` returns ONLY ignored files
@@ -129,11 +134,14 @@ def _snapshot(repo_root: Path) -> dict[str, str]:
 
     The adapter's own evidence artifacts are then removed by exact path -- see
     :func:`_evidence_relpaths`.
+
+    None when either listing failed -- never ``{}``, which the effect check
+    would read as "nothing changed" (the caller refuses on None instead).
     """
     tracked = _list_files(repo_root, "--exclude-standard")
     ignored = _list_files(repo_root, "--exclude-standard", "--ignored")
     if tracked is None or ignored is None:
-        return {}
+        return None
     excluded = _evidence_relpaths()
     snapshot: dict[str, str] = {}
     for rel in [*tracked, *ignored]:
@@ -360,6 +368,18 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
     # actually changed. The target path and operation come from the VERDICT --
     # there is no parameter by which to substitute another.
     before = _snapshot(root)
+    if before is None:
+        # Refused BEFORE the runtime launches: a scope check that cannot see
+        # every file must not wave a write through, and refusing after the
+        # write would hand the operator rollback guidance for a change that
+        # may have been correct.
+        return terminal(
+            exit_code=EXIT_REFUSED,
+            outcome="blocked",
+            tool="none",
+            mutation_attempted=False,
+            blockers=(BLOCKER_SCOPE_UNOBSERVABLE,),
+        )
     # The finding baseline MUST be taken before the mutation: afterwards there is
     # no way to tell a finding this write introduced from one that was already
     # there, and the whole corpus is in scope (#663 gap 3). None here is not an
@@ -381,7 +401,12 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
 
     # Did the run do what it was authorized to do? A no-op and an out-of-scope
     # mutation both previously reported `materialized`.
-    effect_blockers = _effect_blockers(before, _snapshot(root), authorized_path)
+    after = _snapshot(root)
+    effect_blockers = (
+        _effect_blockers(before, after, authorized_path)
+        if after is not None
+        else (BLOCKER_SCOPE_UNOBSERVABLE,)
+    )
     if effect_blockers:
         return terminal(
             exit_code=EXIT_VALIDATION_FAILED,

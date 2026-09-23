@@ -440,7 +440,7 @@ def test_every_effect_blocker_has_readable_detail() -> None:
         for name, value in vars(orchestrate).items()
         if name.startswith("BLOCKER_") and isinstance(value, str)
     ]
-    assert len(ids) == 2
+    assert len(ids) == 3
     for blocker in ids:
         assert orchestrate.BLOCKER_DETAIL.get(blocker)
         assert blocker.startswith("PBIMCP-EFF-")
@@ -670,6 +670,30 @@ def test_a_vendor_failure_carries_the_vendor_diagnosis(ready_repo: Path) -> None
     assert "isError" in report.vendor_detail
     payload = json.loads(report.evidence_path.read_text(encoding="utf-8"))  # type: ignore[union-attr]
     assert payload["vendor_detail"] == report.vendor_detail
+
+
+def test_an_unobservable_scope_refuses_before_the_runtime_launches(
+    ready_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If git cannot list every file, the write must not run at all. Refusing
+    only afterwards reported a possibly-correct write as a no-op with rollback
+    guidance."""
+    launched: list[object] = []
+
+    def factory(**kwargs: object):
+        launched.append(kwargs)
+        raise AssertionError("the runtime was launched")
+
+    monkeypatch.setattr(orchestrate, "_list_files", lambda *_a, **_k: None)
+    before = (ready_repo / TARGET_PATH).read_text(encoding="utf-8")
+
+    report = _apply(ready_repo, mcp_runner=factory)
+
+    assert report.exit_code == orchestrate.EXIT_REFUSED
+    assert report.blockers == (orchestrate.BLOCKER_SCOPE_UNOBSERVABLE,)
+    assert report.mutation_attempted is False
+    assert launched == []
+    assert (ready_repo / TARGET_PATH).read_text(encoding="utf-8") == before
 
 
 def test_a_successful_apply_carries_no_vendor_detail(ready_repo: Path) -> None:
