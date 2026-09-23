@@ -36,6 +36,10 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          # The job token has contents: write. Do NOT leave it in .git/config while
+          # `python -m build` and the exporter run third-party build code; it is
+          # supplied only to the branch-push step below.
+          persist-credentials: false
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -286,7 +290,8 @@ jobs:
           # above it). Do NOT reach for --skip-twine: the strict check validates
           # that the README renders on PyPI, which is a genuine publish blocker
           # and exactly the kind of post-tag surprise this step exists to catch.
-          python -m pip install --quiet build twine
+          python -m pip install --quiet --require-hashes \
+            -r .github/release-tooling/requirements.txt
           rm -rf dist release-staging
           mkdir -p release-staging
           python -m build
@@ -331,13 +336,22 @@ jobs:
 
       - name: Commit generated bundles and push the release branch
         shell: bash
+        env:
+          # Scoped to this step only (checkout ran with persist-credentials: false).
+          PUSH_TOKEN: ${{ github.token }}
         run: |
           git add -- \
             integrations/claude-code/seshat-bi \
             integrations/codex/seshat-bi
           git diff --cached --check
           git commit -m "chore: generate v${VERSION} agent bundles"
-          git push --set-upstream origin "${RELEASE_BRANCH}"
+          auth_basic="$(printf 'x-access-token:%s' "${PUSH_TOKEN}" | base64 -w0)"
+          echo "::add-mask::${auth_basic}"
+          # Header via GIT_CONFIG_* env (not `-c`) so it never appears in argv.
+          GIT_CONFIG_COUNT=1 \
+          GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" \
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic ${auth_basic}" \
+            git push --set-upstream origin "${RELEASE_BRANCH}"
 
       - name: Open a draft release pull request
         shell: bash

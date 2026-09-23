@@ -116,26 +116,60 @@ def _reject_development_paths(paths: list[PurePosixPath]) -> None:
         )
 
 
-_REQUIRED_WHEEL_PACKAGE_DATA = (
-    "seshat/packs/schemas/seshat-extension-pack.schema.json",
-    "seshat/packs/schemas/seshat-pack-registry.schema.json",
-    # Stage-1 blank templates `scaffold-source` reads at call time; they reach
-    # the wheel ONLY via force-include (issue #339). A dropped entry would
-    # silently strand a pip-only user with nothing to copy -- fail loud here.
-    "seshat/stage1_templates/source-profile.md",
-    "seshat/stage1_templates/readiness-status.yaml",
-    "seshat/stage1_templates/source-map.yaml",
-)
+_PYPROJECT = Path(__file__).resolve().parents[1] / "pyproject.toml"
+
+# The Studio UI (spec 139) reaches the wheel through the `artifacts` re-include of
+# the GENERATED, gitignored `src/seshat/studio/static/` -- not through
+# force-include. A wheel built without the frontend step shipped the
+# `seshat-studio` launcher with no UI at all (v1.0.0, issue #623), and the
+# sdist->wheel rebuild comparison could not see it because both lacked the files.
+# So the inspector itself requires the entry page AND at least one bundled asset.
+_REQUIRED_STUDIO_FILES = ("seshat/studio/static/index.html",)
+_REQUIRED_STUDIO_PREFIXES = ("seshat/studio/static/assets/",)
 
 
-def _require_wheel_package_data(names: list[str]) -> None:
-    """Runtime data files the ``pack`` command family reads at call time. Their
-    canonical home is the repo-root ``schemas/`` directory (outside ``src/``),
-    so they reach the wheel ONLY via ``force-include``. A dropped force-include
-    entry would silently reintroduce the clean-install ``FileNotFoundError`` the
-    ``pack`` family had -- fail loud here instead."""
+def _force_include_destinations(pyproject: Path = _PYPROJECT) -> tuple[str, ...]:
+    """Every wheel ``force-include`` destination declared in ``pyproject.toml``.
+
+    DERIVED, not hand-kept: runtime data whose canonical home is outside ``src/``
+    (pack schemas, rule-fixes.yaml, stage-1/design templates, governed projects,
+    statistical schemas, kit-source.yaml...) reaches the wheel ONLY via
+    force-include, and their loaders often fail SOFT. A hand-kept five-entry list
+    covered a fraction of them, so dropping any other entry shipped silently.
+    """
+    try:
+        import tomllib
+
+        document = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+        table = document["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
+    except (OSError, KeyError, ValueError) as exc:
+        raise ArtifactInspectionError(
+            f"cannot read wheel force-include table from {pyproject.name}: {exc}"
+        ) from exc
+    destinations = tuple(str(value).strip("/") for value in table.values())
+    if not destinations:
+        raise ArtifactInspectionError("wheel force-include table is empty")
+    return destinations
+
+
+def _missing_prefixes(present: set[str], prefixes: Iterable[str]) -> list[str]:
+    return [p for p in prefixes if not any(name.startswith(p) for name in present)]
+
+
+def _require_wheel_package_data(names: list[str], pyproject: Path = _PYPROJECT) -> None:
+    """Every force-include destination (a file, or a directory that must hold at
+    least one file) plus the Studio UI must be in the wheel. A dropped entry
+    would silently strand pip-only users (the pack ``FileNotFoundError``, the
+    empty ``check --explain``, the UI-less launcher) -- fail loud here instead."""
     present = set(names)
-    missing = [asset for asset in _REQUIRED_WHEEL_PACKAGE_DATA if asset not in present]
+    missing = [
+        destination
+        for destination in _force_include_destinations(pyproject)
+        if destination not in present
+        and not any(name.startswith(destination + "/") for name in present)
+    ]
+    missing += [path for path in _REQUIRED_STUDIO_FILES if path not in present]
+    missing += _missing_prefixes(present, _REQUIRED_STUDIO_PREFIXES)
     if missing:
         raise ArtifactInspectionError(
             f"wheel is missing required package data: {missing}"
