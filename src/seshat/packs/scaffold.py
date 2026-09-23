@@ -8,6 +8,7 @@ and nothing outside it is touched. Scaffolding never activates anything.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from ..artifact_identity import canonical_relative_path, resolve_within
@@ -110,6 +111,10 @@ def _validate_spec(spec: PackSpec) -> str:
         )
     if not spec.owner.strip():
         raise PackError("pack owner must be a non-empty name")
+    if any(not char.isprintable() for char in spec.owner):
+        raise PackError(
+            "pack owner must be a single-line name without control characters"
+        )
     return _validate_pack_id(spec.pack_id)
 
 
@@ -129,6 +134,16 @@ def _resolve_new_directory(
     return resolved_dir
 
 
+def _yaml_string(value: str) -> str:
+    """``value`` as a double-quoted YAML scalar that reads back unchanged.
+
+    A JSON string literal is a valid YAML double-quoted scalar, so quotes and
+    backslashes are escaped rather than interpreted (``CORP\\ahmed`` must not
+    become ``CORP<BEL>hmed``).
+    """
+    return json.dumps(value)
+
+
 def _manifest_body(spec: PackSpec, relative_dir: str) -> str:
     starter_path, _ = _STARTERS[spec.category]
     return f"""\
@@ -136,7 +151,7 @@ schema_version: "1.0"
 pack_id: {spec.pack_id}
 version: 0.1.0
 category: {spec.category}
-owner: "{spec.owner}"
+owner: {_yaml_string(spec.owner)}
 description: "Describe what this pack contributes and for whom."
 core_compatibility: "1.x"
 provides:
