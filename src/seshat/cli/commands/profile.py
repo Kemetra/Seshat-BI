@@ -292,7 +292,7 @@ def run_profile(args: argparse.Namespace) -> int:
     from seshat.dbt.redaction import EnvironmentConfigError
 
     try:
-        with applied_dotenv(Path.cwd()):
+        with applied_dotenv(Path(getattr(args, "repo", None) or ".")):
             return _run_profile_body(args)
     except EnvironmentConfigError as exc:
         print(f"error: could not read the workspace .env: {exc}", file=sys.stderr)

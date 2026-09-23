@@ -175,7 +175,7 @@ def _run_live_drift(args: argparse.Namespace, parsed: object) -> int:
 
     prog = cli._prog(args)
     try:
-        with applied_dotenv(Path.cwd()):
+        with applied_dotenv(Path(getattr(args, "repo", None) or ".")):
             return _run_live_drift_body(args, parsed)
     except EnvironmentConfigError as exc:
         print(

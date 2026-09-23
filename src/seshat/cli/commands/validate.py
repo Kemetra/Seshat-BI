@@ -54,7 +54,9 @@ def run_validate(args: argparse.Namespace) -> int:
     from seshat.dbt.redaction import EnvironmentConfigError
 
     try:
-        with applied_dotenv(Path.cwd()):
+        # Rooted at --repo (default: the current directory), the same root the
+        # provenance record is written under -- mirroring value-check (#340).
+        with applied_dotenv(Path(getattr(args, "repo", None) or ".")):
             return _run_validate_body(args)
     except EnvironmentConfigError as exc:
         print(f"error: could not read the workspace .env: {exc}", file=sys.stderr)
@@ -171,12 +173,16 @@ def _run_validate_body(args: argparse.Namespace) -> int:
         )
         return 1
 
-    _record_provenance(args, runner, (dialect, config, engine))
-
     for finding in findings:
         print(_format(finding))
     if any(f.severity is Severity.ERROR for f in findings):
+        print(
+            "note: recorded no live-DB provenance -- this run had ERROR findings, "
+            "and a record may only describe a passing run.",
+            file=sys.stderr,
+        )
         return 1
+    _record_provenance(args, runner, (dialect, config, engine))
     print(f"{prog} validate: all live checks passed (0 findings).", file=sys.stderr)
     return 0
 
@@ -186,14 +192,16 @@ def _record_provenance(
     runner: object,
     resolved: tuple[object, object, str],
 ) -> None:
-    """Record this run's server-confirmed DB provenance; never raise, never gate.
+    """Record this PASSING run's DB provenance; never raise, never gate.
 
     The ONE write ruling R7 authorizes (#485 / option A2): persist a digest of
-    this run's server-confirmed database identity so `next` / `status` can later
-    tell whether this evidence was earned against the database the reader is
-    pointed at. Called BEFORE the exit-code decision because the record describes
-    which database answered, which is worth knowing whether or not the findings
-    were clean.
+    this run's database identity so `next` / `status` can later tell whether
+    this evidence was earned against the database the reader is pointed at.
+    Called only AFTER a run with zero ERROR findings: the reader reports a
+    matching record as verification of the stage's pass, so a failing run
+    against another database must never overwrite the record a passing run
+    earned. The record is rooted at ``--repo`` (default: the current directory),
+    and nothing is recorded for a source-map outside ``<repo>/mappings/``.
 
     ``resolved`` is the ``(dialect, config, engine)`` triple this body already
     resolved together as one unit -- passed as one so this helper stays within the
@@ -214,7 +222,7 @@ def _record_provenance(
     try:
         record_live_run(
             LiveRunContext(
-                repo_root=Path.cwd(),
+                repo_root=Path(getattr(args, "repo", None) or "."),
                 source_map=args.source_map,
                 runner=runner,
                 dialect=dialect,
