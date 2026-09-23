@@ -49,6 +49,14 @@ prefix. Human subjects (no bracket prefix) must still be `<type>: <desc>`,
 scope-free; the prefix is not a general escape hatch a human can opt into for a
 malformed subject.
 
+**Amendment (2026-09):** the bracket label must be a KNOWN automation label
+(`_BOT_LABELS`: `codex`, `bot`, `imgbot`, `dependabot`, compared
+case-insensitively -- the labels observed in this repo's history plus the
+generic `bot`). Any other bracketed label (e.g. `[wip] ...`) is judged as a human
+subject. Before this, any `[label] ` prefix a human typed was exempt, which
+contradicted the "not a general escape hatch" intent above. Adding a new bot
+means adding its label to `_BOT_LABELS`.
+
 ## Consequences
 
 - Common, legitimate commit types no longer trip a false P2 ERROR; the project's

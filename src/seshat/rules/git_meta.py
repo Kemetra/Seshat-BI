@@ -236,10 +236,24 @@ REQUIRED_IGNORES = (
     "**/.pbi/cache.abf",
     ".env",
 )
-# synthesized PBIP definition paths that must NOT be ignored
+# Synthesized PBIP definition paths that must NOT be ignored. A representative
+# file in each part of both definition/ trees, so a NARROW pattern that ignores
+# only tables/ or pages/ (and silently drops those files from git) is caught,
+# not just a pattern that ignores the whole folder.
 DEFINITION_PROBE_PATHS = (
     "powerbi/Sales.SemanticModel/definition/model.tmdl",
+    "powerbi/Sales.SemanticModel/definition/database.tmdl",
+    "powerbi/Sales.SemanticModel/definition/relationships.tmdl",
+    "powerbi/Sales.SemanticModel/definition/expressions.tmdl",
+    "powerbi/Sales.SemanticModel/definition/tables/Sales.tmdl",
+    "powerbi/Sales.SemanticModel/definition/cultures/en-US.tmdl",
+    "powerbi/Sales.SemanticModel/definition/roles/Reader.tmdl",
     "powerbi/Sales.Report/definition/report.json",
+    "powerbi/Sales.Report/definition/version.json",
+    "powerbi/Sales.Report/definition/pages/pages.json",
+    "powerbi/Sales.Report/definition/pages/p1/page.json",
+    "powerbi/Sales.Report/definition/pages/p1/visuals/v1/visual.json",
+    "powerbi/Sales.Report/definition/bookmarks/b1.bookmark.json",
 )
 
 
@@ -352,12 +366,12 @@ def _gitignored_pbip_findings(ctx: RuleContext, pbip_paths: list[str]) -> list[F
 # REJECTED -- governance rule P2 is deliberately scope-free (use `docs:` not
 # `docs(018):`).
 #
-# AUTOMATION EXEMPTION: a subject carrying a leading `[name]` prefix
-# (e.g. `[codex]`, `[bot]`) is an automated/tool-generated commit whose subject
-# format the kit does not control (it arrives via a squash merge of a bot PR).
-# Such subjects are accepted as-is, since enforcing the human convention on a
-# machine-written subject is out of the author's hands. Human subjects (no
-# bracket prefix) must still be `<type>: <desc>`, scope-free.
+# AUTOMATION EXEMPTION: a subject carrying a leading `[name]` prefix naming a
+# KNOWN automation label (``_BOT_LABELS``: `[codex]`, `[bot]`, `[ImgBot]`,
+# `[dependabot]`, case-insensitive) is an automated/tool-generated commit whose
+# subject format the kit does not control (it arrives via a squash merge of a
+# bot PR). Such subjects are accepted as-is. Any OTHER bracketed label (e.g.
+# `[wip]`) is a human subject and must still be `<type>: <desc>`, scope-free.
 # See docs/decisions/0012-p2-commit-types.md.
 _P2_TYPES = (
     "feat",
@@ -373,15 +387,17 @@ _P2_TYPES = (
     "revert",
     "brand",
 )
-_BOT_PREFIX_RE = re.compile(r"^\[[A-Za-z0-9_-]+\] ")
+_BOT_LABELS = frozenset({"codex", "bot", "imgbot", "dependabot"})
+_BOT_PREFIX_RE = re.compile(r"^\[(?P<label>[A-Za-z0-9_-]+)\] ")
 SUBJECT_RE = re.compile(r"^(?:" + "|".join(_P2_TYPES) + r"): .+")
 # Local-fallback range when neither --commit-range nor a commit-msg hook message
 # is supplied (a bare `retail check`). Scoped to the CURRENT/incoming commit only
 # (HEAD~1..HEAD) so a normal local check is green whenever the current change is
 # compliant, and is never tripped by aged-out non-conforming history (#112). On a
-# single-commit repo git rejects HEAD~1 (rc 128); the except (RuntimeError,
-# ValueError) branch below turns that into a clean P2 ERROR Finding (not a
-# traceback), exactly as the old HEAD~20 default did. CI supplies an explicit
+# single-commit repo HEAD~1 does not exist, so the fallback judges the range
+# `HEAD` (exactly that one commit) instead of erroring on an unreadable range:
+# `init, commit, check` stays green for a conforming first subject. CI supplies an
+# explicit
 # --commit-range (merge-base(origin/main, HEAD)..HEAD) and the commit-msg hook
 # uses ctx.commit_message, so BOTH bypass this fallback -- new-commit P2
 # enforcement is unaffected.
@@ -421,6 +437,19 @@ def _repo_root_has_commit(repo_root: Path) -> bool:
     return True
 
 
+def _default_range(repo_root: Path) -> str:
+    """The bare-fallback range: ``HEAD~1..HEAD``, or ``HEAD`` on a root commit.
+
+    Only reached once ``_repo_root_has_commit`` proved HEAD exists. When HEAD has
+    no parent the range ``HEAD`` lists exactly that one commit.
+    """
+    try:
+        gitutil.git_output(repo_root, "rev-parse", "--verify", "--quiet", "HEAD~1")
+    except RuntimeError:
+        return "HEAD"
+    return DEFAULT_RANGE
+
+
 def load_commit_subjects(ctx: RuleContext) -> tuple[list[str], list[Finding]]:
     """Resolve the commit subjects to validate for the contract-v2 invocation.
 
@@ -450,7 +479,11 @@ def load_commit_subjects(ctx: RuleContext) -> tuple[list[str], list[Finding]]:
     if ctx.commit_range is None and not _repo_root_has_commit(ctx.repo_root):
         return ([], [])
     # --commit-range is a full revision range; never append "..HEAD".
-    range_expr = ctx.commit_range if ctx.commit_range is not None else DEFAULT_RANGE
+    range_expr = (
+        ctx.commit_range
+        if ctx.commit_range is not None
+        else _default_range(ctx.repo_root)
+    )
     try:
         return (gitutil.git_log_subjects(ctx.repo_root, range_expr), [])
     except (RuntimeError, ValueError) as exc:
@@ -474,7 +507,10 @@ def load_commit_subjects(ctx: RuleContext) -> tuple[list[str], list[Finding]]:
 def _subject_ok(subject: str) -> bool:
     # Automated/tool-generated subjects (leading `[name]` prefix) are exempt
     # from the human convention -- the kit does not control their format.
-    return bool(_BOT_PREFIX_RE.match(subject)) or bool(SUBJECT_RE.match(subject))
+    bot = _BOT_PREFIX_RE.match(subject)
+    if bot is not None and bot.group("label").lower() in _BOT_LABELS:
+        return True
+    return bool(SUBJECT_RE.match(subject))
 
 
 def _invalid_subject_findings(subjects: list[str]) -> list[Finding]:

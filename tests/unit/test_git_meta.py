@@ -234,6 +234,26 @@ def test_g1_flags_ignored_definition_path(tmp_path: Path) -> None:
     assert any("definition" in f.locator for f in findings)
 
 
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("pattern", "probe_part"),
+    [
+        ("**/definition/tables/\n", "definition/tables/"),
+        ("**/*.Report/definition/pages/\n", "definition/pages/"),
+        ("**/definition/relationships.tmdl\n", "relationships.tmdl"),
+    ],
+)
+def test_g1_flags_narrow_pattern_under_definition(
+    tmp_path: Path, pattern: str, probe_part: str
+) -> None:
+    """A pattern that ignores PART of definition/ (tables, pages, ...) must fire
+    too -- probing only model.tmdl/report.json let it through."""
+    repo = _gitignore_repo(tmp_path, GOOD_GITIGNORE + pattern)
+    commit_all(repo, "chore: add gitignore")
+    findings = _findings(rule_g1_gitignore_correctness, context_for(repo))
+    assert any(probe_part in f.locator for f in findings), findings
+
+
 # ---------------------------------------------------------------------------
 # M2.5 — G2
 # ---------------------------------------------------------------------------
@@ -377,6 +397,44 @@ def test_p2_accepts_extended_types_bot_prefix_and_rejects_scopes(
     for subject in ("docs(018): scoped subject", "wip: not a type", "no type at all"):
         assert len(findings_for(subject)) == 1, f"expected rejected: {subject!r}"
         assert findings_for(subject)[0].rule_id == "P2"
+
+
+@pytest.mark.unit
+def test_p2_bracket_exemption_is_limited_to_known_automation_labels(
+    tmp_path: Path,
+) -> None:
+    """The `[label] ` exemption is for known automation only; an arbitrary
+    bracketed label is a human subject and must meet the convention."""
+    repo = make_git_repo(tmp_path)
+
+    def findings_for(subject: str) -> list:
+        return _findings(
+            rule_p2_commit_subjects, _ctx_with(repo, commit_message=subject)
+        )
+
+    for subject in ("[ImgBot] Optimize images", "[dependabot] bump x"):
+        assert findings_for(subject) == [], f"expected accepted: {subject!r}"
+    for subject in ("[wip] random stuff", "[x] docs(018): scoped subject"):
+        assert len(findings_for(subject)) == 1, f"expected rejected: {subject!r}"
+
+
+@pytest.mark.unit
+def test_p2_bare_fallback_on_single_commit_repo_judges_that_commit(
+    tmp_path: Path,
+) -> None:
+    """A first commit has no HEAD~1; the bare fallback judges HEAD itself rather
+    than erroring on an unreadable range."""
+    repo = make_git_repo(tmp_path)
+    _empty_commit(repo, "feat: init")
+    ctx = _ctx_with(repo, commit_range=None, commit_message=None)
+    assert _findings(rule_p2_commit_subjects, ctx) == []
+
+    (tmp_path / "other").mkdir()
+    other = make_git_repo(tmp_path / "other")
+    _empty_commit(other, "initial import")
+    ctx = _ctx_with(other, commit_range=None, commit_message=None)
+    findings = _findings(rule_p2_commit_subjects, ctx)
+    assert [f.locator for f in findings] == ["initial import"]
 
 
 @pytest.mark.unit
