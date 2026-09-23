@@ -252,6 +252,30 @@ def test_generated_tmdl_passes_d_rules():
     assert "measure TotalRevenue" in r.tmdl_block
 
 
+@pytest.mark.parametrize("name", ["Bob's Sales", "Bob'sSales", "A=B"])
+def test_a_name_the_verifier_cannot_parse_is_never_reported_ok(name):
+    """The D-rule self-check re-parses the emitted block. A name the parser
+    could not see made that check vacuous (zero measures, zero findings) and
+    returned ok for TMDL Desktop cannot load."""
+    r = generate_measure(BASE_REVENUE, name=name, doc_intent="total money")
+    if r.ok:
+        from seshat.tmdl import parse_tmdl
+
+        parsed = parse_tmdl(f"table T\n{r.tmdl_block}")
+        assert parsed is not None
+        assert [m.name for m in parsed.measures] == [name]
+
+
+def test_a_name_needing_quotes_is_quoted_and_escaped():
+    from seshat.dax_gen import _build_tmdl_block
+
+    block = _build_tmdl_block("Bob'sSales", "1", "0", "M", "doc")
+    assert "\tmeasure 'Bob''sSales' = 1\n" in block
+    assert "\tmeasure TotalRevenue = 1\n" in _build_tmdl_block(
+        "TotalRevenue", "1", "0", "M", "doc"
+    )
+
+
 def test_generate_refuses_unknown_kind():
     r = generate_measure({"kind": "wormhole"}, name="X")
     assert r.ok is False

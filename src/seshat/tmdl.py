@@ -342,15 +342,9 @@ def _parse_measure_block(
 
     ``match`` is the already-matched header regex. Returns the parsed
     :class:`TmdlMeasure` and the index of the first line past the block.
-
-    KNOWN GAP (audit 2026-06-26 #32, none-today): the name class `[^'=]+?`
-    excludes `=`, so a single-quoted measure name CONTAINING `=` would be
-    truncated at the `=`. No committed measure has `=` in its name; widening
-    the regex risks re-testing all TMDL parsing for a zero-trigger case, so
-    this is documented, not changed.
     """
     ind = _indent(lines[i])
-    name = match.group("name").strip()
+    name = measure_header_name(match)
     body, prop_lines, j = _split_block_body(lines, i, n, ind)
     expr_parts = [match.group("expr").rstrip(), *body]
     props: dict[str, str] = {}
@@ -440,8 +434,25 @@ def _parse_source_block(
 
 
 def _is_measure_header(stripped: str) -> re.Match[str] | None:
-    """Match a ``measure <name> = <expr>`` header line, or None."""
-    return re.match(r"measure\s+('?)(?P<name>[^'=]+?)\1\s*=\s*(?P<expr>.*)$", stripped)
+    """Match a ``measure <name> = <expr>`` header line, or None.
+
+    A QUOTED name may contain ``=`` and escaped ``''`` apostrophes, the same
+    grammar :func:`_is_column_header` accepts. The old single class
+    ``[^'=]+?`` matched neither, so such a measure was invisible to every
+    consumer -- including dax_gen's self-check and measure-sync's duplicate
+    scan. The ``name`` group is RAW; unescape with :func:`measure_header_name`.
+    """
+    quoted = re.match(
+        r"measure\s+'(?P<name>(?:[^']|'')*)'\s*=\s*(?P<expr>.*)$", stripped
+    )
+    if quoted is not None:
+        return quoted
+    return re.match(r"measure\s+(?P<name>[^'=]+?)\s*=\s*(?P<expr>.*)$", stripped)
+
+
+def measure_header_name(match: re.Match[str]) -> str:
+    """The measure name from a :func:`_is_measure_header` match, unescaped."""
+    return match.group("name").strip().replace("''", "'")
 
 
 def _is_column_header(stripped: str) -> re.Match[str] | None:

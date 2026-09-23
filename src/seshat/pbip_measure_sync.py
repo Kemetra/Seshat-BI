@@ -36,6 +36,7 @@ from .tmdl import (
     _is_column_header,
     _is_measure_header,
     _is_source_header,
+    measure_header_name,
 )
 
 SCHEMA_VERSION = "1.0"
@@ -384,7 +385,7 @@ def _scan_measures(
     while i < n:
         header = _measure_header_at(lines, i)
         if header:
-            name = header.group("name").strip()
+            name = measure_header_name(header)
             i, duplicate = _register_measure(lines, i, name, measures)
             if duplicate is not None:
                 return measures, n, duplicate

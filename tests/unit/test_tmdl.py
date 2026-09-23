@@ -315,6 +315,22 @@ def test_a_multiline_measure_body_still_ends_at_its_first_property() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    ("header", "name"),
+    [
+        ("measure 'Customer''s Sales' = SUM(x[y])", "Customer's Sales"),
+        ("measure 'A=B' = 1", "A=B"),
+        ("measure 'Net Sales' = 1", "Net Sales"),
+        ("measure NetSales = 1", "NetSales"),
+    ],
+)
+def test_quoted_measure_names_parse_and_unescape(header: str, name: str) -> None:
+    table = parse_tmdl(f"table T\n\t{header}\n")
+    assert table is not None
+    assert [m.name for m in table.measures] == [name]
+
+
+@pytest.mark.unit
 def test_calc_column_property_lines_are_not_folded_into_the_expression() -> None:
     text = (
         "table Sales\n"
