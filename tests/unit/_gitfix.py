@@ -65,3 +65,28 @@ def context_for(repo: Path) -> RuleContext:
     ).stdout
     tracked = tuple(line for line in out.splitlines() if line)
     return RuleContext(repo_root=repo, tracked_files=tracked)
+
+
+def commit_tree(root: Path, message: str = "fixture") -> Path:
+    """Make ``root`` a git repo (if it is not one) and commit everything in it.
+
+    Approval-bearing gates read COMMITTED state only, so a test that wants a
+    workspace's current files to count must commit them -- exactly the step a
+    human takes to ratify an artifact."""
+    if not (root / ".git").exists():
+        for args in (
+            ["init", "-b", "main"],
+            ["config", "user.email", "t@example.com"],
+            ["config", "user.name", "Test"],
+            ["config", "commit.gpgsign", "false"],
+            ["config", "core.autocrlf", "false"],
+        ):
+            subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "--allow-empty", "-q", "-m", message],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+    return root

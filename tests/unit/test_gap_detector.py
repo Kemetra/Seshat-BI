@@ -24,15 +24,32 @@ pytestmark = pytest.mark.unit
 # fixture writers -- generic (no C086-specific value baked in; Principle VII)
 # --------------------------------------------------------------------------- #
 def _metric_yaml(name: str, status: str, columns: list[str]) -> str:
+    """A complete contract; ``pass`` ones are approved in readiness-status by
+    ``_write_table`` (the shared inventory needs a named metric_owner approval)."""
     cols = "\n".join(f'    - "{c}"' for c in columns) or "    []"
     return (
         f'name: "{name}"\n'
+        "owner: metric_owner\n"
         "binds_to:\n"
-        '  gold_table: "gold.fct_x"\n'
+        f'  gold_table: "gold.fct_{name.lower()}"\n'
         "  columns:\n"
         f"{cols}\n"
+        "definition: {kind: base, aggregation: sum, filter: []}\n"
         "readiness:\n"
         f'  status: "{status}"\n'
+        '  evidence: ["approved by the named metric owner"]\n'
+        "  blocking_reasons: []\n"
+    )
+
+
+def _readiness_yaml(approved_metrics: list[str]) -> str:
+    """The recorded named-human approvals: the mapping gate + the metric owner."""
+    return (
+        "approvals:\n"
+        '  - {stage: mapping_ready, owner: "Ada Lovelace (data_owner)", '
+        'at: "2026-06-25"}\n'
+        '  - {stage: semantic_model_ready, owner: "Grace Hopper (metric_owner)", '
+        f'at: "2026-06-25", contracts: [{", ".join(approved_metrics)}]}}\n'
     )
 
 
@@ -93,6 +110,12 @@ def _write_table(
     questions = files["questions"] if "questions" in files else QUESTIONS_CLEARED
     d = root / "mappings" / table
     d.mkdir(parents=True, exist_ok=True)
+    readiness = files.get("readiness", "__default__")
+    if readiness == "__default__":
+        passing = [n for n, b in (metrics or {}).items() if 'status: "pass"' in b]
+        readiness = _readiness_yaml(passing)
+    if readiness is not None:
+        (d / "readiness-status.yaml").write_text(readiness, encoding="utf-8")
     if metrics is not None:
         (d / "metrics").mkdir(exist_ok=True)
         for name, body in metrics.items():
@@ -262,6 +285,34 @@ def test_open_decision_blocks_dependent_metric(tmp_path):
 def test_answered_decision_not_a_gap(tmp_path):
     view = _dep_metric_view(tmp_path, {"questions": QUESTIONS_CLEARED})
     assert view["items"][0]["status"] == "Covered"  # answered/CLEARED -> not blocked
+
+
+_CLEARED_PROSE_ONLY = QUESTIONS_CLEARED.replace("| answered | yes |", "| open | |")
+
+
+def test_gate_cleared_prose_without_recorded_approval_answers_nothing(tmp_path):
+    """Audit F034: a `Gate status: CLEARED` line is markdown anyone can type. With
+    no recorded mapping_ready approval, an open row stays open."""
+    view = _dep_metric_view(
+        tmp_path,
+        {"questions": _CLEARED_PROSE_ONLY, "readiness": "approvals: []\n"},
+    )
+    assert view["items"][0]["status"] == "Blocked -- needs business definition"
+
+
+def test_self_asserted_pass_contract_is_not_covered(tmp_path):
+    """Audit F040: `readiness.status: pass` with no named metric_owner approval is
+    not an approved contract, so the metric is not Covered."""
+    view = _dep_metric_view(
+        tmp_path,
+        {
+            "questions": QUESTIONS_CLEARED,
+            "readiness": 'approvals:\n  - {stage: mapping_ready, owner: "A '
+            '(data_owner)", at: "2026-06-25"}\n',
+        },
+    )
+    assert view["items"][0]["status"] == "Blocked -- needs business definition"
+    assert "not approved" in view["items"][0]["blocker"]
 
 
 def test_template_gate_placeholder_not_cleared(tmp_path):

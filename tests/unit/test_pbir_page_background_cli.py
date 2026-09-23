@@ -9,7 +9,12 @@ from pathlib import Path
 import pytest
 
 from seshat.cli import main
-from tests.unit._pbir_gate_fixture import gate_args, pbir_gate_repo
+from tests.unit._pbir_gate_fixture import (
+    bind_report,
+    gate_args,
+    pbir_gate_repo,
+    report_home,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -19,9 +24,9 @@ ASSET = FIXTURES / "placeholder-asset.png"
 
 
 def _report_copy(tmp: Path) -> Path:
-    dst = tmp / "R.Report"
+    dst = report_home(tmp) / "R.Report"
     shutil.copytree(FX_REPORT, dst)
-    return dst
+    return bind_report(dst)
 
 
 def test_cli_sets_page_background_exit_zero(tmp_path: Path) -> None:

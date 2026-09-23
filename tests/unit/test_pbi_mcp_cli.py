@@ -27,7 +27,7 @@ def _ready_repo(tmp_path: Path) -> Path:
         'stages:\n  semantic_model_ready:\n    status: "pass"\n'
         '  dashboard_ready:\n    status: "not_started"\n'
         'approvals:\n  - stage: "dashboard_ready"\n'
-        '    owner: "A Person (owner)"\n'
+        '    owner: "A Person (report_owner)"\n'
         '    at: "2026-08-10"\n'
         '    note: "Approved report design"\n',
         encoding="utf-8",

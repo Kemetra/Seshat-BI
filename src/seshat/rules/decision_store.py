@@ -345,17 +345,31 @@ def _check_approval(
     return (
         _missing_field_findings(approval, did, loc)
         + _owner_findings(rec, authority, loc)
-        + _check_evidence_identity(approval, did, loc)
+        + _check_evidence_identity(approval, did, loc, rec.get("decision_type"))
     )
 
 
 def _check_evidence_identity(
-    approval: dict[str, Any], did: object, loc: str
+    approval: dict[str, Any], did: object, loc: str, dtype: object = None
 ) -> list[Finding]:
     evidence = approval.get("evidence")
     identity = approval.get("evidence_identity")
-    if not isinstance(evidence, list) or not isinstance(identity, dict):
+    if not evidence or not identity:
         return []  # missing-field findings already emitted above
+    if not isinstance(evidence, list) or not isinstance(identity, dict):
+        # A non-list/non-dict pair cannot be verified; the gate treats it as stale.
+        # On a CRITICAL decision that must be loud (audit F013). A non-critical
+        # entry (e.g. a Studio assumption_note) only ever warns at the gate.
+        if not is_critical(dtype):
+            return []
+        return [
+            _err(
+                "DS2",
+                f"approval for {did!r} must cite evidence as a list and "
+                "evidence_identity as a mapping; this shape cannot be verified",
+                loc,
+            )
+        ]
     missing = [ref for ref in evidence if isinstance(ref, str) and ref not in identity]
     if missing:
         return [

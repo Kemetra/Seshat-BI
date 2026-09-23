@@ -91,6 +91,32 @@ def test_evidence_pack_has_ten_ordered_sections(tmp_path: Path) -> None:
     assert result["read_only_proof"] is True
 
 
+def test_stage_bearing_sections_follow_their_stage_not_file_presence(
+    tmp_path: Path,
+) -> None:
+    """Audit F076: with every source file present, semantic-model-summary (06)
+    and validation-summary (05) are blocked while their stage has not passed."""
+    _write_status(tmp_path, "orders")
+    _write_complete_pack_sources(tmp_path, "orders")
+    status = tmp_path / "mappings" / "orders" / "readiness-status.yaml"
+    status.write_text(
+        status.read_text(encoding="utf-8")
+        .replace(
+            'semantic_model_ready: {status: "pass", evidence: ["semantic check pass"]}',
+            'semantic_model_ready: {status: "not_started"}',
+        )
+        .replace(
+            'gold_ready: {status: "pass", evidence: ["retail validate exit 0"]}',
+            'gold_ready: {status: "blocked", blocking_reasons: ["recon failed"]}',
+        ),
+        encoding="utf-8",
+    )
+    sections = {s["id"]: s for s in build_evidence_pack(tmp_path, "orders")["sections"]}
+    assert sections["06"]["status"] == "blocked"
+    assert sections["05"]["status"] == "blocked"
+    assert "recon failed" in sections["05"]["blocking_reasons"]
+
+
 def test_missing_section_sources_become_blockers(tmp_path: Path) -> None:
     _write_status(tmp_path, "orders")
     _write(tmp_path / "mappings" / "orders" / "source-profile.md")

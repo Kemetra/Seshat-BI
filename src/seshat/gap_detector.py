@@ -10,7 +10,9 @@ the first visual is placed: which required things already exist and are approved
 and which are missing, unapproved, or awaiting an owner decision.
 
 Committed evidence read (never written):
-- ``mappings/<table>/metrics/*.yaml``       -- metric contract + ``readiness.status``
+- ``mappings/<table>/metrics/*.yaml``       -- metric contracts, APPROVED only via
+  the shared ``metric_contract_inventory`` (never the file's own status field)
+- ``mappings/<table>/readiness-status.yaml``  -- the recorded mapping-gate approval
 - ``mappings/<table>/source-map.yaml``       -- the ``gold_star`` dimension inventory
 - ``mappings/<table>/unresolved-questions.md`` -- open owner decisions (structured rows)
 
@@ -43,6 +45,7 @@ from .coverage_status import (
 
 _ANSWERED = "answered"
 _UNREADABLE = "<unreadable>"
+_UNAPPROVED = "unapproved"
 
 
 def _load_yaml_mapping(path: Path) -> dict[str, Any] | None:
@@ -160,7 +163,13 @@ def _required_items(page_intent: dict[str, Any]) -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------- #
 # committed evidence readers (None == input absent/unreadable)
 # --------------------------------------------------------------------------- #
-def _load_contracts(metrics_dir: Path) -> dict[str, dict[str, Any]] | None:
+def _load_contracts(
+    metrics_dir: Path, approved: frozenset[str] = frozenset()
+) -> dict[str, dict[str, Any]] | None:
+    """Contracts under metrics/ keyed by name. ``status`` is ``pass`` ONLY for a
+    contract the shared inventory approves (``approved``); a self-asserted
+    ``readiness.status: pass`` without that approval reads ``unapproved``
+    (audit F034/F040 -- one approval-trust path)."""
     if not metrics_dir.is_dir():
         return None
     contracts: dict[str, dict[str, Any]] = {}
@@ -181,6 +190,8 @@ def _load_contracts(metrics_dir: Path) -> dict[str, dict[str, Any]] | None:
         status = ""
         if isinstance(readiness, dict):
             status = str(readiness.get("status", "")).strip()
+        if status == "pass" and name not in approved:
+            status = _UNAPPROVED
         binds = data.get("binds_to")
         cols = _str_list(binds.get("columns")) if isinstance(binds, dict) else []
         contracts[name] = {"status": status, "columns": cols, "rel": path.name}
@@ -268,14 +279,18 @@ def _name_tokens(name: object) -> set[str]:
     return {full, full.split(".")[-1]}
 
 
-def _open_decisions(text: str) -> dict[str, dict[str, str]]:
+def _open_decisions(
+    text: str, gate_approved: bool = False
+) -> dict[str, dict[str, str]]:
     """Parse unresolved-questions.md into {row_id: {owner, question, open}}.
 
     A row is OPEN when its structured ``Status`` cell is not ``answered`` AND the
-    doc-level ``Gate status`` is not ``CLEARED``. Openness is read from the
-    structured column only -- the free-text question prose is never scored.
+    gate is not cleared. The markdown ``Gate status: CLEARED`` line clears the
+    gate only when a named-human ``mapping_ready`` approval is also recorded in
+    readiness-status (``gate_approved``): a prose line alone is self-asserted
+    (audit F034). Openness is read from the structured column only.
     """
-    gate_cleared = _gate_cleared(text)
+    gate_cleared = gate_approved and _gate_cleared(text)
     rows: dict[str, dict[str, str]] = {}
     for line in text.splitlines():
         cells = _table_cells(line)
@@ -400,6 +415,14 @@ def _metric_contract_status(
             "contract file present but unreadable or invalid YAML",
             rel,
         )
+    if contract["status"] == _UNAPPROVED:
+        return _blocker(
+            BLOCKED_NEEDS_DEFINITION,
+            "contract says readiness.status='pass' but is not approved (needs "
+            "evidence, an owner, a checkable definition and a named metric_owner "
+            "approval naming it)",
+            rel,
+        )
     if contract["status"] != "pass":
         return _blocker(
             BLOCKED_NEEDS_DEFINITION,
@@ -516,6 +539,19 @@ def _document_gaps(
     return [msg for relevant, missing, msg in checks if relevant and missing]
 
 
+def _approved_names(root: Path, table: str) -> frozenset[str]:
+    from seshat.metric_contract_inventory import approved_contracts_for_scope
+
+    return frozenset(approved_contracts_for_scope(root, table)[0])
+
+
+def _mapping_gate_approved(tdir: Path) -> bool:
+    from seshat.readiness_spine import load_status_mapping, stage_has_valid_approval
+
+    data = load_status_mapping(tdir / "readiness-status.yaml") or {}
+    return stage_has_valid_approval(data.get("approvals"), "mapping_ready")
+
+
 def build_gap_inventory(
     repo_root: Path | str, table: str, page_intent_path: Path | str | None
 ) -> dict[str, Any]:
@@ -542,16 +578,19 @@ def build_gap_inventory(
             "read_only": True,
         }
 
-    contracts = _load_contracts(tdir / "metrics")
+    contracts = _load_contracts(tdir / "metrics", _approved_names(root, table))
     source_map = _load_yaml_mapping(tdir / "source-map.yaml")
     q_text = _read_text(tdir / "unresolved-questions.md")
+    gate_approved = _mapping_gate_approved(tdir)
     dim_tokens, gold_cols = _collect_gold(source_map) if source_map else (None, None)
     ctx = {
         "table": table,
         "contracts": contracts,
         "dim_tokens": dim_tokens,
         "gold_cols": gold_cols,
-        "decisions": _open_decisions(q_text) if q_text is not None else None,
+        "decisions": (
+            _open_decisions(q_text, gate_approved) if q_text is not None else None
+        ),
     }
 
     items = _required_items(page_intent)

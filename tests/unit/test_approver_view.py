@@ -70,6 +70,18 @@ approvals:
     at: "2026-06-25"
 """
 
+RULED_Q1_STATUS = """
+table: "t"
+stages:
+  mapping_ready:
+    status: "pass"
+approvals:
+  - stage: "mapping_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-06-25"
+    note: "ruled Q1 keep"
+"""
+
 # open questions table with an OPEN governance row and an OPEN analyst row
 QUESTIONS_OPEN = """
 | ID | Question | Why | Who must answer | Default | Status | Resolution |
@@ -236,14 +248,25 @@ def test_awkward_cells_answered_not_refusal(tmp_path):
     # PARSER-UNDER-TEST (V1 independent oracle): backticked/padded cells. Q1 is
     # answered -> must NOT be in the refusal case; Q2 open -> must be. This is the
     # exact bug the real fixture exposed (backticked `answered` mis-read as open).
-    _write(tmp_path, "t", ALL_PASS_STATUS, QUESTIONS_AWKWARD)
+    # Q1's `answered` cell is backed by a committed approval naming Q1.
+    _write(tmp_path, "t", RULED_Q1_STATUS, QUESTIONS_AWKWARD)
     view = build_approver_view(tmp_path, "t")
-    sm = yaml.safe_load(ALL_PASS_STATUS)
+    sm = yaml.safe_load(RULED_Q1_STATUS)
     srcs = " ".join(i["source"] for i in view["refusal_case"])
     assert "question Q2" in srcs, "open Q2 must be in the refusal case"
     assert "question Q1" not in srcs, "answered Q1 must NOT be in the refusal case"
     # hand-authored oracle: ONLY Q2 is open
     assert_refusal_case_complete(view, sm, expected_open_question_ids={"Q2"})
+
+
+def test_self_reported_answered_without_ruling_stays_in_refusal(tmp_path):
+    """A Status cell edited to `answered` with no recorded ruling must not vanish
+    from the signer's view: the cell is free markdown (audit F080)."""
+    _write(tmp_path, "t", ALL_PASS_STATUS, QUESTIONS_AWKWARD)
+    view = build_approver_view(tmp_path, "t")
+    q1 = [i for i in view["refusal_case"] if "question Q1" in i["source"]]
+    assert len(q1) == 1
+    assert "unverified" in q1[0]["reason"]
 
 
 # --------------------------------------------------------------------------- #

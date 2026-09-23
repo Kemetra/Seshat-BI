@@ -10,6 +10,7 @@ import yaml
 
 from seshat.statistical.policy import evaluate_policy
 from seshat.statistical.schema import load_analysis_spec
+from tests.unit._gitfix import commit_tree
 
 pytestmark = pytest.mark.unit
 
@@ -25,7 +26,8 @@ def _repo(tmp_path: Path) -> Path:
         Path(__file__).parents[3] / "schemas" / "statistical-analysis-spec.schema.json",
         schema_dir,
     )
-    return root
+    # The policy reads the readiness record and contracts at HEAD.
+    return commit_tree(root)
 
 
 def _load(root: Path):
@@ -37,6 +39,7 @@ def _edit(path: Path, mutate) -> None:
     document = yaml.safe_load(path.read_text(encoding="utf-8"))
     mutate(document)
     path.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+    commit_tree(next(p for p in path.parents if (p / ".git").exists()))
 
 
 def test_valid_policy_resolves_immutable_authority_context(tmp_path: Path) -> None:
@@ -244,3 +247,28 @@ def test_policy_refuses_role_outside_approved_contract_columns(
     assert [blocker.code for blocker in decision.blockers] == [
         "STAT_CONTRACT_NOT_APPROVED"
     ]
+
+
+def test_uncommitted_readiness_edit_does_not_authorize(tmp_path: Path) -> None:
+    """Audit F143: the stage gates read COMMITTED readiness -- a worktree edit is
+    not an approval."""
+    root = _repo(tmp_path)
+    status = root / "mappings/sample/readiness-status.yaml"
+    status.write_text(status.read_text(encoding="utf-8") + "\n# edited\n", "utf-8")
+    decision = evaluate_policy(root, _load(root))
+    assert decision.allowed is False
+    assert "STAT_SEMANTIC_NOT_READY" in {b.code for b in decision.blockers}
+
+
+def test_semantic_pass_without_metric_owner_approval_is_not_ready(
+    tmp_path: Path,
+) -> None:
+    """Audit F143: `semantic_model_ready: pass` alone is self-asserted; the gate
+    needs the named metric_owner approval the recovery text asks for."""
+    root = _repo(tmp_path)
+    _edit(
+        root / "mappings/sample/readiness-status.yaml",
+        lambda doc: doc.update(approvals=[]),
+    )
+    decision = evaluate_policy(root, _load(root))
+    assert "STAT_SEMANTIC_NOT_READY" in {b.code for b in decision.blockers}

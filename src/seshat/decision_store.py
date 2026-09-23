@@ -100,6 +100,9 @@ _OPEN_STATUSES: frozenset[str] = frozenset(
     }
 )
 
+#: Public name for the unresolved-status vocabulary (the review renderer uses it).
+OPEN_STATUSES = _OPEN_STATUSES
+
 # Terminal non-open statuses: settled records that do not block by themselves.
 _TERMINAL_STATUSES: frozenset[str] = frozenset({"approved", "rejected", "superseded"})
 
@@ -144,17 +147,32 @@ def store_files(tracked_files: tuple[str, ...]) -> list[str]:
     return sorted(p for p in tracked_files if p in present)
 
 
-def load_store_file(repo_root: Path | str, rel: str) -> LoadedStore:
-    """Read and shallow-parse one store file. Never raises; a failure becomes a
-    ``StoreProblem`` so the caller can fail closed."""
-    root = Path(repo_root)
+def _read_store_text(root: Path, rel: str, committed: bool) -> tuple[str | None, str]:
+    """The store file's text (HEAD content when ``committed``) or a problem."""
+    if committed:
+        from seshat.gitstate import committed_text
+
+        text = committed_text(root, rel)
+        if text is None:
+            return None, "decision store is not committed (untracked or dirty)"
+        return text.lstrip("\ufeff"), ""
     try:
-        raw = (root / rel).read_text(encoding="utf-8-sig")
+        return (root / rel).read_text(encoding="utf-8-sig"), ""
     except (OSError, UnicodeDecodeError) as exc:
+        return None, f"could not read decision store: {exc}"
+
+
+def load_store_file(
+    repo_root: Path | str, rel: str, *, committed: bool = False
+) -> LoadedStore:
+    """Read and shallow-parse one store file. Never raises; a failure becomes a
+    ``StoreProblem`` so the caller can fail closed. ``committed=True`` reads the
+    HEAD content and fails closed on an untracked or dirty file, so an
+    uncommitted append can never move an approval-bearing verdict."""
+    raw, problem = _read_store_text(Path(repo_root), rel, committed)
+    if raw is None:
         return LoadedStore(
-            path=rel,
-            present=True,
-            problems=(StoreProblem(rel, rel, f"could not read decision store: {exc}"),),
+            path=rel, present=True, problems=(StoreProblem(rel, rel, problem),)
         )
 
     import yaml  # lazy: keep retail check import path stdlib-light
@@ -206,9 +224,14 @@ def load_store_file(repo_root: Path | str, rel: str) -> LoadedStore:
     )
 
 
-def load_store(repo_root: Path | str, tracked_files: tuple[str, ...]) -> "Store":
+def load_store(
+    repo_root: Path | str, tracked_files: tuple[str, ...], *, committed: bool = False
+) -> "Store":
     """Load every present store file into one aggregate view."""
-    files = tuple(load_store_file(repo_root, rel) for rel in store_files(tracked_files))
+    files = tuple(
+        load_store_file(repo_root, rel, committed=committed)
+        for rel in store_files(tracked_files)
+    )
     return Store(files=files)
 
 

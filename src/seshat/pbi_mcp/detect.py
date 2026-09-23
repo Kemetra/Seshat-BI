@@ -332,11 +332,11 @@ def _stage_status(data: dict, stage: str) -> str:
 
 
 def _has_publish_approval(data: dict) -> bool:
-    approvals = data.get("approvals") or []
-    return any(
-        isinstance(entry, dict) and str(entry.get("stage", "")) == "publish_ready"
-        for entry in approvals
-    )
+    """A publish_ready approval that satisfies the ONE shared predicate (named
+    human, eligible class, ISO date) -- not any dict naming the stage."""
+    from seshat.readiness_spine import stage_has_valid_approval
+
+    return stage_has_valid_approval(data.get("approvals"), "publish_ready")
 
 
 def _load_readiness_record(record: Path) -> dict | None:
@@ -451,17 +451,12 @@ def read_table_approval(repo_root: Path, table: str, stage: str) -> str:
     data = _load_readiness_record(record)
     if data is None:
         return APPROVAL_ABSENT
-    approvals = data.get("approvals")
-    if not isinstance(approvals, list):
-        return APPROVAL_ABSENT
-    for entry in approvals:
-        if not isinstance(entry, dict) or entry.get("stage") != stage:
-            continue
-        if all(
-            isinstance(entry.get(field), str) and entry[field].strip()
-            for field in ("owner", "at", "note")
-        ):
-            return APPROVAL_RECORDED
+    # One approval predicate with RS1 and the PBIR gate (audit F023): a named
+    # human of an eligible class, an ISO date, and a note.
+    from seshat.pbir_authoring_gate import complete_stage_approval
+
+    if complete_stage_approval(data, stage):
+        return APPROVAL_RECORDED
     return APPROVAL_ABSENT
 
 

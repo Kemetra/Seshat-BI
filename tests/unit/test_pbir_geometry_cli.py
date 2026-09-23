@@ -8,7 +8,12 @@ from pathlib import Path
 import pytest
 
 from seshat.cli import main
-from tests.unit._pbir_gate_fixture import gate_args, pbir_gate_repo
+from tests.unit._pbir_gate_fixture import (
+    bind_report,
+    gate_args,
+    pbir_gate_repo,
+    report_home,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -16,8 +21,9 @@ FIXTURE = Path(__file__).parent.parent / "fixtures" / "pbir" / "geometry.Report"
 
 
 def _visual(tmp_path: Path) -> Path:
-    dst = tmp_path / "geometry.Report"
+    dst = report_home(tmp_path) / "geometry.Report"
     shutil.copytree(FIXTURE, dst)
+    bind_report(dst)
     return dst / "definition" / "pages" / "pg" / "visuals" / "vA" / "visual.json"
 
 

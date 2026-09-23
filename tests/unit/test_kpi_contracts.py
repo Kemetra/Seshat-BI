@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 
@@ -27,6 +28,13 @@ _AUTHORITY = {
     "policy_ruling": frozenset({"metric_owner"}),
 }
 _EVIDENCE = "mappings/orders/source-map.yaml#net_sales"
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+# Decision approval evidence is RE-VERIFIED at finalize (never trusted from the
+# caller), so the fixtures cite a real committed file and its current identity.
+_DECISION_EVIDENCE = "docs/conventions.md"
+_DECISION_SHA = hashlib.sha256(
+    (_REPO_ROOT / _DECISION_EVIDENCE).read_bytes()
+).hexdigest()
 
 
 def _entry(*, lifecycle: str = "seeded") -> dict[str, object]:
@@ -43,17 +51,20 @@ def _entry(*, lifecycle: str = "seeded") -> dict[str, object]:
     return entry
 
 
-def _approved(decision_type: str, identifier: str) -> dict[str, object]:
+def _approved(
+    decision_type: str, identifier: str, kpi: str = "net_sales"
+) -> dict[str, object]:
     return {
         "id": identifier,
         "decision_type": decision_type,
         "status": "approved",
+        "scope": {"kpis": [kpi]},
         "approval": {
             "approved_by": "Jane Doe (metric_owner)",
             "approved_at": "2026-07-13",
             "source": "owner review",
-            "evidence": ["docs/evidence.md"],
-            "evidence_identity": {"docs/evidence.md": "identity"},
+            "evidence": [_DECISION_EVIDENCE],
+            "evidence_identity": {_DECISION_EVIDENCE: _DECISION_SHA},
             "reviewed_scope": "orders",
         },
     }
@@ -80,6 +91,7 @@ def _finalize(
                 {_EVIDENCE: True} if evidence_freshness is None else evidence_freshness
             ),
             named_human_approval=named_human_approval,
+            repo_root=_REPO_ROOT,
         ),
     )
 
@@ -280,7 +292,7 @@ def test_draft_rejects_implementation_sensitive_values_and_premature_bindings(
 
 
 def test_custom_draft_requires_named_owner_and_does_not_need_registry_entry() -> None:
-    decisions = [_approved("kpi_definition", "kpi_definition.custom")]
+    decisions = [_approved("kpi_definition", "kpi_definition.custom", "CustomMetric")]
     registry_ids = ["KPI-MC-02"]
     registry_before = registry_ids.copy()
     with pytest.raises(ContractDraftRefused, match="named eligible owner"):
@@ -473,3 +485,54 @@ def test_new_generic_contracts_do_not_copy_worked_example_tokens() -> None:
         "insurance pii",
     ):
         assert token not in text
+
+
+def test_draft_refuses_a_decision_approved_for_another_kpi() -> None:
+    """Audit F071: an approved kpi_definition for net_sales does not stand in for
+    Gross Margin."""
+    with pytest.raises(ContractDraftRefused, match="scoped to this KPI"):
+        draft_project_metric_contract(
+            ContractDraftRequest(
+                name="GrossMargin",
+                formula_intent="Sales value less cost.",
+                grain="sales line",
+                owner="Sales owner",
+                generic_kpi_ref="KPI-MC-09",
+                custom=False,
+                registry_ids=["KPI-MC-09"],
+                decisions=[_approved("kpi_definition", "kpi_definition.net_sales")],
+                authority=_AUTHORITY,
+                required_decision_types=["kpi_definition"],
+                source_evidence=[_EVIDENCE],
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "approver", ["Claude Agent (wizard)", "Someone Else (metric_owner)"]
+)
+def test_finalize_refuses_an_approver_who_did_not_approve(approver: str) -> None:
+    """Audit F071: the caller-supplied approver string is not authority -- it must
+    be the eligible named human who approved a referenced kpi_definition."""
+    result = _finalize(
+        _bound_draft(),
+        decisions=_net_sales_decisions(),
+        named_human_approval=approver,
+    )
+    assert result["readiness"]["status"] == "blocked"
+
+
+def test_finalize_blocks_on_stale_decision_evidence() -> None:
+    """Audit F071: decision evidence freshness is computed, not caller-supplied."""
+    decisions = _net_sales_decisions()
+    decisions[0]["approval"]["evidence_identity"] = {_DECISION_EVIDENCE: "0" * 64}
+    result = _finalize(_bound_draft(), decisions=decisions)
+    assert result["readiness"]["status"] == "blocked"
+    assert any("stale" in r for r in result["readiness"]["blocking_reasons"])
+
+
+def test_answerability_evidence_order_is_deterministic() -> None:
+    """Audit F179: evidence order must not depend on PYTHONHASHSEED."""
+    evidence = ["z.md", "a.md", "m.md"]
+    inputs = AnswerabilityInputs(scope="orders", evidence=evidence)
+    assert inputs.evidence == ("a.md", "m.md", "z.md")

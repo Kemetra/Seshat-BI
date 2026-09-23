@@ -9,7 +9,12 @@ from pathlib import Path
 import pytest
 
 from seshat.cli import main
-from tests.unit._pbir_gate_fixture import gate_args, pbir_gate_repo
+from tests.unit._pbir_gate_fixture import (
+    bind_report,
+    gate_args,
+    pbir_gate_repo,
+    report_home,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -17,9 +22,9 @@ FIXTURES = Path(__file__).parent.parent / "fixtures" / "pbir" / "theme_apply"
 
 
 def _report_copy(tmp: Path) -> Path:
-    dst = tmp / "Rpt.Report"
+    dst = report_home(tmp) / "Rpt.Report"
     shutil.copytree(FIXTURES, dst)
-    return dst
+    return bind_report(dst)
 
 
 def _theme(tmp: Path) -> Path:

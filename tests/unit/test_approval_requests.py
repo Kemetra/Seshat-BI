@@ -60,6 +60,35 @@ def test_request_with_shape_valid_approval_is_silent(tmp_path):
     assert open_request_caveats(tmp_path, [_VALID_APPROVAL]) == []
 
 
+_DASHBOARD_REQUEST = "- **stage:** `dashboard_ready`\n- **status:** `open`\n"
+
+
+def test_approval_of_another_stage_and_class_leaves_request_open(tmp_path):
+    """Audit F016: a source_ready/analyst row naming a dashboard_ready request's
+    decision record does not settle it."""
+    _request(tmp_path, "H12-dashboard", _DASHBOARD_REQUEST)
+    forged = {
+        "stage": "source_ready",
+        "owner": "Jane Doe (analyst)",
+        "at": "2026-09-01",
+        "note": "see approval-decision-H12-dashboard.md",
+    }
+    assert _request_kinds(open_request_caveats(tmp_path, [forged])) == [
+        OPEN_REQUEST_KIND
+    ]
+
+
+def test_eligible_approval_of_the_declared_stage_settles(tmp_path):
+    _request(tmp_path, "H12-dashboard", _DASHBOARD_REQUEST)
+    ruling = {
+        "stage": "dashboard_ready",
+        "owner": "Dana Report (report_owner)",
+        "at": "2026-09-01",
+        "note": "see approval-decision-H12-dashboard.md",
+    }
+    assert open_request_caveats(tmp_path, [ruling]) == []
+
+
 def test_request_without_any_approval_is_reported(tmp_path):
     _request(tmp_path, "narrative-brief-migration")
     caveats = open_request_caveats(tmp_path, [])

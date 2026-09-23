@@ -76,10 +76,12 @@ owner, and committed source evidence; without them it raises
 7. On explicit human confirmation, write the returned contract to
    `mappings/<table>/metrics/<Name>.yaml`.
 8. After the gold binding is materialized and validated, call
-   `finalize_project_metric_contract` with a `FinalizationContext`; it promotes
-   to `readiness.status: pass` ONLY when every precondition (binding, decisions,
-   fresh evidence, named-human approval) holds. The skill never sets `pass`
-   itself.
+   `finalize_project_metric_contract` with a `FinalizationContext` (pass
+   `repo_root` so each referenced decision's approval evidence is re-verified);
+   it promotes to `readiness.status: pass` ONLY when every precondition
+   (binding, decisions scoped to this KPI via `scope.kpis`, fresh evidence, and
+   a `named_human_approval` equal to the eligible approver of a referenced
+   `kpi_definition`) holds. The skill never sets `pass` itself.
 
 ## field_provenance (preview only; five-value origin vocabulary)
 

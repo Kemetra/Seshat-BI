@@ -10,26 +10,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-_STAGE_ORDER: tuple[str, ...] = (
-    "source_ready",
-    "mapping_ready",
-    "silver_ready",
-    "gold_ready",
-    "semantic_model_ready",
-    "dashboard_ready",
-    "publish_ready",
+from seshat.readiness_spine import (
+    STAGE_AUTHORITY,
+    STAGE_ORDER,
+    approval_required,
+    load_status_mapping,
+    owner_is_valid,
+    required_authority,
+    stage_has_valid_approval,
 )
-_APPROVAL_REQUIRED: frozenset[str] = frozenset(
-    {"mapping_ready", "semantic_model_ready", "dashboard_ready", "publish_ready"}
-)
-_FILE_SOURCE_KINDS: frozenset[str] = frozenset({"csv", "tsv", "excel"})
-_AUTHORITY_BY_STAGE: dict[str, str] = {
-    "source_ready": "data_owner",
-    "mapping_ready": "analyst",
-    "semantic_model_ready": "metric_owner",
-    "dashboard_ready": "governance",
-    "publish_ready": "data_owner",
-}
+
 _APPROVAL_MARKERS: tuple[str, ...] = (
     "approval",
     "approved",
@@ -45,37 +35,6 @@ def _as_str_list(value: object) -> list[str]:
     return [item for item in value if isinstance(item, str)]
 
 
-def _valid_owner(owner: object) -> bool:
-    from seshat.rules.readiness_status import _owner_is_valid
-
-    return _owner_is_valid(owner)
-
-
-def _source_kind(stage_block: object) -> str | None:
-    from seshat.rules.readiness_status import _source_kind
-
-    return _source_kind(stage_block)
-
-
-def _load_yaml_mapping(path: Path) -> dict[str, Any] | None:
-    import yaml
-
-    try:
-        raw = path.read_text(encoding="utf-8-sig")
-        data = yaml.safe_load(raw)
-    except (OSError, UnicodeDecodeError, yaml.YAMLError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    return data
-
-
-def _approval_required(stage_name: str, block: dict[str, Any]) -> bool:
-    if stage_name in _APPROVAL_REQUIRED:
-        return True
-    return stage_name == "source_ready" and _source_kind(block) in _FILE_SOURCE_KINDS
-
-
 def _stage_approvals(approvals: object, stage_name: str) -> list[dict[str, Any]]:
     if not isinstance(approvals, list):
         return []
@@ -86,26 +45,11 @@ def _stage_approvals(approvals: object, stage_name: str) -> list[dict[str, Any]]
     ]
 
 
-def _valid_stage_approval(approvals: object, stage_name: str) -> bool:
-    """Whether ``stage_name`` carries a shape-valid approval.
-
-    Delegates to the one shared definition so the inbox cannot bless an entry
-    that ``seshat check`` rejects -- e.g. one keyed ``date:`` instead of ``at:``
-    (issue #487).
-    """
-    from seshat.rules.readiness_status import approval_is_shape_valid
-
-    return any(
-        approval_is_shape_valid(item)
-        for item in _stage_approvals(approvals, stage_name)
-    )
-
-
 def _invalid_stage_owners(approvals: object, stage_name: str) -> list[str]:
     owners: list[str] = []
     for item in _stage_approvals(approvals, stage_name):
         owner = item.get("owner")
-        if not _valid_owner(owner):
+        if not owner_is_valid(owner):
             owners.append(str(owner))
     return owners
 
@@ -121,7 +65,7 @@ def _base_item(table: str, source_path: str, stage: str, status: str) -> dict[st
         "source_path": source_path,
         "stage": stage,
         "status": status,
-        "required_authority": _AUTHORITY_BY_STAGE[stage],
+        "required_authority": required_authority(stage),
     }
 
 
@@ -187,7 +131,7 @@ def _stage_item(
     block: dict[str, Any],
 ) -> dict[str, Any] | None:
     status = block.get("status")
-    if not isinstance(status, str) or stage_name not in _AUTHORITY_BY_STAGE:
+    if not isinstance(status, str) or stage_name not in STAGE_AUTHORITY:
         return None
 
     approvals = context["approvals"]
@@ -197,9 +141,11 @@ def _stage_item(
 
     if status == "blocked":
         return _blocked_approval_item(base, blockers, invalid_owners)
-    if status != "pass" or not _approval_required(stage_name, block):
+    if status != "pass" or not approval_required(stage_name, block):
         return None
-    if _valid_stage_approval(approvals, stage_name):
+    # One predicate with the gate: shape-valid AND a class eligible for the stage
+    # (issue #487; audit F073 -- required_authority is now enforced, not decor).
+    if stage_has_valid_approval(approvals, stage_name):
         return None
     return _missing_approval_item(base, blockers, invalid_owners)
 
@@ -220,7 +166,7 @@ def _items_for_status(
     approvals = data.get("approvals")
     context = {"table": table, "source_path": source_path, "approvals": approvals}
     items: list[dict[str, Any]] = []
-    for stage_name in _STAGE_ORDER:
+    for stage_name in STAGE_ORDER:
         block = stages.get(stage_name)
         if not isinstance(block, dict):
             continue
@@ -234,12 +180,43 @@ def _items_for_status(
     return items
 
 
+UNREADABLE_ISSUE = "unreadable_status"
+
+
+def unreadable_status_item(table: str, source_path: str) -> dict[str, Any]:
+    """An explicit item for a readiness file that cannot be parsed (audit F074).
+
+    A corrupt file used to vanish from the inbox, so a table whose state could
+    not be read looked exactly like a table with nothing awaiting approval.
+    """
+    return {
+        "table": table,
+        "source_path": source_path,
+        "stage": None,
+        "status": None,
+        "required_authority": None,
+        "issue": UNREADABLE_ISSUE,
+        "detail": (
+            "readiness-status.yaml is unreadable or not a mapping; its approval "
+            "state cannot be established (this is NOT the same as 'nothing to "
+            "approve')"
+        ),
+        "blocking_reasons": [],
+        "invalid_approvals": [],
+    }
+
+
 def _items_from_status_path(root: Path, status_path: Path) -> list[dict[str, Any]]:
-    data = _load_yaml_mapping(status_path)
-    if data is None:
-        return []
     source_path = status_path.relative_to(root).as_posix()
+    data = load_status_mapping(status_path)
+    if data is None:
+        return [unreadable_status_item(status_path.parent.name, source_path)]
     return _items_for_status(data, source_path, status_path.parent.name)
+
+
+def _sort_key(item: dict[str, Any]) -> tuple[str, int]:
+    stage = item["stage"]
+    return item["source_path"], STAGE_ORDER.index(stage) if stage else -1
 
 
 def build_approval_inbox(repo_root: Path | str = ".") -> dict[str, Any]:
@@ -250,7 +227,5 @@ def build_approval_inbox(repo_root: Path | str = ".") -> dict[str, Any]:
     if mappings_dir.is_dir():
         for status_path in sorted(mappings_dir.glob("*/readiness-status.yaml")):
             items.extend(_items_from_status_path(root, status_path))
-    items.sort(
-        key=lambda item: (item["source_path"], _STAGE_ORDER.index(item["stage"]))
-    )
+    items.sort(key=_sort_key)
     return {"items": items, "read_only_proof": True}
