@@ -81,3 +81,13 @@ def test_only_scans_parameter_expressions(tmp_path: Path) -> None:
     )
     findings = list(check_pbip_param_no_real_value(ctx))
     assert findings == []
+
+
+def test_message_never_echoes_the_leaked_value() -> None:
+    # The finding text flows verbatim into terminal/CI logs, SARIF and the
+    # governor MCP response, so it must name the parameter but not its value.
+    findings = list(check_pbip_param_no_real_value(_ctx("leak.SemanticModel")))
+    text = " ".join(f"{f.message} {f.locator}" for f in findings)
+    assert "db.example.com" not in text
+    assert "prod_demo" not in text
+    assert "redacted" in text

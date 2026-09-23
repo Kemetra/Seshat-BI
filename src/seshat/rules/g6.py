@@ -76,13 +76,17 @@ def _g6_finding_for_line(rel: str, lineno: int, line: str) -> Finding | None:
     value = m.group("value")
     if _PLACEHOLDER_RE.search(value):
         return None  # placeholder form -> safe
+    # The value itself is NEVER echoed: finding text is embedded verbatim into
+    # terminal/CI logs, SARIF uploads and the governor MCP response (the same
+    # discipline C1 follows). The locator points at the exact line to fix.
     return Finding(
         rule_id="G6",
         severity=Severity.ERROR,
         message=(
-            f"PBIP parameter {m.group('name')!r} has a real value ({value!r}); "
-            f"a committed parameter must be the <placeholder> form -- real "
-            f"host/db are supplied at refresh (Desktop/gateway), never committed"
+            f"PBIP parameter {m.group('name')!r} has a non-placeholder value "
+            f"(value redacted); a committed parameter must be the <placeholder> "
+            f"form -- real host/db are supplied at refresh (Desktop/gateway), "
+            f"never committed"
         ),
         locator=f"{rel}:{lineno}",
     )
