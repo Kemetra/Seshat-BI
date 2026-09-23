@@ -52,7 +52,7 @@ def _write_readiness(root: Path, table: str, status: str, approve: bool) -> None
     record = root / "mappings" / table / "readiness-status.yaml"
     record.parent.mkdir(parents=True, exist_ok=True)
     approvals = (
-        '\napprovals:\n  - stage: "publish_ready"\n    owner: "A Person (owner)"\n'
+        '\napprovals:\n  - stage: "publish_ready"\n    owner: "A Person (data_owner)"\n'
         '    at: "2026-07-24"\n'
         if approve
         else "\napprovals: []\n"
@@ -75,7 +75,7 @@ def _write_target_record(
     record.parent.mkdir(parents=True, exist_ok=True)
     approval = (
         '\napprovals:\n  - stage: "dashboard_ready"\n'
-        '    owner: "A Person (owner)"\n'
+        '    owner: "A Person (report_owner)"\n'
         '    at: "2026-08-10"\n'
         '    note: "Approved report design"\n'
         if dashboard_approval

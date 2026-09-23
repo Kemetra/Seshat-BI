@@ -58,6 +58,10 @@ _MANIFEST_MISMATCH = (
 _NO_APPROVED = (
     "No approved metric contract binds to the requested table; nothing to sync."
 )
+_MODEL_OUTSIDE_REPO = (
+    "The semantic model is not inside the repository; measure-sync writes only a "
+    "model that lives under --repo."
+)
 _TABLE_ABSENT = (
     "No table definition matching the requested table name was found under the "
     "model's definition/tables/ directory."
@@ -207,18 +211,44 @@ def _manifest_gate(model_dir: Path) -> str | None:
 def _approved_for_table(
     repo_root: Path, metrics_dir: str, table: str
 ) -> tuple[list[MetricContract], list[str]]:
-    """Approved contracts bound to ``table`` plus every exclusion reason."""
+    """Approved contracts bound to ``table`` plus every exclusion reason.
+
+    Contracts and the readiness approvals are read COMMITTED (an uncommitted,
+    agent-authored approval row authorizes nothing -- #334), and a contract only
+    syncs when its scope's committed ``semantic_model_ready`` is ``pass``."""
     from .metric_contract_inventory import load_contract_inventory
 
     paths = sorted((repo_root / metrics_dir).glob("*/metrics/*.yaml"))
-    inventory = load_contract_inventory(paths, repo_root)
+    inventory = load_contract_inventory(paths, repo_root, committed=True)
     wanted = normalize_table_binding(table)
-    matching = [
-        contract
-        for contract in inventory.approved.values()
-        if normalize_table_binding(contract.gold_table) == wanted
-    ]
-    return sorted(matching, key=lambda contract: contract.name), list(inventory.errors)
+    errors = list(inventory.errors)
+    matching: list[MetricContract] = []
+    for contract in inventory.approved.values():
+        if normalize_table_binding(contract.gold_table) != wanted:
+            continue
+        if _semantic_stage_passes(repo_root, contract.scope):
+            matching.append(contract)
+        else:
+            errors.append(
+                f"{contract.name}: committed semantic_model_ready of scope "
+                f"{contract.scope!r} is not 'pass'"
+            )
+    return sorted(matching, key=lambda contract: contract.name), errors
+
+
+def _semantic_stage_passes(repo_root: Path, scope: str) -> bool:
+    import yaml
+
+    from .gitstate import committed_text
+
+    text = committed_text(repo_root, f"mappings/{scope}/readiness-status.yaml")
+    try:
+        document = yaml.safe_load(text.lstrip("\ufeff")) if text else None
+    except yaml.YAMLError:
+        return False
+    stages = document.get("stages") if isinstance(document, dict) else None
+    block = stages.get("semantic_model_ready") if isinstance(stages, dict) else None
+    return isinstance(block, dict) and block.get("status") == "pass"
 
 
 def _render_contracts(
@@ -649,6 +679,13 @@ def _input_defect_reason(repo_root: Path, model_dir: Path) -> str | None:
     return None
 
 
+def _containment_gate(repo_root: Path, model_dir: Path) -> str | None:
+    """Refuse a model resolving outside the repository (audit F022)."""
+    if model_dir.resolve().is_relative_to(repo_root.resolve()):
+        return None
+    return _MODEL_OUTSIDE_REPO
+
+
 def _write_synced(
     target: _SyncTarget, edits: list[_Edit], report: _RunReport
 ) -> dict[str, Any]:
@@ -722,7 +759,9 @@ def sync_measures(request: MeasureSyncRequest) -> dict[str, Any]:
     defect = _input_defect_reason(Path(request.repo), Path(request.model))
     if defect is not None:
         return report.doc("input_defect", [defect])
-    gate = _manifest_gate(Path(request.model))
+    gate = _containment_gate(Path(request.repo), Path(request.model)) or (
+        _manifest_gate(Path(request.model))
+    )
     if gate is not None:
         return report.doc("refused", [gate])
     rendered, report, failure = _approved_rendered(request, report)

@@ -22,6 +22,7 @@ from seshat.pbip_measure_sync import (
     sync_measures,
 )
 from seshat.tmdl import parse_tmdl
+from tests.unit._gitfix import commit_tree
 
 pytestmark = pytest.mark.unit
 
@@ -82,21 +83,23 @@ def _contract_yaml(name: str, column: str, **overrides: str) -> str:
     )
 
 
-def _readiness_yaml(names: list[str]) -> str:
+def _readiness_yaml(names: list[str], semantic: str = "pass") -> str:
     joined = ", ".join(names)
     return (
+        "stages:\n"
+        f"  semantic_model_ready: {{status: {semantic}}}\n"
         "approvals:\n"
         '  - stage: "semantic_model_ready"\n'
         '    owner: "Test Owner (metric_owner)"\n'
         '    at: "2026-07-24"\n'
-        f'    note: "metric_owner sign-off naming {joined}"\n'
+        f"    contracts: [{joined}]\n"
     )
 
 
 def _make_repo(tmp_path: Path, contracts: dict[str, str]) -> Path:
     repo = tmp_path / "repo"
     metrics = repo / "mappings" / "sales" / "metrics"
-    metrics.mkdir(parents=True)
+    metrics.mkdir(parents=True, exist_ok=True)
     for name, body in contracts.items():
         (metrics / f"{name}.yaml").write_text(body, encoding="utf-8")
     (repo / "mappings" / "sales" / "readiness-status.yaml").write_text(
@@ -112,10 +115,10 @@ def _make_project(
     manifest_model: str | None = "Model.SemanticModel",
     table_filename: str = "gold fct_sales.tmdl",
 ) -> Path:
-    project = tmp_path / "project"
+    project = tmp_path / "repo" / "project"
     model_dir = project / "Model.SemanticModel"
     tables = model_dir / "definition" / "tables"
-    tables.mkdir(parents=True)
+    tables.mkdir(parents=True, exist_ok=True)
     (tables / table_filename).write_text(table_text, encoding="utf-8", newline="")
     if manifest_model is not None:
         manifest = project / Path(MANIFEST_PATH)
@@ -146,6 +149,8 @@ def _partition_text(path: Path) -> str:
 
 
 def _sync(repo: Path, model_dir: Path, **kwargs: object) -> dict:
+    # Contracts and approvals authorize a write only once COMMITTED.
+    commit_tree(repo)
     return sync_measures(MeasureSyncRequest(repo, model_dir, TABLE, **kwargs))  # type: ignore[arg-type]
 
 
@@ -205,6 +210,41 @@ def test_contract_failing_inventory_is_excluded_with_reason(tmp_path: Path) -> N
     assert any("TotalSales" in reason for reason in result["excluded"])
     assert any("not owner-approved" in reason for reason in result["excluded"])
     assert _table_path(model_dir).read_bytes() == before
+
+
+def test_uncommitted_approval_row_refuses(tmp_path: Path) -> None:
+    """Audit F022: an approval row nobody committed authorizes no TMDL write."""
+    repo = _make_repo(tmp_path, {"TotalSales": _contract_yaml("TotalSales", "amount")})
+    model_dir = _make_project(tmp_path)
+    status = repo / "mappings" / "sales" / "readiness-status.yaml"
+    status.write_text(_readiness_yaml([]), encoding="utf-8")
+    commit_tree(repo)
+    status.write_text(_readiness_yaml(["TotalSales"]), encoding="utf-8")
+    before = _table_path(model_dir).read_bytes()
+    result = sync_measures(MeasureSyncRequest(repo, model_dir, TABLE))
+    assert result["outcome"] == "refused"
+    assert _table_path(model_dir).read_bytes() == before
+
+
+def test_semantic_stage_not_pass_refuses(tmp_path: Path) -> None:
+    repo = _make_repo(tmp_path, {"TotalSales": _contract_yaml("TotalSales", "amount")})
+    (repo / "mappings" / "sales" / "readiness-status.yaml").write_text(
+        _readiness_yaml(["TotalSales"], semantic="blocked"), encoding="utf-8"
+    )
+    model_dir = _make_project(tmp_path)
+    result = _sync(repo, model_dir)
+    assert result["outcome"] == "refused"
+    assert any("semantic_model_ready" in e for e in result["excluded"])
+
+
+def test_model_outside_the_repo_is_refused(tmp_path: Path) -> None:
+    """Audit F022: --model must resolve inside --repo."""
+    repo = _make_repo(tmp_path, {"TotalSales": _contract_yaml("TotalSales", "amount")})
+    outside = tmp_path / "elsewhere"
+    model_dir = _make_project(outside)
+    result = _sync(repo, model_dir)
+    assert result["outcome"] == "refused"
+    assert any("not inside the repository" in b for b in result["blocking_reasons"])
 
 
 def test_refuses_when_table_file_absent(tmp_path: Path) -> None:
@@ -490,6 +530,7 @@ def _cli_args(repo: Path, model_dir: Path, *extra: str) -> list[str]:
 def test_cli_measure_sync_json_success(tmp_path: Path, capsys) -> None:
     repo = _make_repo(tmp_path, {"TotalSales": _contract_yaml("TotalSales", "amount")})
     model_dir = _make_project(tmp_path)
+    commit_tree(repo)
     code = main(_cli_args(repo, model_dir, "--format", "json"))
     document = json.loads(capsys.readouterr().out)
     assert code == 0
@@ -531,6 +572,7 @@ def test_cli_text_output_suggests_value_check_via_prog_seam(
 ) -> None:
     repo = _make_repo(tmp_path, {"TotalSales": _contract_yaml("TotalSales", "amount")})
     model_dir = _make_project(tmp_path)
+    commit_tree(repo)
     code = main(_cli_args(repo, model_dir))
     output = capsys.readouterr().out
     assert code == 0
