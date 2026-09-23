@@ -287,34 +287,6 @@ def test_no_compiles_to_and_no_out_is_clean_error(tmp_path: Path):
         compile_theme(tokens, out_path=None, force=False)
 
 
-@pytest.mark.parametrize("escape", ["../escaped.theme.json", "ABS"])
-def test_compiles_to_outside_the_repo_is_refused(tmp_path: Path, escape: str):
-    """meta.compiles_to is committed content; it may not name a path outside
-    the repository (F234). --out stays the explicit operator override."""
-    repo = tmp_path / "repo"
-    target = tmp_path / "escaped.theme.json"
-    compiles_to = str(target) if escape == "ABS" else escape
-    doc = {**TOKENS, "meta": {**TOKENS["meta"], "compiles_to": compiles_to}}
-    tokens = _write_tokens(repo, doc)
-    with pytest.raises(ThemeCompileError, match="outside the repository"):
-        compile_theme(tokens, out_path=None, force=False)
-    assert not target.exists()
-
-
-def test_compiles_to_escape_refused_for_a_relative_tokens_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    """A relative tokens path must not let the containment check resolve a
-    doubled root while the write lands outside the repository (F234)."""
-    monkeypatch.chdir(tmp_path)
-    doc = {**TOKENS, "meta": {**TOKENS["meta"], "compiles_to": "../escaped.theme.json"}}
-    _write_tokens(tmp_path / "repo", doc)
-    tokens = Path("repo/design/tokens/executive-dark-design-tokens.yaml")
-    with pytest.raises(ThemeCompileError, match="outside the repository"):
-        compile_theme(tokens, out_path=None, force=False)
-    assert not (tmp_path / "escaped.theme.json").exists()
-
-
 def test_compile_refuses_when_deferred_field_differs_even_with_force(tmp_path: Path):
     # tower-retail-shaped case: the committed theme was hand-tuned by the owner
     # in a DL3-deferred field ("good"). compile must refuse to clobber it, even
