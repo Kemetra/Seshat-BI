@@ -295,18 +295,53 @@ def classify_invocation_argv(argv: Sequence[str]) -> str:
     return forced if forced is not None else CONFIG_READ_ONLY
 
 
-def classify_mcp_config(path: Path) -> str:
-    """Classify the machine-local ``.mcp.json`` at ``path`` (read-only)."""
+def classify_mcp_config(path: Path, *, servers_key: str = "mcpServers") -> str:
+    """Classify one MCP config file at ``path`` (read-only).
+
+    ``servers_key`` is where the file keeps its server map: ``mcpServers`` for
+    ``.mcp.json``, ``servers`` for VS Code's ``.vscode/mcp.json``.
+    """
     if not path.is_file():
         return CONFIG_ABSENT
     try:
         data = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError, UnicodeDecodeError):
         return CONFIG_UNPARSEABLE
-    servers = data.get("mcpServers") if isinstance(data, dict) else None
+    servers = data.get(servers_key) if isinstance(data, dict) else None
     if not isinstance(servers, dict):
         return CONFIG_UNPARSEABLE
     return _classify_servers(servers)
+
+
+#: The PROJECT-scoped MCP config files the bypass guard reads, with the key each
+#: keeps its servers under. User-scope configs (the home directory) are
+#: deliberately NOT read: this repo-rooted tool does not reach into a user's
+#: private settings, and the adapter's own launch argv is built without the
+#: flag regardless (``runner.build_argv``). The scope is stated, not implied.
+PROJECT_MCP_CONFIGS: tuple[tuple[str, str], ...] = (
+    (".mcp.json", "mcpServers"),
+    (".vscode/mcp.json", "servers"),
+)
+
+#: Verdicts that outrank any other, most restrictive first.
+_RESTRICTIVE_VERDICTS = (CONFIG_FORBIDDEN_FLAG, CONFIG_UNPARSEABLE, CONFIG_WRITE_MODE)
+
+
+def classify_project_mcp_configs(root: Path) -> str:
+    """The most restrictive verdict across :data:`PROJECT_MCP_CONFIGS`.
+
+    Reading only ``.mcp.json`` let a bypass flag registered in the second
+    project-scoped file go unseen by doctor, preflight and the write guard
+    alike. One helper for all three, so they cannot disagree.
+    """
+    verdicts = [
+        classify_mcp_config(Path(root) / rel, servers_key=key)
+        for rel, key in PROJECT_MCP_CONFIGS
+    ]
+    for restrictive in _RESTRICTIVE_VERDICTS:
+        if restrictive in verdicts:
+            return restrictive
+    return next((v for v in verdicts if v != CONFIG_ABSENT), CONFIG_ABSENT)
 
 
 def _pbip_marker_at(root: Path, depth: str) -> bool:
@@ -490,7 +525,7 @@ def detect_facts(
         vendored_runtime=(
             PRESENT if (root / VENDORED_RUNTIME_DIR).is_dir() else ABSENT
         ),
-        mcp_config=classify_mcp_config(root / ".mcp.json"),
+        mcp_config=classify_project_mcp_configs(root),
         pbip_project=PRESENT if _pbip_project_present(root) else ABSENT,
         target=target,
         semantic_model_ready=semantic,

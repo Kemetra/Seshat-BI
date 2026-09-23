@@ -373,7 +373,10 @@ def _run_write_leg(args, *, dry_run: bool) -> int:
 
     One implementation, so the dry run cannot drift from the real thing.
     """
-    from seshat.pbi_mcp.detect import BypassFlagRefused, classify_mcp_config
+    from seshat.pbi_mcp.detect import (
+        BypassFlagRefused,
+        classify_project_mcp_configs,
+    )
     from seshat.pbi_mcp.scan import GeneratedSecretError
     from seshat.pbi_mcp_adapter import orchestrate
 
@@ -383,7 +386,9 @@ def _run_write_leg(args, *, dry_run: bool) -> int:
     # carrying --skipconfirmation was never detected on a write. The verdict is
     # already computed for the read-only legs; wire it in rather than trust argv
     # alone (FR-002 covers BOTH arrival routes).
-    config_state = classify_mcp_config(repo_root / ".mcp.json")
+    # Every project-scoped config (.mcp.json and .vscode/mcp.json), the same
+    # helper doctor and preflight use, so the three cannot disagree.
+    config_state = classify_project_mcp_configs(repo_root)
     try:
         report = orchestrate.apply_write(
             repo_root,

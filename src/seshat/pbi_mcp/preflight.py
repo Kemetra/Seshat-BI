@@ -53,7 +53,7 @@ from .detect import (
     CONFIG_WRITE_MODE,
     READINESS_MISSING,
     READINESS_PASS,
-    classify_mcp_config,
+    classify_project_mcp_configs,
     read_semantic_readiness,
     read_table_readiness,
 )
@@ -140,13 +140,13 @@ class PreflightResult:
 
 
 def _config_blockers(repo_root: Path) -> list[PreflightBlocker]:
-    state = classify_mcp_config(Path(repo_root) / ".mcp.json")
+    state = classify_project_mcp_configs(Path(repo_root))
     if state == CONFIG_FORBIDDEN_FLAG:
         return [
             PreflightBlocker(
                 id="PBIMCP-CONF-01",
                 detail=(
-                    ".mcp.json carries --skipconfirmation -- forbidden in "
+                    "a project MCP config carries --skipconfirmation -- forbidden in "
                     "every mode; hard refusal, nothing was contacted"
                 ),
             )
@@ -156,8 +156,8 @@ def _config_blockers(repo_root: Path) -> list[PreflightBlocker]:
             PreflightBlocker(
                 id="PBIMCP-CONF-02",
                 detail=(
-                    ".mcp.json requests write mode -- this preflight asserts "
-                    "read-only and refuses; set --readonly"
+                    "a project MCP config requests write mode -- this preflight "
+                    "asserts read-only and refuses; set --readonly"
                 ),
             )
         ]
@@ -166,7 +166,7 @@ def _config_blockers(repo_root: Path) -> list[PreflightBlocker]:
             PreflightBlocker(
                 id="PBIMCP-CONF-03",
                 detail=(
-                    ".mcp.json is unparseable -- fail-closed; fix or "
+                    "a project MCP config is unparseable -- fail-closed; fix or "
                     "regenerate it (seshat pbi-mcp generate-config)"
                 ),
             )
