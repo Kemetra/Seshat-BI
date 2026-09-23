@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.unit._git_fixtures import commit_file
+
 pytestmark = pytest.mark.unit
 
 
@@ -178,9 +180,10 @@ def test_a_blocked_plan_exits_nonzero_and_names_the_blocker(
     from seshat.cli.commands.integrations import integrations_main
 
     root = _project(tmp_path)
-    (root / "contracts").mkdir()
-    (root / "contracts" / "capability-declines.yaml").write_text(
-        "declines:\n  - capability: powerbi-integration\n", encoding="utf-8"
+    commit_file(
+        root,
+        "contracts/capability-declines.yaml",
+        "declines:\n  - capability: powerbi-integration\n",
     )
 
     code = integrations_main(_args(root))

@@ -55,10 +55,12 @@ def _project(root: Path, *evidence: str) -> Path:
 
 
 def _decline(root: Path, capability_id: str) -> None:
-    contracts = root / "contracts"
-    contracts.mkdir(parents=True, exist_ok=True)
-    (contracts / "capability-declines.yaml").write_text(
-        f"declines:\n  - capability: {capability_id}\n", encoding="utf-8"
+    from tests.unit._git_fixtures import commit_file
+
+    commit_file(
+        root,
+        "contracts/capability-declines.yaml",
+        f"declines:\n  - capability: {capability_id}\n",
     )
 
 

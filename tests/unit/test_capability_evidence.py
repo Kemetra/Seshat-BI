@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.unit._git_fixtures import commit_file
+
 pytestmark = pytest.mark.unit
 
 
@@ -153,9 +155,10 @@ def test_machine_readable_status_carries_blockers_and_undetermined(
     from seshat.integrations.derivation import derive, render_json
 
     root = _project(tmp_path)
-    (root / "contracts").mkdir(exist_ok=True)
-    (root / "contracts" / "capability-declines.yaml").write_text(
-        "declines:\n  - capability: powerbi-integration\n", encoding="utf-8"
+    commit_file(
+        root,
+        "contracts/capability-declines.yaml",
+        "declines:\n  - capability: powerbi-integration\n",
     )
     payload = json.loads(render_json(derive(root)))
     assert payload["blocked"] is True

@@ -16,7 +16,7 @@ prompt, no banner -- so a consumer can pipe it straight into a parser. That also
 means JSON mode never prompts: a machine has no answer to give.
 
 `--derived` is a fourth, ORTHOGONAL concern (spec 155). It changes WHAT is
-selected -- the components this project's committed evidence needs, instead of a
+selected -- the components this project's evidence needs, instead of a
 curated profile -- and changes nothing about whether coordinates are resolved,
 whether anything is written, or who may authorize it. The profile default is
 untouched: `DEFAULT_PROFILE` keeps its value and `--profile` keeps its behavior.

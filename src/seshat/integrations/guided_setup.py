@@ -3,7 +3,7 @@
 Three shipped things did not touch each other before this module existed:
 
 * the DERIVED capability plan (spec 153) -- what this project actually needs, in
-  capability language, from committed evidence;
+  capability language, from project evidence in the workspace;
 * the committed named-human provisioning approval (spec 154, issue #671) -- the
   only thing that may authorize installing external software;
 * the integration control plane (spec 144) -- catalog, resolver, compatibility
@@ -71,8 +71,9 @@ class DerivedScope:
     """The exact existing catalog components a project's derived need calls for.
 
     ``component_ids`` is the object an approval binds to (spec 154), so it is
-    deliberately a function of committed evidence, the shipped projection,
-    discovery state, and committed declines -- and of nothing a caller supplies.
+    deliberately a function of project evidence in the workspace, the shipped
+    projection, discovery state, and COMMITTED declines -- and of nothing a
+    caller supplies. Widening it still needs a committed approval covering it.
     """
 
     plan: SetupPlan
@@ -179,7 +180,7 @@ def _sort_rows(plan: SetupPlan, projection: dict) -> _Sorted:
 
 
 def derive_scope(root, *, requested: tuple[str, ...] = ()) -> DerivedScope:
-    """The proposed change set for this project, from committed evidence only.
+    """The proposed change set for this project, from its evidence (declines at HEAD).
 
     Reads. Never writes, never resolves a coordinate, never contacts a network,
     and never installs -- so it is safe to run before anyone has approved
@@ -371,6 +372,7 @@ def _scope_notes(scope: DerivedScope) -> list[str]:
         "project's evidence does not need it"
         for capability_id in scope.outside_need
     )
+    notes.extend(f"  warning: {warning}" for warning in scope.plan.warnings)
     return notes
 
 
@@ -384,6 +386,7 @@ def render_json(scope: DerivedScope, statuses: tuple[CapabilityStatus, ...]) -> 
         "blockers": list(scope.blockers),
         "unsupported": list(scope.unsupported),
         "outside_derived_need": list(scope.outside_need),
+        "warnings": list(scope.plan.warnings),
         "capabilities": [
             {
                 "id": status.capability_id,

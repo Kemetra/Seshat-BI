@@ -5,7 +5,9 @@ profile is the union of every profile -- a fixed bundle for every user. Nothing
 inspected the project to decide what it actually needed, and no field said how
 strongly a capability was needed.
 
-This module answers both questions from COMMITTED evidence, and nothing else. It
+This module answers both questions from project evidence ON DISK in the
+workspace (source maps, PBIP, dbt and orchestration projects) plus the human
+declines file, which alone is read at HEAD -- and nothing else. It
 does not install, resolve a version, verify, write a lock, or decide an approval:
 those belong to the integration control plane (spec 144), the discovery surface
 (spec 148), and the provisioning approval gate (issue #671) respectively.
@@ -70,6 +72,9 @@ class SetupPlanRow:
 @dataclass(frozen=True)
 class SetupPlan:
     rows: tuple[SetupPlanRow, ...]
+    # Evidence that was present but deliberately NOT used (e.g. an uncommitted
+    # declines file), named so the reader is not left to infer it.
+    warnings: tuple[str, ...] = ()
 
     @property
     def needs_setup(self) -> int:
@@ -232,17 +237,34 @@ def _orchestration(root: Path) -> SetupPlanRow:
 CAPABILITY_DECLINES_RELPATH = "contracts/capability-declines.yaml"
 
 
-def _declined_ids(root: Path) -> frozenset[str]:
-    """Capability ids a human has declined, from committed text.
+def _declined_ids(root: Path) -> tuple[frozenset[str], str | None]:
+    """``(declined capability ids, warning)`` from the COMMITTED declines file.
+
+    Read at HEAD, gated on the file being tracked and clean -- the same rule the
+    provisioning approval uses -- so an uncommitted edit (an agent's included)
+    can neither suppress a capability nor block the plan. An untracked or dirty
+    file declines NOTHING and yields a warning naming it, so the ignored
+    decision is visible rather than silently dropped.
 
     Fails CLOSED in the safe direction: an absent, unreadable, or malformed file
     declines NOTHING. Failing open would suppress every capability the project
     needs while rendering a clean-looking plan.
     """
-    path = root / CAPABILITY_DECLINES_RELPATH
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
+    from seshat.gitstate import committed_text, is_tracked_and_clean
+
+    if not (root / CAPABILITY_DECLINES_RELPATH).exists():
+        return frozenset(), None
+    if not is_tracked_and_clean(root, CAPABILITY_DECLINES_RELPATH):
+        return frozenset(), (
+            f"{CAPABILITY_DECLINES_RELPATH} is untracked or has uncommitted "
+            "changes; declines are read from the committed version only, so "
+            "none were applied -- commit it to record the decision"
+        )
+    return _parse_declines(committed_text(root, CAPABILITY_DECLINES_RELPATH)), None
+
+
+def _parse_declines(text: str | None) -> frozenset[str]:
+    if text is None:
         return frozenset()
 
     import yaml  # lazy: keeps module import dependency-light
@@ -291,14 +313,17 @@ def _apply_decline(row: SetupPlanRow) -> SetupPlanRow:
 
 
 def derive(root: Path) -> SetupPlan:
-    """The capabilities this project needs, from its committed evidence.
+    """The capabilities this project needs, from its evidence.
+
+    Project evidence (source maps, PBIP, dbt and orchestration projects) is
+    read from the workspace; the human declines file is read at HEAD only.
 
     Reads only. No network, no database, no writes -- so it works on a checkout
     with no optional provider installed, and the same evidence always yields the
     same plan.
     """
     root = Path(root)
-    declined = _declined_ids(root)
+    declined, warning = _declined_ids(root)
     rows = (
         _database_connectivity(root),
         _powerbi_integration(root),
@@ -324,7 +349,7 @@ def derive(root: Path) -> SetupPlan:
         if row.capability.id in declined:
             row = _apply_decline(row)
         resolved.append(row)
-    return SetupPlan(rows=tuple(resolved))
+    return SetupPlan(rows=tuple(resolved), warnings=(warning,) if warning else ())
 
 
 # Which catalog components satisfy each capability. The IDS are the catalog's,
@@ -434,6 +459,7 @@ def render_json(plan: SetupPlan) -> str:
         "needs_setup": plan.needs_setup,
         "blocked": plan.blocked,
         "blockers": list(plan.blockers),
+        "warnings": list(plan.warnings),
         "capabilities": [
             {
                 "id": row.capability.id,
@@ -509,4 +535,5 @@ def render_text(plan: SetupPlan) -> str:
         if count
         else "No capabilities require setup."
     )
+    lines.extend(f"warning: {warning}" for warning in plan.warnings)
     return "\n".join(lines)
