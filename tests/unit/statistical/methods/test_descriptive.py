@@ -186,6 +186,20 @@ def test_singleton_and_constant_samples_never_emit_non_finite_results() -> None:
     assert _diagnostic(constant, "STAT_MAD_ZERO").status == "warning"
 
 
+def test_small_n_shape_statistics_are_undefined_not_biased() -> None:
+    """#735: scipy silently returns the BIASED skew (n<3) and kurtosis (n<4)."""
+    pair = run_describe(_context([1, 2]))
+    assert _estimate(pair, "skewness") is None
+    assert _estimate(pair, "kurtosis") is None
+    assert _diagnostic(pair, "STAT_SHAPE_UNDEFINED").status == "warning"
+
+    triple = run_describe(_context([1, 2, 4]))
+    assert _estimate(triple, "skewness") == pytest.approx(
+        stats.skew([1.0, 2.0, 4.0], bias=False)
+    )
+    assert _estimate(triple, "kurtosis") is None
+
+
 def test_groups_below_privacy_floor_are_suppressed_without_label_leakage() -> None:
     result = run_describe(
         _context(
