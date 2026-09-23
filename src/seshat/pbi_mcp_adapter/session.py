@@ -394,6 +394,8 @@ class SubprocessTransport:
                 self._proc.wait(timeout=5)
             except (OSError, subprocess.TimeoutExpired):
                 pass
+        # POSIX: anything in the group that ignored SIGTERM is killed now.
+        _kill_tree(self._proc.pid, final=True)
 
     def stderr_text(self) -> str:
         """The drained stderr so far. Safe to call while the child is live."""
@@ -417,8 +419,14 @@ def _tree_spawn_options() -> dict[str, object]:
     return {"start_new_session": True}
 
 
-def _kill_tree(pid: int) -> None:
+def _kill_tree(pid: int, *, final: bool = False) -> None:
     """Kill ``pid`` AND its descendants. Best effort, never raises.
+
+    Two passes on POSIX: SIGTERM to the group first (a graceful exit for the
+    common, healthy close), then -- after the direct child has been waited on
+    -- SIGKILL to whatever in the group is left. win32 has one forced pass,
+    ``taskkill /T /F``, which must run while the direct child still exists;
+    the ``final`` pass is a no-op there.
 
     ``Popen.terminate`` reaches only the direct child. On a stall that left the
     vendor grandchild running, it could still finish a flush into the model
@@ -427,6 +435,8 @@ def _kill_tree(pid: int) -> None:
     """
     try:
         if sys.platform == "win32":
+            if final:
+                return
             subprocess.run(  # noqa: S603, S607 - fixed argv, no shell
                 ["taskkill", "/T", "/F", "/PID", str(pid)],
                 stdin=subprocess.DEVNULL,
@@ -436,7 +446,7 @@ def _kill_tree(pid: int) -> None:
                 shell=False,
             )
         else:
-            os.killpg(pid, signal.SIGKILL)
+            os.killpg(pid, signal.SIGKILL if final else signal.SIGTERM)
     except (OSError, subprocess.SubprocessError):  # pragma: no cover
         pass
 

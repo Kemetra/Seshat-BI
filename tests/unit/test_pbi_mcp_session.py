@@ -453,7 +453,13 @@ def _pid_alive(pid: int) -> bool:
         os.kill(pid, 0)
     except ProcessLookupError:
         return False
-    return True
+    # A zombie still answers signal 0 until its new parent reaps it; it is not
+    # running, so it must not flake this check on Linux.
+    stat = Path(f"/proc/{pid}/stat")
+    try:
+        return stat.read_text().rsplit(")", 1)[1].split()[0] != "Z"
+    except (OSError, IndexError):
+        return True
 
 
 def _force_kill(pid: int) -> None:
