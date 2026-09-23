@@ -126,6 +126,15 @@ def _add_next_parser(sub: argparse._SubParsersAction) -> None:
             "response; 'agent' emits the guarded agent-facing document"
         ),
     )
+    p.add_argument(
+        "--exit-code",
+        dest="exit_code",
+        action="store_true",
+        help=(
+            "opt-in: exit 0 to proceed, 3 on a STOP (blocked, approval required, "
+            "or a STOP-phrased action), 2 on an input defect; default exits 0"
+        ),
+    )
 
 
 def _add_readiness_report_parser(
@@ -325,6 +334,16 @@ def _add_reset_parser(sub: argparse._SubParsersAction) -> None:
         "--yes",
         action="store_true",
         help="skip the interactive confirmation (for automation)",
+    )
+    p.add_argument(
+        "--discard-uncommitted",
+        dest="discard_uncommitted",
+        action="store_true",
+        help=(
+            "also delete untracked or modified files under the planned paths; "
+            "without it such work is refused (dirty_tree), since git cannot "
+            "restore it"
+        ),
     )
     p.add_argument(
         "--format",

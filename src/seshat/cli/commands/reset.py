@@ -46,6 +46,7 @@ def _plan_document(plan: Any, outcome: str, reason: str | None) -> dict[str, Any
             for edit in (plan.shared_edits if plan is not None else ())
         ],
         "preserved": list(plan.preserved) if plan is not None else [],
+        "uncommitted": list(plan.uncommitted) if plan is not None else [],
         "staged": [],
         "staging_note": None,
         "verification_findings": [],
@@ -86,6 +87,9 @@ def _render_plan_text(plan: Any, prog: str, repo: str) -> str:
     lines.append(
         "never touched: the live database; other tables' files; orchestration/dagster/"
     )
+    if plan.uncommitted:
+        lines.append("uncommitted work under these paths (NOT recoverable):")
+        lines += [f"  - {rel}" for rel in plan.uncommitted]
     return "\n".join(lines)
 
 
@@ -132,15 +136,21 @@ def _refusal_detail(reason: str) -> str:
 
 
 def _confirmed(console: _Console, plan_text: str) -> str | None:
-    """None when confirmed; else the named refusal reason."""
-    if not console.as_json:
-        print(plan_text)
+    """None when confirmed; else the named refusal reason.
+
+    The plan is ALWAYS shown before the prompt -- on stderr in JSON mode, so
+    stdout stays one JSON document (audit F047).
+    """
+    print(plan_text, file=sys.stderr if console.as_json else sys.stdout)
     if not _stdin_is_interactive():
         return "confirmation_required"
+    prompt = f"{console.prog} reset: remove these paths and stage the deletions? [y/N] "
     try:
-        answer = input(
-            f"{console.prog} reset: remove these paths and stage the deletions? [y/N] "
-        )
+        if console.as_json:
+            print(prompt, end="", file=sys.stderr, flush=True)
+            answer = input()
+        else:
+            answer = input(prompt)
     except EOFError:
         return "declined"
     return None if answer.strip().lower() in ("y", "yes") else "declined"
@@ -216,7 +226,11 @@ def _execute_and_finish(
     )
 
     try:
-        report = execute_reset(args.repo, plan)
+        report = execute_reset(
+            args.repo,
+            plan,
+            allow_uncommitted=bool(getattr(args, "discard_uncommitted", False)),
+        )
     except ResetError as exc:
         return _emit_refusal(console, exc.reason, str(exc))
     except ResetExecutionError as exc:
@@ -247,6 +261,17 @@ def reset_main(args: argparse.Namespace) -> int:
     plan_text = _render_plan_text(plan, console.prog, args.repo)
     if args.dry_run:
         return _emit_dry_run(console, document, plan_text)
+
+    if plan.uncommitted and not getattr(args, "discard_uncommitted", False):
+        # Refuse BEFORE asking: a "y" must never be able to destroy work git
+        # cannot restore. execute_reset re-checks independently (audit F047).
+        return _emit_refusal(
+            console,
+            "dirty_tree",
+            "uncommitted or untracked work under the planned paths cannot be "
+            f"restored via git: {', '.join(plan.uncommitted)} -- commit or move "
+            "it, or pass --discard-uncommitted to delete it",
+        )
 
     if not args.yes:
         refusal = _confirmed(console, plan_text)

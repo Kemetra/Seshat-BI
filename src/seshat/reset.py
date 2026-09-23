@@ -44,6 +44,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -90,6 +91,9 @@ class ResetPlan:
     remove_files: tuple[str, ...]
     shared_edits: tuple[SharedFileEdit, ...]
     preserved: tuple[str, ...]
+    #: Untracked or modified paths under a planned removal: content git cannot
+    #: restore (audit F047). Informational here; ``execute_reset`` re-checks.
+    uncommitted: tuple[str, ...] = ()
 
     @property
     def is_empty(self) -> bool:
@@ -377,7 +381,80 @@ def plan_reset(repo_root: Path | str, table: str) -> ResetPlan:
         remove_files=tuple(remove_files),
         shared_edits=shared_edits,
         preserved=_preserved(root, table),
+        uncommitted=_uncommitted_under(root, [*remove_dirs, *remove_files]),
     )
+
+
+def _porcelain_paths(stdout: str) -> tuple[str, ...]:
+    """Paths from ``git status --porcelain -z`` (a rename's origin is skipped)."""
+    tokens = iter(token for token in stdout.split("\0") if token)
+    paths: list[str] = []
+    for token in tokens:
+        paths.append(token[3:])
+        if token[:1] in ("R", "C"):
+            next(tokens, None)
+    return tuple(sorted(paths))
+
+
+def _inside_work_tree(root: Path) -> bool:
+    """True unless git positively reports ``root`` is outside any work tree.
+
+    A failing ``git status`` inside a real repository (e.g. a corrupt index)
+    must refuse, not read as "not a repo" -- exit 128 alone cannot tell them
+    apart. Any doubt counts as inside (fail closed).
+    """
+    from seshat.gitstate import run_git
+
+    try:
+        probe = run_git(root, "rev-parse", "--is-inside-work-tree")
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return True
+    if probe.returncode == 0:
+        return (probe.stdout or "").strip() == "true"
+    return "not a git repository" not in (probe.stderr or "").lower()
+
+
+def _uncommitted_under(root: Path, rels: list[str]) -> tuple[str, ...]:
+    """Untracked or modified content under ``rels`` -- what git cannot restore.
+
+    Git-ignored scratch (e.g. dagster run dirs) is not listed: it is derived,
+    never an audit record. A non-git workspace yields ``()``; its staging note
+    already says nothing was staged. Any other git failure refuses.
+    """
+    if not rels:
+        return ()
+    from seshat.gitstate import run_git
+
+    try:
+        result = run_git(
+            root, "status", "--porcelain", "-z", "--untracked-files=all", "--", *rels
+        )
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        raise ResetError(
+            "dirty_tree",
+            "could not run git to verify that the planned paths hold no "
+            f"uncommitted work ({exc.__class__.__name__})",
+        ) from exc
+    if result.returncode != 0 and not _inside_work_tree(root):
+        return ()
+    if result.returncode != 0:
+        raise ResetError(
+            "dirty_tree",
+            "could not verify that the planned paths hold no uncommitted work "
+            f"(git status exit {result.returncode})",
+        )
+    return _porcelain_paths(result.stdout or "")
+
+
+def _refuse_uncommitted(root: Path, plan: ResetPlan) -> None:
+    uncommitted = _uncommitted_under(root, [*plan.remove_dirs, *plan.remove_files])
+    if uncommitted:
+        raise ResetError(
+            "dirty_tree",
+            "uncommitted or untracked work under the planned paths cannot be "
+            f"restored via git: {', '.join(uncommitted)} -- commit or move it, "
+            "or pass --discard-uncommitted to delete it",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -442,7 +519,8 @@ def _remove_planned_paths(root: Path, plan: ResetPlan) -> list[str]:
     except OSError as exc:
         raise ResetExecutionError(
             f"removal failed at {rel}: {exc} -- the paths listed as removed "
-            "are already gone; complete or undo the reset via git",
+            "are already gone; complete the reset, or restore its committed "
+            "paths, via git",
             tuple(removed),
         ) from exc
     return removed
@@ -463,8 +541,8 @@ def _apply_shared_edits(root: Path, plan: ResetPlan, removed: list[str]) -> list
     except OSError as exc:
         raise ResetExecutionError(
             f"shared-file edit failed at {edit.path}: {exc} -- the paths "
-            "listed as removed are already gone; complete or undo the reset "
-            "via git",
+            "listed as removed are already gone; complete the reset, or "
+            "restore its committed paths, via git",
             tuple(removed),
         ) from exc
     return edited
@@ -498,11 +576,20 @@ def _stage_paths(
     )
 
 
-def execute_reset(repo_root: Path | str, plan: ResetPlan) -> ResetReport:
+def execute_reset(
+    repo_root: Path | str, plan: ResetPlan, *, allow_uncommitted: bool = False
+) -> ResetReport:
     """Validate the ENTIRE plan, then remove + edit + stage. File-tree only:
-    never touches a live database."""
+    never touches a live database.
+
+    Uncommitted work under a planned path is re-checked HERE, not trusted from
+    ``plan.uncommitted``, and refused (``dirty_tree``) unless the operator
+    explicitly opted in with ``allow_uncommitted`` (audit F047).
+    """
     root = Path(repo_root).resolve()
     _validate_plan(root, plan)
+    if not allow_uncommitted:
+        _refuse_uncommitted(root, plan)
     removed = _remove_planned_paths(root, plan)
     edited = _apply_shared_edits(root, plan, removed)
     staged, staging_note = _stage_paths(root, [*removed, *edited], tuple(removed))

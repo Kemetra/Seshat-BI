@@ -91,6 +91,36 @@ def _render_agent_text(document: dict) -> str:
     return "\n".join(lines)
 
 
+#: ``--exit-code`` mapping (audit F153). Opt-in: the default stays exit 0.
+_EXIT_BY_OUTCOME: dict[str, int] = {
+    "next_action": 0,
+    "terminal_pass": 0,
+    "stop_blocked": 3,
+    "approval_required": 3,
+    "input_defect": 2,
+}
+_EXIT_STOP = 3
+
+
+def _exit_status(args: argparse.Namespace, outcome: object, *, stopped: bool) -> int:
+    """0 unless ``--exit-code``; then STOP -> 3, input defect -> 2.
+
+    ``stopped`` carries the document's own STOP signal: a live-validation STOP
+    is phrased while ``outcome`` stays ``next_action``/``terminal_pass``, so the
+    outcome alone would let it exit 0. An unknown outcome never exits 0.
+    """
+    if not getattr(args, "exit_code", False):
+        return 0
+    code = _EXIT_BY_OUTCOME.get(str(outcome), _EXIT_STOP)
+    return _EXIT_STOP if code == 0 and stopped else code
+
+
+def _document_stopped(document: dict) -> bool:
+    return document.get("readiness_state") == "blocked" or str(
+        document.get("next_allowed_action") or ""
+    ).startswith("STOP")
+
+
 def next_main(args: argparse.Namespace) -> int:
     from seshat.run_next import build_run_next_response
 
@@ -105,11 +135,14 @@ def next_main(args: argparse.Namespace) -> int:
             print(json.dumps(document, indent=2))
         else:
             print(_render_agent_text(document))
-        return 0
+        return _exit_status(
+            args, document.get("outcome"), stopped=_document_stopped(document)
+        )
 
     response = build_run_next_response(args.repo, table)
     if output_format == "json":
         print(json.dumps(response, indent=2))
     else:
         print(_render_text(response))
-    return 0
+    stopped = str(response.get("action_text") or "").startswith("STOP")
+    return _exit_status(args, response.get("outcome"), stopped=stopped)
