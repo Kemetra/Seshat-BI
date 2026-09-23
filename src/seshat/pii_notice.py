@@ -147,6 +147,44 @@ def _finding_for_column(
     }
 
 
+def _pii_malformed(col: object) -> bool:
+    """True for a column whose ``pii`` flag is not exactly a boolean.
+
+    PyYAML reads a quoted ``"true"`` as a string and ``1`` as an int, so an
+    ``is True`` filter alone silently dropped such a column and the notice then
+    asserted that no column is personal data.
+    """
+    if not isinstance(col, dict):
+        return True
+    return not isinstance(col.get("pii"), bool)
+
+
+def _malformed_finding(col: object) -> dict[str, Any]:
+    """A GAP for a column whose pii flag is missing or not a boolean."""
+    name = col.get("source_name", "") if isinstance(col, dict) else ""
+    return {
+        "column": str(name) or "<unnamed column>",
+        "decision": None,
+        "state": "malformed",
+        "disposition": None,
+        "disposition_source": None,
+    }
+
+
+def _table_mapping_dir(root: Path, table: str) -> Path | None:
+    """``<root>/mappings/<table>`` when ``table`` names exactly one directory there.
+
+    ``None`` for a path-shaped value (``../x``, ``a/b``, an absolute path): the
+    table is joined into both the read and the ``--write`` path, so it must not
+    be able to leave ``mappings/``.
+    """
+    mappings = (root / "mappings").resolve()
+    if not table or table in (".", "..") or any(sep in table for sep in "/\\:"):
+        return None
+    candidate = (mappings / table).resolve()
+    return candidate if candidate.parent == mappings else None
+
+
 def build_pii_notice(repo_root: Path | str, table: str) -> dict[str, Any]:
     """Compose the PII-notice model for one table from its committed source-map.
 
@@ -156,7 +194,17 @@ def build_pii_notice(repo_root: Path | str, table: str) -> dict[str, Any]:
     """
     root = Path(repo_root)
     source_path = f"mappings/{table}/source-map.yaml"
-    data = _load_yaml_mapping(root / "mappings" / table / "source-map.yaml")
+    table_dir = _table_mapping_dir(root, table)
+    if table_dir is None:
+        return {
+            "table": table,
+            "source_path": source_path,
+            "findings": [],
+            "no_pii": False,
+            "document_gap": "table must name one directory under mappings/",
+            "read_only_proof": True,
+        }
+    data = _load_yaml_mapping(table_dir / "source-map.yaml")
 
     if data is None:
         return {
@@ -189,11 +237,14 @@ def build_pii_notice(repo_root: Path | str, table: str) -> dict[str, Any]:
         for col in columns
         if isinstance(col, dict) and col.get("pii") is True
     ]
+    findings += [_malformed_finding(col) for col in columns if _pii_malformed(col)]
 
     return {
         "table": table,
         "source_path": source_path,
         "findings": findings,
+        # "no PII" only when EVERY column states exactly `pii: false`; a quoted
+        # "true", a 1, or a missing flag is a GAP, never an implied clearance.
         "no_pii": len(findings) == 0,
         "document_gap": None,
         "read_only_proof": True,
@@ -224,6 +275,12 @@ def _render_finding(finding: dict[str, Any], source_path: str) -> str:
             f"(checked: {source_path} {finding['disposition_source']}). "
             f"This column is NOT cleared; the keep/drop conflict must be resolved."
         )
+    if state == "malformed":
+        return (
+            f"- GAP: {column} -- pii flag is missing or not a boolean "
+            f"(checked: {source_path} columns[{column}]). "
+            "This column is NOT cleared; set pii: true or pii: false."
+        )
     # undecided -> GAP, always "NOT cleared", never a clearance token.
     return (
         f"- GAP: {column} -- pii:true with NO recorded governance disposition "
@@ -243,7 +300,7 @@ def _header_lines(table: str, source_path: str) -> list[str]:
     ]
 
 
-_GAP_STATES = frozenset({"undecided", "inconsistent"})
+_GAP_STATES = frozenset({"undecided", "inconsistent", "malformed"})
 
 
 def _flagged_column_lines(notice: dict[str, Any], source_path: str) -> list[str]:
