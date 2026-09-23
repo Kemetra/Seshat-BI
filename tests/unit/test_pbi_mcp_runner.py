@@ -91,7 +91,11 @@ class FakeSession:
         *,
         raise_on_handshake: bool = False,
         handshake_error: Exception | None = None,
+        tools: tuple[str, ...] | None = None,
     ):
+        #: What ``tools/list`` answers. Defaults to the characterized vendor set,
+        #: so only a test that means to perturb it sees drift.
+        self.listed = tuple(sorted(vendor_ops.VENDOR_TOOLS)) if tools is None else tools
         self.calls: list[tuple[str, dict]] = []
         self.handshaken = False
         self.closed = False
@@ -106,6 +110,9 @@ class FakeSession:
             raise self._handshake_error
         self.handshaken = True
         return {"name": "powerbi-modeling-mcp", "version": "0.5.0.0"}
+
+    def list_tools(self) -> tuple[str, ...]:
+        return self.listed
 
     def call(self, tool: str, request: dict) -> protocol.ToolOutcome:
         self.calls.append((tool, request))
@@ -141,8 +148,8 @@ def test_build_argv_no_longer_invents_target_or_operation_flags():
     argv = runner.build_argv(read_only=True)
     assert "--target" not in argv
     assert "--operation" not in argv
-    # The package slot carries the version-floored SPEC since #658, not the bare
-    # identity constant -- see `test_the_argv_floors_the_version_npx_may_resolve`.
+    # The package slot carries the version-pinned SPEC, not the bare identity
+    # constant -- see `test_the_argv_pins_the_characterized_vendor_build_exactly`.
     assert argv == ["npx", "--yes", runner.VENDOR_PACKAGE_SPEC, "--readonly"]
 
 
@@ -585,18 +592,67 @@ def test_a_refused_handshake_records_no_version_rather_than_a_guess(
     assert result.runtime_version is None
 
 
-def test_the_argv_floors_the_version_npx_may_resolve() -> None:
-    """A floor, not a pin: the package publishes only prereleases (measured
-    2026-09-17 -- 0.5.0-beta.2 through beta.13, no stable release), so there is
-    nothing to pin to. The range still refuses a surprise jump to an
-    incompatible future major.
+def test_the_argv_pins_the_characterized_vendor_build_exactly() -> None:
+    """An exact version, never a range: ``npx --yes`` auto-installs whatever a
+    range resolves to today and runs it in write mode. The pin is the build the
+    committed capability capture characterizes.
     """
     argv = runner.build_argv(read_only=True)
     spec = argv[2]
 
     assert spec == runner.VENDOR_PACKAGE_SPEC
-    assert spec.startswith(runner.VENDOR_PACKAGE)
-    assert "@^0.5.0-beta" in spec
+    assert spec == f"{runner.VENDOR_PACKAGE}@{runner.VENDOR_VERSION}"
+    assert not any(ch in runner.VENDOR_VERSION for ch in "^~<>=* ")
+
+
+def test_the_pinned_version_is_the_one_the_committed_capture_names() -> None:
+    fixtures = Path(__file__).resolve().parents[1] / "fixtures" / "pbi_mcp"
+    captured = f"vendor_tools_{runner.VENDOR_VERSION}.json"
+    assert (fixtures / captured).is_file(), (
+        f"no committed capability capture for the pinned build ({captured})"
+    )
+
+
+# --------------------------------------------------------------------------
+# tools/list is compared with the characterized set BEFORE anything binds
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "tools",
+    [
+        (),
+        tuple(sorted(vendor_ops.VENDOR_TOOLS - {"measure_operations"})),
+        tuple(sorted(vendor_ops.VENDOR_TOOLS | {"surprise_operations"})),
+    ],
+    ids=["empty", "missing-tool", "extra-tool"],
+)
+def test_a_drifted_tool_set_refuses_before_connect(
+    tmp_path: Path, tools: tuple[str, ...]
+) -> None:
+    """The server's self-reported name is not identity. What it EXPOSES must be
+    the set this adapter was characterized against, or nothing is bound."""
+    from seshat.pbi_mcp_adapter import drift
+
+    fake = FakeSession(tools=tools)
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+
+    assert result.blockers == (drift.BLOCKER_CAPABILITY_DRIFT,)
+    assert result.mutation_attempted is False
+    assert fake.calls == [], "a call was issued to an uncharacterized runtime"
+    assert fake.closed is True
+
+
+def test_a_matching_tool_set_proceeds(tmp_path: Path) -> None:
+    fake = FakeSession(
+        [_outcome(read_only=True), _outcome(read_only=False), _outcome(read_only=True)]
+    )
+    result = runner.invoke(
+        _cleared_verdict(), repo_root=tmp_path, session_factory=_factory(fake)
+    )
+    assert result.succeeded is True
 
 
 def test_the_identity_constant_stays_free_of_a_version_range() -> None:

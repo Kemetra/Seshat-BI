@@ -184,6 +184,11 @@ def test_stalled_runtime_is_exit_three_not_exit_one(ready_repo: Path) -> None:
             def handshake(self) -> dict:
                 return {"name": "powerbi-modeling-mcp", "version": "0.5.0.0"}
 
+            def list_tools(self) -> tuple[str, ...]:
+                from seshat.pbi_mcp_adapter import vendor_ops
+
+                return tuple(sorted(vendor_ops.VENDOR_TOOLS))
+
             def call(self, tool: str, request: dict):
                 # Stall on the OPERATION, not on the connect: a server that hangs
                 # before the write is attempted is a clean refusal, whereas one

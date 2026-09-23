@@ -52,6 +52,9 @@ DEFAULT_DEADLINE_SECONDS = 900
 #: without truncating anything: a full queue back-pressures the reader.
 MAX_QUEUED_LINES = 4096
 
+#: Ceiling on ``tools/list`` pages. The vendor exposes 21 tools on one page.
+MAX_TOOL_PAGES = 20
+
 
 class SessionError(RuntimeError):
     """The session could not be established or a call could not be completed."""
@@ -171,6 +174,30 @@ class McpSession:
         request_id = self._take_id()
         self._send(proto.tool_call_request(request_id, tool, request))
         return proto.parse_tool_result(self._await_id(request_id))
+
+    def list_tools(self) -> tuple[str, ...]:
+        """Every tool the server EXPOSES, sorted, across all listing pages.
+
+        The handshake's ``serverInfo.name`` is a string the peer asserts about
+        itself; this is what it actually offers, which the runner compares with
+        the characterized set before binding anything. Bounded to
+        :data:`MAX_TOOL_PAGES` so a cursor that never ends cannot loop forever.
+        """
+        if not self._ready:
+            raise SessionError("list_tools() before a completed handshake")
+        names: list[str] = []
+        cursor: str | None = None
+        for _page in range(MAX_TOOL_PAGES):
+            request_id = self._take_id()
+            self._send(proto.tools_list_request(request_id, cursor))
+            try:
+                page, cursor = proto.parse_tool_names(self._await_id(request_id))
+            except proto.McpFrameError as exc:
+                raise SessionError(f"unreadable tools/list reply: {exc}") from exc
+            names.extend(page)
+            if cursor is None:
+                return tuple(sorted(names))
+        raise SessionError(f"tools/list did not end within {MAX_TOOL_PAGES} pages")
 
     def close(self) -> None:
         self._transport.terminate()

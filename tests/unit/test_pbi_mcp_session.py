@@ -330,3 +330,54 @@ def test_the_pump_threads_are_daemons(tmp_path: Path) -> None:
             assert reader.daemon is True
     finally:
         transport.terminate()
+
+
+# --------------------------------------------------------------------------
+# tools/list -- what the runtime actually exposes, not what it says its name is
+# --------------------------------------------------------------------------
+
+
+def _tools_reply(request_id: int, names: list[str], cursor: str | None = None) -> dict:
+    result: dict = {"tools": [{"name": name} for name in names]}
+    if cursor is not None:
+        result["nextCursor"] = cursor
+    return {"jsonrpc": "2.0", "id": request_id, "result": result}
+
+
+def test_list_tools_sends_tools_list_and_returns_the_names():
+    transport = FakeTransport([_init_reply(), _tools_reply(2, ["b_ops", "a_ops"])])
+    sess = session.McpSession(transport)
+    sess.handshake()
+
+    assert sess.list_tools() == ("a_ops", "b_ops")
+    assert transport.written[-1]["method"] == "tools/list"
+
+
+def test_list_tools_follows_the_pagination_cursor():
+    transport = FakeTransport(
+        [
+            _init_reply(),
+            _tools_reply(2, ["a_ops"], cursor="page2"),
+            _tools_reply(3, ["b_ops"]),
+        ]
+    )
+    sess = session.McpSession(transport)
+    sess.handshake()
+
+    assert sess.list_tools() == ("a_ops", "b_ops")
+    assert transport.written[-1]["params"] == {"cursor": "page2"}
+
+
+def test_list_tools_before_handshake_is_refused():
+    with pytest.raises(session.SessionError):
+        session.McpSession(FakeTransport()).list_tools()
+
+
+def test_a_malformed_tools_list_reply_raises_rather_than_reading_as_empty():
+    """An unreadable listing is not an empty one -- empty would read as drift
+    at best and, in a looser comparison, as 'nothing unexpected'."""
+    bad = {"jsonrpc": "2.0", "id": 2, "result": {"tools": "nope"}}
+    sess = session.McpSession(FakeTransport([_init_reply(), bad]))
+    sess.handshake()
+    with pytest.raises(session.SessionError):
+        sess.list_tools()
