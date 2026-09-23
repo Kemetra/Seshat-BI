@@ -308,9 +308,9 @@ def test_a_component_without_a_probe_never_reads_healthy(tmp_path: Path):
 
 
 def test_an_abandoned_turn_is_reaped_by_a_poll_on_another_thread(tmp_path: Path):
+    client = _client(tmp_path)  # skips first when the app extra is absent
     from seshat.studio import agent_routes
 
-    client = _client(tmp_path)
     app = client.app
     fake = app.state.bridge
 

@@ -168,6 +168,15 @@ assert _NEW_THREAD_STATE in THREAD_STATES, (
 )
 
 
+def _is_bindable_table(app: FastAPI, selected: object) -> bool:
+    """True for no table at all, or for a table id this workspace contains."""
+    if selected is None:
+        return True
+    if not isinstance(selected, str):
+        return False
+    return selected in turn_wiring.known_table_ids(app)
+
+
 def _create_thread(app: FastAPI, body: dict[str, Any] | None) -> Any:
     """Create a thread and record its opening event.
 
@@ -177,10 +186,7 @@ def _create_thread(app: FastAPI, body: dict[str, Any] | None) -> Any:
     actually contains is accepted.
     """
     selected = (body or {}).get("selected_table_id")
-    if selected is not None and (
-        not isinstance(selected, str)
-        or selected not in turn_wiring.known_table_ids(app)
-    ):
+    if not _is_bindable_table(app, selected):
         return _problem(
             422,
             "Unknown table",
@@ -266,10 +272,18 @@ async def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any
             "Adjust the request and try again.",
         )
 
-    # Parked for the poll loop to advance. Not a background task: one created inside
-    # a request dies with that request's event loop (verified under `TestClient`), so
-    # the turn would silently stop after its first frame.
     _reap_abandoned_turns(app)
+    _park_turn(app, thread_id, thread, request)
+    return {"turn_id": turn_id}
+
+
+def _park_turn(app: FastAPI, thread_id: str, thread: Any, request: TurnRequest) -> None:
+    """Park the turn's generator for the poll loop to advance.
+
+    Not a background task: one created inside a request dies with that request's
+    event loop (verified under `TestClient`), so the turn would silently stop after
+    its first frame.
+    """
     app.state.pending_turns[thread_id] = _PendingTurn(
         events=app.state.bridge.run_turn(
             prompt=request.prompt,
@@ -287,7 +301,6 @@ async def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any
         last_touched=time.monotonic(),
         results=queue.Queue(),
     )
-    return {"turn_id": turn_id}
 
 
 def _interrupt_turn(app: FastAPI, thread_id: str, turn_id: str) -> Response:

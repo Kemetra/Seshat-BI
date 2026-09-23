@@ -268,6 +268,26 @@ def _with_headers(response: Response) -> Response:
     return response
 
 
+def _exchange_bootstrap(app: FastAPI, token: str, response: Response) -> Response:
+    """Trade the one-time token for a session cookie, or refuse with a problem."""
+    cookie = app.state.sessions.exchange(token)
+    if cookie is None:
+        return _problem(
+            401,
+            "Invalid bootstrap token",
+            "The bootstrap token is wrong or has already been used.",
+            "If this browser already opened Studio, reload without the link; "
+            "otherwise restart Studio from the agent to get a fresh link.",
+        )
+    response.set_cookie(
+        session.SESSION_COOKIE_NAME,
+        cookie,
+        **session.session_cookie_attributes(),
+    )
+    response.status_code = 204
+    return response
+
+
 def _register_routes(app: FastAPI) -> None:
     """The deterministic routes, then the agent, workbench and operations modules.
 
@@ -298,22 +318,7 @@ def _register_routes(app: FastAPI) -> None:
 
     @app.post(f"{API_PREFIX}/bootstrap", status_code=204)
     async def bootstrap(token: str, response: Response) -> Response:
-        cookie = app.state.sessions.exchange(token)
-        if cookie is None:
-            return _problem(
-                401,
-                "Invalid bootstrap token",
-                "The bootstrap token is wrong or has already been used.",
-                "If this browser already opened Studio, reload without the link; "
-                "otherwise restart Studio from the agent to get a fresh link.",
-            )
-        response.set_cookie(
-            session.SESSION_COOKIE_NAME,
-            cookie,
-            **session.session_cookie_attributes(),
-        )
-        response.status_code = 204
-        return response
+        return _exchange_bootstrap(app, token, response)
 
     @app.get(f"{API_PREFIX}/bootstrap/state")
     async def bootstrap_state() -> Any:
