@@ -528,6 +528,7 @@ def apply(
                 resolved=resolved,
                 profile=envs[item.id],
                 runner=runner,
+                python_version=resolvers.python_version,
             )
         )
         outcome.rows.append(row)

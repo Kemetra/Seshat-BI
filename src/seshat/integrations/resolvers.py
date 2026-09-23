@@ -143,7 +143,12 @@ class NpmRegistry(Protocol):
 
 
 def running_python() -> tuple[int, ...]:
-    return sys.version_info[:2]
+    """The running interpreter at full precision (major, minor, micro).
+
+    Micro matters: a `requires-python >=3.13.1` bound compared against a
+    two-part (3, 13) would be padded to 3.13.0 and wrongly judged incompatible.
+    """
+    return tuple(sys.version_info[:3])
 
 
 # --------------------------------------------------------------------------- #
@@ -517,4 +522,11 @@ class LiveNpm:
 
 def live_resolvers() -> Resolvers:
     """The network-backed resolvers. Built only behind an explicit `--refresh`."""
-    return Resolvers(pypi=LivePypi(), github=LiveGitHub(), npm=LiveNpm())
+    return Resolvers(
+        pypi=LivePypi(),
+        github=LiveGitHub(),
+        npm=LiveNpm(),
+        # Stated explicitly so resolution, the compatibility floor and the
+        # profile environment all use the same interpreter version.
+        python_version=running_python(),
+    )

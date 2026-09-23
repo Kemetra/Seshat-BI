@@ -32,7 +32,7 @@ from seshat.integrations.presence import (
     installed_coordinate,
 )
 from seshat.integrations.procs import _detail, remove_tree
-from seshat.integrations.resolvers import Resolution
+from seshat.integrations.resolvers import Resolution, running_python
 
 PRESENT = "present"
 PLANNED = "planned"
@@ -64,6 +64,14 @@ class _Install:
     resolved: Resolution
     profile: str
     runner: Callable[[list[str], Path], subprocess.CompletedProcess]
+    # The interpreter version compatibility was resolved for; None means the
+    # running interpreter. The profile environment is created for this version.
+    python_version: tuple[int, ...] | None = None
+
+    @property
+    def python(self) -> str:
+        """The `uv venv --python` request matching the resolved version."""
+        return ".".join(str(part) for part in self.python_version or running_python())
 
     @property
     def env(self) -> Path:
@@ -100,7 +108,9 @@ def _install_pypi(req: _Install) -> tuple[str, str]:
     if shutil.which("uv") is None:
         return UNAVAILABLE, "uv is not on PATH; needed to build an isolated environment"
     if not (req.root / _venv_python(_profile_env(req.profile))).is_file():
-        created = req.run(["uv", "venv", str(req.env)])
+        # `--python` pins the env to the version compatibility was resolved
+        # for; without it uv picks from .python-version, UV_PYTHON or PATH.
+        created = req.run(["uv", "venv", "--python", req.python, str(req.env)])
         if created.returncode:
             return FAILED, _detail(created, "failed to create the profile environment")
     spec = f"{req.item.coordinate}=={req.resolved.version}"
