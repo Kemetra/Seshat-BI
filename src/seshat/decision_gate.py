@@ -19,6 +19,7 @@ committed artifacts (store + cited evidence + the flow contract).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -32,11 +33,32 @@ from seshat.decision_store import (
     is_open_status,
     load_authority_map,
     load_store,
+    scope_keys,
 )
 
 _FLOW_CONTRACT_REL = "contracts/knowledge/database-to-pbip-flow.yaml"
 
 VERDICTS = ("pass", "warn", "blocked")
+
+# Categories each stage needs at least one approved, valid, fresh decision OF
+# (audit F002). The flow contract's blocking_decision_categories say which
+# unresolved records BLOCK a stage; this says which approvals must EXIST. Taken
+# from each stage's required_inputs/stop_rules in database-to-pbip-flow.yaml (the
+# knowledge-contract schema is additionalProperties:false, so it lives here):
+# report_intent/dashboard_blueprint need the owner's report_intent_approval, the
+# blueprint and PBIP stages the dashboard_blueprint_approval, evidence_pack the
+# publish_export ruling, and the modelling stages their grain / KPI meaning.
+REQUIRED_CATEGORIES: dict[str, frozenset[str]] = {
+    "kpi_contracts": frozenset({"kpi_definition"}),
+    "silver_gold_model_planning": frozenset({"table_grain"}),
+    "semantic_model_dax": frozenset({"kpi_definition"}),
+    "report_intent": frozenset({"report_intent_approval"}),
+    "dashboard_blueprint": frozenset(
+        {"report_intent_approval", "dashboard_blueprint_approval"}
+    ),
+    "pbip_prototype_readiness": frozenset({"dashboard_blueprint_approval"}),
+    "evidence_pack": frozenset({"publish_export"}),
+}
 
 
 @dataclass(frozen=True)
@@ -83,8 +105,14 @@ def evidence_stale(repo_root: Path | str, approval: dict[str, Any]) -> list[str]
     unresolvable reference counts as stale/mismatched."""
     recorded = approval.get("evidence_identity")
     evidence = approval.get("evidence")
-    if not isinstance(recorded, dict) or not isinstance(evidence, list):
-        return list(evidence) if isinstance(evidence, list) else []
+    # A non-list evidence or non-dict identity cannot be verified, so it is STALE,
+    # never fresh (audit F013: a string pair used to read as verified evidence).
+    if not isinstance(evidence, list):
+        return [repr(evidence)]
+    if not isinstance(recorded, dict):
+        return [ref if isinstance(ref, str) else repr(ref) for ref in evidence] or [
+            repr(recorded)
+        ]
     stale: list[str] = []
     for ref in evidence:
         if not isinstance(ref, str):
@@ -200,6 +228,7 @@ class _Accumulator:
     blocking: list[Blocker] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     evidence: list[str] = field(default_factory=list)
+    covered: set[str] = field(default_factory=set)
 
     def add(
         self,
@@ -214,6 +243,8 @@ class _Accumulator:
             self.warnings.append(note)
         elif state == "ok":
             self.evidence += _approval_evidence(decision)
+            if decision.get("status") == "approved":
+                self.covered.add(str(decision.get("decision_type")))
 
 
 def _conflict_blockers(
@@ -236,11 +267,27 @@ def _not_started_blocker(stage: str) -> Blocker:
     )
 
 
+def _coverage_blockers(stage: str, acc: _Accumulator) -> list[Blocker]:
+    """One blocker per required category with no approved, valid, fresh record."""
+    missing = sorted(REQUIRED_CATEGORIES.get(stage, frozenset()) - acc.covered)
+    return [
+        Blocker(
+            stage,
+            f"no approved {category} decision covers this stage; another "
+            "category's approval does not stand in for it",
+        )
+        for category in missing
+    ]
+
+
 def _final_verdict(stage: str, categories: set[str], acc: _Accumulator) -> Verdict:
     """Resolve the pass/warn/blocked outcome from an accumulated result set."""
     warnings, evidence = tuple(acc.warnings), tuple(acc.evidence)
     if acc.blocking:
         return Verdict(stage, "blocked", tuple(acc.blocking), warnings, evidence)
+    coverage = _coverage_blockers(stage, acc)
+    if coverage:
+        return Verdict(stage, "blocked", tuple(coverage), warnings, evidence)
     # Evidence-presence rule (FR-034 / gate-verdicts.md line 9): on a stage that
     # declares blocking categories, a pass MUST rest on at least one citable
     # evidence string. Empty evidence => not-started => blocked, never a false
@@ -252,15 +299,38 @@ def _final_verdict(stage: str, categories: set[str], acc: _Accumulator) -> Verdi
     return Verdict(stage, "pass", (), (), evidence)
 
 
-def compute_verdict(repo_root: Path | str, store: Store, stage: str) -> Verdict:
-    """Classify readiness for ``stage`` from the store + evidence + flow contract."""
+def _in_scope(
+    decisions: list[dict[str, Any]], scope: Iterable[str] | None
+) -> list[dict[str, Any]]:
+    """Decisions whose scope shares a ``kind:value`` key with ``scope``.
+
+    ``None`` keeps the whole store (the unscoped, store-wide question). A given
+    scope is fail-closed: a decision with an empty or malformed scope applies to
+    no specific table/report, so it never satisfies a scoped request (F011)."""
+    if scope is None:
+        return list(decisions)
+    wanted = set(scope)
+    return [d for d in decisions if wanted.intersection(scope_keys(d.get("scope")))]
+
+
+def compute_verdict(
+    repo_root: Path | str,
+    store: Store,
+    stage: str,
+    scope: Iterable[str] | None = None,
+) -> Verdict:
+    """Classify readiness for ``stage`` from the store + evidence + flow contract.
+
+    ``scope`` is an optional set of ``kind:value`` keys (``tables:x``,
+    ``artifacts:report_a``, ...); when given, only decisions scoped to one of them
+    count, so an approval for table/report A cannot satisfy B."""
     failclosed = _failclosed_verdict(repo_root, store, stage)
     if failclosed is not None:
         return failclosed
 
     categories = _load_blocking_categories(repo_root, stage) or set()
     authority = load_authority_map(repo_root)
-    decisions = store.decisions()
+    decisions = _in_scope(store.decisions(), scope)
 
     acc = _Accumulator()
     for decision in decisions:
@@ -272,11 +342,14 @@ def compute_verdict(repo_root: Path | str, store: Store, stage: str) -> Verdict:
 
 
 def verdict_for(
-    repo_root: Path | str, tracked_files: tuple[str, ...], stage: str
+    repo_root: Path | str,
+    tracked_files: tuple[str, ...],
+    stage: str,
+    scope: Iterable[str] | None = None,
 ) -> Verdict:
     """Convenience: load the store from tracked files and compute the verdict."""
     store = load_store(repo_root, tracked_files)
-    return compute_verdict(repo_root, store, stage)
+    return compute_verdict(repo_root, store, stage, scope)
 
 
 # Which readiness-spine stage each flow stage's verdict contributes to (R-6). The

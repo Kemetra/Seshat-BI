@@ -205,6 +205,25 @@ def test_agent_identity_approval_is_rejected(tmp_path: Path) -> None:
     _assert_blocked_shape(result)
 
 
+def test_approval_for_another_report_does_not_approve_this_intent(
+    tmp_path: Path,
+) -> None:
+    """Audit F011: the gate is asked for THIS report's scope. An approval recorded
+    for a different report no longer satisfies the committed intent."""
+    root, tracked = _materialize(tmp_path)
+    store = root / _STORE_REL
+    store.write_text(
+        store.read_text(encoding="utf-8").replace(
+            "[demo_report_weekly]", "[some_other_report]"
+        ),
+        encoding="utf-8",
+    )
+    result = dc.next_action(root, _SUBJECT, tracked)
+    b = _assert_blocked_shape(result)
+    assert result.stage == "report_intent"
+    assert "owner-approved" in b.what
+
+
 def test_missing_intent_artifact_blocks(tmp_path: Path) -> None:
     root, tracked = _materialize(tmp_path)
     (root / _INTENT_REL).unlink()

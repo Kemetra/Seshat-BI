@@ -313,7 +313,8 @@ def next_action(
     if intent_blocker is not None:
         return _blocked(_REPORT_INTENT_STAGE, intent_blocker)
 
-    approval_blocker = _check_intent_approved(root, tracked_files)
+    intent = _load_yaml_mapping(sdir / _INTENT_REL) or {}
+    approval_blocker = _check_intent_approved(root, tracked_files, intent)
     if approval_blocker is not None:
         return _blocked(_REPORT_INTENT_STAGE, approval_blocker)
 
@@ -321,7 +322,6 @@ def next_action(
     if model_blocker is not None:
         return _blocked("semantic_model_ready", model_blocker)
 
-    intent = _load_yaml_mapping(sdir / _INTENT_REL) or {}
     metric_blocker = _check_metrics_resolve(root, subject_area, intent)
     if metric_blocker is not None:
         return _blocked("dashboard_gaps", metric_blocker)
@@ -370,12 +370,27 @@ def _check_intent_committed(sdir: Path, subject_area: str) -> Blocked | None:
     return None
 
 
+def _intent_scope(intent: dict[str, Any]) -> tuple[str, ...]:
+    """The Decision Store scope key of THIS report (its committed ``report_id``).
+
+    An intent without a report_id has no scope, so no approval can match it --
+    the gate stays blocked rather than borrowing another report's approval."""
+    report_id = intent.get("report_id")
+    if isinstance(report_id, str) and report_id.strip():
+        return (f"artifacts:{report_id.strip()}",)
+    return ()
+
+
 def _check_intent_approved(
-    root: Path, tracked_files: tuple[str, ...]
+    root: Path, tracked_files: tuple[str, ...], intent: dict[str, Any]
 ) -> Blocked | None:
     """Read the report_intent approval verdict through the SHIPPED decision gate so
-    the coordinator never re-derives approval and never self-grants it."""
-    verdict = verdict_for(root, tracked_files, _REPORT_INTENT_STAGE)
+    the coordinator never re-derives approval and never self-grants it. The gate
+    is asked for THIS report's scope: an approval recorded for another report or
+    table does not approve this intent (audit F011)."""
+    verdict = verdict_for(
+        root, tracked_files, _REPORT_INTENT_STAGE, scope=_intent_scope(intent)
+    )
     if verdict.verdict == "pass":
         return None
     reasons = "; ".join(f"{b.decision_id}: {b.reason}" for b in verdict.blocking)
