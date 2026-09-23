@@ -121,7 +121,14 @@ class SessionStore:
             self._session_digest = None
             self._expires_at = None
             return False
-        return hmac.compare_digest(_digest(presented_cookie), self._session_digest)
+        if not hmac.compare_digest(_digest(presented_cookie), self._session_digest):
+            return False
+        # Sliding expiry: an ACTIVE session is renewed on use. The bootstrap token is
+        # spent at the first exchange, so an absolute deadline stranded an analyst mid
+        # work with no way back except restarting Studio and losing in-memory state.
+        # An idle session still lapses after the TTL.
+        self._expires_at = self._clock() + self._ttl
+        return True
 
     def expire_now(self) -> None:
         """Force the session past its deadline, for tests and explicit lockout."""

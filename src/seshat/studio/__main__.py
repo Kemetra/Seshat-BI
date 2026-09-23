@@ -232,7 +232,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     _serve(application, host=bound.bind_host, port=bound.port, sock=listener)
     return _EXIT_OK
-    return _EXIT_OK
 
 
 if __name__ == "__main__":  # pragma: no cover - console-script parity

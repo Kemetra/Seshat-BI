@@ -23,12 +23,10 @@ its generated schema and handshake fixtures pass.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
 
-from seshat.studio import codex_process
 from seshat.studio.codex_process import (
     MAXIMUM_TESTED_CODEX,
     MINIMUM_TESTED_CODEX,
@@ -275,7 +273,11 @@ def test_disabling_the_bare_token_regex_lets_the_raw_token_through(
     would have kept passing even with the JWT alternation deleted outright --
     this uses `_BARE_JWT_LINE`, already proven neutral above.
     """
-    monkeypatch.setattr(codex_process, "_BARE_CREDENTIAL", re.compile(r"(?!)"))
+    # The bare-token table moved into the SHARED redactor so the stderr and event
+    # legs cannot drift; disabling it there is what proves it does this work.
+    from seshat.studio import redaction
+
+    monkeypatch.setattr(redaction, "BARE_TOKEN_PATTERNS", ())
 
     sk_cleaned = redact_provider_stderr(
         "Incorrect API key provided: sk-live-ABCDEFGH12345678\n",

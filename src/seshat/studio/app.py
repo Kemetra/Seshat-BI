@@ -107,18 +107,12 @@ def _problem(
     return JSONResponse(
         status_code=status,
         media_type="application/problem+json",
-        content={
-            "type": "about:blank",
-            "title": title,
-            "status": status,
-            "detail": detail,
-            "recovery_action": recovery_action,
-        },
+        content=redaction.problem_content(status, title, detail, recovery_action),
     )
 
 
 def _bootstrap_capabilities(app: FastAPI) -> dict[str, Any]:
-    """What this build can do. `business_decision_recording` is const false (FR-022).
+    """What this build can do; every flag is derived from the capability it names.
 
     **`agent_turns` is DERIVED, not declared.** It was a hardcoded `False` while
     `app.state.agent_turns_refused` -- computed from the real provider outcome -- was
@@ -244,8 +238,10 @@ def _check_session(request: Request, app: FastAPI) -> JSONResponse | None:
     return _problem(
         401,
         "Unauthenticated",
-        "No valid Studio session is present.",
-        "Reopen Studio from the agent to start a new session.",
+        "No valid Studio session is present; an idle session lapses after "
+        f"{int(session.SESSION_TTL_SECONDS // 3600)} hours.",
+        "The launch link is single-use: restart Studio from the agent and open the "
+        "new link it prints.",
     )
 
 
@@ -272,8 +268,33 @@ def _with_headers(response: Response) -> Response:
     return response
 
 
+def _exchange_bootstrap(app: FastAPI, token: str, response: Response) -> Response:
+    """Trade the one-time token for a session cookie, or refuse with a problem."""
+    cookie = app.state.sessions.exchange(token)
+    if cookie is None:
+        return _problem(
+            401,
+            "Invalid bootstrap token",
+            "The bootstrap token is wrong or has already been used.",
+            "If this browser already opened Studio, reload without the link; "
+            "otherwise restart Studio from the agent to get a fresh link.",
+        )
+    response.set_cookie(
+        session.SESSION_COOKIE_NAME,
+        cookie,
+        **session.session_cookie_attributes(),
+    )
+    response.status_code = 204
+    return response
+
+
 def _register_routes(app: FastAPI) -> None:
-    """The seven deterministic routes. Agent-thread routes belong to Phase 4."""
+    """The deterministic routes, then the agent, workbench and operations modules.
+
+    Agent-thread routes live in `agent_routes`, the spec-140 workbench (including the
+    named-human decision RECORDING route) in `workbench_routes`, and spec-141
+    Operations in `operations_routes`; each is registered from here.
+    """
 
     def _snapshot() -> projection.WorkspaceSnapshot:
         return projection.build_workspace_snapshot(
@@ -297,21 +318,7 @@ def _register_routes(app: FastAPI) -> None:
 
     @app.post(f"{API_PREFIX}/bootstrap", status_code=204)
     async def bootstrap(token: str, response: Response) -> Response:
-        cookie = app.state.sessions.exchange(token)
-        if cookie is None:
-            return _problem(
-                401,
-                "Invalid bootstrap token",
-                "The bootstrap token is wrong or has already been used.",
-                "Reopen Studio from the agent to get a fresh link.",
-            )
-        response.set_cookie(
-            session.SESSION_COOKIE_NAME,
-            cookie,
-            **session.session_cookie_attributes(),
-        )
-        response.status_code = 204
-        return response
+        return _exchange_bootstrap(app, token, response)
 
     @app.get(f"{API_PREFIX}/bootstrap/state")
     async def bootstrap_state() -> Any:
@@ -360,9 +367,10 @@ def _register_routes(app: FastAPI) -> None:
     async def decisions() -> Any:
         """The business decisions a NAMED HUMAN still owes (T027, FR-022).
 
-        Read-only by construction: there is no mutation route to omit, and
-        `business_decision_recording` is const `False`. Listing what a human owes is
-        not recording their ruling.
+        Read-only: this route only LISTS what a human owes. Recording a ruling is
+        a separate, named-human route (`POST /decisions/record` in
+        `workbench_routes`, spec 140), which writes into the working tree as
+        `pending commit` and is never authority until a human commits it.
 
         This returned a hardcoded `{"items": []}` from Phase 3 until T027 -- a
         contract that promised a `PreparedDecisionSummary` beside code that could
@@ -378,7 +386,9 @@ def _register_routes(app: FastAPI) -> None:
 
     @app.get(f"{API_PREFIX}/agent/health")
     async def agent_health() -> Any:
-        return _snapshot().agent_health.as_dict()
+        # Through the same boundary as every other route: the health summary can
+        # echo the CLI's own `--version` output.
+        return _redact(_snapshot().agent_health.as_dict())
 
 
 def _register_frontend(app: FastAPI) -> None:
@@ -545,7 +555,6 @@ def create_app(
     #: store the gate does not read. Initialised HERE rather than lazily so the routes
     #: never read an attribute nothing wrote.
     app.state.workbench_proposals = {}
-    app.state.workbench_decision_counter = 0
     app.state.expected_host = f"{launch.bind_host}:{launch.port}"
     #: FR-013a: the default and the only path SC-010 certifies. An
     #: operator-configured alternate bridge sets this to

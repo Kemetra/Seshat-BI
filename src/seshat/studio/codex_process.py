@@ -27,6 +27,7 @@ NEWER than the tested maximum is therefore refused, not waved through.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from dataclasses import dataclass
@@ -79,9 +80,34 @@ def is_tested_version(version: str | None) -> bool:
     return low <= parsed <= high
 
 
+def _trusted_search_path() -> str:
+    """PATH with every entry that could resolve to the working directory removed.
+
+    `.`, empty and relative entries all name the CURRENT directory (or one below it),
+    which is usually an untrusted cloned workspace.
+    """
+    entries = os.environ.get("PATH", "").split(os.pathsep)
+    return os.pathsep.join(
+        entry for entry in entries if entry and Path(entry).is_absolute()
+    )
+
+
 def find_codex_executable() -> str | None:
-    """Locate `codex` on PATH without ever building a shell command string."""
-    return shutil.which("codex")
+    """Locate `codex` on PATH, never in the working directory, as an absolute path.
+
+    `shutil.which` on Windows searches the CURRENT DIRECTORY before PATH (unless
+    NoDefaultCurrentDirectoryInExePath is set), and does so even when an explicit
+    `path=` is passed -- so a `codex.bat` committed to the workspace the analyst
+    launched from would run at startup. The search therefore uses only absolute PATH
+    entries, and a result inside the working directory is refused outright.
+    """
+    found = shutil.which("codex", path=_trusted_search_path())
+    if found is None:
+        return None
+    resolved = Path(found).resolve()
+    if resolved.parent == Path.cwd().resolve():
+        return None
+    return str(resolved)
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,16 +140,6 @@ class CodexLaunchPlan:
         )
 
 
-#: Credential shapes that appear STANDALONE in provider diagnostics, with no
-#: `key=value` or `Authorization:` framing for the shared redactor to key on --
-#: "Incorrect API key provided: sk-..." is the common one. Matched here rather than
-#: in the shared redactor because these are provider-token shapes, and widening the
-#: shared rules risks the over-redaction that module's docstring warns about.
-_BARE_CREDENTIAL = re.compile(
-    r"(?:sk-[A-Za-z0-9_-]{8,}|ey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)"
-)
-
-
 def redact_provider_stderr(raw: str, *, workspace_root: Path | None = None) -> str:
     """Strip credentials and absolute paths from provider stderr before retention.
 
@@ -131,13 +147,12 @@ def redact_provider_stderr(raw: str, *, workspace_root: Path | None = None) -> s
     implementation would drift from the one the event path uses, and stderr is exactly
     where a drifted redactor goes unnoticed.
 
-    It then sweeps bare token shapes the shared redactor cannot see. That redactor
-    keys on `key=value`, `Authorization:` schemes, and DSNs, so a provider diagnostic
-    that simply PRINTS a key -- which is how OpenAI's own "Incorrect API key
-    provided" error reads -- would otherwise be retained verbatim.
+    Bare token shapes -- a provider diagnostic that simply PRINTS a key, which is
+    how OpenAI's own "Incorrect API key provided" error reads -- are covered by the
+    shared redactor's `BARE_TOKEN_PATTERNS`, the same table every event and
+    projection passes through, so the stderr and event legs cannot drift apart.
     """
-    cleaned = redact_for_boundary(raw, secrets=(), workspace_root=workspace_root)
-    return _BARE_CREDENTIAL.sub("<redacted>", cleaned)
+    return redact_for_boundary(raw, secrets=(), workspace_root=workspace_root)
 
 
 def _health(

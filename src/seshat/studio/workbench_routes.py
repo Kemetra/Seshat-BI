@@ -15,33 +15,19 @@ reviewable at a glance; it is the whole security model of this feature.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from functools import partial
 from pathlib import Path
 from typing import Any
 
+import anyio.to_thread
 import yaml
 from fastapi import FastAPI, Request
 
 from seshat import gitutil
 from seshat.studio import apply as apply_module
 from seshat.studio import decision_routes, evidence, proposals, review_scope
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-async def _json_body(request: Request) -> dict[str, Any]:
-    """The request body as a mapping; a non-mapping becomes an empty one.
-
-    Returning {} rather than raising lets each route's own field checks produce the
-    contracted 422 with a useful message instead of a framework-shaped error.
-    """
-    try:
-        body = await request.json()
-    except Exception:
-        return {}
-    return body if isinstance(body, dict) else {}
+from seshat.studio.http_common import json_body as _json_body
+from seshat.studio.http_common import now_iso as _now_iso
 
 
 def _proposal_id_for(app: FastAPI, proposal_hash: Any) -> str:
@@ -59,8 +45,14 @@ def _proposal_id_for(app: FastAPI, proposal_hash: Any) -> str:
     return ""
 
 
-class _CommittedReader:
-    """Reads a path as it stands at HEAD -- the gate's view, and the only authority."""
+class CommittedReader:
+    """Reads a path as it stands at HEAD -- the gate's view, and the only authority.
+
+    The path is WORKSPACE-relative and is requested as `HEAD:./<path>`: git resolves a
+    bare `HEAD:<path>` from the repository top level regardless of cwd, so a workspace
+    nested inside a larger repo silently read nothing and every committed decision
+    looked absent.
+    """
 
     def __init__(self, root: Path) -> None:
         self._root = root
@@ -70,7 +62,7 @@ class _CommittedReader:
             # The SHARED hardening tuple, never a local re-listing: naming
             # core.fsmonitor alone leaves hooksPath and protocol.ext live on a tree
             # this process did not author.
-            ["git", *gitutil.GIT_HARDENING, "show", f"HEAD:{relative}"],
+            ["git", *gitutil.GIT_HARDENING, "show", f"HEAD:./{relative}"],
             cwd=self._root,
             # run_subprocess sets stdin and timeout but NOT capture_output. Without
             # this, stdout is empty and EVERY committed decision looks absent.
@@ -208,9 +200,6 @@ async def record_decision(request: Request, *, deps: Deps) -> Any:
             "That proposal is not the current prepared proposal.",
             "Prepare the change again and re-review it before signing.",
         )
-    counter = deps.app.state.workbench_decision_counter = (
-        deps.app.state.workbench_decision_counter + 1
-    )
     try:
         receipt = decision_routes.record(
             context=decision_routes.WorkspaceContext(
@@ -223,7 +212,6 @@ async def record_decision(request: Request, *, deps: Deps) -> Any:
             ),
             payload=payload,
             proposal=proposal,
-            decision_id=f"studio-{counter:04d}",
             recorded_at=_now_iso(),
         )
     except decision_routes.RecordRefused as refused:
@@ -259,18 +247,21 @@ async def apply_proposal_route(
             "No prepared proposal matches that identifier.",
             "Prepare the change again to get a current proposal.",
         )
+    apply = partial(
+        apply_module.apply_proposal,
+        committed=CommittedReader(deps.app.state.launch.workspace_root),
+        proposal=proposal,
+        payload=await _json_body(request),
+        context=decision_routes.WorkspaceContext(
+            repo_root=deps.app.state.launch.workspace_root,
+            current_revision=deps.snapshot().identity.revision,
+            store_rel=decision_routes.DECISION_STORE_REL,
+        ),
+        live_available=False,
+    )
     try:
-        receipt = apply_module.apply_proposal(
-            committed=_CommittedReader(deps.app.state.launch.workspace_root),
-            proposal=proposal,
-            payload=await _json_body(request),
-            context=decision_routes.WorkspaceContext(
-                repo_root=deps.app.state.launch.workspace_root,
-                current_revision=deps.snapshot().identity.revision,
-                store_rel=decision_routes.DECISION_STORE_REL,
-            ),
-            live_available=False,
-        )
+        # In a worker thread: the HEAD read is a blocking `git show`.
+        receipt = await anyio.to_thread.run_sync(apply)
     except apply_module.ApplyRefused as refused:
         return deps.problem(
             refused.status,

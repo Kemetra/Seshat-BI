@@ -186,7 +186,10 @@ def test_the_advertised_capability_is_backed_by_a_reachable_delivery_seam():
     # `provider_sessions` -- a dict nothing ever wrote to. The lookup existed, the
     # caller existed, and no decision ever reached a provider. So the registry's WRITE
     # side is pinned too; `test_studio_approval_reachability` proves it end to end.
-    assert "_publish_provider_session" in inspect.getsource(agent_routes), (
+    from seshat.studio import turn_wiring
+
+    assert "turn_wiring.turn_kwargs" in inspect.getsource(agent_routes)
+    assert "provider_sessions" in inspect.getsource(turn_wiring), (
         "nothing registers a provider session, so every `_frame_sink` lookup misses "
         "and `technical_approvals: True` advertises a round trip that cannot close"
     )
@@ -263,7 +266,15 @@ def test_a_real_readiness_gate_blocks_an_allow_end_to_end(tmp_path: Path):
     table so `build_table_next_document` actually runs, and asserts the sentence the
     readiness gate itself produced reaches the analyst.
     """
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from unit import _studio_workspace_fixtures as workspace_fixtures
+
     client, app = _client(tmp_path)
+    # Thread creation only binds a table the workspace contains; a mapping-blocked
+    # one keeps silver and later closed, so the real gate forbids them.
+    workspace_fixtures.write_blocked_table(tmp_path, table="retail_store_sales")
     created = client.post(
         f"{API}/agent/threads", json={"selected_table_id": "retail_store_sales"}
     )

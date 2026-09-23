@@ -18,11 +18,14 @@ FR-141-004 forbids a second *probe set*, not a mapping layer. The mapping is new
 
 from __future__ import annotations
 
+import importlib.util
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from seshat import doctor
 from seshat.core import Finding, Severity
+from seshat.studio import WEB_DEPENDENCIES, assets
 
 #: Closed vocabulary (FR-141-003). `deferred` is NOT a failure: it means a boundary that
 #: is legitimately unavailable -- no DSN configured, an optional extra absent -- and
@@ -120,16 +123,100 @@ def diagnose(component: str, findings: list[Finding]) -> ComponentDiagnostic:
     )
 
 
-def report(repo_root: Path | str) -> tuple[ComponentDiagnostic, ...]:
+def report(
+    repo_root: Path | str,
+    *,
+    agent_health: Any = None,
+    static_dir: Path | None = None,
+) -> tuple[ComponentDiagnostic, ...]:
     """One diagnostic per component.
 
     Every component appears even when it has no findings, because a component missing
     from the report reads as "fine" to a technician scanning the list -- the same
     empty-success failure US1 exists to prevent.
+
+    Doctor's findings cover only the process, bundle and static gate. The other four
+    components get their OWN probe below; with no findings source they used to read
+    `healthy` unconditionally -- a missing Codex CLI showed as a healthy adapter.
     """
     grouped = _findings_by_component(repo_root)
+    probed = {
+        "package_extras": _package_extras(),
+        "codex_adapter": _codex_adapter(agent_health),
+        "live_boundary": _live_boundary(),
+        "frontend_assets": _frontend_assets(
+            static_dir or assets.packaged_static_directory()
+        ),
+    }
     return tuple(
-        diagnose(component, grouped.get(component, [])) for component in COMPONENTS
+        probed.get(component) or diagnose(component, grouped.get(component, []))
+        for component in COMPONENTS
+    )
+
+
+def _probed(
+    component: str, state: str, evidence: str, blocker: str | None = None
+) -> ComponentDiagnostic:
+    return ComponentDiagnostic(
+        component=component, state=state, evidence=(evidence,), blocker=blocker
+    )
+
+
+def _package_extras() -> ComponentDiagnostic:
+    """The Studio web extras, by importability -- not by assumption."""
+    absent = sorted(
+        name for name in WEB_DEPENDENCIES if importlib.util.find_spec(name) is None
+    )
+    if absent:
+        message = f"Studio extras not importable: {', '.join(absent)}"
+        return _probed("package_extras", "missing", message, message)
+    return _probed(
+        "package_extras",
+        "healthy",
+        f"importable: {', '.join(sorted(WEB_DEPENDENCIES))}",
+    )
+
+
+#: Agent health states that map one-to-one onto a component state.
+_AGENT_STATES: dict[str, str] = {
+    "healthy": "healthy",
+    "missing": "missing",
+    "incompatible": "incompatible",
+    "signed_out": "misconfigured",
+    "disabled": "deferred",
+}
+
+
+def _codex_adapter(agent_health: Any) -> ComponentDiagnostic:
+    """The adapter's state from the SAME health record the turn route gates on."""
+    if agent_health is None:
+        reason = "no agent health was supplied, so the adapter was not probed"
+        return _probed("codex_adapter", "deferred", reason, reason)
+    state = _AGENT_STATES.get(str(agent_health.state), "failed")
+    summary = str(agent_health.summary)
+    return _probed(
+        "codex_adapter",
+        state,
+        f"agent health: {agent_health.state} -- {summary}",
+        None if state == "healthy" else summary,
+    )
+
+
+def _live_boundary() -> ComponentDiagnostic:
+    """Operations never probes a live source, so it never claims one is healthy."""
+    reason = (
+        f"{PENDING_LIVE_MARKER} Operations does not connect to a live source; run the "
+        "live validation path to verify it"
+    )
+    return _probed("live_boundary", "deferred", reason, reason)
+
+
+def _frontend_assets(directory: Path) -> ComponentDiagnostic:
+    problem = assets.describe_missing_assets(directory)
+    if problem is not None:
+        return _probed("frontend_assets", "missing", problem, problem)
+    return _probed(
+        "frontend_assets", "healthy", f"{assets.INDEX_FILENAME} present in the build"
     )
 
 

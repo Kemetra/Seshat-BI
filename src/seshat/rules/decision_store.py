@@ -144,6 +144,16 @@ def _check_decision_shape(rec: dict[str, Any], rel: str) -> list[Finding]:
     return findings
 
 
+def decision_shape_findings(rec: dict[str, Any], rel: str) -> list[Finding]:
+    """DS1's per-record shape ERRORs, as a PUBLIC seam for the write path.
+
+    `seshat.decision_write` refuses an entry DS1 would flag, so a sanctioned write can
+    never turn the gate red. Sharing this function (rather than re-listing the id,
+    status and scope rules there) is what keeps the writer and the lint from drifting.
+    """
+    return _check_decision_shape(rec, rel)
+
+
 def _confidence_ok(conf: object) -> bool:
     return isinstance(conf, str) and conf in CONFIDENCE_VALUES
 

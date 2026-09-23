@@ -201,21 +201,25 @@ def test_a_real_turn_registers_its_provider_session(tmp_path: Path):
 
     # Observe the TRANSITIONS, not the state. The scripted child runs a whole turn
     # inside a single poll, so sampling `provider_sessions` between polls can miss
-    # both edges and report a working seam as broken. Wrapping the closure the route
-    # installed records each edge while still exercising the real one underneath.
-    # Records what the REGISTRY held at each edge, not merely that a callback fired.
-    # An earlier draft asserted on the callback alone and passed with the route's
-    # wiring deleted, because `CodexBridge.__init__` installs a no-op default -- the
-    # spy dutifully recorded edges into nothing. What must be proven is that the
-    # session became findable by `_frame_sink`, which means the dict.
-    installed = app.state.bridge.on_session
+    # both edges and report a working seam as broken. Instrumenting the REGISTRY
+    # itself records each edge while the route's real per-turn closure does the
+    # writing. An earlier draft spied on a callback and passed with the route's
+    # wiring deleted, because a no-op default dutifully recorded edges into nothing.
+    # What must be proven is that the session became findable by `_frame_sink`,
+    # which means the dict.
     registry_at_edge: list[Any] = []
 
-    def spy(session: Any) -> None:
-        installed(session)
-        registry_at_edge.append(app.state.provider_sessions.get(thread_id))
+    class _EdgeRecordingRegistry(dict):
+        def __setitem__(self, key: Any, value: Any) -> None:
+            super().__setitem__(key, value)
+            registry_at_edge.append(self.get(thread_id))
 
-    app.state.bridge.on_session = spy
+        def pop(self, key: Any, *default: Any) -> Any:
+            popped = super().pop(key, *default)
+            registry_at_edge.append(self.get(thread_id))
+            return popped
+
+    app.state.provider_sessions = _EdgeRecordingRegistry()
 
     # The generator is lazy: nothing runs until a poll advances it. Draining the event
     # stream is what a browser does, and what opens the session.

@@ -44,13 +44,16 @@ import anyio.to_thread
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from seshat.studio import turn_wiring
 from seshat.studio.approval_routes import (
     ApprovalRequest,
     decide_approval,
     register_approval,
+    selected_table,
 )
 from seshat.studio.bridge import validate_turn_request
 from seshat.studio.events import ReplayExpired, TurnAlreadyActive
+from seshat.studio.redaction import problem_content
 
 #: Contract's `AgentThreadRef.state` enum. Used to VALIDATE the state this module
 #: reports, so a typo cannot ship a state no client knows how to render.
@@ -78,21 +81,15 @@ WRITE_INTENT_TYPES: frozenset[str] = frozenset(
 def _problem(
     status: int, title: str, detail: str, recovery_action: str
 ) -> JSONResponse:
-    """The contract's `Problem` shape. Mirrors `app._problem` deliberately.
+    """The contract's `Problem` shape, built by the SAME redacting helper as `app`.
 
-    Imported rather than duplicated would be cleaner, but `app` imports THIS module, so
-    reaching back would be a cycle. The shape is pinned by contract tests on both sides.
+    `app` imports THIS module, so reaching back for `app._problem` would be a cycle;
+    both call `redaction.problem_content` instead, so the redaction cannot drift.
     """
     return JSONResponse(
         status_code=status,
         media_type="application/problem+json",
-        content={
-            "type": "about:blank",
-            "title": title,
-            "status": status,
-            "detail": detail,
-            "recovery_action": recovery_action,
-        },
+        content=problem_content(status, title, detail, recovery_action),
     )
 
 
@@ -171,10 +168,32 @@ assert _NEW_THREAD_STATE in THREAD_STATES, (
 )
 
 
-def _create_thread(app: FastAPI, body: dict[str, Any] | None) -> dict[str, Any]:
-    """Create a thread and record its opening event."""
-    thread_id = f"thread-{uuid.uuid4().hex[:12]}"
+def _is_bindable_table(app: FastAPI, selected: object) -> bool:
+    """True for no table at all, or for a table id this workspace contains."""
+    if selected is None:
+        return True
+    if not isinstance(selected, str):
+        return False
+    return selected in turn_wiring.known_table_ids(app)
+
+
+def _create_thread(app: FastAPI, body: dict[str, Any] | None) -> Any:
+    """Create a thread and record its opening event.
+
+    The table binding is VALIDATED here: it keys the readiness check every technical
+    approval on this thread is judged against, so an arbitrary label (or a non-string)
+    would let a caller pick which gate applies. Only null or a table id the workspace
+    actually contains is accepted.
+    """
     selected = (body or {}).get("selected_table_id")
+    if not _is_bindable_table(app, selected):
+        return _problem(
+            422,
+            "Unknown table",
+            "selected_table_id must be null or the id of a table in this workspace.",
+            "Open the Command Room to see the tables in this workspace.",
+        )
+    thread_id = f"thread-{uuid.uuid4().hex[:12]}"
     app.state.threads.thread(thread_id).append(
         "thread_started", {"selected_table_id": selected}
     )
@@ -253,53 +272,35 @@ async def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any
             "Adjust the request and try again.",
         )
 
-    # Parked for the poll loop to advance. Not a background task: one created inside
-    # a request dies with that request's event loop (verified under `TestClient`), so
-    # the turn would silently stop after its first frame.
     _reap_abandoned_turns(app)
-    _publish_provider_session(app, thread_id)
+    _park_turn(app, thread_id, thread, request)
+    return {"turn_id": turn_id}
+
+
+def _park_turn(app: FastAPI, thread_id: str, thread: Any, request: TurnRequest) -> None:
+    """Park the turn's generator for the poll loop to advance.
+
+    Not a background task: one created inside a request dies with that request's
+    event loop (verified under `TestClient`), so the turn would silently stop after
+    its first frame.
+    """
     app.state.pending_turns[thread_id] = _PendingTurn(
         events=app.state.bridge.run_turn(
             prompt=request.prompt,
             turn_id=request.turn_id,
             requested_mode=request.requested_mode,
+            **turn_wiring.turn_kwargs(
+                app,
+                thread_id,
+                table_id=selected_table(thread),
+                requested_mode=request.requested_mode,
+            ),
         ),
         request=request,
         pumping=asyncio.Lock(),
         last_touched=time.monotonic(),
         results=queue.Queue(),
     )
-    return {"turn_id": turn_id}
-
-
-def _publish_provider_session(app: FastAPI, thread_id: str) -> None:
-    """Let this thread's turn register its live provider session for the relay.
-
-    The approval relay answers a blocked `requestApproval` by writing to the child
-    process that raised it, so it must be able to find that child by thread. Nothing
-    did this before: `app.state.provider_sessions` was initialized and read but never
-    assigned, so every lookup missed and every decision returned 204 while the
-    provider stayed blocked.
-
-    Registration is a CLOSURE handed to the bridge rather than a value the bridge
-    returns, for two reasons. `run_turn` never receives a `thread_id`, so the bridge
-    cannot key the registry itself; and `app.state.bridge` is ONE instance shared by
-    every thread, so a session stored on it would let a second thread's turn overwrite
-    the first and answer the wrong provider.
-
-    A bridge with no session to publish -- `FakeAgentBridge` -- simply has no
-    `on_session` attribute, and this is a no-op for it.
-    """
-    if not hasattr(app.state.bridge, "on_session"):
-        return
-
-    def publish(session: Any) -> None:
-        if session is None:
-            app.state.provider_sessions.pop(thread_id, None)
-        else:
-            app.state.provider_sessions[thread_id] = session
-
-    app.state.bridge.on_session = publish
 
 
 def _interrupt_turn(app: FastAPI, thread_id: str, turn_id: str) -> Response:
@@ -337,6 +338,11 @@ async def _stream_events(app: FastAPI, thread_id: str, request: Request) -> Resp
     # Advance any live turn BEFORE replaying, so this poll serves what it just
     # produced rather than making the browser wait another interval for it.
     await _pump_turn(app, thread_id, app.state.threads.thread(thread_id))
+    # Sweep AFTER this thread's own pump touched it: a closed tab's turn is parked
+    # with nobody to advance it, and waiting for a NEW turn to start left its child
+    # process alive for the rest of the Studio process. Runs on the poll, never as a
+    # background task -- one bound to a request's loop dies with that request.
+    _reap_abandoned_turns(app)
 
     try:
         last_seen = _parse_last_event_id(request.headers.get("Last-Event-ID"))
@@ -645,7 +651,8 @@ def _reap_abandoned_turns(app: FastAPI) -> None:
     The pump only runs on a poll, so a browser that closes mid-reply leaves its
     generator parked with nothing to advance or close it -- holding a live
     `CodexSession` and its child process. Swept when a new turn is started, which is
-    the only moment this dictionary can grow.
+    the only moment this dictionary can grow, and on every events poll from any
+    thread, so a closed tab does not have to wait for someone to start a turn.
 
     The turn is FAILED, not merely dropped. Closing the generator alone would leave
     `_active_turn` set on a thread whose stream never reports an ending -- so that
