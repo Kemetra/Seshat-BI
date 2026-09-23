@@ -477,6 +477,12 @@ def _stage_paths(
     ``-A``). A non-git workspace is a note, not a failure."""
     if not paths:
         return (), None
+    # Deliberately a real `git add`, which applies the repository's configured
+    # content filters (unlike the filter-free probes in `git_worktree`): this
+    # is a confirmed write verb (`--yes` or an interactive prompt) the owner
+    # runs on their own workspace, and staging must produce exactly what their
+    # own `git add` would (LFS pointers, eol normalization). Removed paths have
+    # no content to filter; only the rewritten shared files do.
     result = run_subprocess(
         ["git", *_GIT_HARDENING, "-C", str(root), "add", "-A", "--", *paths],
         capture_output=True,
