@@ -12,6 +12,8 @@ from pathlib import Path
 # `\Z` (not `$`): in Python `$` also matches just before a trailing newline, so a
 # `"a..b\n"` would pass and be handed to git verbatim. `\Z` anchors the true end.
 _SAFE_RANGE_RE = re.compile(r"^[A-Za-z0-9_][\w./~^@-]*(\.\.\.?[\w./~^@-]+)?\Z")
+# One revision (the left-hand side of the range shape above).
+_SAFE_REVISION_RE = re.compile(r"^[A-Za-z0-9_][\w./~^@-]*\Z")
 # Cap on stderr spliced into an error message so a failing git command cannot dump
 # unbounded (or sensitive) output into a RuntimeError / Finding (audit #27).
 _STDERR_LIMIT = 300
@@ -154,6 +156,22 @@ def list_paths(repo_root: Path, *args: str) -> tuple[str, ...]:
     )
 
 
+def validate_revision(revision: str) -> str:
+    """Return ``revision`` if it is ONE safe revision (not a range), else raise.
+
+    The single-ref half of :func:`validate_commit_range`: no leading ``-`` (git
+    would parse it as an option), ref-name characters only, and no ``..`` range
+    operator.
+    """
+    if (
+        not isinstance(revision, str)
+        or not _SAFE_REVISION_RE.match(revision)
+        or ".." in revision
+    ):
+        raise ValueError(f"unsafe git revision: {revision!r}")
+    return revision
+
+
 def git_output(repo_root: Path, *args: str) -> str:
     result = run_subprocess(
         ["git", *_GIT_HARDENING, "-C", str(repo_root), *args],
@@ -175,10 +193,25 @@ def git_output(repo_root: Path, *args: str) -> str:
 
 
 def git_check_ignore(repo_root: Path, path: str) -> bool:
+    # `--` before the path: a tracked file may legitimately be named `-x.pbip`,
+    # which git would otherwise parse as an option (exit 129 -> RuntimeError).
+    # UTF-8 decoding, not the locale codec, so non-ASCII stderr cannot null the
+    # captured output (issue #663 class).
     result = run_subprocess(
-        ["git", *_GIT_HARDENING, "-C", str(repo_root), "check-ignore", "-q", path],
+        [
+            "git",
+            *_GIT_HARDENING,
+            "-C",
+            str(repo_root),
+            "check-ignore",
+            "-q",
+            "--",
+            path,
+        ],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     if result.returncode == 0:
         return True
