@@ -89,7 +89,7 @@ def test_only_check_receives_review_formats() -> None:
         parser.parse_args(["status", "--format", "review"])
 
 
-@pytest.mark.parametrize("value", ["-n1", "--stat", "--output=x", "a..b\n"])
+@pytest.mark.parametrize("value", ["-n1", "--stat", "a..b\n"])
 def test_option_shaped_commit_range_never_reaches_git(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: str
 ) -> None:

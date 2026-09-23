@@ -251,3 +251,16 @@ def test_cp1252_design_tokens_are_a_finding_not_a_crash(
         ctx = RuleContext(repo_root=tmp_path, tracked_files=(rel,))
         findings = list(getattr(module, rule_name)(ctx))
         assert [f.severity for f in findings] == [Severity.ERROR]
+
+
+def test_crash_finding_does_not_echo_exception_text(tmp_path: Path) -> None:
+    def leaks(ctx: RuleContext):
+        raise RuntimeError("C:/Users/someone/secret/path failed")
+
+    rules = (RegisteredRule(id="BAD2", rule=leaks, title="leaks"),)
+    ctx = RuleContext(repo_root=tmp_path, tracked_files=())
+
+    (finding,) = runner.collect_findings(rules, ctx)
+
+    assert "someone" not in finding.message
+    assert "RuntimeError" in finding.message

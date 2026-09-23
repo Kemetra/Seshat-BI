@@ -191,9 +191,6 @@ def _rule_findings(
         return [_crash_finding(registered, exc, ctx.repo_root)]
 
 
-_CRASH_DETAIL_LIMIT = 200
-
-
 def _crash_finding(
     registered: RegisteredRule, exc: Exception, repo_root: Path
 ) -> Finding:
@@ -205,9 +202,10 @@ def _crash_finding(
             locator = exc.path.name
         message = "could not read a tracked file: it is not valid UTF-8"
     else:
-        detail = str(exc).replace("\n", " ")[:_CRASH_DETAIL_LIMIT]
+        # The exception TYPE only: its text can carry absolute local paths or
+        # secret-shaped content into JSON/SARIF output.
         locator = "(rule)"
-        message = f"rule could not complete ({type(exc).__name__}: {detail})"
+        message = f"rule could not complete ({type(exc).__name__})"
     return Finding(
         rule_id=registered.id,
         severity=Severity.ERROR,
