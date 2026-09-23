@@ -27,6 +27,41 @@ _BUNDLED_SKILLS = {
 }
 
 
+_PACKAGE_PREFIX = "src/seshat/"
+
+
+def _bundled_candidates(root: Path, relative: str) -> tuple[Path, ...]:
+    """Where a bundled artifact may live, most authoritative first.
+
+    Bundled components ship WITH Seshat, not with the consumer's workspace, so
+    the installed package is consulted first: a `src/seshat/...` path maps into
+    the imported package, and any other path into the source checkout the
+    package was imported from (a `src/` layout). The workspace is the last
+    resort, for a repository that vendors the artifact itself.
+    """
+    import seshat
+
+    package = Path(seshat.__file__).resolve().parent
+    candidates: list[Path] = []
+    if relative.startswith(_PACKAGE_PREFIX):
+        candidates.append(package / relative[len(_PACKAGE_PREFIX) :])
+    if package.parent.name == "src":
+        candidates.append(package.parent.parent / relative)
+    candidates.append(root / relative)
+    return tuple(candidates)
+
+
+def bundled_path(root: Path, item: Component) -> Path | None:
+    """The bundled artifact on disk for `item`, or None when it is absent."""
+    relative = _BUNDLED_SKILLS.get(item.id)
+    if not relative:
+        return None
+    return next(
+        (path for path in _bundled_candidates(root, relative) if path.is_file()),
+        None,
+    )
+
+
 def _skill_dir(item: Component) -> Path:
     return SKILLS_DIR / item.id
 
@@ -59,8 +94,7 @@ def _is_installed(root: Path, item: Component, profile: str) -> bool:
     reports as not installed, so it is re-planned rather than claimed.
     """
     if item.source_type is SourceType.BUNDLED:
-        relative = _BUNDLED_SKILLS.get(item.id)
-        return bool(relative) and (root / relative).is_file()
+        return bundled_path(root, item) is not None
     if item.mcp_server:
         # An MCP component is installed when its registration marker exists,
         # whatever index its version came from.
