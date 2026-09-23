@@ -1,15 +1,23 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from collections.abc import Mapping
-from fnmatch import fnmatch
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Callable
 
 from seshat.gitutil import GIT_HARDENING as _GIT_HARDENING
 from seshat.gitutil import run_subprocess
 
-from .core import Finding, RegisteredRule, RuleContext, RuleTier, Severity
+from .core import (
+    Finding,
+    RegisteredRule,
+    RuleContext,
+    RuleTier,
+    Severity,
+    UnreadableTrackedFile,
+)
 from .rule_coverage import (
     ContextInput,
     CoverageRecord,
@@ -38,6 +46,47 @@ _GIT_NOT_A_REPO = 128
 # come from the single `gitutil.GIT_HARDENING` definition, imported above.
 
 
+def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """One hardened git read for the corpus, decoded losslessly.
+
+    ``-z`` output decoded as UTF-8 with ``surrogateescape``: without ``-z`` git
+    C-quotes every non-ASCII path (``"sql/caf\\303\\251.sql"``), which then neither
+    matches a rule's glob nor opens on disk, so every file-scoped rule skipped it
+    silently. ``safe.directory`` is pinned as in ``gitstate``/``dbt.gate`` so a
+    checkout owned by another account does not fail this read. A timeout becomes
+    a ``RuntimeError`` naming it, which the CLI reports as a clean error.
+    """
+    try:
+        return run_subprocess(
+            [
+                "git",
+                *_GIT_HARDENING,
+                "-c",
+                f"safe.directory={Path(repo_root).resolve().as_posix()}",
+                *args,
+            ],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="surrogateescape",
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"git {' '.join(args)} timed out after {exc.timeout}s"
+        ) from exc
+
+
+def _nul_split(stdout: str | None) -> tuple[str, ...]:
+    return tuple(path for path in (stdout or "").split("\0") if path)
+
+
+def _is_work_tree(repo_root: Path) -> bool:
+    """Is ``repo_root`` inside a git work tree? (Reads no index.)"""
+    probe = _git(repo_root, "rev-parse", "--is-inside-work-tree")
+    return probe.returncode == 0 and (probe.stdout or "").strip() == "true"
+
+
 def _git_ls_files(repo_root: Path) -> tuple[str, ...]:
     """Return repo-relative POSIX paths for every tracked file.
 
@@ -45,42 +94,35 @@ def _git_ls_files(repo_root: Path) -> tuple[str, ...]:
     vacuously on a broken git:
 
     * ``0``   -> the tracked-file list.
-    * ``128`` -> ``repo_root`` is not a git repository (e.g. a bare tmp dir in
-      tests); return ``()`` — the expected non-repo case.
+    * ``128`` AND ``repo_root`` is not inside a work tree (e.g. a bare tmp dir
+      in tests) -> ``()`` — the expected non-repo case. Git also exits 128 for a
+      corrupt index or a refused checkout; those are inside a work tree and fail
+      LOUD. (The stderr text is not matched: git localizes it.)
     * any other non-zero code -> ``RuntimeError`` so CI misconfiguration fails
       LOUD (red) rather than silently green.
     """
-    result = run_subprocess(
-        ["git", *_GIT_HARDENING, "ls-files"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == _GIT_NOT_A_REPO:
+    result = _git(repo_root, "ls-files", "-z")
+    if result.returncode == _GIT_NOT_A_REPO and not _is_work_tree(repo_root):
         return ()
     if result.returncode != 0:
         raise RuntimeError(
-            f"git ls-files failed (exit {result.returncode}): {result.stderr.strip()}"
+            f"git ls-files failed (exit {result.returncode}): "
+            f"{(result.stderr or '').strip()}"
         )
     # A newly initialized first-success workspace has no index yet. In that narrow
     # state, evaluate its non-ignored files so `git init` followed by `seshat check`
     # can verify the generated baseline before its first commit. Once anything is
     # tracked, the normal committed-files-only governance boundary is unchanged.
-    tracked = tuple(line for line in result.stdout.splitlines() if line)
+    tracked = _nul_split(result.stdout)
     if tracked:
         return tracked
-    untracked = run_subprocess(
-        ["git", *_GIT_HARDENING, "ls-files", "--others", "--exclude-standard"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
+    untracked = _git(repo_root, "ls-files", "-z", "--others", "--exclude-standard")
     if untracked.returncode != 0:
         raise RuntimeError(
             "git ls-files --others failed "
-            f"(exit {untracked.returncode}): {untracked.stderr.strip()}"
+            f"(exit {untracked.returncode}): {(untracked.stderr or '').strip()}"
         )
-    return tuple(line for line in untracked.stdout.splitlines() if line)
+    return _nul_split(untracked.stdout)
 
 
 def build_context(
@@ -134,10 +176,44 @@ def _rule_findings(
     A KIT_SELF rule in a non-bootstrapped repo does NOT execute -- it yields a
     single INFO skip finding instead of ERROR-ing on a kit manifest the foreign
     repo cannot have. Every other case runs the rule normally.
+
+    A rule that RAISES is isolated: its crash becomes one ERROR finding and every
+    other rule still runs. Before, one malformed artifact (a UTF-16 SQL file, a
+    trailing comma in a PBIR) aborted the whole gate with a traceback and no
+    findings at all, and ``--format json`` printed nothing parseable. The ERROR
+    keeps the run failing (fail closed) while saying which rule and file.
     """
     if registered.tier is RuleTier.KIT_SELF and not bootstrapped:
         return [_skip_finding(registered)]
-    return list(registered.rule(ctx))
+    try:
+        return list(registered.rule(ctx))
+    except Exception as exc:  # noqa: BLE001 -- isolate one rule's crash, reported
+        return [_crash_finding(registered, exc, ctx.repo_root)]
+
+
+_CRASH_DETAIL_LIMIT = 200
+
+
+def _crash_finding(
+    registered: RegisteredRule, exc: Exception, repo_root: Path
+) -> Finding:
+    """The ERROR finding that stands in for a rule that could not complete."""
+    if isinstance(exc, UnreadableTrackedFile):
+        try:
+            locator = exc.path.relative_to(repo_root).as_posix()
+        except ValueError:
+            locator = exc.path.name
+        message = "could not read a tracked file: it is not valid UTF-8"
+    else:
+        detail = str(exc).replace("\n", " ")[:_CRASH_DETAIL_LIMIT]
+        locator = "(rule)"
+        message = f"rule could not complete ({type(exc).__name__}: {detail})"
+    return Finding(
+        rule_id=registered.id,
+        severity=Severity.ERROR,
+        message=message,
+        locator=locator,
+    )
 
 
 def _collect(
@@ -202,13 +278,14 @@ def _corpus_empty(tracked_files: tuple[str, ...], requirement: Requirement) -> b
     """
     pattern = requirement.pattern or ""
     return not any(
-        fnmatch(candidate, pattern) and not _excluded(candidate, requirement.exclude)
+        fnmatchcase(candidate, pattern)
+        and not _excluded(candidate, requirement.exclude)
         for candidate in tracked_files
     )
 
 
 def _excluded(candidate: str, exclude: tuple[str, ...]) -> bool:
-    return any(fnmatch(candidate, pattern) for pattern in exclude)
+    return any(fnmatchcase(candidate, pattern) for pattern in exclude)
 
 
 def _commit_subject_missing(ctx: RuleContext) -> bool:

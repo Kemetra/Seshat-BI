@@ -38,6 +38,7 @@ Structure:
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -141,6 +142,15 @@ def _run_check(args: object) -> int:
                 file=sys.stderr,
             )
             return 1  # main() is -> int; the __main__ guard does sys.exit(main())
+        except (OSError, UnicodeDecodeError) as exc:
+            # A cp1252 COMMIT_EDITMSG (or an unreadable path) must fail the
+            # commit-msg hook with a clean error, not a traceback.
+            print(
+                f"error: commit message file could not be read as UTF-8: "
+                f"{args.commit_msg_file} ({exc.__class__.__name__})",  # type: ignore[attr-defined]
+                file=sys.stderr,
+            )
+            return 1
         # git's COMMIT_EDITMSG ends in a trailing newline (\r\n on Windows) —
         # strip it so the message passed to rules is the bare text.
         commit_message = raw.rstrip("\r\n")
@@ -151,7 +161,7 @@ def _run_check(args: object) -> int:
             commit_range=args.commit_range,  # type: ignore[attr-defined]
             commit_message=commit_message,
         )
-    except (OSError, RuntimeError) as exc:
+    except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
         # build_context -> _git_ls_files exercises git BEFORE any rule runs. A git
         # that cannot launch (OSError: missing binary) or fails non-zero/non-128
         # (RuntimeError: e.g. a corrupt repo) must surface as a clean error, not a
