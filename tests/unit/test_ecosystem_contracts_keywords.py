@@ -40,7 +40,7 @@ def test_every_shipped_contract_schema_uses_only_supported_keywords(
     [
         {"type": "string", "maxLength": 3},
         {"anyOf": [{"type": "string"}, {"type": "integer"}]},
-        {"type": "object", "properties": {"a": {"type": "string", "format": "x"}}},
+        {"type": "object", "properties": {"a": {"type": "string", "maxLength": 2}}},
         {"$defs": {"d": {"not": {"type": "null"}}}, "$ref": "#/$defs/d"},
         {"type": "array", "items": {"type": "object", "propertyNames": {}}},
         {"type": "object", "patternProperties": {"^x": {}}},
@@ -61,6 +61,7 @@ def test_annotation_keywords_are_accepted() -> None:
         "type": "string",
         "default": "a",
         "examples": ["a"],
+        "format": "date",
     }
     assert validate_json_contract("a", schema) == []
 

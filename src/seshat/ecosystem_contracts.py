@@ -318,6 +318,9 @@ _ANNOTATION_KEYWORDS = frozenset(
         "$comment",
         "default",
         "examples",
+        # Annotation-only in JSON Schema 2020-12 unless the format-assertion
+        # vocabulary is enabled, so ignoring it is the specified behaviour.
+        "format",
     }
 )
 
