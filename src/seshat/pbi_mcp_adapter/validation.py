@@ -180,6 +180,12 @@ def _run_validator(
 
     ``stdin=DEVNULL`` because the parent may itself be speaking MCP over stdio,
     where an inherited stdin deadlocks. Its own timeout, not the shared cap.
+
+    ``encoding="utf-8", errors="replace"`` for the reason ``runner`` documents
+    (#404): the child ``seshat.cli`` writes UTF-8 on win32, and the locale codec
+    raises on a byte it cannot map INSIDE subprocess's reader thread, which
+    leaves ``stdout`` as None -- a finding on an Arabic-named measure then
+    erased the whole baseline.
     """
     return subprocess.run(  # noqa: S603 - fixed argv, no shell, no user string
         args,
@@ -187,6 +193,8 @@ def _run_validator(
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=VALIDATION_TIMEOUT_SECONDS,
         check=False,
         shell=False,
@@ -230,6 +238,11 @@ def semantic_baseline(
     try:
         completed = invoke(root, _semantic_argv(root))  # type: ignore[operator]
     except (subprocess.TimeoutExpired, OSError):
+        return None
+    if completed.stdout is None:
+        # Nothing was captured, which is not "no findings". Returning an empty
+        # set here would make every later finding look new AND hide that the
+        # baseline never ran; None is what the caller treats as a blocker.
         return None
     return finding_lines(completed.stdout)
 
@@ -490,6 +503,10 @@ def validate_semantic_model(
     try:
         completed = invoke(root, args)  # type: ignore[operator]
     except (subprocess.TimeoutExpired, OSError):
+        completed = None
+    # stdout=None means the output was never captured, so the run cannot be
+    # read as clean -- the same fail-closed ending as a validator that died.
+    if completed is None or completed.stdout is None:
         return ValidationOutcome(
             checks_run=checks_run,
             artifacts_examined=(target_path,),
@@ -505,7 +522,7 @@ def validate_semantic_model(
         backup_ref,
         checks_run,
         baseline,
-        completed.stdout or "",
+        completed.stdout,
         examined,
     )
     semantic = _outcome_for(completed.returncode, run)
