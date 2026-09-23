@@ -107,13 +107,7 @@ def _problem(
     return JSONResponse(
         status_code=status,
         media_type="application/problem+json",
-        content={
-            "type": "about:blank",
-            "title": title,
-            "status": status,
-            "detail": detail,
-            "recovery_action": recovery_action,
-        },
+        content=redaction.problem_content(status, title, detail, recovery_action),
     )
 
 
@@ -378,7 +372,9 @@ def _register_routes(app: FastAPI) -> None:
 
     @app.get(f"{API_PREFIX}/agent/health")
     async def agent_health() -> Any:
-        return _snapshot().agent_health.as_dict()
+        # Through the same boundary as every other route: the health summary can
+        # echo the CLI's own `--version` output.
+        return _redact(_snapshot().agent_health.as_dict())
 
 
 def _register_frontend(app: FastAPI) -> None:

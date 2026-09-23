@@ -52,6 +52,7 @@ from seshat.studio.approval_routes import (
 )
 from seshat.studio.bridge import validate_turn_request
 from seshat.studio.events import ReplayExpired, TurnAlreadyActive
+from seshat.studio.redaction import problem_content
 
 #: Contract's `AgentThreadRef.state` enum. Used to VALIDATE the state this module
 #: reports, so a typo cannot ship a state no client knows how to render.
@@ -79,21 +80,15 @@ WRITE_INTENT_TYPES: frozenset[str] = frozenset(
 def _problem(
     status: int, title: str, detail: str, recovery_action: str
 ) -> JSONResponse:
-    """The contract's `Problem` shape. Mirrors `app._problem` deliberately.
+    """The contract's `Problem` shape, built by the SAME redacting helper as `app`.
 
-    Imported rather than duplicated would be cleaner, but `app` imports THIS module, so
-    reaching back would be a cycle. The shape is pinned by contract tests on both sides.
+    `app` imports THIS module, so reaching back for `app._problem` would be a cycle;
+    both call `redaction.problem_content` instead, so the redaction cannot drift.
     """
     return JSONResponse(
         status_code=status,
         media_type="application/problem+json",
-        content={
-            "type": "about:blank",
-            "title": title,
-            "status": status,
-            "detail": detail,
-            "recovery_action": recovery_action,
-        },
+        content=problem_content(status, title, detail, recovery_action),
     )
 
 

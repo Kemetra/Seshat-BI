@@ -27,6 +27,7 @@ fail-open dressed as resilience.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -289,8 +290,14 @@ class _DeltaBuffer:
 
     So nothing is scrubbed in isolation. Each item's raw text is accumulated, the
     WHOLE accumulation is redacted every time, and only the part of that redacted
-    text not yet sent is emitted. The redactor always sees complete context, so the
-    splitting window does not exist -- rather than being narrowed by a heuristic.
+    text not yet sent is emitted.
+
+    Cumulative redaction alone still left a window: a rule can only match a value
+    once the value is COMPLETE (a DSN needs its `@`, a bare token its full length),
+    so a chunk ending mid-credential matched nothing and was emitted raw. The
+    unterminated trailing token is therefore HELD BACK -- emission stops at the last
+    whitespace boundary of the redacted text -- and released once a boundary arrives
+    or the item is flushed, when the redactor sees the whole token.
 
     Keyed per ITEM, never per stream: Codex interleaves items, and one shared slot
     would splice item A's text onto item B -- corrupting the transcript and creating
@@ -323,11 +330,12 @@ class _DeltaBuffer:
         key = item_id or self._UNKEYED
         raw, sent = self._items.get(key, ("", ""))
         raw += text
-        redacted = scrub(raw)
-        self._items[key] = (raw, redacted if redacted.startswith(sent) else sent)
-        if not redacted.startswith(sent):
+        safe = _through_last_boundary(scrub(raw))
+        if not safe.startswith(sent):
+            self._items[key] = (raw, sent)
             return ""
-        return redacted[len(sent) :]
+        self._items[key] = (raw, safe)
+        return safe[len(sent) :]
 
     def flush(self, item_id: str, scrub: Callable[[str], str]) -> str:
         """Release whatever redacted text this item has not yet emitted."""
@@ -343,6 +351,14 @@ class _DeltaBuffer:
     def flush_all(self, scrub: Callable[[str], str]) -> str:
         """Release every outstanding item, for turn-level terminal events."""
         return "".join(self.flush(key, scrub) for key in list(self._items))
+
+
+_TRAILING_TOKEN = re.compile(r"\S*\Z")
+
+
+def _through_last_boundary(text: str) -> str:
+    """`text` up to and including its last whitespace; the trailing token is held."""
+    return text[: len(text) - len(_TRAILING_TOKEN.search(text).group(0))]
 
 
 @dataclass(frozen=True, slots=True)
