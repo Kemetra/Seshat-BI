@@ -30,7 +30,7 @@ def test_redaction_core_scrubs_token_key_and_guid_shapes() -> None:
 def test_already_redacted_assignment_is_left_readable() -> None:
     from seshat.redaction_core import scrub_secret_shaped
 
-    scrubbed, _ = scrub_secret_shaped("password=[REDACTED] failed")
+    scrubbed, _ = scrub_secret_shaped("password=[REDACTED] failed", keep_redacted=True)
     assert scrubbed == "password=[REDACTED] failed"
 
 

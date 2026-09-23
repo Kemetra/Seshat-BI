@@ -428,7 +428,7 @@ _REDACTION_MARKERS = ("[REDACTED]", "[REDACTED-ENV]", "[REDACTED-DSN]")
 
 
 def scrub_secret_shaped(
-    text: str, token: str = "[REDACTED]"
+    text: str, token: str = "[REDACTED]", *, keep_redacted: bool = False
 ) -> tuple[str, tuple[str, ...]]:
     """Replace every secret-shaped span in ``text``, naming what was replaced.
 
@@ -436,11 +436,17 @@ def scrub_secret_shaped(
     value it was never told about (a token, a cloud key id, a tenant GUID), so
     every output surface runs this after its value pass. Returns the scrubbed
     text and the labels that matched, so a substitution is auditable.
+
+    ``keep_redacted`` leaves a span that already ENDS in a redaction marker
+    (``password=[REDACTED]``) readable -- for free-text surfaces whose layer-one
+    pass already replaced the value. The pbi-mcp record writer keeps the strict
+    default: it scrubs values first, then re-scrubs the serialized JSON.
     """
 
     def replace(match: re.Match[str]) -> str:
         span = match.group(0)
-        return span if span.endswith(_REDACTION_MARKERS) else token
+        keep = keep_redacted and span.endswith(_REDACTION_MARKERS)
+        return span if keep else token
 
     applied: list[str] = []
     scrubbed = text

@@ -112,7 +112,7 @@ def redact_text(text: str) -> str:
     out = _DSN_RE.sub("[REDACTED-DSN]", out)
     out = _KEYWORD_RE.sub(lambda m: f"{m.group(1)}=[REDACTED]", out)
     # Layer two: secret-SHAPED spans (tokens, key ids, GUIDs) no value knew.
-    return scrub_secret_shaped(out)[0]
+    return scrub_secret_shaped(out, keep_redacted=True)[0]
 
 
 def redact_and_tail(text: str, max_chars: int) -> str:
