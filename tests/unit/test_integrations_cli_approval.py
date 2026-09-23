@@ -87,8 +87,11 @@ def test_tty_confirmation_without_committed_approval_does_not_provision(
         "seshat.cli.commands.integrations._attended", lambda: True, raising=False
     )
     monkeypatch.setattr(integrations_setup, "confirm", lambda *a, **k: True)
-    integrations_main(_args(root, refresh=True, apply=True))
-    assert "apply" not in planned
+    exit_code = integrations_main(_args(root, refresh=True, apply=True))
+    # Presence, not just absence: the plan step RAN (so the TTY path was
+    # actually exercised) and the run refused rather than exiting early.
+    assert planned == ["plan"]
+    assert exit_code != 0
 
 
 def test_stdin_answer_without_committed_approval_does_not_provision(
@@ -98,9 +101,14 @@ def test_stdin_answer_without_committed_approval_does_not_provision(
     import io
 
     root = _workspace(tmp_path)
-    monkeypatch.setattr("sys.stdin", io.StringIO("y\n"))
-    integrations_main(_args(root, refresh=True, apply=True))
-    assert "apply" not in planned
+    piped = io.StringIO("y\n")
+    monkeypatch.setattr("sys.stdin", piped)
+    exit_code = integrations_main(_args(root, refresh=True, apply=True))
+    # Presence, not just absence: the plan step RAN, the piped answer was never
+    # consumed as a confirmation, and the run ended as a plan-only report.
+    assert planned == ["plan"]
+    assert piped.tell() == 0
+    assert exit_code == 0
 
 
 def test_yes_is_never_passed_to_the_gate(
