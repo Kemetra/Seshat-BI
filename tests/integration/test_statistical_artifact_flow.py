@@ -10,6 +10,7 @@ import pytest
 
 from seshat.cli import main
 from seshat.ecosystem_contracts import validate_json_contract
+from tests.unit._gitfix import commit_tree
 
 pytestmark = pytest.mark.statistics
 
@@ -25,7 +26,8 @@ _EVIDENCE_SCHEMA = json.loads(
 def _copy_fixture_repo(tmp_path: Path, name: str) -> Path:
     root = tmp_path / name
     shutil.copytree(_FIXTURES / name, root)
-    return root
+    # The statistical policy reads readiness and contracts at HEAD.
+    return commit_tree(root)
 
 
 _SPEC = "mappings/sample_orders/analyses/weekly_signal.analysis.yaml"

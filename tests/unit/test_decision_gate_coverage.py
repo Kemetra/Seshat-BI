@@ -136,6 +136,20 @@ def test_empty_scope_request_matches_nothing(tmp_path: Path) -> None:
     assert verdict_for(root, tracked, "report_intent", scope=()).verdict == "blocked"
 
 
+def test_committed_verdict_ignores_an_uncommitted_store_append(tmp_path: Path) -> None:
+    """Audit F178: with committed=True the store is read at HEAD, so an
+    uncommitted approval appended to a tracked store file moves nothing."""
+    from tests.unit._gitfix import commit_tree
+
+    _repo(tmp_path, "decisions: []\n")
+    commit_tree(tmp_path)
+    # Re-materialize with an approved record: the store file is now dirty.
+    root, tracked = _report_intent(tmp_path, "report_a")
+    assert verdict_for(root, tracked, "report_intent").verdict == "pass"
+    committed = verdict_for(root, tracked, "report_intent", committed=True)
+    assert committed.verdict == "blocked"
+
+
 def test_string_evidence_is_stale() -> None:
     approval = {"evidence": "does/not/exist.md", "evidence_identity": "whatever"}
     assert evidence_stale(".", approval)

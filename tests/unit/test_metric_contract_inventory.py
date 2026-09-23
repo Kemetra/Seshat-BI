@@ -330,6 +330,58 @@ def test_same_semantic_binding_in_different_scopes_is_rejected(
     assert any("duplicate semantic binding" in error for error in inventory.errors)
 
 
+def _write_raw_approval(root: Path, scope: str, body: str) -> None:
+    _write(root / "mappings" / scope / "readiness-status.yaml", "approvals:\n" + body)
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        # at: TBD is not an ISO date -- RS1 rejects the row, so must the inventory.
+        '  - {stage: semantic_model_ready, owner: "Ann Lee (metric_owner)", '
+        'at: TBD, note: "approved metric contracts: TotalSales"}\n',
+        # a rejection that names the contract is not an approval.
+        '  - {stage: semantic_model_ready, owner: "Ann Lee (metric_owner)", '
+        'at: "2026-09-01", note: "TotalSales contract REJECTED -- do not use"}\n',
+        # a neighbouring multi-word name does not approve the shorter name.
+        '  - {stage: semantic_model_ready, owner: "Ann Lee (metric_owner)", '
+        'at: "2026-09-01", note: "approved Net TotalSales only"}\n',
+    ],
+)
+def test_prose_that_is_not_an_approval_does_not_approve(
+    tmp_path: Path, entry: str
+) -> None:
+    _write_raw_approval(tmp_path, "sales", entry)
+    path = _write(_contract_path(tmp_path, "sales"), _approved())
+    assert load_contract_inventory([path], tmp_path).approved == {}
+
+
+def test_structured_contracts_field_binds_the_approval(tmp_path: Path) -> None:
+    _write_raw_approval(
+        tmp_path,
+        "sales",
+        '  - {stage: semantic_model_ready, owner: "Ann Lee (metric_owner)", '
+        'at: "2026-09-01", contracts: [TotalSales], note: "see decision record"}\n',
+    )
+    path = _write(_contract_path(tmp_path, "sales"), _approved())
+    assert set(load_contract_inventory([path], tmp_path).approved) == {
+        ("sales", "TotalSales")
+    }
+
+
+def test_structured_contracts_field_is_authoritative_over_the_note(
+    tmp_path: Path,
+) -> None:
+    _write_raw_approval(
+        tmp_path,
+        "sales",
+        '  - {stage: semantic_model_ready, owner: "Ann Lee (metric_owner)", '
+        'at: "2026-09-01", contracts: [Other], note: "contracts: TotalSales"}\n',
+    )
+    path = _write(_contract_path(tmp_path, "sales"), _approved())
+    assert load_contract_inventory([path], tmp_path).approved == {}
+
+
 def test_contract_outside_the_repository_is_rejected(tmp_path: Path) -> None:
     path = _write(tmp_path.parent / "outside" / "TotalSales.yaml", _approved())
 

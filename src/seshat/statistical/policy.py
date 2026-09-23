@@ -11,7 +11,7 @@ from typing import Mapping
 import yaml
 
 from seshat.metric_contract_inventory import MetricContract, load_contract_inventory
-from seshat.status_surface import build_status_projection
+from seshat.readiness_spine import stage_has_valid_approval
 
 from .contracts import AnalysisSpec, Blocker
 
@@ -56,10 +56,19 @@ def _blocker(code: str, message: str, recovery: str) -> Blocker:
     return Blocker(code=code, message=message, recovery=recovery)
 
 
-def _readiness_document(path: Path) -> dict:
+def _readiness_document(root: Path, relative: str) -> dict:
+    """The COMMITTED readiness record ({} when untracked, dirty or unreadable).
+
+    The stage gates below are approval-bearing, so a worktree edit flipping
+    gold/semantic to pass must not authorize an analysis (audit F143)."""
+    from seshat.gitstate import committed_text
+
+    text = committed_text(root, relative)
+    if text is None:
+        return {}
     try:
-        document = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
-    except (OSError, UnicodeError, yaml.YAMLError):
+        document = yaml.safe_load(text.lstrip("\ufeff"))
+    except yaml.YAMLError:
         return {}
     return document if isinstance(document, dict) else {}
 
@@ -118,7 +127,7 @@ def _contract_authority(
     repo_root: Path, spec: AnalysisSpec
 ) -> tuple[tuple[MetricContract, ...], list[Blocker]]:
     paths = [repo_root / Path(*path.parts) for path in spec.metric_contracts]
-    inventory = load_contract_inventory(paths, repo_root)
+    inventory = load_contract_inventory(paths, repo_root, committed=True)
     contracts = tuple(
         sorted(
             inventory.for_scope(spec.subject).values(),
@@ -280,11 +289,15 @@ def _readiness_blockers(table: dict | None) -> list[Blocker]:
                 "Run live validation and commit its successful evidence.",
             )
         )
-    if semantic.get("status") != "pass":
+    semantic_approved = stage_has_valid_approval(
+        (table or {}).get("approvals"), "semantic_model_ready"
+    )
+    if semantic.get("status") != "pass" or not semantic_approved:
         blockers.append(
             _blocker(
                 "STAT_SEMANTIC_NOT_READY",
-                "Semantic-model readiness is not pass for this analysis subject.",
+                "Semantic-model readiness is not pass, or carries no named "
+                "metric_owner approval, for this analysis subject.",
                 "Complete named-human semantic approval before statistical analysis.",
             )
         )
@@ -303,18 +316,9 @@ def evaluate_policy(repo_root: Path, spec: AnalysisSpec) -> PolicyDecision:
 
     root = repo_root.resolve()
     readiness_path = (root / Path(*spec.readiness_status.parts)).resolve(strict=False)
-    projection = build_status_projection(root)
-    source_path = spec.readiness_status.as_posix()
-    table = next(
-        (
-            item
-            for item in projection.get("tables", [])
-            if isinstance(item, dict) and item.get("source_path") == source_path
-        ),
-        None,
-    )
+    readiness = _readiness_document(root, spec.readiness_status.as_posix())
 
-    blockers = _readiness_blockers(table)
+    blockers = _readiness_blockers(readiness)
     contracts, contract_blockers = _contract_authority(root, spec)
     blockers.extend(contract_blockers)
     blockers.extend(_contract_policy_blockers(root, spec, contracts))
@@ -322,7 +326,6 @@ def evaluate_policy(repo_root: Path, spec: AnalysisSpec) -> PolicyDecision:
     if ordered:
         return PolicyDecision(allowed=False, blockers=ordered, context=None)
 
-    readiness = _readiness_document(readiness_path)
     approved_columns: dict[str, set[str]] = {}
     for contract in contracts:
         _add_contract_authority(approved_columns, contract)

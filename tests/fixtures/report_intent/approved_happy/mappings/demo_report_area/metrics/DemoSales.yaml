@@ -1,11 +1,16 @@
 name: "DemoSales"
 grain: "transaction"
+owner: "Dana Metric (metric_owner)"
 binds_to:
   gold_table: "gold.fct_demo"
   columns:
     - "total_amount"
+definition:
+  kind: base
+  aggregation: sum
+  filter: []
 readiness:
   status: "pass"
   evidence:
-    - "owner-approved 2026-07-12"
+    - "owner-approved 2026-07-12 (see readiness-status approvals[])"
   blocking_reasons: []

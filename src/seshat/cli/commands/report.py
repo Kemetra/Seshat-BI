@@ -66,36 +66,19 @@ def report_main(args: argparse.Namespace) -> int:
 def approved_contracts(repo_root: Path, table: str) -> dict[str, str]:
     """Contract id -> path, for the contracts that are actually APPROVED.
 
-    File presence is not approval. A draft, blocked, or malformed contract sitting
-    in ``metrics/`` was previously exposed by its stem alone, so an observation
-    could cite it and the report would advertise governed provenance for a metric
-    nobody signed off. Each file's own ``readiness.status`` decides, and anything
-    other than ``pass`` is left out -- which makes every observation citing it
-    refuse.
+    File presence is not approval, and neither is a contract's own
+    ``readiness.status: pass``: the shared contract inventory -- read at HEAD --
+    also requires evidence, an owner, a checkable definition and a named
+    metric_owner approval naming the contract (one approval-trust path). Anything
+    else is left out, which makes every observation citing it refuse.
     """
-    from seshat.report.model import ReportError
+    from seshat.metric_contract_inventory import approved_contracts_for_scope
 
-    directory = repo_root / "mappings" / table / "metrics"
-    if not directory.is_dir():
-        return {}
-    approved: dict[str, str] = {}
-    for path in sorted(directory.glob("*.yaml")):
-        try:
-            loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-        except (OSError, yaml.YAMLError) as exc:
-            raise ReportError(f"cannot read contract {path}: {exc}") from exc
-        if _contract_is_approved(loaded):
-            approved[path.stem] = str(path.relative_to(repo_root))
-    return approved
-
-
-def _contract_is_approved(loaded: object) -> bool:
-    if not isinstance(loaded, dict):
-        return False
-    readiness = loaded.get("readiness")
-    if not isinstance(readiness, dict):
-        return False
-    return readiness.get("status") == "pass"
+    approved, _errors = approved_contracts_for_scope(repo_root, table, committed=True)
+    return {
+        name: contract.path.resolve().relative_to(repo_root.resolve()).as_posix()
+        for name, contract in approved.items()
+    }
 
 
 def load_observations(path: Path, *, expect_table: str | None = None) -> list[dict]:

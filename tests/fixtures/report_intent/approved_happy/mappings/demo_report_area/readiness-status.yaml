@@ -38,3 +38,11 @@ stages:
     blocking_reasons: []
 evidence: []
 blocking_reasons: []
+# A fixture named-human metric_owner approval binding both contracts through the
+# structured contracts: list -- what the shared contract inventory requires.
+approvals:
+  - stage: "semantic_model_ready"
+    owner: "Dana Metric (metric_owner)"
+    at: "2026-07-12"
+    contracts: [DemoSales, DemoCount]
+    note: "approved metric contracts: DemoSales, DemoCount"

@@ -346,9 +346,14 @@ def verdict_for(
     tracked_files: tuple[str, ...],
     stage: str,
     scope: Iterable[str] | None = None,
+    *,
+    committed: bool = False,
 ) -> Verdict:
-    """Convenience: load the store from tracked files and compute the verdict."""
-    store = load_store(repo_root, tracked_files)
+    """Convenience: load the store from tracked files and compute the verdict.
+
+    ``committed=True`` reads each store file at HEAD and fails closed on an
+    untracked/dirty one -- for approval-bearing callers (audit F178)."""
+    store = load_store(repo_root, tracked_files, committed=committed)
     return compute_verdict(repo_root, store, stage, scope)
 
 

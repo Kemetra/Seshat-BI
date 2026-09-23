@@ -16,6 +16,7 @@ from seshat.cli.commands.report import (
 )
 from seshat.report.gate import assert_renderable, stage_evidence, stage_status
 from seshat.report.model import ReportError
+from tests.unit._gitfix import commit_tree  # noqa: E402
 from tests.unit._report_helpers import workspace as _workspace
 
 pytestmark = pytest.mark.unit
@@ -96,6 +97,7 @@ def test_a_readiness_file_that_is_not_a_mapping_is_not_a_pass(tmp_path: Path) ->
     path = tmp_path / "mappings" / "odd_table"
     path.mkdir(parents=True)
     (path / "readiness-status.yaml").write_text("- just\n- a list\n", encoding="utf-8")
+    commit_tree(tmp_path)
     assert stage_status(tmp_path, "odd_table") == "not_started"
     with pytest.raises(ReportError, match="not_started"):
         assert_renderable(tmp_path, "odd_table")
@@ -107,6 +109,7 @@ def test_an_unreadable_readiness_file_refuses_rather_than_defaulting(
     path = tmp_path / "mappings" / "broken_table"
     path.mkdir(parents=True)
     (path / "readiness-status.yaml").write_text("stages: [oops\n", encoding="utf-8")
+    commit_tree(tmp_path)
     with pytest.raises(ReportError, match="cannot read"):
         stage_status(tmp_path, "broken_table")
 
@@ -295,6 +298,7 @@ def test_a_bare_pass_token_carries_no_evidence(tmp_path: Path) -> None:
     (path / "readiness-status.yaml").write_text(
         yaml.safe_dump({"stages": {"dashboard_ready": "pass"}}), encoding="utf-8"
     )
+    commit_tree(tmp_path)
     assert stage_status(tmp_path, "bare_table") == "pass"
     assert stage_evidence(tmp_path, "bare_table") == ()
     with pytest.raises(ReportError, match="records no evidence"):
@@ -324,6 +328,7 @@ def test_an_unapproved_contract_file_is_not_an_approved_contract(
         yaml.safe_dump({"name": "DraftMetric", "readiness": {"status": "not_started"}}),
         encoding="utf-8",
     )
+    commit_tree(tmp_path)
     assert "DraftMetric" not in approved_contracts(tmp_path, table)
     assert "TotalSales" in approved_contracts(tmp_path, table)
 
@@ -333,7 +338,45 @@ def test_a_contract_with_no_readiness_block_is_not_approved(tmp_path: Path) -> N
     (tmp_path / "mappings" / table / "metrics" / "Bare.yaml").write_text(
         "name: Bare\n", encoding="utf-8"
     )
+    commit_tree(tmp_path)
     assert approved_contracts(tmp_path, table) == {}
+
+
+def test_a_self_asserted_pass_contract_is_not_approved(tmp_path: Path) -> None:
+    """Audit F034: `readiness.status: pass` alone is not approval -- the shared
+    inventory needs a named metric_owner approval naming the contract."""
+    table, _ = _workspace(tmp_path, contracts=())
+    (tmp_path / "mappings" / table / "metrics" / "Selfie.yaml").write_text(
+        yaml.safe_dump({"name": "Selfie", "readiness": {"status": "pass"}}),
+        encoding="utf-8",
+    )
+    commit_tree(tmp_path)
+    assert approved_contracts(tmp_path, table) == {}
+
+
+def test_an_uncommitted_readiness_record_refuses_to_render(tmp_path: Path) -> None:
+    """Audit F034: the gate reads committed state -- an uncommitted edit flipping
+    dashboard_ready to pass is not an audited approval."""
+    table, _ = _workspace(tmp_path, status="blocked")
+    status = tmp_path / "mappings" / table / "readiness-status.yaml"
+    status.write_text(
+        status.read_text(encoding="utf-8").replace("blocked", "pass"), encoding="utf-8"
+    )
+    with pytest.raises(ReportError, match="untracked or modified"):
+        assert_renderable(tmp_path, table)
+
+
+def test_pass_with_evidence_but_no_named_approval_refuses(tmp_path: Path) -> None:
+    table, _ = _workspace(tmp_path)
+    status = tmp_path / "mappings" / table / "readiness-status.yaml"
+    data = yaml.safe_load(status.read_text(encoding="utf-8"))
+    data["approvals"] = [
+        a for a in data["approvals"] if a["stage"] != "dashboard_ready"
+    ]
+    status.write_text(yaml.safe_dump(data), encoding="utf-8")
+    commit_tree(tmp_path)
+    with pytest.raises(ReportError, match="no named-human approval"):
+        assert_renderable(tmp_path, table)
 
 
 def test_the_shipped_contracts_are_all_approved() -> None:

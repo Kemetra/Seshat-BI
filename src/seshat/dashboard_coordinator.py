@@ -90,23 +90,29 @@ class DesignTrace(NamedTuple):
 
 
 # --------------------------------------------------------------------------- #
-# committed-state readers (None == absent/unreadable; never fabricated)
+# committed-state readers (None == absent/unreadable/uncommitted; never fabricated)
 # --------------------------------------------------------------------------- #
-def _load_yaml_mapping(path: Path) -> dict[str, Any] | None:
+def _read_text(root: Path, relative: str) -> str | None:
+    """HEAD content of a tracked, clean file -- an uncommitted edit (a new
+    contract, an edited binding map, a hand-written approval) is invisible here,
+    so it can never advance the coordinator (audit F025)."""
+    from seshat.gitstate import committed_text
+
+    text = committed_text(root, relative)
+    return text.lstrip("\ufeff") if text is not None else None
+
+
+def _load_yaml_mapping(root: Path, relative: str) -> dict[str, Any] | None:
     import yaml
 
+    text = _read_text(root, relative)
+    if text is None:
+        return None
     try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
-    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        data = yaml.safe_load(text)
+    except yaml.YAMLError:
         return None
     return data if isinstance(data, dict) else None
-
-
-def _read_text(path: Path) -> str | None:
-    try:
-        return path.read_text(encoding="utf-8-sig")
-    except (OSError, UnicodeDecodeError):
-        return None
 
 
 def _semantic_model_status(readiness: dict[str, Any] | None) -> str | None:
@@ -208,25 +214,19 @@ def _rows_after(lines: list[str], cols: dict[str, int | None]) -> list[VisualBin
 # --------------------------------------------------------------------------- #
 # approved-contract inventory (the coordinator's binding target set -- FR-003)
 # --------------------------------------------------------------------------- #
-def _approved_contract_names(metrics_dir: Path) -> set[str]:
-    """Names of metric contracts under metrics/ with readiness.status == pass.
+def _approved_contract_names(root: Path, subject_area: str) -> set[str]:
+    """Names of COMMITTED contracts the shared inventory approves for this scope.
 
-    An unapproved-but-present contract is NOT a valid binding target (FR-003), so it
-    is excluded here -- a visual binding it reads as an orphan (SC-003)."""
-    names: set[str] = set()
-    if not metrics_dir.is_dir():
-        return names
-    for path in sorted(metrics_dir.glob("*.yaml")):
-        data = _load_yaml_mapping(path)
-        if data is None:
-            continue
-        readiness = data.get("readiness")
-        status = ""
-        if isinstance(readiness, dict):
-            status = str(readiness.get("status", "")).strip()
-        if status == "pass":
-            names.add(str(data.get("name", path.stem)).strip())
-    return names
+    A contract's own ``readiness.status: pass`` is self-asserted, so it is not
+    approval: the single inventory also requires evidence, an owner, a checkable
+    definition and a named metric_owner approval in readiness-status (audit
+    F025/F040). An unapproved-but-present contract is NOT a valid binding target
+    (FR-003) -- a visual binding it reads as an orphan (SC-003)."""
+    from seshat.metric_contract_inventory import approved_contracts_for_scope
+
+    scope = Path(subject_area).name
+    approved, _errors = approved_contracts_for_scope(root, scope, committed=True)
+    return set(approved)
 
 
 def _intent_question_ids(intent: dict[str, Any]) -> list[str]:
@@ -258,12 +258,11 @@ def trace_design(repo_root: Path | str, subject_area: str) -> DesignTrace:
     field (zero orphans, SC-003), and which blueprint questions trace to a committed
     intent question (FR-002a). Read-only; writes nothing."""
     root = Path(repo_root)
-    sdir = root / subject_area
-    approved = _approved_contract_names(sdir / "metrics")
-    intent = _load_yaml_mapping(sdir / _INTENT_REL) or {}
+    approved = _approved_contract_names(root, subject_area)
+    intent = _load_yaml_mapping(root, f"{subject_area}/{_INTENT_REL}") or {}
     intent_qids = _intent_question_ids(intent)
 
-    binding_text = _read_text(sdir / _BINDING_REL)
+    binding_text = _read_text(root, f"{subject_area}/{_BINDING_REL}")
     visuals = _binding_visuals(binding_text) if binding_text else []
 
     orphan_visuals = tuple(
@@ -307,18 +306,17 @@ def next_action(
     coordinator never self-grants `dashboard_ready: pass` (FR-010).
     """
     root = Path(repo_root)
-    sdir = root / subject_area
 
-    intent_blocker = _check_intent_committed(sdir, subject_area)
+    intent_blocker = _check_intent_committed(root, subject_area)
     if intent_blocker is not None:
         return _blocked(_REPORT_INTENT_STAGE, intent_blocker)
 
-    intent = _load_yaml_mapping(sdir / _INTENT_REL) or {}
+    intent = _load_yaml_mapping(root, f"{subject_area}/{_INTENT_REL}") or {}
     approval_blocker = _check_intent_approved(root, tracked_files, intent)
     if approval_blocker is not None:
         return _blocked(_REPORT_INTENT_STAGE, approval_blocker)
 
-    model_blocker = _check_semantic_model_ready(sdir, subject_area)
+    model_blocker = _check_semantic_model_ready(root, subject_area)
     if model_blocker is not None:
         return _blocked("semantic_model_ready", model_blocker)
 
@@ -354,9 +352,9 @@ def _blocked(stage: str, blocker: Blocked) -> CoordinatorResult:
     return CoordinatorResult(outcome="blocked", stage=stage, blocked=blocker)
 
 
-def _check_intent_committed(sdir: Path, subject_area: str) -> Blocked | None:
+def _check_intent_committed(root: Path, subject_area: str) -> Blocked | None:
     rel = f"{subject_area}/{_INTENT_REL}"
-    intent = _load_yaml_mapping(sdir / _INTENT_REL)
+    intent = _load_yaml_mapping(root, rel)
     if intent is None:
         return Blocked(
             what="Report Intent is not committed or is unreadable",
@@ -389,7 +387,11 @@ def _check_intent_approved(
     is asked for THIS report's scope: an approval recorded for another report or
     table does not approve this intent (audit F011)."""
     verdict = verdict_for(
-        root, tracked_files, _REPORT_INTENT_STAGE, scope=_intent_scope(intent)
+        root,
+        tracked_files,
+        _REPORT_INTENT_STAGE,
+        scope=_intent_scope(intent),
+        committed=True,
     )
     if verdict.verdict == "pass":
         return None
@@ -408,9 +410,9 @@ def _check_intent_approved(
     )
 
 
-def _check_semantic_model_ready(sdir: Path, subject_area: str) -> Blocked | None:
+def _check_semantic_model_ready(root: Path, subject_area: str) -> Blocked | None:
     rel = f"{subject_area}/{_READINESS_REL}"
-    readiness = _load_yaml_mapping(sdir / _READINESS_REL)
+    readiness = _load_yaml_mapping(root, rel)
     status = _semantic_model_status(readiness)
     if status == "pass":
         return None
@@ -432,7 +434,7 @@ def _check_semantic_model_ready(sdir: Path, subject_area: str) -> Blocked | None
 def _check_metrics_resolve(
     root: Path, subject_area: str, intent: dict[str, Any]
 ) -> Blocked | None:
-    result = resolve_metric_references(intent, root)
+    result = resolve_metric_references(intent, root, committed=True)
     if not result.gaps:
         return None
     gap = result.gaps[0]
@@ -453,6 +455,18 @@ def _check_metrics_resolve(
 
 
 def _check_no_orphan_visuals(root: Path, subject_area: str) -> Blocked | None:
+    if _read_text(root, f"{subject_area}/{_BINDING_REL}") is None:
+        # An absent, unreadable or uncommitted binding map has no visuals to
+        # check, which must never read as "zero orphans" (fail closed).
+        return Blocked(
+            what="the visual-contract binding map is missing or not committed",
+            evidence=f"{subject_area}/{_BINDING_REL}",
+            owner="report_owner",
+            unblock=(
+                "author the binding map (every visual bound to one approved metric "
+                "contract) and commit it before the blueprint review"
+            ),
+        )
     trace = trace_design(root, subject_area)
     if not trace.orphan_visuals:
         return None

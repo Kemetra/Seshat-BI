@@ -23,6 +23,7 @@ from pathlib import Path
 import pytest
 
 from seshat import dashboard_coordinator as dc
+from tests.unit._gitfix import commit_tree
 
 pytestmark = pytest.mark.unit
 
@@ -35,6 +36,18 @@ _FLOW_REL = "contracts/knowledge/database-to-pbip-flow.yaml"
 _AUTHORITY_REL = "contracts/knowledge/approval-authority.yaml"
 _READINESS_REL = "mappings/demo_report_area/readiness-status.yaml"
 _BINDING_REL = "mappings/demo_report_area/design/visual-contract-binding-map.md"
+
+
+def _next_action(root: Path, tracked: tuple[str, ...]) -> dc.CoordinatorResult:
+    """Commit the workspace (the coordinator reads COMMITTED state only), then
+    ask for the next action."""
+    commit_tree(root)
+    return dc.next_action(root, _SUBJECT, tracked)
+
+
+def _trace(root: Path) -> dc.DesignTrace:
+    commit_tree(root)
+    return dc.trace_design(root, _SUBJECT)
 
 
 def _materialize(tmp_path: Path) -> tuple[Path, tuple[str, ...]]:
@@ -80,7 +93,7 @@ def _tracked(root: Path) -> tuple[str, ...]:
 # --------------------------------------------------------------------------- #
 def test_baseline_fixture_is_not_blocked(tmp_path: Path) -> None:
     root, tracked = _materialize(tmp_path)
-    result = dc.next_action(root, _SUBJECT, tracked)
+    result = _next_action(root, tracked)
     assert result.outcome == "next_action", result
     assert result.blocked is None
 
@@ -115,7 +128,7 @@ def test_semantic_model_not_pass_blocks(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    result = dc.next_action(root, _SUBJECT, tracked)
+    result = _next_action(root, tracked)
     b = _assert_blocked_shape(result)
     assert "semantic_model_ready" in b.what
 
@@ -125,7 +138,7 @@ def test_missing_contract_blocks_and_routes_upstream(tmp_path: Path) -> None:
     # Remove one approved contract the intent references -> resolution gap (FR-004).
     (root / "mappings/demo_report_area/metrics/DemoCount.yaml").unlink()
     tracked = _tracked(root)
-    result = dc.next_action(root, _SUBJECT, tracked)
+    result = _next_action(root, tracked)
     b = _assert_blocked_shape(result)
     assert "DemoCount" in b.what
     # Routes upstream to metric-contract definition (FR-004).
@@ -142,7 +155,7 @@ def test_unapproved_contract_blocks(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    result = dc.next_action(root, _SUBJECT, tracked)
+    result = _next_action(root, tracked)
     b = _assert_blocked_shape(result)
     assert "DemoCount" in b.what
 
@@ -158,7 +171,7 @@ def test_orphan_visual_blocks(tmp_path: Path) -> None:
     line = next(ln for ln in text.splitlines(keepends=True) if ln.startswith(anchor))
     text = text.replace(line, line + orphan_row)
     binding.write_text(text, encoding="utf-8")
-    result = dc.next_action(root, _SUBJECT, tracked)
+    result = _next_action(root, tracked)
     b = _assert_blocked_shape(result)
     assert "orphan" in b.what.lower() or "v99" in b.what
 
@@ -175,7 +188,7 @@ def test_visual_binding_unapproved_contract_blocks(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    result = dc.next_action(root, _SUBJECT, tracked)
+    result = _next_action(root, tracked)
     b = _assert_blocked_shape(result)
     assert "GhostMetric" in b.what or "orphan" in b.what.lower()
 
@@ -184,7 +197,7 @@ def test_missing_approval_stops_and_does_not_self_grant(tmp_path: Path) -> None:
     root, tracked = _materialize(tmp_path)
     # Remove the report_intent_approval decision from the store -> unapproved intent.
     (root / _STORE_REL).write_text("decisions: []\n", encoding="utf-8")
-    result = dc.next_action(root, _SUBJECT, tracked)
+    result = _next_action(root, tracked)
     b = _assert_blocked_shape(result)
     assert "approval" in b.what.lower() or "intent" in b.what.lower()
 
@@ -201,7 +214,7 @@ def test_agent_identity_approval_is_rejected(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    result = dc.next_action(root, _SUBJECT, tracked)
+    result = _next_action(root, tracked)
     _assert_blocked_shape(result)
 
 
@@ -218,16 +231,38 @@ def test_approval_for_another_report_does_not_approve_this_intent(
         ),
         encoding="utf-8",
     )
-    result = dc.next_action(root, _SUBJECT, tracked)
+    result = _next_action(root, tracked)
     b = _assert_blocked_shape(result)
     assert result.stage == "report_intent"
     assert "owner-approved" in b.what
+
+
+def test_uncommitted_contract_and_binding_edits_are_invisible(tmp_path: Path) -> None:
+    """Audit F025: the coordinator reads COMMITTED state. An uncommitted edit that
+    adds a self-asserted `readiness.status: pass` contract and binds a visual to it
+    does not change the verdict -- the committed orphan still blocks."""
+    root, tracked = _materialize(tmp_path)
+    binding = root / _BINDING_REL
+    binding.write_text(
+        binding.read_text(encoding="utf-8").replace("| DemoSales |", "| Ghost |", 1),
+        encoding="utf-8",
+    )
+    commit_tree(root)
+    ghost = root / "mappings/demo_report_area/metrics/Ghost.yaml"
+    ghost.write_text('name: "Ghost"\nreadiness: {status: pass}\n', encoding="utf-8")
+    binding.write_text(
+        binding.read_text(encoding="utf-8").replace("| Ghost |", "| DemoSales |", 1),
+        encoding="utf-8",
+    )
+    result = dc.next_action(root, _SUBJECT, tracked)
+    assert result.outcome == "blocked"
+    assert result.stage == "dashboard_design"
 
 
 def test_missing_intent_artifact_blocks(tmp_path: Path) -> None:
     root, tracked = _materialize(tmp_path)
     (root / _INTENT_REL).unlink()
     tracked = _tracked(root)
-    result = dc.next_action(root, _SUBJECT, tracked)
+    result = _next_action(root, tracked)
     b = _assert_blocked_shape(result)
     assert "intent" in b.what.lower()
