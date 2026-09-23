@@ -113,17 +113,22 @@ def _run_site(site: str, engine: str, tmp_path: Path) -> int:
     return report_main(args)
 
 
-@pytest.mark.parametrize("engine", ["postgres", "sqlserver", "mysql", "snowflake"])
+_SITES = ("validate", "profile", "value-check", "drift", "report")
+_ENGINES = ("postgres", "sqlserver", "mysql", "snowflake")
+
+
 @pytest.mark.parametrize(
-    "site", ["validate", "profile", "value-check", "drift", "report"]
+    "case",
+    [(site, engine) for site in _SITES for engine in _ENGINES],
+    ids=lambda case: "-".join(case),
 )
 def test_every_live_site_and_engine_redacts_the_driver_message(
-    site: str,
-    engine: str,
+    case: tuple[str, str],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    site, engine = case
     monkeypatch.chdir(tmp_path)
     _configure(monkeypatch, engine)
 
@@ -240,23 +245,29 @@ def test_dict_config_engines_redact_the_database_like_postgres(
     assert _DB not in text
 
 
-@pytest.mark.parametrize(
-    ("engine", "driver"),
-    [
-        ("sqlserver", "pyodbc"),
-        ("mysql", "mysql-connector-python"),
-        ("snowflake", "snowflake-connector-python"),
-    ],
+_DRIVERS = (
+    ("sqlserver", "pyodbc"),
+    ("mysql", "mysql-connector-python"),
+    ("snowflake", "snowflake-connector-python"),
 )
-@pytest.mark.parametrize("site", ["validate", "value-check", "drift"])
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        (site, engine, driver)
+        for site in ("validate", "value-check", "drift")
+        for engine, driver in _DRIVERS
+    ],
+    ids=lambda case: "-".join(case[:2]),
+)
 def test_the_missing_driver_hint_names_the_engines_own_driver(
-    site: str,
-    engine: str,
-    driver: str,
+    case: tuple[str, str, str],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    site, engine, driver = case
     monkeypatch.chdir(tmp_path)
     _configure(monkeypatch, engine)
     monkeypatch.setattr("seshat.cli._ensure_driver", lambda: False)
