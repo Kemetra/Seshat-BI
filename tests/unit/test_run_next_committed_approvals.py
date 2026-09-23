@@ -109,6 +109,22 @@ def test_committed_approval_survives_an_unrelated_worktree_edit(
     assert response["stage"] == "silver_ready"
 
 
+def test_committed_approval_counts_when_repo_is_a_subdirectory(
+    tmp_path: Path,
+) -> None:
+    """``--repo`` below the git toplevel still resolves the HEAD copy."""
+    top = make_git_repo(tmp_path)
+    workspace = top / "analytics"
+    path = workspace / "mappings" / "orders" / "readiness-status.yaml"
+    path.parent.mkdir(parents=True)
+    path.write_text(_STATUS.replace("approvals: []\n", _APPROVAL), encoding="utf-8")
+    commit_all(top, "feat: nested workspace")
+
+    response = build_run_next_response(workspace, "orders")
+
+    assert response["stage"] == "silver_ready"
+
+
 def test_approval_outside_a_git_repository_is_not_trusted(tmp_path: Path) -> None:
     path = tmp_path / "mappings" / "orders" / "readiness-status.yaml"
     path.parent.mkdir(parents=True)

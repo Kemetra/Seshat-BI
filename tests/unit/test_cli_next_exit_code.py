@@ -71,6 +71,9 @@ def test_exit_code_flag_maps_input_defect_to_two(
 ) -> None:
     _write(tmp_path, '"bogus"')
     assert _run(tmp_path, "--exit-code", *table_args) == 2
+    # Non-vacuity: argparse also exits 2 on an unknown flag; prove the
+    # document was actually produced.
+    assert "input_defect" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("table_args", [(), ("--table", "orders")])

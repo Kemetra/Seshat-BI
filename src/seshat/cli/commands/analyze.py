@@ -45,7 +45,10 @@ def _failure_summary(exc: BaseException, *, with_message: bool = True) -> str:
         return name
     from seshat.pbi_mcp_adapter.evidence import redact, scrub_secret_shaped
 
-    scrubbed, _ = scrub_secret_shaped(redact(" ".join(str(exc).split())[:200]))
+    # Scrub the WHOLE message before truncating: cutting first could split a
+    # DSN into a fragment that DSN-derived redaction no longer recognises.
+    scrubbed, _ = scrub_secret_shaped(redact(" ".join(str(exc).split())))
+    scrubbed = scrubbed[:200]
     return f"{name}: {scrubbed}" if scrubbed else name
 
 

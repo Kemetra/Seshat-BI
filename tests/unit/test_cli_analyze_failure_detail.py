@@ -57,6 +57,20 @@ def test_validate_failure_detail_is_scrubbed(
     assert "hunter2" not in text
 
 
+def test_long_message_is_scrubbed_before_truncation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _boom(root: Path, raw: str) -> None:
+        raise RuntimeError("x" * 159 + f" could not open {_DSN}")
+
+    monkeypatch.setattr(analyze, "_load_spec", _boom)
+    payload = analyze._validate_command(tmp_path, argparse.Namespace(spec="a.yaml"))
+
+    text = _blocker_text(payload)
+    assert "hunter2" not in text
+    assert "hunt" not in text
+
+
 def test_execution_failure_reports_class_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
