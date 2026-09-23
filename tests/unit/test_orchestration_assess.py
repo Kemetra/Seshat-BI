@@ -224,12 +224,26 @@ def test_dagster_project_presence_is_detected(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_malformed_status_file_is_skipped_not_fatal(tmp_path: Path) -> None:
+def test_malformed_status_file_is_counted_and_reported_not_fatal(
+    tmp_path: Path,
+) -> None:
     _write_status(tmp_path, "good", _gold_ready("good"))
     _write_status(tmp_path, "bad", "this: is: not: valid: yaml: [")
     result = build_orchestration_assessment(tmp_path)
-    # The good table still counts; the bad one is skipped, not a crash.
-    assert result["table_count"] == 1
+    # Not a crash -- but the broken table still counts and is named, so a
+    # 1-of-2 portfolio never reads as a single Gold table.
+    assert result["table_count"] == 2
+    assert result["gold_ready_count"] == 1
+    assert result["unreadable_tables"] == ["bad"]
+    assert "NOT required" not in result["recommended_action"]
+    assert "bad" in result["recommended_action"]
+
+
+def test_readable_portfolio_reports_no_unreadable_tables(tmp_path: Path) -> None:
+    _write_status(tmp_path, "good", _gold_ready("good"))
+    result = build_orchestration_assessment(tmp_path)
+    assert result["unreadable_tables"] == []
+    assert "NOT required" in result["recommended_action"]
 
 
 # ---------------------------------------------------------------------------
