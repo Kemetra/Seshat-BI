@@ -37,13 +37,16 @@ __all__ = [
     "MAX_FRAME_BYTES",
     "PROTOCOL_VERSION",
     "McpFrameError",
+    "McpFrameTooLarge",
     "ToolOutcome",
     "decode_frame",
     "encode_frame",
     "initialize_request",
     "initialized_notification",
+    "parse_tool_names",
     "parse_tool_result",
     "tool_call_request",
+    "tools_list_request",
 ]
 
 #: Declared to the server at handshake. Probed value, 2026-08-20.
@@ -60,6 +63,16 @@ class McpFrameError(ValueError):
     """A vendor frame violated the JSON-RPC envelope."""
 
 
+class McpFrameTooLarge(McpFrameError):
+    """A frame exceeded :data:`MAX_FRAME_BYTES`.
+
+    A distinct TYPE because the session must not treat it like a log line: an
+    oversized frame may be the very reply being awaited, and skipping it turns
+    a completed call into a 900s "stall". Dispatch is on the type, never on
+    message text.
+    """
+
+
 def encode_frame(obj: dict[str, Any]) -> bytes:
     """One outbound frame: compact JSON plus the terminating newline."""
     return (json.dumps(obj) + "\n").encode("utf-8")
@@ -72,7 +85,7 @@ def _frame_text(line: bytes) -> str:
     validation -- transport here, JSON shape there.
     """
     if len(line) > MAX_FRAME_BYTES:
-        raise McpFrameError(f"frame exceeds {MAX_FRAME_BYTES} bytes")
+        raise McpFrameTooLarge(f"frame exceeds {MAX_FRAME_BYTES} bytes")
     text = line.decode("utf-8", errors="replace").strip()
     if not text:
         raise McpFrameError("empty frame")
@@ -120,6 +133,35 @@ def tool_call_request(
         "method": "tools/call",
         "params": {"name": tool, "arguments": {"request": request}},
     }
+
+
+def tools_list_request(request_id: int, cursor: str | None = None) -> dict[str, Any]:
+    """One ``tools/list`` page. ``cursor`` continues a paginated listing."""
+    params: dict[str, Any] = {} if cursor is None else {"cursor": cursor}
+    return {
+        "jsonrpc": _JSONRPC,
+        "id": request_id,
+        "method": "tools/list",
+        "params": params,
+    }
+
+
+def parse_tool_names(frame: dict[str, Any]) -> tuple[tuple[str, ...], str | None]:
+    """The tool names in one ``tools/list`` reply, plus the next cursor.
+
+    Raises on any shape it cannot read. An unreadable listing must never come
+    back as an empty one: the caller compares this against the characterized
+    tool set, and a silent empty result is a guess, not an observation.
+    """
+    result = frame.get("result")
+    tools = result.get("tools") if isinstance(result, dict) else None
+    if not isinstance(tools, list):
+        raise McpFrameError("tools/list reply carried no tools array")
+    names = [entry.get("name") if isinstance(entry, dict) else None for entry in tools]
+    if not all(isinstance(name, str) and name for name in names):
+        raise McpFrameError("tools/list reply named a tool without a name")
+    cursor = result.get("nextCursor")
+    return tuple(names), cursor if isinstance(cursor, str) and cursor else None  # type: ignore[arg-type]
 
 
 @dataclass(frozen=True)

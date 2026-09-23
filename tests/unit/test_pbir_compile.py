@@ -412,3 +412,75 @@ def test_compile_line_chart_no_partial_write_on_injected_validation_failure(
     with pytest.raises(PbirCompileError, match="injected validation failure"):
         compile_line_chart(_ctx(report), _line_request())
     assert _tree_snapshot(report) == before
+
+
+# ---------------------------------------------------------------------------
+# Never overwrite a different existing element; commit writes all-or-nothing
+# ---------------------------------------------------------------------------
+
+
+def test_a_differing_page_under_the_minted_id_is_refused(tmp_path: Path):
+    """A rerun with the same slug but a new display name used to replace an
+    existing page's page.json (filters, config) with a blank shell."""
+    report = _report(tmp_path, _PAGE_SHELL_SAMPLE, "r.Report")
+    name = mint_element_id(_REPORT_ID, "branch_perf")
+    existing = report / "definition" / "pages" / name / "page.json"
+    existing.parent.mkdir(parents=True)
+    existing.write_text(
+        json.dumps({"name": name, "displayName": "Hand Edited", "filters": [1]}),
+        encoding="utf-8",
+    )
+    before = _tree_snapshot(report)
+
+    with pytest.raises(PbirCompileError, match="already exists"):
+        compile_page_shell(_ctx(report), _PAGE_REQUEST)
+    assert _tree_snapshot(report) == before
+
+
+def test_a_differing_visual_under_the_minted_id_is_refused(tmp_path: Path):
+    report = _report(tmp_path, _LINECHART_SAMPLE, "r.Report")
+    name = mint_element_id(_REPORT_ID, "sales_trend")
+    existing = report / "definition" / "pages" / "pg" / "visuals" / name / "visual.json"
+    existing.parent.mkdir(parents=True)
+    existing.write_text(json.dumps({"name": name, "custom": True}), encoding="utf-8")
+    before = _tree_snapshot(report)
+
+    with pytest.raises(PbirCompileError, match="already exists"):
+        compile_line_chart(_ctx(report), _line_request())
+    assert _tree_snapshot(report) == before
+
+
+def test_a_copy_failure_mid_commit_leaves_the_report_untouched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """The batch is two files; a failure copying the second used to leave the
+    first written -- an unregistered page folder."""
+    report = _report(tmp_path, _PAGE_SHELL_SAMPLE, "r.Report")
+    before = _tree_snapshot(report)
+
+    import seshat.pbir_compile as compile_mod
+
+    real_copy = compile_mod.shutil.copyfile
+    calls = {"n": 0}
+
+    def flaky(src, dst, *args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise PermissionError("injected copy failure")
+        return real_copy(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(compile_mod.shutil, "copyfile", flaky)
+
+    with pytest.raises(PbirCompileError, match="injected copy failure"):
+        compile_page_shell(_ctx(report), _PAGE_REQUEST)
+    assert _tree_snapshot(report) == before
+
+
+def test_staged_validation_rejects_a_non_object_json(tmp_path: Path):
+    """The old round-trip comparison could never fail; the check must be one
+    that a malformed PBIR document actually trips."""
+    from seshat.pbir_compile import _validate_staged_batch
+
+    (tmp_path / "page.json").write_text("[]", encoding="utf-8")
+    with pytest.raises(PbirCompileError, match="JSON object"):
+        _validate_staged_batch(tmp_path)

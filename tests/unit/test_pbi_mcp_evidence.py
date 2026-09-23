@@ -647,3 +647,72 @@ def test_an_absent_runtime_version_is_null_not_a_guess(tmp_path: Path) -> None:
     payload = json.loads(evidence.finalize(tmp_path, _record()).read_text("utf-8"))
 
     assert payload["runtime_version"] is None
+
+
+# --------------------------------------------------------------------------
+# A GUID-shaped allowlisted target_id must not erase refusal evidence (FR-015)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("outcome", ["blocked", "deferred"])
+def test_a_guid_target_on_a_refusal_path_is_scrubbed_and_recorded(
+    tmp_path: Path, outcome: str
+) -> None:
+    """A run that reached the gate leaves a record even for a GUID target id.
+
+    The target id is an allowlisted identifier the operator chose, and a
+    workspace GUID is a legitimate choice. Refusing the whole record on it drops
+    every refusal and dry run for that target from the audit trail while a
+    successful apply of the same target IS recorded. Only ``target_id`` is
+    scrubbed here -- every other field still refuses (see
+    :func:`test_a_pre_mutation_record_still_refuses`).
+    """
+    path = evidence.finalize(
+        tmp_path,
+        _record(
+            target_id=GUID_REF,
+            outcome=outcome,
+            mutation_attempted=False,
+            blockers=("PBIMCP-DRIFT-02",),
+        ),
+    )
+    written = path.read_text(encoding="utf-8")
+    assert GUID_REF not in written
+    payload = json.loads(written)
+    assert payload["target_id"] == evidence.REDACTED
+    assert payload["redactions_applied"]
+    history = evidence.history_path(tmp_path).read_text(encoding="utf-8")
+    assert GUID_REF not in history
+
+
+def test_vendor_detail_on_a_refusal_is_scrubbed_not_refused(tmp_path: Path) -> None:
+    """Vendor output is untrusted text; refusing on it would drop the record of
+    the very failure it diagnoses."""
+    path = evidence.finalize(
+        tmp_path,
+        _record(
+            outcome="blocked",
+            mutation_attempted=False,
+            blockers=("PBIMCP-RUN-05",),
+            vendor_detail=f"vendor error: workspace {GUID_REF} not found",
+        ),
+    )
+    written = path.read_text(encoding="utf-8")
+    assert GUID_REF not in written
+    payload = json.loads(written)
+    assert payload["vendor_detail"].startswith("vendor error: workspace")
+    assert payload["redactions_applied"]
+
+
+def test_a_guid_target_does_not_excuse_a_secret_elsewhere(tmp_path: Path) -> None:
+    """Scrubbing the target id must not widen into scrubbing every field."""
+    with pytest.raises(GeneratedSecretError):
+        evidence.finalize(
+            tmp_path,
+            _record(
+                target_id=GUID_REF,
+                outcome="blocked",
+                mutation_attempted=False,
+                blockers=(r"C:\Users\ahmed\x.tmdl",),
+            ),
+        )

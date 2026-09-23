@@ -34,6 +34,7 @@ EXIT_INDETERMINATE = 3
 #: A runtime exit of 0 is a claim, not proof. These name what the claim failed.
 BLOCKER_TARGET_UNCHANGED = "PBIMCP-EFF-01"
 BLOCKER_OUT_OF_SCOPE_CHANGE = "PBIMCP-EFF-02"
+BLOCKER_SCOPE_UNOBSERVABLE = "PBIMCP-EFF-03"
 
 BLOCKER_DETAIL: dict[str, str] = {
     BLOCKER_TARGET_UNCHANGED: (
@@ -44,39 +45,27 @@ BLOCKER_DETAIL: dict[str, str] = {
         "the run modified files outside the authorized target; only the resolved "
         "allowlist path may change"
     ),
+    BLOCKER_SCOPE_UNOBSERVABLE: (
+        "git could not list every file a run could touch (a directory it cannot "
+        "open, or a git failure), so an out-of-scope change could not be seen"
+    ),
 }
 
 
 def _digest(path: Path) -> str | None:
-    """SHA-256 of ``path``, or None when absent."""
+    """SHA-256 of ``path``, or None when absent.
+
+    STREAMED (``hashlib.file_digest``): the snapshot covers ignored files too,
+    which include a PBIP ``.pbi/cache.abf`` that can run to hundreds of MB, and
+    reading each one whole spiked memory twice per apply.
+    """
     import hashlib
 
     try:
-        return hashlib.sha256(path.read_bytes()).hexdigest()
+        with path.open("rb") as handle:
+            return hashlib.file_digest(handle, "sha256").hexdigest()
     except OSError:
         return None
-
-
-def _decode_git_path(reported: str) -> str:
-    """Deprecated no-op: ``run_git`` now decodes git output losslessly.
-
-    This used to re-encode through the locale codec and re-decode as UTF-8, to
-    recover a path that ``text=True`` had mangled (``cafe.tmdl`` with an acute
-    accent arriving double-encoded). Issue #663 fixed the decode at the SOURCE
-    instead, because a byte the locale codec cannot map at all kills
-    subprocess's reader thread and leaves ``stdout`` as ``None`` -- there is
-    then no string left for this helper to recover.
-
-    With the source fixed, this transform became ACTIVELY HARMFUL rather than
-    merely redundant: applied to already-correct UTF-8 it produced surrogates
-    (``caf\\udce9.tmdl``) matching nothing on disk, so the file dropped
-    of the snapshot -- the very defect it was written to prevent (measured by
-    two existing regression tests going red).
-
-    Kept as an identity function so those regression tests keep naming this
-    seam; delete once they assert against ``run_git`` directly.
-    """
-    return reported
 
 
 def _evidence_relpaths() -> frozenset[str]:
@@ -102,6 +91,10 @@ def _evidence_relpaths() -> frozenset[str]:
     )
 
 
+#: git's stderr marker for a directory it skipped while listing.
+_UNREADABLE_DIRECTORY = "could not open directory"
+
+
 def _list_files(repo_root: Path, *extra: str) -> list[str] | None:
     """One ``ls-files`` listing, or None when git could not be read.
 
@@ -117,6 +110,11 @@ def _list_files(repo_root: Path, *extra: str) -> list[str] | None:
         return None
     if listed.returncode != 0 or listed.stdout is None:
         return None
+    # git exits 0 while SKIPPING a directory it cannot open, warning on stderr
+    # only. Every file under it is then missing from both snapshots, so a write
+    # there is invisible to the scope check. An incomplete listing fails closed.
+    if _UNREADABLE_DIRECTORY in (listed.stderr or ""):
+        return None
     # `-z` because git C-QUOTES any path with non-ASCII bytes, a newline, a quote
     # or a backslash: `cafe.tmdl` arrives as `"caf\\303\\251.tmdl"`. Stripping the
     # quotes is not decoding the escapes, so `_digest` read a nonexistent path,
@@ -125,7 +123,7 @@ def _list_files(repo_root: Path, *extra: str) -> list[str] | None:
     return [rel for rel in listed.stdout.split("\0") if rel]
 
 
-def _snapshot(repo_root: Path) -> dict[str, str]:
+def _snapshot(repo_root: Path) -> dict[str, str] | None:
     """Digest every file a vendor run could touch, so scope creep is visible.
 
     TWO listings unioned, because ``--ignored`` returns ONLY ignored files
@@ -136,11 +134,14 @@ def _snapshot(repo_root: Path) -> dict[str, str]:
 
     The adapter's own evidence artifacts are then removed by exact path -- see
     :func:`_evidence_relpaths`.
+
+    None when either listing failed -- never ``{}``, which the effect check
+    would read as "nothing changed" (the caller refuses on None instead).
     """
     tracked = _list_files(repo_root, "--exclude-standard")
     ignored = _list_files(repo_root, "--exclude-standard", "--ignored")
     if tracked is None or ignored is None:
-        return {}
+        return None
     excluded = _evidence_relpaths()
     snapshot: dict[str, str] = {}
     for rel in [*tracked, *ignored]:
@@ -215,6 +216,8 @@ class WriteReport:
     #: The vendor build that ran (issue #658); None if the runtime was never
     #: reached.
     runtime_version: str | None = None
+    #: The vendor's own diagnosis on a runtime failure, bounded and redacted.
+    vendor_detail: str | None = None
 
     @property
     def succeeded(self) -> bool:
@@ -246,6 +249,13 @@ class _Ending:
     #: The vendor build that ran, from the handshake (issue #658). None on every
     #: path that never reached the runtime -- honestly, since none measured it.
     runtime_version: str | None = None
+    #: The vendor's diagnosis, only on a runtime failure (see `_runtime_failure`).
+    vendor_detail: str | None = None
+
+
+#: Bound on the vendor diagnosis carried to the record and the report. The
+#: runner keeps a longer redacted tail; this is what an operator needs to read.
+VENDOR_DETAIL_CHARS = 2_000
 
 
 def _terminate(
@@ -271,6 +281,7 @@ def _terminate(
         rollback_guidance=ending.rollback_guidance,
         checks_skipped=ending.checks_skipped,
         runtime_version=ending.runtime_version,
+        vendor_detail=ending.vendor_detail,
     )
     path = evidence.finalize(repo_root, record)
     return WriteReport(
@@ -286,6 +297,7 @@ def _terminate(
         validation_failed=ending.validation_failed,
         checks_skipped=ending.checks_skipped,
         runtime_version=ending.runtime_version,
+        vendor_detail=ending.vendor_detail,
     )
 
 
@@ -326,6 +338,10 @@ def _runtime_failure(result, terminal, guidance: tuple[str, ...]) -> WriteReport
     not define for exit 1 (Codex review, PR #659).
     """
     indeterminate = result.mutation_attempted
+    # The runner already redacted this through BOTH layers; the evidence writer
+    # scrubs it again. Carried so a vendor refusal reaches the operator with
+    # its diagnosis rather than as a bare blocker id.
+    detail = (result.output or "").strip()[-VENDOR_DETAIL_CHARS:] or None
     return terminal(
         exit_code=EXIT_INDETERMINATE if indeterminate else EXIT_REFUSED,
         outcome="blocked",
@@ -334,6 +350,7 @@ def _runtime_failure(result, terminal, guidance: tuple[str, ...]) -> WriteReport
         mutation_attempted=result.mutation_attempted,
         blockers=result.blockers or (runner.BLOCKER_RUNTIME_UNEXPLAINED,),
         rollback_guidance=guidance,
+        vendor_detail=detail,
     )
 
 
@@ -351,6 +368,18 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
     # actually changed. The target path and operation come from the VERDICT --
     # there is no parameter by which to substitute another.
     before = _snapshot(root)
+    if before is None:
+        # Refused BEFORE the runtime launches: a scope check that cannot see
+        # every file must not wave a write through, and refusing after the
+        # write would hand the operator rollback guidance for a change that
+        # may have been correct.
+        return terminal(
+            exit_code=EXIT_REFUSED,
+            outcome="blocked",
+            tool="none",
+            mutation_attempted=False,
+            blockers=(BLOCKER_SCOPE_UNOBSERVABLE,),
+        )
     # The finding baseline MUST be taken before the mutation: afterwards there is
     # no way to tell a finding this write introduced from one that was already
     # there, and the whole corpus is in scope (#663 gap 3). None here is not an
@@ -372,7 +401,12 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
 
     # Did the run do what it was authorized to do? A no-op and an out-of-scope
     # mutation both previously reported `materialized`.
-    effect_blockers = _effect_blockers(before, _snapshot(root), authorized_path)
+    after = _snapshot(root)
+    effect_blockers = (
+        _effect_blockers(before, after, authorized_path)
+        if after is not None
+        else (BLOCKER_SCOPE_UNOBSERVABLE,)
+    )
     if effect_blockers:
         return terminal(
             exit_code=EXIT_VALIDATION_FAILED,

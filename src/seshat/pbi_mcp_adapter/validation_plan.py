@@ -89,6 +89,41 @@ def _referenced_model(report_dir: Path) -> Path | None:
         return None
 
 
+#: Directory names never searched for reports: VCS metadata, vendored or
+#: virtual-env trees, caches, and the test-fixture tree (its deliberately
+#: broken reports would read as skips of THIS repo's reports). Any other
+#: dot-directory is pruned too.
+_SKIP_DIRS = frozenset(
+    {"node_modules", "venv", "site-packages", "__pycache__", "tests", "dist", "build"}
+)
+
+#: How deep below the root a report may sit. Bounded: this runs on every apply.
+MAX_REPORT_DEPTH = 6
+
+
+def _report_dirs(root: Path) -> list[Path]:
+    """Every ``*.Report`` directory within :data:`MAX_REPORT_DEPTH` of ``root``.
+
+    A root-only glob missed the repo's own canonical ``powerbi/X.Report``
+    layout. The walk stops descending at a report (reports do not nest) and
+    prunes :data:`_SKIP_DIRS` and dot-directories.
+    """
+    import os
+
+    found: list[Path] = []
+    base_depth = len(root.parts)
+    for current, dirs, _files in os.walk(root):
+        here = Path(current)
+        kept: list[str] = []
+        for name in sorted(dirs):
+            if name.endswith(".Report"):
+                found.append(here / name)
+            elif not name.startswith(".") and name not in _SKIP_DIRS:
+                kept.append(name)
+        dirs[:] = kept if len(here.parts) - base_depth < MAX_REPORT_DEPTH else []
+    return sorted(found)
+
+
 def paired_reports(
     repo_root: Path, model_dir: Path
 ) -> tuple[tuple[Path, ...], tuple[tuple[str, str], ...]]:
@@ -102,9 +137,7 @@ def paired_reports(
     target = Path(model_dir).resolve()
     paired: list[Path] = []
     skipped: list[tuple[str, str]] = []
-    for report_dir in sorted(Path(repo_root).glob("*.Report")):
-        if not report_dir.is_dir():
-            continue
+    for report_dir in _report_dirs(Path(repo_root)):
         referenced = _referenced_model(report_dir)
         if referenced is None:
             skipped.append(

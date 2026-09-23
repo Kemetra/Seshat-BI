@@ -58,6 +58,7 @@ BLOCKER_BACKUP_UNRESOLVABLE = "PBIMCP-GATE-12"
 BLOCKER_TARGET_ESCAPES_REPO = "PBIMCP-GATE-13"
 BLOCKER_BACKUP_MISSES_TARGET = "PBIMCP-GATE-14"
 BLOCKER_APPROVAL_OPERATION = "PBIMCP-GATE-15"
+BLOCKER_SIBLING_NOT_READY = "PBIMCP-GATE-16"
 
 #: Human-readable detail per blocker id. Categorical text only -- never a score.
 BLOCKER_DETAIL: dict[str, str] = {
@@ -105,6 +106,11 @@ BLOCKER_DETAIL: dict[str, str] = {
     BLOCKER_APPROVAL_OPERATION: (
         "the publish_ready approval note does not name the requested operation; "
         "a target-naming approval does not authorize every operation on it"
+    ),
+    BLOCKER_SIBLING_NOT_READY: (
+        f"the target is a model folder, which the flush rewrites whole, and "
+        f"another table in it has its own readiness record without a committed "
+        f"{REQUIRED_STAGE} 'pass'"
     ),
 }
 
@@ -555,6 +561,68 @@ def _path_blockers(
     return True, ()
 
 
+def _canonical_relpath(repo_root: Path, relative: str) -> str | None:
+    """The repo-relative POSIX spelling of a contained target, or None.
+
+    The allowlist may spell a path as ``./x`` or, on a case-insensitive
+    filesystem, in another case; ``resolve()`` accepts both. Every downstream
+    consumer (effect check, validation, rollback guidance, backup custody)
+    compares against git's own spelling, so the gate hands on THIS form rather
+    than the allowlist's text.
+    """
+    contained = _contained_target(repo_root, relative)
+    if contained is None:
+        return None
+    return contained.relative_to(Path(repo_root).resolve()).as_posix()
+
+
+#: A TMDL table file stem that may name a mapping directory. Anything else --
+#: path separators, ``..`` -- is never turned into a path.
+_TABLE_ID = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
+
+
+def _table_ids(folder: Path) -> set[str]:
+    """Candidate table ids for every TMDL table file in a model folder.
+
+    A table file may carry a schema prefix (``gold fct_sales.tmdl``), so both
+    the whole stem and its last space-separated word are candidates. Works for
+    a ``*.SemanticModel`` folder and for its ``definition/`` folder.
+    """
+    ids: set[str] = set()
+    for tables in (folder / "definition" / "tables", folder / "tables"):
+        for path in tables.glob("*.tmdl"):
+            for candidate in {path.stem, path.stem.rsplit(" ", 1)[-1]}:
+                if _TABLE_ID.match(candidate):
+                    ids.add(candidate)
+    return ids
+
+
+def _sibling_blockers(
+    repo_root: Path, target_id: str, relative: str
+) -> tuple[str, ...]:
+    """Refuse a folder write that would rewrite a governed, not-ready table.
+
+    ``ExportToTmdlFolder`` rewrites every table file in the model (research R8),
+    so a write authorized for ONE table's readiness also rewrites the others. A
+    table with its own readiness record must therefore hold a COMMITTED
+    ``semantic_model_ready: pass`` too; a table with no record is not governed
+    separately and rides on the target's authorization. A file target changes
+    only itself and is unaffected.
+    """
+    folder = _contained_target(repo_root, relative)
+    if folder is None or not folder.is_dir():
+        return ()
+    for table_id in sorted(_table_ids(folder) - {target_id}):
+        relpath = _readiness_relpath(table_id)
+        on_disk = (Path(repo_root) / relpath).is_file()
+        if not on_disk and committed_text(repo_root, relpath) is None:
+            continue
+        data, _committed = _load_committed_yaml(repo_root, relpath)
+        if data is None or _stage_status(data, REQUIRED_STAGE) != "pass":
+            return (BLOCKER_SIBLING_NOT_READY,)
+    return ()
+
+
 def _operation_binds(
     entry: AllowlistEntry | None, target_id: str, operation_id: str
 ) -> bool:
@@ -579,9 +647,15 @@ def _resolve_target_facts(
     entry = allowlist.get(target_id)
     target_exists, path_blockers = _path_blockers(repo_root, entry)
     binds = _operation_binds(entry, target_id, operation_id)
+    siblings = (
+        _sibling_blockers(repo_root, target_id, entry.path)
+        if entry is not None and target_exists
+        else ()
+    )
     blockers = (
         *((BLOCKER_ALLOWLIST_UNCOMMITTED,) if not allowlist_committed else ()),
         *path_blockers,
+        *siblings,
         *((BLOCKER_OPERATION_UNBOUND,) if not binds else ()),
     )
     return _TargetFacts(
@@ -680,15 +754,21 @@ def evaluate(
     root = Path(repo_root)
     readiness = _read_readiness_facts(root, target_id, operation_id)
     target = _resolve_target_facts(root, target_id, operation_id)
-    authorized_path = (
-        target.entry.path if target.entry is not None and target.target_exists else None
+    # The CANONICAL spelling, used by every consumer downstream -- see
+    # `_canonical_relpath`. An escaping path has none, and the containment
+    # blocker already refuses it.
+    canonical = (
+        _canonical_relpath(root, target.entry.path)
+        if target.entry is not None
+        else None
     )
+    authorized_path = canonical if target.target_exists else None
     git = GitState() if git_state is None else git_state
     git_safe, git_blockers = _git_safety(
         root,
         tree_clean=git.tree_clean,
         backup_ref=git.backup_ref,
-        target_path=target.entry.path if target.entry is not None else None,
+        target_path=canonical,
     )
 
     return GateVerdict(

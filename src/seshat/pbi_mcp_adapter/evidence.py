@@ -129,6 +129,10 @@ class RunEvidence:
     #: when no handshake completed -- never a placeholder string, which a reader
     #: would take for a measured value.
     runtime_version: str | None = None
+    #: The tail of the vendor's own transcript on a runtime failure, already
+    #: through both redaction layers in the runner. ``None`` on every path that
+    #: never reached the runtime or that succeeded.
+    vendor_detail: str | None = None
 
     def __post_init__(self) -> None:
         if self.outcome not in OUTCOMES:
@@ -168,6 +172,9 @@ class RunEvidence:
                 redact(self.runtime_version)
                 if self.runtime_version is not None
                 else None
+            ),
+            "vendor_detail": (
+                redact(self.vendor_detail) if self.vendor_detail is not None else None
             ),
         }
 
@@ -317,9 +324,49 @@ def render(record: RunEvidence) -> str:
         text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
         scrubbed, _ = scrub_secret_shaped(text)
         return scrubbed
+    _scrub_identifier_fields(payload)
     _scan_payload_values(payload)
     text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
     return refuse_if_secret_shaped(text, context=ARTIFACT_RELPATH)
+
+
+#: Fields that carry an OPERATOR-CHOSEN identifier rather than run output.
+#: A committed allowlist may legitimately key a target by its workspace GUID,
+#: so refusing on it would drop every refusal and dry run for that target from
+#: the audit trail while a successful apply of it IS recorded (FR-015).
+_IDENTIFIER_FIELDS = ("target_id",)
+
+#: The ONE class scrubbed in those fields before the refusing scan. Narrow on
+#: purpose: a GUID is a plausible identifier, a user path or a credential in a
+#: target id is not, and those still refuse the record.
+_IDENTIFIER_CLASS = "GUID (tenant/app/workspace id)"
+
+
+#: Fields holding UNTRUSTED VENDOR TEXT. Every secret class is scrubbed there,
+#: never refused: refusing would drop the record of the failure it diagnoses.
+_VENDOR_TEXT_FIELDS = ("vendor_detail",)
+
+
+def _scrub_identifier_fields(payload: dict[str, object]) -> None:
+    """Scrub the fields a refusal must not be dropped for, labelling each match.
+
+    GUIDs only in :data:`_IDENTIFIER_FIELDS`; every class in
+    :data:`_VENDOR_TEXT_FIELDS`. Everything else still meets the refusing scan.
+    """
+    pattern = dict(SECRET_PATTERNS)[_IDENTIFIER_CLASS]
+    applied: set[str] = set()
+    for key in _IDENTIFIER_FIELDS:
+        value = payload.get(key)
+        if isinstance(value, str) and pattern.search(value):
+            payload[key] = pattern.sub(REDACTED, value)
+            applied.add(_IDENTIFIER_CLASS)
+    for key in _VENDOR_TEXT_FIELDS:
+        value = payload.get(key)
+        if isinstance(value, str):
+            payload[key], labels = scrub_secret_shaped(value)
+            applied.update(labels)
+    if applied:
+        payload["redactions_applied"] = sorted(applied)
 
 
 def _write_atomically(path: Path, text: str) -> None:

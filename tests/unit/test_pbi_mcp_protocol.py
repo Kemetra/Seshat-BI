@@ -33,6 +33,15 @@ def test_decode_frame_refuses_an_oversized_frame():
         protocol.decode_frame(huge)
 
 
+def test_an_oversized_frame_raises_its_own_type():
+    """Typed, so the session can fail fast on it instead of skipping it like
+    a log line and waiting out the whole deadline."""
+    huge = b"x" * (protocol.MAX_FRAME_BYTES + 1)
+    with pytest.raises(protocol.McpFrameTooLarge):
+        protocol.decode_frame(huge)
+    assert issubclass(protocol.McpFrameTooLarge, protocol.McpFrameError)
+
+
 def test_decode_frame_refuses_a_bare_json_scalar():
     with pytest.raises(protocol.McpFrameError):
         protocol.decode_frame(b"42\n")

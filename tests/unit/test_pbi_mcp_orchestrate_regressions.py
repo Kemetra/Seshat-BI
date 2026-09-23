@@ -271,3 +271,36 @@ def test_a_file_target_still_authorizes_exactly_itself() -> None:
         {target: "a", sibling: "a"}, {target: "b", sibling: "b"}, target
     )
     assert orchestrate.BLOCKER_OUT_OF_SCOPE_CHANGE in blockers
+
+
+def test_an_unreadable_directory_fails_the_listing_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """git exits 0 while skipping a directory it cannot open, so the scope
+    check would be blind to any write under it. A listing git could not
+    complete is not a listing."""
+    import subprocess
+
+    from seshat import gitstate
+
+    def partial(_root, *args):
+        return subprocess.CompletedProcess(
+            args=list(args),
+            returncode=0,
+            stdout="a.tmdl\0",
+            stderr="warning: could not open directory 'secret/': Permission denied\n",
+        )
+
+    monkeypatch.setattr(gitstate, "run_git", partial)
+    assert orchestrate._list_files(tmp_path, "--exclude-standard") is None
+
+
+def test_the_digest_is_streamed_and_matches_a_whole_file_hash(tmp_path: Path) -> None:
+    import hashlib
+
+    payload = b"x" * (3 * 1024 * 1024 + 7)
+    (tmp_path / "big.bin").write_bytes(payload)
+    assert (
+        orchestrate._digest(tmp_path / "big.bin") == hashlib.sha256(payload).hexdigest()
+    )
+    assert orchestrate._digest(tmp_path / "absent.bin") is None

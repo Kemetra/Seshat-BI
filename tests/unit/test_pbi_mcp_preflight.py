@@ -244,7 +244,9 @@ def test_another_tables_pass_does_not_unblock_the_declared_target(
         )
     )
     assert result.status == STATUS_BLOCKED
-    assert "PBIMCP-GATE-03" in _blocker_ids(result)
+    # A MISSING record is "readiness state absent/unreadable" -- the gate's
+    # PBIMCP-GATE-02, never GATE-03 (which means "not committed").
+    assert "PBIMCP-GATE-02" in _blocker_ids(result)
     assert any("table_b" in blocker.detail for blocker in result.blockers)
 
 
@@ -259,8 +261,20 @@ def test_declared_target_recording_not_pass_blocks(tmp_path: Path) -> None:
         )
     )
     assert result.status == STATUS_BLOCKED
-    assert "PBIMCP-GATE-02" in _blocker_ids(result)
+    # Stage recorded but not pass is the gate's PBIMCP-GATE-01.
+    assert "PBIMCP-GATE-01" in _blocker_ids(result)
     assert any("table_b" in blocker.detail for blocker in result.blockers)
+
+
+def test_preflight_gate_ids_mean_what_the_write_gate_exports() -> None:
+    """An exported constant's value is contract. The two modules shared the
+    PBIMCP-GATE family with swapped meanings, sending a consumer keyed on the
+    id to the wrong fix."""
+    from seshat.pbi_mcp import preflight
+    from seshat.pbi_mcp_adapter import gate
+
+    assert preflight.BLOCKER_STAGE_NOT_PASS == gate.BLOCKER_STAGE_NOT_PASS
+    assert preflight.BLOCKER_STAGE_UNREADABLE == gate.BLOCKER_STAGE_UNREADABLE
 
 
 def test_generated_remote_config_does_not_block_the_preflight(tmp_path: Path) -> None:

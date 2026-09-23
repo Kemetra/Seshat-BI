@@ -110,6 +110,11 @@ def _mcp(returncode: int = 0, mutates: str | None = None):
         def handshake(self) -> dict:
             return {"name": "powerbi-modeling-mcp", "version": "0.5.0.0"}
 
+        def list_tools(self) -> tuple[str, ...]:
+            from seshat.pbi_mcp_adapter import vendor_ops
+
+            return tuple(sorted(vendor_ops.VENDOR_TOOLS))
+
         def call(self, tool: str, request: dict):
             self.calls.append((tool, request))
             operation = request.get("operation")
@@ -150,6 +155,11 @@ def _mcp_session(on_flush=None, *, returncode: int = 0, on_call=None):
         def handshake(self) -> dict:
             return {"name": "powerbi-modeling-mcp", "version": "0.5.0.0"}
 
+        def list_tools(self) -> tuple[str, ...]:
+            from seshat.pbi_mcp_adapter import vendor_ops
+
+            return tuple(sorted(vendor_ops.VENDOR_TOOLS))
+
         def call(self, tool: str, request: dict):
             operation = request.get("operation")
             if on_call is not None:
@@ -176,7 +186,11 @@ def _mcp_session(on_flush=None, *, returncode: int = 0, on_call=None):
 
 def _validator(returncode: int = 0):
     def run(repo_root: Path, args: tuple[str, ...]):
-        return subprocess.CompletedProcess(args=list(args), returncode=returncode)
+        # A captured run always carries text (possibly empty). stdout=None means
+        # the capture itself failed, which the validator treats as an error.
+        return subprocess.CompletedProcess(
+            args=list(args), returncode=returncode, stdout="", stderr=""
+        )
 
     return run
 

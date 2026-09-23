@@ -11,6 +11,7 @@ ONLY in load_contract(); this module is never in the `retail check` core chain.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 __all__ = ["GenResult", "generate_measure", "load_contract"]
@@ -197,6 +198,15 @@ def _default_format(definition: dict) -> str:
     return _DEFAULT_FORMATS.get(definition.get("aggregation", ""), "#,0")
 
 
+def _tmdl_name(name: str) -> str:
+    """``name`` as a TMDL object name: bare when it is a plain identifier,
+    otherwise single-quoted with ``'`` doubled. An unquoted ``Bob's Sales`` is
+    TMDL Desktop cannot load."""
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+        return name
+    return "'" + name.replace("'", "''") + "'"
+
+
 def _build_tmdl_block(
     name: str, dax: str, format_string: str, display_folder: str, doc_intent: str
 ) -> str:
@@ -204,10 +214,18 @@ def _build_tmdl_block(
     doc = (doc_intent or name).replace("\n", " ").strip()
     return (
         f"\t/// {doc}\n"
-        f"\tmeasure {name} = {dax}\n"
+        f"\tmeasure {_tmdl_name(name)} = {dax}\n"
         f"\t\tformatString: {format_string}\n"
         f"\t\tdisplayFolder: {display_folder}\n"
     )
+
+
+def _round_trips(block: str, name: str) -> bool:
+    """True when ``block`` parses back to exactly one measure named ``name``."""
+    from .tmdl import parse_tmdl
+
+    table = parse_tmdl(f"table T\n{block}")
+    return table is not None and [m.name for m in table.measures] == [name]
 
 
 def _is_d_rule(rule_id: str) -> bool:
@@ -275,6 +293,12 @@ def _verify_form(
     fmt = format_string or _default_format(definition)
     folder = display_folder or "Measures"
     block = _build_tmdl_block(name, dax, fmt, folder, doc_intent or "")
+    if not _round_trips(block, name):
+        # Fail CLOSED: a block the parser cannot read back makes the D-rule
+        # pass below vacuous -- zero measures parsed, zero findings.
+        return GenResult.refuse(
+            f"the emitted TMDL block does not parse back to measure {name!r}"
+        )
     errors, warnings = _run_d_rules(block, name)
     if errors:
         return GenResult.refuse("D-rule ERROR(s): " + "; ".join(errors))
