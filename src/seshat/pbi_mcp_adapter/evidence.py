@@ -317,9 +317,35 @@ def render(record: RunEvidence) -> str:
         text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
         scrubbed, _ = scrub_secret_shaped(text)
         return scrubbed
+    _scrub_identifier_fields(payload)
     _scan_payload_values(payload)
     text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
     return refuse_if_secret_shaped(text, context=ARTIFACT_RELPATH)
+
+
+#: Fields that carry an OPERATOR-CHOSEN identifier rather than run output.
+#: A committed allowlist may legitimately key a target by its workspace GUID,
+#: so refusing on it would drop every refusal and dry run for that target from
+#: the audit trail while a successful apply of it IS recorded (FR-015).
+_IDENTIFIER_FIELDS = ("target_id",)
+
+#: The ONE class scrubbed in those fields before the refusing scan. Narrow on
+#: purpose: a GUID is a plausible identifier, a user path or a credential in a
+#: target id is not, and those still refuse the record.
+_IDENTIFIER_CLASS = "GUID (tenant/app/workspace id)"
+
+
+def _scrub_identifier_fields(payload: dict[str, object]) -> None:
+    """Scrub GUIDs from :data:`_IDENTIFIER_FIELDS` in place, labelling them."""
+    pattern = dict(SECRET_PATTERNS)[_IDENTIFIER_CLASS]
+    matched = False
+    for key in _IDENTIFIER_FIELDS:
+        value = payload.get(key)
+        if isinstance(value, str) and pattern.search(value):
+            payload[key] = pattern.sub(REDACTED, value)
+            matched = True
+    if matched:
+        payload["redactions_applied"] = [_IDENTIFIER_CLASS]
 
 
 def _write_atomically(path: Path, text: str) -> None:
