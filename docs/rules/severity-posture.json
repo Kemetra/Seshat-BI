@@ -13,13 +13,13 @@
       "error"
     ],
     "AD1": [
-      "<no-finding>"
+      "error"
     ],
     "AL1": [
       "error"
     ],
     "AL2": [
-      "<no-finding>"
+      "error"
     ],
     "AP1": [
       "error"
@@ -31,7 +31,7 @@
       "error"
     ],
     "B3": [
-      "<no-finding>"
+      "error"
     ],
     "C1": [
       "error"
@@ -40,16 +40,16 @@
       "error"
     ],
     "CB1": [
-      "<no-finding>"
+      "error"
     ],
     "CT1": [
       "error"
     ],
     "CT2": [
-      "<no-finding>"
+      "error"
     ],
     "CT3": [
-      "<no-finding>"
+      "error"
     ],
     "D1": [
       "error"
@@ -91,10 +91,10 @@
       "error"
     ],
     "DL10": [
-      "<no-finding>"
+      "error"
     ],
     "DL11": [
-      "<no-finding>"
+      "error"
     ],
     "DL2": [
       "error"
@@ -109,16 +109,16 @@
       "error"
     ],
     "DL6": [
-      "<no-finding>"
+      "error"
     ],
     "DL7": [
-      "<no-finding>"
+      "error"
     ],
     "DL8": [
       "error"
     ],
     "DL9": [
-      "<no-finding>"
+      "error"
     ],
     "DR1": [
       "error"
@@ -158,37 +158,37 @@
       "error"
     ],
     "HR1": [
-      "<no-finding>"
+      "error"
     ],
     "HR11": [
-      "<no-finding>"
+      "error"
     ],
     "HR12": [
-      "<no-finding>"
+      "error"
     ],
     "HR13": [
-      "<no-finding>"
+      "error"
     ],
     "HR4": [
-      "<no-finding>"
+      "error"
     ],
     "HR5": [
-      "<no-finding>"
+      "error"
     ],
     "HR6": [
-      "<no-finding>"
+      "error"
     ],
     "HR7": [
-      "<no-finding>"
+      "error"
     ],
     "HR8": [
-      "<no-finding>"
+      "error"
     ],
     "HR9": [
-      "<no-finding>"
+      "error"
     ],
     "KP1": [
-      "<no-finding>"
+      "error"
     ],
     "KR1": [
       "error"
@@ -200,13 +200,13 @@
       "error"
     ],
     "PP1": [
-      "<no-finding>"
+      "error"
     ],
     "R1": [
       "error"
     ],
     "R2": [
-      "<no-finding>"
+      "error"
     ],
     "RS1": [
       "error"
@@ -240,7 +240,7 @@
       "error"
     ],
     "S9": [
-      "<no-finding>"
+      "warning"
     ],
     "SC1": [
       "error"
