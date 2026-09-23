@@ -59,10 +59,10 @@ class TestExecuteRun:
             captured["kwargs"] = kwargs
             return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
 
-        monkeypatch.setattr(runner.subprocess, "run", fake_run)
+        monkeypatch.setattr(runner, "_run_child", fake_run)
         result = runner.execute_run(root, "full_sequence_job", table="demo_table")
         assert result.exit_code == 0
-        assert captured["kwargs"].get("shell") is False
+        assert captured["kwargs"]["cwd"] == root
         env = captured["kwargs"]["env"]
         assert env["SESHAT_DAGSTER_RUN_ID"] == result.run_id
         assert env["SESHAT_DAGSTER_TABLES"] == "demo_table"
@@ -73,15 +73,14 @@ class TestExecuteRun:
         # and the parent's decode matches the child's output (#404).
         assert env["PYTHONUTF8"] == "1"
         assert env["PYTHONIOENCODING"] == "utf-8"
-        assert captured["kwargs"].get("encoding") == "utf-8"
 
     def test_child_failure_maps_to_nonzero_result_with_redacted_output(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         root = _fake_repo(tmp_path)
         monkeypatch.setattr(
-            runner.subprocess,
-            "run",
+            runner,
+            "_run_child",
             lambda argv, **kwargs: subprocess.CompletedProcess(
                 argv, 1, stdout="", stderr="failed: postgresql://u:pw@h/d"
             ),
@@ -112,8 +111,8 @@ class TestExecuteRun:
         assert "s3cretpw" in raw_tail
         root = _fake_repo(tmp_path)
         monkeypatch.setattr(
-            runner.subprocess,
-            "run",
+            runner,
+            "_run_child",
             lambda argv, **kwargs: subprocess.CompletedProcess(
                 argv, 1, stdout="", stderr=secret
             ),
@@ -130,12 +129,17 @@ class TestExecuteRun:
         root = _fake_repo(tmp_path)
 
         def hung_child(argv, **kwargs):
-            raise subprocess.TimeoutExpired(cmd=argv, timeout=1)
+            raise subprocess.TimeoutExpired(
+                cmd=argv, timeout=1, output="step 3 running postgresql://u:pw@h/d"
+            )
 
-        monkeypatch.setattr(runner.subprocess, "run", hung_child)
+        monkeypatch.setattr(runner, "_run_child", hung_child)
         result = runner.execute_run(root, "full_sequence_job")
         assert result.exit_code == 124
         assert "timed out" in result.output
+        # The partial output survives, redacted.
+        assert "step 3 running" in result.output
+        assert "pw@h" not in result.output
 
     def test_missing_orchestration_env_raises_runner_error(
         self, tmp_path: Path
@@ -184,7 +188,7 @@ class TestSourceModeWiring:
             captured["env"] = kwargs["env"]
             return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
 
-        monkeypatch.setattr(runner.subprocess, "run", fake_run)
+        monkeypatch.setattr(runner, "_run_child", fake_run)
         return captured
 
     def test_default_run_leaves_source_mode_env_absent(
@@ -225,6 +229,94 @@ class TestSourceModeWiring:
         def must_not_run(argv, **kwargs):
             raise AssertionError("child must not launch on an invalid source mode")
 
-        monkeypatch.setattr(runner.subprocess, "run", must_not_run)
+        monkeypatch.setattr(runner, "_run_child", must_not_run)
         with pytest.raises(runner.RunnerError, match="source mode must be one of"):
             runner.execute_run(root, "through_gold_job", source_mode="wipe-it")
+
+
+class TestRunChild:
+    """The real child launcher: own process group, closed stdin, tree kill."""
+
+    class _FakePopen:
+        instances: list = []
+
+        def __init__(self, argv, **kwargs):
+            self.argv = argv
+            self.kwargs = kwargs
+            self.pid = 4242
+            self.returncode = None
+            self.killed = False
+            self.calls = 0
+            type(self).instances.append(self)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def communicate(self, timeout=None):
+            self.calls += 1
+            if self.calls == 1 and self.kwargs.get("_hang", True):
+                raise subprocess.TimeoutExpired(self.argv, timeout)
+            self.returncode = -9
+            return "partial out", "partial err"
+
+        def kill(self):
+            self.killed = True
+
+    def test_spawn_is_shell_free_utf8_with_closed_stdin_and_own_group(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._FakePopen.instances = []
+        monkeypatch.setattr(runner.subprocess, "Popen", self._FakePopen)
+        monkeypatch.setattr(runner, "_kill_tree", lambda proc: proc.kill())
+        with pytest.raises(subprocess.TimeoutExpired):
+            runner._run_child(["py"], cwd=tmp_path, env={})
+        kwargs = self._FakePopen.instances[0].kwargs
+        assert kwargs["shell"] is False
+        assert kwargs["encoding"] == "utf-8"
+        assert kwargs["stdin"] == subprocess.DEVNULL
+        assert "creationflags" in kwargs or kwargs.get("start_new_session") is True
+
+    def test_real_child_output_and_exit_code_are_captured(self, tmp_path: Path) -> None:
+        import sys
+
+        proc = runner._run_child(
+            [sys.executable, "-c", "import sys; print('hi'); sys.exit(3)"],
+            cwd=tmp_path,
+            env=dict(__import__("os").environ),
+        )
+        assert proc.returncode == 3
+        assert "hi" in proc.stdout
+
+    def test_real_timeout_kills_a_grandchild_tree(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import os
+        import sys
+
+        monkeypatch.setattr(runner, "_RUN_TIMEOUT_SECONDS", 2)
+        code = (
+            "import subprocess, sys, time; "
+            "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+            "print('started', flush=True); time.sleep(60)"
+        )
+        with pytest.raises(subprocess.TimeoutExpired) as exc:
+            runner._run_child(
+                [sys.executable, "-c", code], cwd=tmp_path, env=dict(os.environ)
+            )
+        assert "started" in exc.value.output
+
+    def test_timeout_kills_the_whole_tree_and_keeps_partial_output(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._FakePopen.instances = []
+        killed: list[int] = []
+        monkeypatch.setattr(runner.subprocess, "Popen", self._FakePopen)
+        monkeypatch.setattr(runner, "_kill_tree", lambda proc: killed.append(proc.pid))
+        with pytest.raises(subprocess.TimeoutExpired) as exc:
+            runner._run_child(["py"], cwd=tmp_path, env={})
+        assert killed == [4242]
+        assert "partial out" in exc.value.output
+        assert "partial err" in exc.value.output

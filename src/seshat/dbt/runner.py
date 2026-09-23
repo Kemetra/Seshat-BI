@@ -226,14 +226,94 @@ def _try_acquire_lock(path: Path) -> int | None:
         return None
 
 
+_STILL_ACTIVE = 259
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_ERROR_INVALID_PARAMETER = 87
+
+
+def _windows_pid_alive(pid: int) -> bool:
+    """OpenProcess + GetExitCodeProcess; never ``os.kill`` (it TERMINATES on
+    Windows). An unknown answer reads as alive, so nothing is reclaimed."""
+    import ctypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+    handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return ctypes.get_last_error() != _ERROR_INVALID_PARAMETER  # type: ignore[attr-defined]
+    try:
+        code = ctypes.c_ulong()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            return True
+        return code.value == _STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _pid_alive(pid: int) -> bool:
+    """True unless ``pid`` is provably gone (fail closed: unknown == alive)."""
+    if pid <= 0 or pid == os.getpid():
+        return True  # nonsense pid is unknown; our own pid is alive
+    if os.name == "nt":
+        return _windows_pid_alive(pid)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    return True
+
+
+def _lock_owner_pid(raw: bytes) -> int | None:
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    pid = payload.get("pid") if isinstance(payload, dict) else None
+    return pid if isinstance(pid, int) and not isinstance(pid, bool) else None
+
+
+def _reclaim_stale_lock(path: Path) -> bool:
+    """Remove a lock whose recorded owner process is gone; True if removed.
+
+    A malformed payload or a live/unknown owner is never reclaimed. The bytes
+    are re-read just before unlinking so a lock another process has just
+    taken is never deleted."""
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return False
+    pid = _lock_owner_pid(raw)
+    if pid is None or _pid_alive(pid):
+        return False
+    try:
+        if path.read_bytes() != raw:
+            return False
+    except OSError:
+        return False
+    _unlink_lock(path)
+    return True
+
+
+def _lock_busy(path: Path, table_id: str, target: str) -> LockUnavailable:
+    relative = Path(".seshat", "dbt", "locks", path.name).as_posix()
+    return LockUnavailable(
+        f"dbt invocation already in progress for {table_id}/{target} "
+        f"(lock: {relative}); if no seshat dbt process is running, remove that "
+        "lock file and retry"
+    )
+
+
 def _acquire_lock(path: Path, table_id: str, target: str, timeout_s: float) -> int:
     deadline = time.monotonic() + min(max(timeout_s, 0.0), 1.0)
+    reclaimed = False
     while (descriptor := _try_acquire_lock(path)) is None:
+        if not reclaimed and _reclaim_stale_lock(path):
+            reclaimed = True
+            continue
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            raise LockUnavailable(
-                f"dbt invocation already in progress for {table_id}/{target}"
-            )
+            raise _lock_busy(path, table_id, target)
         time.sleep(min(0.05, remaining))
     return descriptor
 
