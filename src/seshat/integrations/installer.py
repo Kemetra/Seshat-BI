@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
@@ -54,7 +55,7 @@ from seshat.integrations.presence import (
     _skill_dir,
     _venv_python,
 )
-from seshat.integrations.procs import _detail, _run
+from seshat.integrations.procs import _detail, _run, remove_tree
 from seshat.integrations.resolvers import Resolution, Resolvers, resolve
 
 PRESENT = "present"
@@ -700,7 +701,9 @@ def _clone_at_ref(req: _Install, staging: Path, ref: str) -> str | None:
     )
     if not shallow.returncode:
         return None
-    shutil.rmtree(staging, ignore_errors=True)
+    leftover = remove_tree(staging)
+    if leftover is not None:
+        return leftover
     full = req.run(["git", "clone", url, str(staging)])
     if full.returncode:
         return _detail(full, "git clone failed")
@@ -710,47 +713,69 @@ def _clone_at_ref(req: _Install, staging: Path, ref: str) -> str | None:
     return None
 
 
+def _activate(staging: Path, target: Path, ref: str) -> str | None:
+    """Move the validated clone into place; a failure detail, or None.
+
+    An existing installed tree (an upgrade) is moved aside first and restored if
+    the swap fails, so a failed upgrade never leaves the component missing.
+    """
+    previous = staging.parent / "previous"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if target.exists():
+            target.replace(previous)
+        staging.replace(target)
+    except OSError as exc:
+        if previous.exists() and not target.exists():
+            previous.replace(target)
+        return f"could not activate the staged clone: {exc}"
+    (target / ".seshat-installed").write_text(f"{ref}\n", encoding="utf-8")
+    return None
+
+
+def _stage_and_activate(req: _Install, scratch: Path, ref: str) -> tuple[str, str]:
+    staging = scratch / "tree"
+    failure = _clone_at_ref(req, staging, ref)
+    if failure is not None:
+        return FAILED, failure
+    missing = _missing_required_payload(staging, req.item)
+    if missing:
+        return FAILED, f"missing required payload: {', '.join(missing)}"
+    failure = _activate(staging, req.root / _skill_dir(req.item), ref)
+    if failure is not None:
+        return FAILED, failure
+    return (
+        INSTALLED,
+        f"{req.item.coordinate} at {ref} in {_skill_dir(req.item).as_posix()}",
+    )
+
+
 def _install_github(req: _Install) -> tuple[str, str]:
-    """Clone into staging at an exact ref, then activate by rename.
+    """Clone into a fresh staging directory at an exact ref, then activate.
 
     Staging is what keeps a partial clone from ever being reported installed:
     the marker file that `_is_installed` looks for is written only after the
-    clone succeeded and the tree moved into place.
+    clone succeeded and the tree moved into place. Each attempt stages into its
+    own fresh directory, so a leftover from an earlier failure cannot block it,
+    and a leftover this attempt cannot delete is named in the failure detail.
     """
     if shutil.which("git") is None:
         return UNAVAILABLE, "git is not on PATH"
     target = req.root / _skill_dir(req.item)
-    if target.exists():
+    if target.exists() and not _is_installed(req.root, req.item, req.profile):
         return FAILED, f"incomplete existing directory: {target}"
     ref = req.resolved.tag or req.resolved.commit
     if not ref:
         return FAILED, "refusing to clone without an exact tag or commit"
 
-    staging = req.root / STAGING_DIR / req.item.id
-    if staging.exists():
-        shutil.rmtree(staging, ignore_errors=True)
-    staging.parent.mkdir(parents=True, exist_ok=True)
-    failure = _clone_at_ref(req, staging, ref)
-    if failure is not None:
-        shutil.rmtree(staging, ignore_errors=True)
-        return FAILED, failure
-
-    missing = _missing_required_payload(staging, req.item)
-    if missing:
-        shutil.rmtree(staging, ignore_errors=True)
-        return FAILED, f"missing required payload: {', '.join(missing)}"
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        staging.replace(target)
-    except OSError as exc:
-        shutil.rmtree(staging, ignore_errors=True)
-        return FAILED, f"could not activate the staged clone: {exc}"
-    (target / ".seshat-installed").write_text(f"{ref}\n", encoding="utf-8")
-    return (
-        INSTALLED,
-        f"{req.item.coordinate} at {ref} in {_skill_dir(req.item).as_posix()}",
-    )
+    staging_root = req.root / STAGING_DIR
+    staging_root.mkdir(parents=True, exist_ok=True)
+    scratch = Path(tempfile.mkdtemp(prefix=f"{req.item.id}-", dir=staging_root))
+    status, detail = _stage_and_activate(req, scratch, ref)
+    leftover = remove_tree(scratch)
+    if leftover is not None and status != INSTALLED:
+        detail = f"{detail}; {leftover}"
+    return status, detail
 
 
 def _install_npm(

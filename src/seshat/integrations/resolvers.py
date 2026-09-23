@@ -23,6 +23,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from seshat.integrations.catalog import Channel, Component, SourceType
+from seshat.integrations.procs import scrub
 from seshat.integrations.versions import (
     artifact_sha256,
     is_prerelease,
@@ -79,7 +80,10 @@ class Resolution:
 
 
 def _refuse(component_id: str, status: str, reason: str) -> Resolution:
-    return Resolution(component_id=component_id, ok=False, status=status, reason=reason)
+    """A refusal whose reason is scrubbed: it may quote an exception's text."""
+    return Resolution(
+        component_id=component_id, ok=False, status=status, reason=scrub(reason)
+    )
 
 
 # --------------------------------------------------------------------------- #
