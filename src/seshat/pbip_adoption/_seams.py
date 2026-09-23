@@ -27,6 +27,9 @@ _STAGE_ORDER = (
 )
 
 
+_READINESS_UNAVAILABLE = "unavailable:readiness-projection"
+
+
 @dataclass(frozen=True)
 class _NextStepInputs:
     target_kind: str
@@ -102,7 +105,15 @@ def _governance_findings(
     return normalized, facts
 
 
-def _readiness(root: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _readiness(
+    root: Any,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[_Fact]]:
+    """Compose the readiness projection; a failure is REPORTED, never silent.
+
+    Mirrors ``_governance_findings``: an exception yields an explicit
+    ``unavailable:readiness-projection`` fact, so ``_next_step`` cannot fall
+    through to "no readiness file found" for a project that has them.
+    """
     try:
         from ..blocker_explainer import build_blocker_explanations
         from ..readiness_projection import build_readiness_projection
@@ -117,9 +128,20 @@ def _readiness(root: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
                 readiness.append(entry)
         readiness.sort(key=lambda item: str(item["projection"].get("source_path")))
         blockers = build_blocker_explanations(root).get("items", [])
-        return readiness, blockers if isinstance(blockers, list) else []
-    except (OSError, ValueError, KeyError):
-        return [], []
+        return readiness, blockers if isinstance(blockers, list) else [], []
+    except (OSError, ValueError, KeyError) as exc:
+        return [], [], [_readiness_unavailable_fact(exc)]
+
+
+def _readiness_unavailable_fact(exc: BaseException) -> _Fact:
+    return _Fact(
+        id=_READINESS_UNAVAILABLE,
+        classification="unavailable_with_reason",
+        category="readiness",
+        subject="existing readiness state",
+        detail="Existing readiness state could not be evaluated.",
+        reason=_safe_detail(type(exc).__name__, fallback="projection unavailable"),
+    )
 
 
 def _readiness_entry(
@@ -155,6 +177,7 @@ def _next_step(inputs: _NextStepInputs) -> dict[str, Any]:
         _unclean_vc_step,
         _ambiguity_step,
         _blocked_fact_step,
+        _readiness_unavailable_step,
         _readiness_step,
         _blocker_step,
     )
@@ -253,6 +276,23 @@ def _blocked_fact_step(inputs: _NextStepInputs) -> dict[str, Any] | None:
     }
 
 
+def _readiness_unavailable_step(inputs: _NextStepInputs) -> dict[str, Any] | None:
+    if not any(fact["id"] == _READINESS_UNAVAILABLE for fact in inputs.facts):
+        return None
+    return {
+        "kind": "terminal_stop",
+        "stage": None,
+        "action": (
+            "Readiness could not be evaluated; inspect the readiness files "
+            "(seshat check / seshat status), fix them, then reassess."
+        ),
+        "blocking_reasons": [
+            "The readiness projection failed, so no truthful next stage is known."
+        ],
+        "required_authority": "analyst",
+    }
+
+
 def _readiness_step(inputs: _NextStepInputs) -> dict[str, Any] | None:
     candidates: list[tuple[int, str, dict[str, Any]]] = []
     for item in inputs.readiness:
@@ -297,7 +337,7 @@ def _readiness_response_step(response: dict[str, Any]) -> dict[str, Any]:
             fallback="Review the existing readiness response before proceeding.",
         ),
         "blocking_reasons": [
-            str(reason)
+            _safe_detail(reason, fallback="Readiness blocking reason.")
             for reason in response.get("blocking_reasons", [])
             if isinstance(reason, str)
         ],
