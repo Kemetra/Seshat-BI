@@ -372,7 +372,9 @@ def _scan_outer_text(text: str) -> Iterable[tuple[str, str]]:
     Catches schema-qualifying positions (``FROM bronze.x``, ``bronze.obj``,
     ``CREATE SCHEMA bronze``) via ``stale_schema_tokens``.
     """
-    for token, _line in stale_schema_tokens(text):
+    # Raw M text: every "..." here is an M string, not a SQL identifier, so the
+    # literal-blind stream is kept; string bodies are scanned separately below.
+    for token, _line in stale_schema_tokens(text, identifiers=False):
         yield (
             token,
             (
