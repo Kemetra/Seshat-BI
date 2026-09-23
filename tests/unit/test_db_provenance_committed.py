@@ -228,7 +228,7 @@ def test_the_source_map_digest_ignores_checkout_line_endings_and_bom() -> None:
     lf = db_provenance.source_map_digest(_SOURCE_MAP_TEXT)
 
     assert db_provenance.source_map_digest(_SOURCE_MAP_TEXT.replace("\n", "\r\n")) == lf
-    assert db_provenance.source_map_digest("﻿" + _SOURCE_MAP_TEXT) == lf
+    assert db_provenance.source_map_digest("\ufeff" + _SOURCE_MAP_TEXT) == lf
 
 
 def test_a_foreign_source_map_with_a_colliding_directory_name_is_refused(

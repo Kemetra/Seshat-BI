@@ -316,7 +316,7 @@ def source_map_digest(text: str) -> str:
     the worktree file, the reader the committed blob, and under
     ``core.autocrlf=true`` those differ only in line endings.
     """
-    normalized = text.lstrip("﻿").replace("\r\n", "\n")
+    normalized = text.lstrip("\ufeff").replace("\r\n", "\n")
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:_DIGEST_CHARS]
 
 
@@ -467,7 +467,7 @@ def read_record(path: Path) -> dict[str, Any] | None:
 
 def parse_record(raw: str) -> dict[str, Any]:
     """Parse one record's text; the sentinel ``{}`` for anything malformed."""
-    raw = raw.lstrip("﻿")
+    raw = raw.lstrip("\ufeff")
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
