@@ -223,6 +223,31 @@ def worktree_status(root: Path | str, *pathspecs: str) -> WorktreeStatus | None:
     return WorktreeStatus(modified=tuple(sorted(modified)), untracked=untracked)
 
 
+def repository_status(root: Path | str) -> tuple[WorktreeStatus, str] | None:
+    """Whole-repository status for a root that may sit BELOW the git toplevel.
+
+    :func:`worktree_status` sees only the subtree under the directory it runs
+    in, while ``git status`` covers the whole repository. A precondition that
+    means "the repository is clean" (a scaffold's or a write's git-safety check)
+    must not go blind to a dirty file outside the subdirectory it was pointed
+    at. Returns the status (paths relative to the TOPLEVEL) and ``root``'s
+    prefix from the toplevel (``""`` or ``"sub/dir/"``), or None on failure.
+    """
+    base = Path(root)
+    try:
+        top = _git(base, "rev-parse", "--show-toplevel")
+        prefix = _git(base, "rev-parse", "--show-prefix")
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if top.returncode or prefix.returncode:
+        return None
+    toplevel = Path(top.stdout.decode("utf-8", errors="surrogateescape").strip())
+    status = worktree_status(toplevel)
+    if status is None:
+        return None
+    return status, prefix.stdout.decode("utf-8", errors="surrogateescape").strip()
+
+
 def worktree_matches_revision(root: Path | str, rev: str, relative: str) -> bool:
     """Is ``relative`` present at ``rev`` with exactly the worktree's content?
 

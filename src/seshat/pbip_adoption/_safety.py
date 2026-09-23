@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from seshat.git_worktree import worktree_status
+from seshat.git_worktree import repository_status
 
 SCHEMA_VERSION = "1.0"
 MANIFEST_PATH = ".seshat/adoption/pbip-adoption.yaml"
@@ -181,11 +181,14 @@ def _git_state(root: Path) -> str:
     ``git status`` would push every file through the tree's own
     attribute-selected content filters -- commands the tree's author chose -- so
     the comparison is made filter-free by
-    :func:`seshat.git_worktree.worktree_status`.
+    :func:`seshat.git_worktree.repository_status`. Whole-repository scope, like
+    ``git status``: scaffolding requires a clean repository, and a PBIP project
+    is often a subdirectory of it.
     """
-    status = worktree_status(root)
-    if status is None:
+    probed = repository_status(root)
+    if probed is None:
         return "absent"
+    status, _prefix = probed
     if status.untracked:
         return "untracked"
     return "dirty" if status.modified else "clean"

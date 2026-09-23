@@ -248,23 +248,26 @@ def _probe_tree_clean(repo_root: Path) -> bool | None:
     here rather than relying on ``.gitignore`` is deliberate -- a user's own
     project will not carry this repo's ignore rules.
     """
-    from seshat.git_worktree import worktree_status
+    from seshat.git_worktree import repository_status
     from seshat.pbi_mcp_adapter.evidence import ARTIFACT_RELPATH, HISTORY_RELPATH
 
     # Filter-free (`git_worktree`), not `git status`: the target project may be a
     # tree this process did not author, and `status` runs its content filters.
-    # Untracked files are listed individually, so an exact-path exclusion works.
-    status = worktree_status(repo_root)
-    if status is None:
+    # Whole-repository scope like `git status`, so a `--repo` below the toplevel
+    # still sees a dirty file elsewhere. Untracked files are listed one by one,
+    # so an exact-path exclusion works.
+    probed = repository_status(repo_root)
+    if probed is None:
         return None
+    status, prefix = probed
     # BOTH of the adapter's own artifacts (issue #657). Excluding only the
     # latest-run file made the append-only history read as a foreign untracked
     # file, so a second `plan-write` was refused for git-safety on a dirty state
     # this adapter created itself -- caught by
     # `test_plan_write_twice_still_sees_a_clean_tree`.
     ours = {
-        ARTIFACT_RELPATH.replace("\\", "/"),
-        HISTORY_RELPATH.replace("\\", "/"),
+        prefix + ARTIFACT_RELPATH.replace("\\", "/"),
+        prefix + HISTORY_RELPATH.replace("\\", "/"),
     }
     return all(entry in ours for entry in status.paths)
 

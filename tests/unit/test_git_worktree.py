@@ -234,6 +234,29 @@ def test_revision_match_refuses_option_shaped_rev_and_absent_path(
     tmp_path: Path,
 ) -> None:
     repo = _seeded(tmp_path)
-    assert worktree_matches_revision(repo, "--output=x", "a.txt") is False
+    assert worktree_matches_revision(repo, "-n1", "a.txt") is False
     assert worktree_matches_revision(repo, "HEAD", "absent.txt") is False
     assert worktree_matches_revision(repo, "HEAD", "../a.txt") is False
+
+
+# --------------------------------------------------------------------------
+# Repository-wide preconditions keep whole-repository scope from a subdirectory.
+# --------------------------------------------------------------------------
+
+
+def test_subdirectory_root_still_sees_a_dirty_file_elsewhere(tmp_path: Path) -> None:
+    from seshat.cli.commands.pbi_mcp import _probe_tree_clean
+    from seshat.git_worktree import repository_status
+    from seshat.pbip_adoption._safety import _git_state
+
+    repo = _seeded(tmp_path)
+    assert _git_state(repo / "sub") == "clean"
+    assert _probe_tree_clean(repo / "sub") is True
+
+    (repo / "a.txt").write_text("edited outside the subdirectory\n", encoding="utf-8")
+
+    probed = repository_status(repo / "sub")
+    assert probed is not None and probed[1] == "sub/"
+    assert probed[0].modified == ("a.txt",)
+    assert _git_state(repo / "sub") == "dirty"
+    assert _probe_tree_clean(repo / "sub") is False
