@@ -28,6 +28,7 @@ from urllib.request import (
     HTTPRedirectHandler,
     HTTPSHandler,
     OpenerDirector,
+    ProxyHandler,
     Request,
     UnknownHandler,
 )
@@ -444,10 +445,12 @@ def _build_opener() -> OpenerDirector:
     """An opener that can speak https ONLY.
 
     `urllib.request.build_opener` also installs file, ftp and data handlers; a
-    redirect could otherwise reach them. Nothing but https is registered here.
+    redirect could otherwise reach them. Nothing but https is registered here,
+    plus the environment proxy settings (https is tunnelled through them).
     """
     opener = OpenerDirector()
     for handler in (
+        ProxyHandler(),
         HTTPSHandler(),
         _HttpsSameHostRedirect(),
         HTTPDefaultErrorHandler(),

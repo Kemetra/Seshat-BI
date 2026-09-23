@@ -92,3 +92,15 @@ def test_an_unsafe_release_tag_is_refused(tag: str) -> None:
     assert not result.ok
     assert result.status == resolvers.FAILED
     assert not any(call.startswith("commit:") for call in index.calls)
+
+
+def test_the_opener_honours_an_environment_https_proxy(monkeypatch) -> None:
+    """A corporate proxy keeps working: https is tunnelled through it."""
+    from urllib.request import ProxyHandler
+
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:3128")
+    monkeypatch.setenv("https_proxy", "http://proxy.example:3128")
+    opener = resolvers._build_opener()
+
+    proxies = [h for h in opener.handlers if isinstance(h, ProxyHandler)]
+    assert proxies and proxies[0].proxies.get("https") == "http://proxy.example:3128"
