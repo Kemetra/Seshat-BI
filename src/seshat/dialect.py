@@ -228,9 +228,9 @@ class _DictConfigDialect(_LazyDriverDialect):
       env var is truthy; the order fixes each engine's dict order.
     - ``_int_keys``: env keys whose value is int()-coerced (e.g. PORT).
     - ``_secret_keys``: dict keys whose values ``redact`` scrubs from error
-      text. No longest-first ordering is needed here: unlike SqlServer's DSN
-      string there is no token parsing -- each dict value is looked up and
-      replaced independently, in the subclass-declared key order."""
+      text. Values are replaced LONGEST FIRST: a user ``analytics`` replaced
+      before a host ``analytics-db.example.com`` would leave the host's tail
+      behind, so declaration order must not decide the outcome."""
 
     _secret_keys: tuple[str, ...] = ()
     _anchor: tuple[str, str] = ("", "")
@@ -252,12 +252,11 @@ class _DictConfigDialect(_LazyDriverDialect):
         return config
 
     def redact(self, message: object, config: dict[str, object]) -> str:
-        text = str(message)
-        for key in self._secret_keys:
-            value = (config or {}).get(key)
-            if value:
-                text = text.replace(str(value), "<redacted>")
-        return text
+        from .redaction_core import replace_bounded
+
+        values = {str(v) for k in self._secret_keys if (v := (config or {}).get(k))}
+        ordered = sorted(values, key=len, reverse=True)
+        return replace_bounded(str(message), ordered, "<redacted>")
 
 
 _MSSQL_TEXT_TYPES = frozenset({"varchar", "nvarchar", "char", "nchar", "text", "ntext"})
@@ -505,7 +504,8 @@ _MYSQL_TEXT_TYPES = frozenset(
 )
 
 
-_MYSQL_SECRET_KEYS = ("password", "user", "host")
+# `database` for parity with Postgres, whose redactor scrubs the DB name too.
+_MYSQL_SECRET_KEYS = ("password", "user", "host", "database")
 
 
 class MySqlDialect(_DictConfigDialect):
@@ -575,7 +575,15 @@ class MySqlDialect(_DictConfigDialect):
         return value
 
 
-_SNOWFLAKE_SECRET_KEYS = ("password", "user", "account", "token", "host")
+_SNOWFLAKE_SECRET_KEYS = (
+    "password",
+    "user",
+    "account",
+    "token",
+    "host",
+    "database",
+    "warehouse",
+)
 
 
 class SnowflakeDialect(_DictConfigDialect):

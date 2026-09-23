@@ -344,9 +344,12 @@ def _read_gold(
         # A contract this module refuses to compile is not a boundary failure.
         raise
     except Exception as exc:
+        from seshat.db_boundary import boundary_error_text
+
         raise ReportError(
             "--from-gold failed at the DB boundary "
-            f"({exc.__class__.__name__}): {dialect.redact(exc, config)}. Verify the "
+            f"({exc.__class__.__name__}): "
+            f"{boundary_error_text(dialect, exc, config)}. Verify the "
             "DSN, network access and the gold objects the contracts bind to."
         ) from exc
 

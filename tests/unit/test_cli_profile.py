@@ -212,47 +212,31 @@ def test_safe_target_label_never_leaks_keyword_conninfo_password() -> None:
     and it would otherwise leak the password (PR #409 P1)."""
     from seshat.cli import _safe_target_label
 
-    # A keyword conninfo renders NO component (host/user/password can be quoted
-    # or "@"-bearing, so no split/regex safely isolates the host) -- it falls
-    # back to the bare engine label, guaranteeing nothing leaks.
-    conninfo = "host=db.example user=svc password=s3cret dbname=x port=5432"
-    assert _safe_target_label("postgres", conninfo) == "postgres"
+    # Every label is the engine plus, at most, a short target DIGEST: no
+    # component of any config shape is ever echoed, however it is quoted or
+    # "@"-bearing, and whatever "://" it smuggles in.
+    cases = {
+        "host=db.example user=svc password=s3cret dbname=x port=5432": (
+            "db.example",
+            "svc",
+            "s3cret",
+        ),
+        "host=db user=svc password=@s3cret": ("svc", "s3cret"),
+        "password='abc host=secret' host=db": ("secret", "abc"),
+        "host=db password='abc://u:s3cret@credential'": ("s3cret", "credential"),
+        "postgresql://h:5432/db?password=s3cret": ("s3cret",),
+        "postgresql://h/db?password=secret@tail": ("secret", "tail"),
+        "postgresql://u:p@db-a.example:5432/db1": ("db-a.example", "db1", "u:p"),
+    }
+    for config, secrets in cases.items():
+        label = _safe_target_label("postgres", config)
+        assert label.startswith("postgres"), (config, label)
+        assert not any(secret in label for secret in secrets), (config, label)
 
-    # password containing "@" -> never split on "@".
-    assert _safe_target_label("postgres", "host=db user=svc password=@s3cret") == (
-        "postgres"
-    )
-    # password quoting a host-shaped token -> never regex-extracted.
-    quoted = "password='abc host=secret' host=db"
-    label = _safe_target_label("postgres", quoted)
-    assert label == "postgres"
-    assert "secret" not in label
-
-    # password quoting a "://" -> must NOT be misclassified as a URL (the
-    # discriminator is the LEADING scheme, not "://" appearing anywhere).
-    spoof = "host=db password='abc://u:s3cret@credential'"
-    spoof_label = _safe_target_label("postgres", spoof)
-    assert spoof_label == "postgres"
-    assert "s3cret" not in spoof_label and "credential" not in spoof_label
-
-    # URL form with credentials in the query string is scrubbed to host, even
-    # when the query value contains a raw "@" (structural parse, not @-split).
-    assert "s3cret" not in _safe_target_label(
-        "postgres", "postgresql://h:5432/db?password=s3cret"
-    )
-    at_query = "postgresql://h/db?password=secret@tail"
-    assert _safe_target_label("postgres", at_query) == "h/db"
-    assert "tail" not in _safe_target_label("postgres", at_query)
-
-    # The credential-bearing URL form yields the host-only label.
-    assert _safe_target_label("postgres", "postgresql://u:p@h:5432/db") == "h:5432/db"
-    assert _safe_target_label("postgres", "postgresql://h:5432/db") == "h:5432/db"
-
-    # A non-numeric / out-of-range port makes urlsplit's lazy `.port` raise
-    # ValueError; the label is computed before the DB-boundary try, so it must
-    # be guarded and fall back to the engine label (no uncaught traceback, #409).
-    assert _safe_target_label("postgres", "postgresql://h:notaport/db") == "postgres"
-    assert _safe_target_label("postgres", "postgresql://h:99999/db") == "postgres"
+    # A non-numeric / out-of-range port must not raise: the label is computed
+    # before the DB-boundary try (no uncaught traceback, #409).
+    for bad_port in ("postgresql://h:notaport/db", "postgresql://h:99999/db"):
+        assert _safe_target_label("postgres", bad_port).startswith("postgres")
 
 
 @pytest.mark.parametrize("bad_table", ["orders", "a.b.c", "bronze.", ".orders"])

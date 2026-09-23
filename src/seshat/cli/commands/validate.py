@@ -122,7 +122,7 @@ def _run_validate_body(args: argparse.Namespace) -> int:
     if not cli._ensure_driver():
         print(
             f"error: `{prog} validate` needs the optional DB driver.\n"
-            f"{cli._db_extra_hint()}\n"
+            f"{cli._db_extra_hint(engine)}\n"
             f"       (the static `{prog} check` core stays dependency-free).",
             file=sys.stderr,
         )
@@ -164,11 +164,14 @@ def _run_validate_body(args: argparse.Namespace) -> int:
         runner = cli._make_runner(config)
         findings = run_live_checks(runner, targets, dialect=dialect)
     except Exception as exc:
+        from seshat.db_boundary import boundary_error_text
+
         print(
             "error: live validation failed at the DB boundary "
-            f"({exc.__class__.__name__}): {dialect.redact(exc, config)}\n"
+            f"({exc.__class__.__name__}): "
+            f"{boundary_error_text(dialect, exc, config)}\n"
             "       verify the DSN, network access, database objects, and the "
-            f"optional DB driver:\n{cli._db_extra_hint()}",
+            f"optional DB driver:\n{cli._db_extra_hint(engine)}",
             file=sys.stderr,
         )
         return 1

@@ -224,7 +224,7 @@ def _run_live_drift_body(args: argparse.Namespace, parsed: object) -> int:
     if not cli._ensure_driver():
         print(
             f"{prog} drift: the live re-profile needs the optional DB driver.\n"
-            f"{cli._db_extra_hint()}\n"
+            f"{cli._db_extra_hint(cli._current_engine())}\n"
             "       (the deferred [PENDING LIVE RE-PROFILE] mode needs no driver).",
             file=sys.stderr,
         )
@@ -244,11 +244,16 @@ def _run_live_drift_body(args: argparse.Namespace, parsed: object) -> int:
 
     try:
         runner = cli._make_runner(config)
-        observed = run_profile(runner, parsed.landed_table, parsed.pk_columns)
+        observed = run_profile(
+            runner, parsed.landed_table, parsed.pk_columns, dialect=dialect
+        )
     except Exception as exc:
+        from seshat.db_boundary import boundary_error_text
+
         print(
             f"{prog} drift: live re-profile failed at the DB boundary "
-            f"({exc.__class__.__name__}): {dialect.redact(exc, config)}",
+            f"({exc.__class__.__name__}): "
+            f"{boundary_error_text(dialect, exc, config)}",
             file=sys.stderr,
         )
         return 1

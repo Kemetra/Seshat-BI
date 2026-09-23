@@ -216,7 +216,7 @@ def _preflight_config(
         prog = cli._prog(args)
         raise _ContractError(
             f"error: `{prog} value-check` needs the optional DB driver.\n"
-            f"{cli._db_extra_hint()}\n"
+            f"{cli._db_extra_hint(engine)}\n"
             f"       (the static `{prog} check` core stays dependency-free)."
         )
     return config
@@ -248,9 +248,12 @@ def _recompute_findings(
             f"error: value-check rejected an unsafe contract identifier: {exc}"
         ) from exc
     except Exception as exc:
+        from seshat.db_boundary import boundary_error_text
+
         raise _ContractError(
             "error: live value-check failed at the DB boundary "
-            f"({exc.__class__.__name__}): {dialect.redact(exc, config)}"
+            f"({exc.__class__.__name__}): "
+            f"{boundary_error_text(dialect, exc, config)}"
         ) from exc
     return findings
 

@@ -169,7 +169,7 @@ def _make_file_reader(path, sheet: str | None):
         except ImportError:
             return None, (
                 "error: reading an Excel --file needs the optional 'files' extra "
-                "(pip install 'seshat-bi[files]'). CSV/TSV need no extra."
+                '(pip install "seshat-bi[files]"). CSV/TSV need no extra.'
             )
 
     delimiter = _CSV_DELIMITERS.get(suffix)
@@ -363,9 +363,12 @@ def _profile_and_render(
             runner, args.table, candidate_pk, dialect=dialect
         )
     except Exception as exc:
+        from seshat.db_boundary import boundary_error_text
+
         print(
             "error: profiling failed at the DB boundary "
-            f"({exc.__class__.__name__}): {dialect.redact(exc, config)}",
+            f"({exc.__class__.__name__}): "
+            f"{boundary_error_text(dialect, exc, config)}",
             file=sys.stderr,
         )
         print(
