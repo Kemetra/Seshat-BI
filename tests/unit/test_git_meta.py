@@ -619,6 +619,7 @@ def test_c2_sentinel_real_repo_source_does_not_self_trip() -> None:
         src_root / "dialect.py",
         *sorted((src_root / "cli").rglob("*.py")),
         src_root / "rules" / "git_meta.py",
+        src_root / "rules" / "c2_scan.py",
     ]
     offenders: dict[str, list[str]] = {}
     for path in targets:
