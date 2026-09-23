@@ -12,15 +12,15 @@ update integrity, uninstall integrity, IDE surface, and the governance
 contract-presence check that reads the selected target's own exported
 ``portable-operating-contract.md``). Five are ``shared_baseline`` (readiness
 routing via the read-only governor, and the four hard-stop scenarios via the
-benchmark's scenario loader + deterministic scripted reference) -- these are
+benchmark's scenario loader, reported as MANIFEST-DECLARED stops -- no gate or
+agent behaviour is executed for them) -- these are
 repo-level and target-invariant, so their evidence is labeled a shared
 baseline rather than implied per-target (FR-012 through FR-017).
 
 No check re-implements hashing, version parsing, or scenario execution: it
 reuses ``scripts.export_agent_bundles`` provenance shape, ``scripts.
 check_release_versions`` over the shared ``seshat.release_versions`` authority,
-``seshat.benchmark`` (loader +
-scripted reference), and ``seshat.governor.service.GovernorService``.
+``seshat.benchmark`` (scenario loader), and ``seshat.governor.service.GovernorService``.
 """
 
 from __future__ import annotations
