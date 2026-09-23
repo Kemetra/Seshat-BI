@@ -90,8 +90,10 @@ def main(argv: list[str] | None = None) -> int:
     existing = _gh_json(
         "api", f"repos/{args.repo}/issues/{args.pr}/comments", "--paginate"
     )
-    bodies = [c["body"] for c in existing] if isinstance(existing, list) else []
-    action, index = find_existing(bodies)
+    # Whole comment objects, not bare bodies: find_existing keys on the author's
+    # identity (user.login/user.type), which a body list would discard.
+    comments = existing if isinstance(existing, list) else []
+    action, index = find_existing(comments)
 
     body_file = Path("friendly-pr-summary-body.txt")
     body_file.write_text(comment.body, encoding="utf-8")

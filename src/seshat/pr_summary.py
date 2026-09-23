@@ -47,8 +47,9 @@ Invariants (Principle VIII; B1/B3 import-boundary guards):
   - No score: no numeric merge/confidence/health/maturity/completeness score
     or percentage anywhere. Every status is a verbatim categorical token.
   - stdlib-only: this module imports only the Python standard library plus
-    sibling in-repo modules (``.core``, ``.sarif``, ``.readiness_classify``)
-    that are themselves stdlib-only. No ``yaml``, no ``requests``, no ``gh``.
+    sibling in-repo modules (``.core``, ``.sarif``, ``.readiness_classify``,
+    and -- lazily, for the public comment -- ``.pbi_mcp.scan``) that are
+    themselves stdlib-only. No ``yaml``, no ``requests``, no ``gh``.
 """
 
 from __future__ import annotations
@@ -769,20 +770,61 @@ def render_summary(
     )
 
 
+def _scrub_secret_shaped(text: str) -> str:
+    """Second masking layer: every shape in the shared ``SECRET_PATTERNS`` table.
+
+    ``mask()`` alone misses a DSN/connection URL, a managed-database endpoint and
+    a bare tenant/app GUID. This is the same table the pbi-mcp refusing
+    chokepoint uses (``seshat.pbi_mcp.scan``, stdlib-only), so the public comment
+    cannot drift from what the rest of the kit treats as secret-shaped.
+    """
+    from .pbi_mcp.scan import SECRET_PATTERNS
+
+    for _label, pattern in SECRET_PATTERNS:
+        text = pattern.sub("[REDACTED]", text)
+    return text
+
+
 def compose_comment(summary: FriendlySummary) -> StickyComment:
     """Compose the sticky-comment body: the stable ``MARKER`` + the summary
-    text, masked with extra force (this is the public-egress surface).
-    Pure and deterministic; posting the comment is a separate opt-in wrapper.
+    text, masked by BOTH layers (this is the public-egress surface): the four
+    ``mask()`` shapes, then every shared secret shape (DSN URLs, database
+    endpoints, GUIDs, user paths). Pure and deterministic; posting the comment
+    is a separate opt-in wrapper.
     """
-    body = f"{MARKER}\n{mask(summary.text)}"
+    body = f"{MARKER}\n{_scrub_secret_shaped(mask(summary.text))}"
     return StickyComment(schema_version=SCHEMA_VERSION, marker=MARKER, body=body)
 
 
-def find_existing(comment_bodies: Sequence[str]) -> tuple[str, int | None]:
-    """Decide "update" (target the first same-marker comment) vs "create"
-    (no marker match). Never returns "create" when a marker match exists, so
-    a re-run never posts a second sticky comment."""
-    for index, body in enumerate(comment_bodies):
-        if MARKER in body:
+# The only author whose comment the sticky summary may update: the workflow's
+# own token identity. A marker is a label anyone can paste; identity is not.
+BOT_LOGIN = "github-actions[bot]"
+
+
+def _is_own_sticky(comment: Mapping[str, Any]) -> bool:
+    user = comment.get("user")
+    if not isinstance(user, Mapping):
+        return False
+    body = comment.get("body")
+    return (
+        user.get("login") == BOT_LOGIN
+        and user.get("type") == "Bot"
+        and isinstance(body, str)
+        and body.startswith(MARKER)
+    )
+
+
+def find_existing(comments: Sequence[Mapping[str, Any]]) -> tuple[str, int | None]:
+    """Decide "update" (target the bot's own sticky comment) vs "create".
+
+    ``comments`` are GitHub issue-comment objects (``body`` plus ``user.login``
+    / ``user.type``). Only a comment AUTHORED by :data:`BOT_LOGIN` whose body
+    STARTS with ``MARKER`` is updated: keying on the marker alone let any
+    commenter who pasted it capture the update (the job then failed trying to
+    edit a human's comment, or overwrote it). Never returns "create" when the
+    bot's own sticky comment exists, so a re-run never posts a second one.
+    """
+    for index, comment in enumerate(comments):
+        if isinstance(comment, Mapping) and _is_own_sticky(comment):
             return ("update", index)
     return ("create", None)
