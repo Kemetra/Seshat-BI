@@ -41,8 +41,10 @@ DO_CLUSTER_SLUG_RE = re.compile(r"\bdb-[a-z]{2,}-[a-z]{2,}\d-\d{3,}\b")
 _CRED_VALUE = r"[^;\s{}<>/$()\"'`\[\]]+"
 
 # The two ODBC credential keywords in their canonical upper-case spelling, with
-# no whitespace around the equals sign (the historical C2 shape).
-ODBC_SECRET_RE = re.compile(r"\b(?:PWD|UID)=" + _CRED_VALUE)
+# no whitespace around the equals sign -- the historical C2 shape, kept
+# byte-for-byte (its wider value class still catches a quoted or `$`-leading
+# value; the narrower ``_CRED_VALUE`` applies only to the any-case form below).
+ODBC_SECRET_RE = re.compile(r"\b(?:PWD|UID)=[^;\s{}<>/]+")
 
 # Connection-string keywords in ANY case, including the ADO.NET password
 # keyword. Driver managers treat these keywords case-insensitively, so a

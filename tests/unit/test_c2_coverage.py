@@ -128,6 +128,8 @@ def test_lower_case_and_ado_credentials_are_flagged(tmp_path: Path) -> None:
         "Server=h;User Id=sa;Password=Secret123",
         'conn = "Server=h;password=Secret123;"',
         "PWD=realpw;",
+        'PWD="hunter2";',
+        "UID='sa';PWD=$ecret",
     ],
 )
 def test_connection_string_credentials_hit(line: str) -> None:
