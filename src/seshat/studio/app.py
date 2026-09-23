@@ -112,7 +112,7 @@ def _problem(
 
 
 def _bootstrap_capabilities(app: FastAPI) -> dict[str, Any]:
-    """What this build can do. `business_decision_recording` is const false (FR-022).
+    """What this build can do; every flag is derived from the capability it names.
 
     **`agent_turns` is DERIVED, not declared.** It was a hardcoded `False` while
     `app.state.agent_turns_refused` -- computed from the real provider outcome -- was
@@ -238,8 +238,10 @@ def _check_session(request: Request, app: FastAPI) -> JSONResponse | None:
     return _problem(
         401,
         "Unauthenticated",
-        "No valid Studio session is present.",
-        "Reopen Studio from the agent to start a new session.",
+        "No valid Studio session is present; an idle session lapses after "
+        f"{int(session.SESSION_TTL_SECONDS // 3600)} hours.",
+        "The launch link is single-use: restart Studio from the agent and open the "
+        "new link it prints.",
     )
 
 
@@ -267,7 +269,12 @@ def _with_headers(response: Response) -> Response:
 
 
 def _register_routes(app: FastAPI) -> None:
-    """The seven deterministic routes. Agent-thread routes belong to Phase 4."""
+    """The deterministic routes, then the agent, workbench and operations modules.
+
+    Agent-thread routes live in `agent_routes`, the spec-140 workbench (including the
+    named-human decision RECORDING route) in `workbench_routes`, and spec-141
+    Operations in `operations_routes`; each is registered from here.
+    """
 
     def _snapshot() -> projection.WorkspaceSnapshot:
         return projection.build_workspace_snapshot(
@@ -297,7 +304,8 @@ def _register_routes(app: FastAPI) -> None:
                 401,
                 "Invalid bootstrap token",
                 "The bootstrap token is wrong or has already been used.",
-                "Reopen Studio from the agent to get a fresh link.",
+                "If this browser already opened Studio, reload without the link; "
+                "otherwise restart Studio from the agent to get a fresh link.",
             )
         response.set_cookie(
             session.SESSION_COOKIE_NAME,
@@ -354,9 +362,10 @@ def _register_routes(app: FastAPI) -> None:
     async def decisions() -> Any:
         """The business decisions a NAMED HUMAN still owes (T027, FR-022).
 
-        Read-only by construction: there is no mutation route to omit, and
-        `business_decision_recording` is const `False`. Listing what a human owes is
-        not recording their ruling.
+        Read-only: this route only LISTS what a human owes. Recording a ruling is
+        a separate, named-human route (`POST /decisions/record` in
+        `workbench_routes`, spec 140), which writes into the working tree as
+        `pending commit` and is never authority until a human commits it.
 
         This returned a hardcoded `{"items": []}` from Phase 3 until T027 -- a
         contract that promised a `PreparedDecisionSummary` beside code that could

@@ -120,12 +120,11 @@ def test_a_retracted_publisher_never_pops_a_newer_registration():
     """Keyed by thread, checked by identity: a late retract cannot evict a successor."""
     from types import SimpleNamespace
 
-    pytest.importorskip("fastapi")  # agent_routes needs the app extra
-    from seshat.studio import agent_routes
+    from seshat.studio import turn_wiring
 
     app = SimpleNamespace(state=SimpleNamespace(provider_sessions={}))
-    older = agent_routes._session_publisher(app, "thread-1")
-    newer = agent_routes._session_publisher(app, "thread-1")
+    older = turn_wiring.session_publisher(app, "thread-1")
+    newer = turn_wiring.session_publisher(app, "thread-1")
     first, second = object(), object()
 
     older(first)

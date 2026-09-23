@@ -457,10 +457,14 @@ def normalize_approval_request(
         "action": _APPROVAL_ACTIONS[method],
         "target": str(params.get("command") or params.get("grantRoot") or "unknown"),
         "reason": str(params.get("reason") or "unknown"),
-        "scope": "propose_changes" if not technical else "read_only",
-        "risk": "high" if escalates else "low",
         "provider_request_id": frame.get("id"),
     }
+    # Scope and risk are stated only when the PROVIDER stated something that implies
+    # them. A hardcoded `read_only` / `low` beside an Allow button was a governance
+    # claim nobody made -- `git push --force` read as low-risk read-only. Absent keys
+    # render as "unknown" downstream, which is the honest label.
+    if escalates:
+        payload["risk"] = "high"
     return "approval_required", _scrubbed(
         payload, context.workspace_root, context.secrets
     )

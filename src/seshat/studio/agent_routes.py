@@ -29,13 +29,12 @@ module only.
 from __future__ import annotations
 
 import asyncio
-import inspect
 import json
 import queue
 import threading
 import time
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from dataclasses import dataclass
 from functools import partial
 from typing import Any
@@ -45,10 +44,12 @@ import anyio.to_thread
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from seshat.studio import turn_wiring
 from seshat.studio.approval_routes import (
     ApprovalRequest,
     decide_approval,
     register_approval,
+    selected_table,
 )
 from seshat.studio.bridge import validate_turn_request
 from seshat.studio.events import ReplayExpired, TurnAlreadyActive
@@ -167,10 +168,26 @@ assert _NEW_THREAD_STATE in THREAD_STATES, (
 )
 
 
-def _create_thread(app: FastAPI, body: dict[str, Any] | None) -> dict[str, Any]:
-    """Create a thread and record its opening event."""
-    thread_id = f"thread-{uuid.uuid4().hex[:12]}"
+def _create_thread(app: FastAPI, body: dict[str, Any] | None) -> Any:
+    """Create a thread and record its opening event.
+
+    The table binding is VALIDATED here: it keys the readiness check every technical
+    approval on this thread is judged against, so an arbitrary label (or a non-string)
+    would let a caller pick which gate applies. Only null or a table id the workspace
+    actually contains is accepted.
+    """
     selected = (body or {}).get("selected_table_id")
+    if selected is not None and (
+        not isinstance(selected, str)
+        or selected not in turn_wiring.known_table_ids(app)
+    ):
+        return _problem(
+            422,
+            "Unknown table",
+            "selected_table_id must be null or the id of a table in this workspace.",
+            "Open the Command Room to see the tables in this workspace.",
+        )
+    thread_id = f"thread-{uuid.uuid4().hex[:12]}"
     app.state.threads.thread(thread_id).append(
         "thread_started", {"selected_table_id": selected}
     )
@@ -258,7 +275,12 @@ async def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any
             prompt=request.prompt,
             turn_id=request.turn_id,
             requested_mode=request.requested_mode,
-            **_session_kwargs(app, thread_id),
+            **turn_wiring.turn_kwargs(
+                app,
+                thread_id,
+                table_id=selected_table(thread),
+                requested_mode=request.requested_mode,
+            ),
         ),
         request=request,
         pumping=asyncio.Lock(),
@@ -266,48 +288,6 @@ async def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any
         results=queue.Queue(),
     )
     return {"turn_id": turn_id}
-
-
-def _session_kwargs(app: FastAPI, thread_id: str) -> dict[str, Any]:
-    """`on_session` for a bridge whose `run_turn` accepts one; nothing otherwise.
-
-    The approval relay answers a blocked `requestApproval` by writing to the child
-    process that raised it, so it must be able to find that child by thread.
-
-    The callback is passed INTO this turn's `run_turn`, never stored on the bridge:
-    `app.state.bridge` is ONE instance shared by every thread and `run_turn` is lazy,
-    so a callback installed on it was read by whichever turn advanced next -- one
-    thread's session registered under another thread's key. Keyed on the capability
-    (the parameter), not on the bridge's class: `FakeAgentBridge` has no session to
-    publish and simply does not accept one.
-    """
-    run_turn = app.state.bridge.run_turn
-    if "on_session" not in inspect.signature(run_turn).parameters:
-        return {}
-    return {"on_session": _session_publisher(app, thread_id)}
-
-
-def _session_publisher(app: Any, thread_id: str) -> Callable[[Any], None]:
-    """A per-turn closure that registers, then retracts, ITS OWN session only.
-
-    Keyed by thread: the per-thread active-turn guard allows one live turn per thread,
-    and an approval envelope names its thread, not its turn. The identity check on
-    retract is what makes that key safe -- a turn that ends late (reaped after its
-    successor started) must not pop the successor's live session.
-    """
-    mine: list[Any] = []
-
-    def publish(session: Any) -> None:
-        sessions = app.state.provider_sessions
-        if session is not None:
-            mine[:] = [session]
-            sessions[thread_id] = session
-            return
-        if mine and sessions.get(thread_id) is mine[0]:
-            sessions.pop(thread_id, None)
-        mine.clear()
-
-    return publish
 
 
 def _interrupt_turn(app: FastAPI, thread_id: str, turn_id: str) -> Response:
@@ -345,6 +325,11 @@ async def _stream_events(app: FastAPI, thread_id: str, request: Request) -> Resp
     # Advance any live turn BEFORE replaying, so this poll serves what it just
     # produced rather than making the browser wait another interval for it.
     await _pump_turn(app, thread_id, app.state.threads.thread(thread_id))
+    # Sweep AFTER this thread's own pump touched it: a closed tab's turn is parked
+    # with nobody to advance it, and waiting for a NEW turn to start left its child
+    # process alive for the rest of the Studio process. Runs on the poll, never as a
+    # background task -- one bound to a request's loop dies with that request.
+    _reap_abandoned_turns(app)
 
     try:
         last_seen = _parse_last_event_id(request.headers.get("Last-Event-ID"))
@@ -653,7 +638,8 @@ def _reap_abandoned_turns(app: FastAPI) -> None:
     The pump only runs on a poll, so a browser that closes mid-reply leaves its
     generator parked with nothing to advance or close it -- holding a live
     `CodexSession` and its child process. Swept when a new turn is started, which is
-    the only moment this dictionary can grow.
+    the only moment this dictionary can grow, and on every events poll from any
+    thread, so a closed tab does not have to wait for someone to start a turn.
 
     The turn is FAILED, not merely dropped. Closing the generator alone would leave
     `_active_turn` set on a thread whose stream never reports an ending -- so that

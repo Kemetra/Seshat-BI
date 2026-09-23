@@ -430,6 +430,8 @@ class _TurnState:
     """
 
     undecided: set[object] = field(default_factory=set)
+    #: The rendered Turn Context, sent as the first input item ahead of the prompt.
+    preamble: str | None = None
 
 
 class CodexBridge:
@@ -650,7 +652,7 @@ class CodexBridge:
             if not initialized:
                 initialized = self._negotiated(session, frame)
             if not requested:
-                requested = self._requested(session, frame, prompt)
+                requested = self._requested(session, frame, prompt, state)
             yield frame
 
     def _negotiated(self, session: CodexSession, frame: dict[str, Any]) -> bool:
@@ -675,17 +677,33 @@ class CodexBridge:
         return True
 
     def _requested(
-        self, session: CodexSession, frame: dict[str, Any], prompt: str
+        self,
+        session: CodexSession,
+        frame: dict[str, Any],
+        prompt: str,
+        state: _TurnState,
     ) -> bool:
         """True once the turn has been requested on the provider's own thread id."""
         thread_id = _thread_id_from(frame)
         if thread_id is None:
             return False
-        self._start_turn(session, thread_id, prompt)
+        self._start_turn(session, thread_id, prompt, state.preamble)
         return True
 
-    def _start_turn(self, session: CodexSession, thread_id: str, prompt: str) -> None:
-        """Ask for the turn itself, on the thread the provider just minted."""
+    def _start_turn(
+        self,
+        session: CodexSession,
+        thread_id: str,
+        prompt: str,
+        preamble: str | None,
+    ) -> None:
+        """Ask for the turn itself, on the thread the provider just minted.
+
+        The Turn Context (governance reminder, requested mode, readiness facts) goes
+        FIRST as its own input item, so the provider reads what it may not do before
+        it reads what it was asked.
+        """
+        items = [{"type": "text", "text": text} for text in (preamble, prompt) if text]
         session.send(
             {
                 "jsonrpc": "2.0",
@@ -693,7 +711,7 @@ class CodexBridge:
                 "method": "turn/start",
                 "params": {
                     "threadId": thread_id,
-                    "input": [{"type": "text", "text": prompt}],
+                    "input": items,
                     "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
                 },
             }
@@ -706,6 +724,7 @@ class CodexBridge:
         turn_id: str,
         requested_mode: str,
         on_session: Callable[[Any], None] | None = None,
+        turn_context: str | None = None,
     ) -> Iterator[StudioEvent]:
         """Drive one turn. `on_session` belongs to THIS turn, never to the bridge.
 
@@ -715,7 +734,7 @@ class CodexBridge:
         """
         cleaned = validate_turn_request(prompt, requested_mode)
         sequence = 0
-        state = _TurnState()
+        state = _TurnState(preamble=turn_context)
         publish = on_session if on_session is not None else _no_publish
 
         def emit(event_type: str, payload: dict[str, Any]) -> StudioEvent:

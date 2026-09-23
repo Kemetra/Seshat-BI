@@ -27,6 +27,7 @@ NEWER than the tested maximum is therefore refused, not waved through.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from dataclasses import dataclass
@@ -79,9 +80,34 @@ def is_tested_version(version: str | None) -> bool:
     return low <= parsed <= high
 
 
+def _trusted_search_path() -> str:
+    """PATH with every entry that could resolve to the working directory removed.
+
+    `.`, empty and relative entries all name the CURRENT directory (or one below it),
+    which is usually an untrusted cloned workspace.
+    """
+    entries = os.environ.get("PATH", "").split(os.pathsep)
+    return os.pathsep.join(
+        entry for entry in entries if entry and Path(entry).is_absolute()
+    )
+
+
 def find_codex_executable() -> str | None:
-    """Locate `codex` on PATH without ever building a shell command string."""
-    return shutil.which("codex")
+    """Locate `codex` on PATH, never in the working directory, as an absolute path.
+
+    `shutil.which` on Windows searches the CURRENT DIRECTORY before PATH (unless
+    NoDefaultCurrentDirectoryInExePath is set), and does so even when an explicit
+    `path=` is passed -- so a `codex.bat` committed to the workspace the analyst
+    launched from would run at startup. The search therefore uses only absolute PATH
+    entries, and a result inside the working directory is refused outright.
+    """
+    found = shutil.which("codex", path=_trusted_search_path())
+    if found is None:
+        return None
+    resolved = Path(found).resolve()
+    if resolved.parent == Path.cwd().resolve():
+        return None
+    return str(resolved)
 
 
 @dataclass(frozen=True, slots=True)
