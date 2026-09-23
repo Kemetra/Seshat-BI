@@ -28,6 +28,7 @@ _AWS = "AK" + "IA" + "IOSFODNN7EXAMPL1"
 _JWT = "ey" + "JhbGciOiJIUzI1NiJ9" + ".eyJzdWIiOiIxIn0" + ".c2lnbmF0dXJl"
 _GUID = "1b2c3d4e-" + "1111-2222-3333-" + "444455556666"
 _PASSWORD = "S3cr" + "etPass99"
+_BEARER = "q9W" + "x7Lm2Pz8Rt4Kv6N"
 _DSN = "postgresql://" + "admin:" + _PASSWORD + "@db.example.com:5432/x"
 
 
@@ -75,7 +76,13 @@ def _stream(chunks: list[str]) -> list[str]:
 
 @pytest.mark.parametrize(
     ("secret", "fragment"),
-    [(_DSN, _PASSWORD[:3]), (_OPENAI, _OPENAI[3:8]), (_GITHUB, _GITHUB[:6])],
+    [
+        (_DSN, _PASSWORD[:3]),
+        (_OPENAI, _OPENAI[3:8]),
+        (_GITHUB, _GITHUB[:6]),
+        # A header rewrite diverges from text already sent; it must not duplicate.
+        ("Authorization: Bearer " + _BEARER, _BEARER[:6]),
+    ],
 )
 def test_a_split_credential_never_emits_a_partial_value(secret: str, fragment: str):
     message = f"connect with {secret} done"
