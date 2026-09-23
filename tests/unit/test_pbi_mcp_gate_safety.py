@@ -217,7 +217,7 @@ def test_every_blocker_id_has_readable_detail() -> None:
         for name, value in vars(gate).items()
         if name.startswith("BLOCKER_") and isinstance(value, str)
     ]
-    assert len(ids) == 15
+    assert len(ids) == 16
     for blocker in ids:
         assert gate.BLOCKER_DETAIL.get(blocker), blocker
         assert blocker.startswith("PBIMCP-GATE-")
