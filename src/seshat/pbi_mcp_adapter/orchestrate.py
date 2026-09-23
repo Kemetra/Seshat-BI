@@ -48,35 +48,19 @@ BLOCKER_DETAIL: dict[str, str] = {
 
 
 def _digest(path: Path) -> str | None:
-    """SHA-256 of ``path``, or None when absent."""
+    """SHA-256 of ``path``, or None when absent.
+
+    STREAMED (``hashlib.file_digest``): the snapshot covers ignored files too,
+    which include a PBIP ``.pbi/cache.abf`` that can run to hundreds of MB, and
+    reading each one whole spiked memory twice per apply.
+    """
     import hashlib
 
     try:
-        return hashlib.sha256(path.read_bytes()).hexdigest()
+        with path.open("rb") as handle:
+            return hashlib.file_digest(handle, "sha256").hexdigest()
     except OSError:
         return None
-
-
-def _decode_git_path(reported: str) -> str:
-    """Deprecated no-op: ``run_git`` now decodes git output losslessly.
-
-    This used to re-encode through the locale codec and re-decode as UTF-8, to
-    recover a path that ``text=True`` had mangled (``cafe.tmdl`` with an acute
-    accent arriving double-encoded). Issue #663 fixed the decode at the SOURCE
-    instead, because a byte the locale codec cannot map at all kills
-    subprocess's reader thread and leaves ``stdout`` as ``None`` -- there is
-    then no string left for this helper to recover.
-
-    With the source fixed, this transform became ACTIVELY HARMFUL rather than
-    merely redundant: applied to already-correct UTF-8 it produced surrogates
-    (``caf\\udce9.tmdl``) matching nothing on disk, so the file dropped
-    of the snapshot -- the very defect it was written to prevent (measured by
-    two existing regression tests going red).
-
-    Kept as an identity function so those regression tests keep naming this
-    seam; delete once they assert against ``run_git`` directly.
-    """
-    return reported
 
 
 def _evidence_relpaths() -> frozenset[str]:
@@ -102,6 +86,10 @@ def _evidence_relpaths() -> frozenset[str]:
     )
 
 
+#: git's stderr marker for a directory it skipped while listing.
+_UNREADABLE_DIRECTORY = "could not open directory"
+
+
 def _list_files(repo_root: Path, *extra: str) -> list[str] | None:
     """One ``ls-files`` listing, or None when git could not be read.
 
@@ -116,6 +104,11 @@ def _list_files(repo_root: Path, *extra: str) -> list[str] | None:
     except (OSError, RuntimeError):
         return None
     if listed.returncode != 0 or listed.stdout is None:
+        return None
+    # git exits 0 while SKIPPING a directory it cannot open, warning on stderr
+    # only. Every file under it is then missing from both snapshots, so a write
+    # there is invisible to the scope check. An incomplete listing fails closed.
+    if _UNREADABLE_DIRECTORY in (listed.stderr or ""):
         return None
     # `-z` because git C-QUOTES any path with non-ASCII bytes, a newline, a quote
     # or a backslash: `cafe.tmdl` arrives as `"caf\\303\\251.tmdl"`. Stripping the
