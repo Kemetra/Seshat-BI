@@ -88,6 +88,82 @@ def test_table_path_escape_is_rejected(tmp_path: Path) -> None:
     assert result["error"] == "table must be a local table identifier"
 
 
+def _call(root: Path, operation: str, **request: object) -> dict:
+    return GovernorService(root).call(operation, {"workspace": str(root), **request})
+
+
+def test_directory_name_equals_qualified_table_for_blockers(tmp_path: Path) -> None:
+    """Audit F017: the directory name and the recorded table are one table."""
+    root = _workspace(tmp_path)
+    by_dir = _call(root, "seshat_explain_blockers", table="example_table")
+    by_table = _call(root, "seshat_explain_blockers", table="silver.example_table")
+    assert by_dir["outcome"] == by_table["outcome"] == "blocked"
+    assert by_dir["blockers"] == by_table["blockers"]
+
+
+def test_unknown_table_is_an_input_defect_not_ok(tmp_path: Path) -> None:
+    root = _workspace(tmp_path)
+    for operation, extra in (
+        ("seshat_explain_blockers", {}),
+        ("seshat_prepare_approval_request", {"decision_id": "d"}),
+    ):
+        result = _call(root, operation, table="no_such_table", **extra)
+        assert result["outcome"] == "input_defect", operation
+
+
+def test_invalid_yaml_is_an_input_defect(tmp_path: Path) -> None:
+    """Audit F074: a corrupt record is not a table with nothing blocking."""
+    root = _workspace(tmp_path)
+    (root / "mappings/example_table/readiness-status.yaml").write_text(
+        "stages: [oops\n", encoding="utf-8"
+    )
+    result = _call(root, "seshat_explain_blockers", table="example_table")
+    assert result["outcome"] == "input_defect"
+    request = _call(
+        root, "seshat_prepare_approval_request", table="example_table", decision_id="d"
+    )
+    assert request["outcome"] == "input_defect"
+
+
+def test_short_domain_tokens_hit_the_forbidden_vocabulary(tmp_path: Path) -> None:
+    """Audit F078: 'add DAX measures' is semantic-model work before Gold Ready."""
+    root = _workspace(tmp_path)
+    for scope in ("add DAX measures", "build the PBIP report page"):
+        result = _call(
+            root, "seshat_get_next_action", table="example_table", requested_scope=scope
+        )
+        assert result["outcome"] == "blocked", scope
+
+
+def test_a_committed_keyword_dsn_never_leaves_the_governor(tmp_path: Path) -> None:
+    """Audit F079/F137: success payloads are scrubbed, not just error text."""
+    root = _workspace(tmp_path)
+    status = root / "mappings/example_table/readiness-status.yaml"
+    secret = "connect failed: host=db.prod user=svc password=hunter2"
+    guid = "12345678-1234-1234-1234-1234567890ab"
+    status.write_text(
+        status.read_text(encoding="utf-8").replace(
+            "grain not confirmed unique on data", f"{secret} tenant {guid}"
+        ),
+        encoding="utf-8",
+    )
+    requests = {
+        "seshat_get_status": {},
+        "seshat_get_next_action": {"table": "example_table"},
+        "seshat_explain_blockers": {"table": "example_table"},
+        "seshat_prepare_approval_request": {
+            "table": "example_table",
+            "decision_id": "d",
+        },
+        "seshat_run_static_check": {},
+        "seshat_export_evidence_pack": {"table": "example_table"},
+    }
+    for operation in OPERATIONS:
+        text = repr(_call(root, operation, **requests[operation]))
+        for leaked in ("hunter2", "db.prod", "svc", guid):
+            assert leaked not in text, (operation, leaked)
+
+
 def test_mcp_parser_binds_repo_without_starting_sdk() -> None:
     from seshat.cli.parser import _build_parser
 

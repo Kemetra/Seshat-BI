@@ -22,10 +22,29 @@ OPERATIONS = (
     "seshat_run_static_check",
     "seshat_export_evidence_pack",
 )
-_SECRET = re.compile(
-    r"(?i)(?:postgres(?:ql)?|mysql|mssql|snowflake)://\S+|"
-    r"(?:password|pwd|token|secret)\s*[=:]\s*\S+"
+# Structured forbidden-capability vocabulary (audit F078). Each gate sentence
+# agent_next emits is keyed by a marker phrase; a requested scope naming ANY of
+# that capability's tokens collides with it -- including short domain tokens such
+# as DAX, SQL or PII that a word-length filter used to drop.
+_CAPABILITY_TOKENS: tuple[tuple[str, frozenset[str]], ...] = (
+    ("silver work", frozenset({"silver", "cleaning", "cleanse", "staging"})),
+    ("gold work", frozenset({"gold", "star", "mart", "fact", "dim", "dimension"})),
+    (
+        "semantic-model work",
+        frozenset({"semantic", "dax", "measure", "measures", "tmdl", "model", "kpi"}),
+    ),
+    (
+        "dashboard work",
+        frozenset(
+            {"dashboard", "report", "visual", "visuals", "page", "pages", "pbir"}
+        ),
+    ),
+    ("publish/handoff work", frozenset({"publish", "handoff", "deploy"})),
+    ("live publish", frozenset({"publish", "deploy", "workspace"})),
+    ("self-grant an approval", frozenset({"approve", "approval", "signoff"})),
+    ("execution adapter", frozenset({"f016", "execution", "adapter"})),
 )
+_UNREADABLE_ISSUE = "unreadable_status"
 
 
 def _valid_table_name(table: object) -> bool:
@@ -35,13 +54,52 @@ def _valid_table_name(table: object) -> bool:
 
 
 def _scope_is_blocked(requested: object, forbidden: list[str]) -> bool:
-    """True iff the requested scope collides with a forbidden-scope entry."""
+    """True iff the requested scope collides with a forbidden-scope entry.
+
+    Matched against the structured capability vocabulary for each forbidden gate,
+    plus any longer word appearing verbatim in the forbidden sentence."""
     if requested is None:
         return False
     if not isinstance(requested, str):
         raise ValueError("requested_scope must be text")
-    words = [word for word in requested.lower().split() if len(word) > 3]
-    return any(any(word in scope.lower() for word in words) for scope in forbidden)
+    tokens = set(re.findall(r"[a-z0-9]+", requested.lower().replace("-", "")))
+    for scope in (entry.lower() for entry in forbidden):
+        if any(len(word) > 3 and word in scope for word in tokens):
+            return True
+        if any(
+            marker in scope and tokens & vocab for marker, vocab in _CAPABILITY_TOKENS
+        ):
+            return True
+    return False
+
+
+def _scrub(text: str, root: Path) -> str:
+    """The shared boundary chain for one string (audit F079/F137): workspace
+    paths (OS and posix spellings), then DSN components (layer one), then every
+    secret-shaped span (layer two, incl. tenant GUIDs)."""
+    from seshat.pbi_mcp_adapter.evidence import redact, scrub_secret_shaped
+
+    for form in {str(root), root.as_posix()}:
+        text = text.replace(form, "<workspace>")
+    scrubbed, _labels = scrub_secret_shaped(redact(text))
+    return scrubbed
+
+
+def _scrub_tree(value: Any, root: Path) -> Any:
+    if isinstance(value, str):
+        return _scrub(value, root)
+    if isinstance(value, dict):
+        return {key: _scrub_tree(item, root) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_scrub_tree(item, root) for item in value]
+    return value
+
+
+def _table_matches(item: dict[str, Any], table: str) -> bool:
+    """A table identifier matches the recorded table OR its mapping directory."""
+    source = item.get("source_path")
+    directory = Path(source).parent.name if isinstance(source, str) else None
+    return table in (item.get("table"), directory)
 
 
 def _next_outcome(blocked: bool, source_outcome: str) -> str:
@@ -50,6 +108,15 @@ def _next_outcome(blocked: bool, source_outcome: str) -> str:
     if source_outcome == "input_defect":
         return "input_defect"
     return "ok"
+
+
+def _items_outcome(items: list[dict[str, Any]]) -> str:
+    """A table whose record cannot be read is an input defect, never 'ok'."""
+    from seshat.blocker_explainer import UNREADABLE_REASON
+
+    if any(item.get("reason") == UNREADABLE_REASON for item in items):
+        return "input_defect"
+    return "blocked" if items else "ok"
 
 
 class GovernorService:
@@ -86,8 +153,26 @@ class GovernorService:
         return table
 
     def _safe_error(self, error: Exception) -> str:
-        message = str(error).replace(str(self.root), "<workspace>")
-        return _SECRET.sub("<redacted>", message) or error.__class__.__name__
+        return _scrub(str(error), self.root) or error.__class__.__name__
+
+    def _known_table(self, table: str) -> bool:
+        """Whether ``table`` names a readiness record (its table or directory)."""
+        from seshat.readiness_spine import load_status_mapping
+
+        for path in sorted((self.root / "mappings").glob("*/readiness-status.yaml")):
+            if path.parent.name == table:
+                return True
+            data = load_status_mapping(path) or {}
+            if table in (data.get("table"), data.get("source_id")):
+                return True
+        return False
+
+    def _unknown_table(self, operation: str, table: str) -> dict[str, Any]:
+        return self._response(
+            operation,
+            outcome="input_defect",
+            error=f"no readiness record matches table {table!r}",
+        )
 
     def _response(
         self, operation: str, *, outcome: str, error: str | None = None, **details: Any
@@ -109,7 +194,9 @@ class GovernorService:
         }
         if error:
             response["error"] = error
-        return response
+        # Every payload is scrubbed at the boundary, not just exception text:
+        # committed blocking_reasons can hold a pasted DSN (audit F079/F137).
+        return _scrub_tree(response, self.root)
 
     def call(self, operation: str, request: dict[str, Any]) -> dict[str, Any]:
         if operation not in self._operations:
@@ -135,9 +222,7 @@ class GovernorService:
         projection = build_status_projection(self.root)
         if table:
             projection["tables"] = [
-                item
-                for item in projection["tables"]
-                if table in (item["table"], Path(item["source_path"]).parent.name)
+                item for item in projection["tables"] if _table_matches(item, table)
             ]
         return self._response("seshat_get_status", outcome="ok", content=projection)
 
@@ -160,11 +245,14 @@ class GovernorService:
 
     def _blockers(self, request: dict[str, Any]) -> dict[str, Any]:
         table = self._table(request, required=True)
+        assert table is not None
+        if not self._known_table(table):
+            return self._unknown_table("seshat_explain_blockers", table)
         result = build_blocker_explanations(self.root)
-        items = [item for item in result["items"] if item["table"] == table]
+        items = [item for item in result["items"] if _table_matches(item, table)]
         return self._response(
             "seshat_explain_blockers",
-            outcome="blocked" if items else "ok",
+            outcome=_items_outcome(items),
             content={"items": items},
             blockers=items,
         )
@@ -174,8 +262,18 @@ class GovernorService:
         decision_id = request.get("decision_id")
         if not isinstance(decision_id, str) or not decision_id.strip():
             raise ValueError("decision_id is required")
+        assert table is not None
+        if not self._known_table(table):
+            return self._unknown_table("seshat_prepare_approval_request", table)
         inbox = build_approval_inbox(self.root)
-        candidates = [item for item in inbox["items"] if item["table"] == table]
+        candidates = [item for item in inbox["items"] if _table_matches(item, table)]
+        if any(item.get("issue") == _UNREADABLE_ISSUE for item in candidates):
+            return self._response(
+                "seshat_prepare_approval_request",
+                outcome="input_defect",
+                error="the table's readiness-status.yaml is unreadable",
+                blockers=candidates,
+            )
         issue = candidates[0] if candidates else None
         content = {
             "decision_id": decision_id,

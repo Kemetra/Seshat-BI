@@ -51,6 +51,15 @@ Shape-validity is delegated, never re-implemented: ``approval_is_shape_valid``
 already requires a stage, a date, and a NAMED human owner, so the bare-role
 bypass that defeated the reverted attempt cannot occur here.
 
+STAGE AND CLASS MUST MATCH (audit F016)
+---------------------------------------
+When a request declares its readiness stage (``- **stage:** `<stage>```), only
+an approval OF THAT STAGE settles it, and -- for an approval-bearing stage -- only
+from a class eligible for that stage (``readiness_status.stage_approval_valid``).
+A ``source_ready``/analyst row naming a report-owner request no longer closes it.
+The declared stage can only NARROW what settles a request, never widen it: an
+unparseable or missing stage falls back to the plain shape-valid rule above.
+
 FAIL-CLOSED POSTURE
 -------------------
 A request whose file cannot be read is REPORTED, never skipped (the #453
@@ -60,6 +69,7 @@ surfaced as a caveat rather than silently dropped.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -87,47 +97,63 @@ def _question_id(path: Path) -> str:
     return path.stem[len(_REQUEST_PREFIX) :]
 
 
-def _settled_records(approvals: object) -> set[str]:
-    """Decision-record filenames named by a SHAPE-VALID approval entry.
+_STAGE_FIELD = re.compile(r"\*\*stage:\*\*\s*`([a-z_]+)`")
 
-    Delegates shape-validity to ``readiness_status.approval_is_shape_valid`` --
-    the same predicate the gate rule and the approval inbox use -- so this
-    surface cannot drift from them, and so a malformed or unnamed-owner entry
-    can never settle a request. An entry that fails the shape check contributes
-    nothing, exactly as if it were absent.
-    """
-    from seshat.rules.readiness_status import approval_is_shape_valid
 
+def _declared_stage(text: str) -> str | None:
+    """The readiness stage a request declares, or None when absent/unknown."""
+    from seshat.rules.readiness_status import STAGE_ORDER
+
+    match = _STAGE_FIELD.search(text)
+    stage = match.group(1) if match else None
+    return stage if stage in STAGE_ORDER else None
+
+
+def _settles(item: object, stage: str | None) -> bool:
+    """Whether one approvals[] entry can settle a request of ``stage``.
+
+    Shape-validity is delegated to ``approval_is_shape_valid`` -- the predicate
+    the gate rule and the inbox use -- so a malformed or unnamed-owner entry
+    never settles anything. A declared stage must match, with an eligible class
+    for an approval-bearing stage (``stage_approval_valid``)."""
+    from seshat.rules.readiness_status import (
+        STAGE_AUTHORITY,
+        approval_is_shape_valid,
+        stage_approval_valid,
+    )
+
+    if not isinstance(item, dict) or not approval_is_shape_valid(item):
+        return False
+    if stage is None:
+        return True
+    if item.get("stage") != stage:
+        return False
+    return stage not in STAGE_AUTHORITY or stage_approval_valid(stage, item)
+
+
+def _is_settled(qid: str, stage: str | None, approvals: object) -> bool:
+    """True when a qualifying approval names this request's decision record."""
     if not isinstance(approvals, list):
-        return set()
-    records: set[str] = set()
-    for item in approvals:
-        if not isinstance(item, dict) or not approval_is_shape_valid(item):
-            continue
-        note = item.get("note")
-        if isinstance(note, str):
-            records.add(note)
-    return records
-
-
-def _is_settled(qid: str, notes: set[str]) -> bool:
-    """True when a shape-valid approval names this request's decision record."""
+        return False
     record = _DECISION_TEMPLATE.format(qid=qid)
-    return any(record in note for note in notes)
+    return any(
+        _settles(item, stage)
+        and isinstance(item.get("note"), str)
+        and record in item["note"]
+        for item in approvals
+    )
 
 
-def _readable(path: Path) -> bool:
-    """Whether the request document can be read at all.
+def _read_request(path: Path) -> str | None:
+    """The request text, or None when it cannot be read.
 
-    The CONTENT is deliberately discarded -- reading proves only that the file
-    exists and is decodable. Trusting anything inside it is the mistake this
-    module exists to avoid.
+    Nothing inside it is trusted to SETTLE the request; only its declared stage
+    is read, and that can only narrow which approval settles it.
     """
     try:
-        path.read_text(encoding="utf-8-sig")
+        return path.read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError):
-        return False
-    return True
+        return None
 
 
 def _open_caveat(qid: str, name: str) -> dict[str, str]:
@@ -166,14 +192,14 @@ def open_request_caveats(
     """
     if directory is None or not directory.is_dir():
         return []
-    notes = _settled_records(approvals)
     caveats: list[dict[str, str]] = []
     for path in sorted(directory.glob(_REQUEST_GLOB)):
         qid = _question_id(path)
-        if not _readable(path):
+        text = _read_request(path)
+        if text is None:
             caveats.append(_unparsed_caveat(qid, path.name))
             continue
-        if not _is_settled(qid, notes):
+        if not _is_settled(qid, _declared_stage(text), approvals):
             caveats.append(_open_caveat(qid, path.name))
     return caveats
 
