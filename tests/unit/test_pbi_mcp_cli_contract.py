@@ -226,6 +226,23 @@ def test_plan_write_without_runtime_profile_reports_a_blocked_verdict(
     assert payload["blockers"] == [drift.BLOCKER_NO_RECORDED_BASELINE]
 
 
+def test_apply_without_runtime_profile_refuses_on_the_drift_gate(
+    ready_repo: Path,
+) -> None:
+    """The NON-dry leg too: the shipped CLI supplies no capability profile, so
+    a real apply must refuse on the missing baseline, never run unchecked."""
+    before = (ready_repo / TARGET_PATH).read_text(encoding="utf-8")
+    result = _run_cli(
+        ready_repo, "apply", "--target", TARGET, "--operation", OPERATION, "--json"
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["outcome"] == "blocked"
+    assert payload["mutation_attempted"] is False
+    assert payload["blockers"] == [drift.BLOCKER_NO_RECORDED_BASELINE]
+    assert (ready_repo / TARGET_PATH).read_text(encoding="utf-8") == before
+
+
 def test_plan_write_mutates_nothing(ready_repo: Path) -> None:
     before = (ready_repo / TARGET_PATH).read_text(encoding="utf-8")
     _run_cli(ready_repo, "plan-write", "--target", TARGET, "--operation", OPERATION)
