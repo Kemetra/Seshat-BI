@@ -41,8 +41,13 @@ def _location(locator: str) -> dict[str, Any] | None:
 
 
 def sarif_document(findings: Iterable[Finding]) -> dict[str, Any]:
+    # SARIF is uploaded to a third-party code-scanning service, so finding text
+    # is scrubbed of secret-shaped spans first (before the fingerprint, which
+    # would otherwise hash the raw value).
+    from .finding_scrub import scrub_finding
+
     ordered = sorted(
-        findings,
+        (scrub_finding(finding) for finding in findings),
         key=lambda finding: (
             finding.rule_id,
             finding.locator,

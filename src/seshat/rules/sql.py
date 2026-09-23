@@ -11,9 +11,12 @@ from ..registry import register
 from ..sql import (
     WAREHOUSE_SQL_CORPUS,
     SqlToken,
+    dml_target_zone,
+    ident_text,
     iter_sql_files,
     schema_zone,
     stale_schema_tokens,
+    statement_has_keyword,
     strip_sql_comments,
     tokenize_sql,
 )
@@ -35,11 +38,15 @@ def read_sql_text(ctx: RuleContext, rel: str) -> str:
     return read_tracked_text(ctx.repo_root / rel) or ""
 
 
-def _tokens(ctx: RuleContext, rel: str) -> list[SqlToken]:
+def _tokens(ctx: RuleContext, rel: str, *, identifiers: bool = False) -> list[SqlToken]:
     """Non-empty (comment/string-stripped) tokens for `rel`. Shared by the
     token-based rules (S3/S4b/S5/S7) so each stops re-deriving this filter.
+
+    ``identifiers=True`` keeps double-quoted names (S3's view name, S4b's zone);
+    see ``tokenize_sql``.
     """
-    return [t for t in tokenize_sql(read_sql_text(ctx, rel)) if t.text]
+    text = read_sql_text(ctx, rel)
+    return [t for t in tokenize_sql(text, identifiers=identifiers) if t.text]
 
 
 def live_sql_files(ctx: RuleContext) -> list[str]:
@@ -142,19 +149,20 @@ def _s3_view_name_token(toks: list[SqlToken], idx: int) -> SqlToken | None:
 def s3_vw_prefix(ctx: RuleContext) -> list[Finding]:
     findings: list[Finding] = []
     for rel in iter_sql_files(ctx):
-        toks = _tokens(ctx, rel)
+        toks = _tokens(ctx, rel, identifiers=True)
         for idx, tok in enumerate(toks):
             if tok.text.upper() != "VIEW":
                 continue
             name_tok = _s3_view_name_token(toks, idx)
             if name_tok is None:
                 continue
-            if not name_tok.text.lower().startswith("vw_"):
+            name = ident_text(name_tok.text)
+            if not name.lower().startswith("vw_"):
                 findings.append(
                     Finding(
                         rule_id="S3",
                         severity=Severity.ERROR,
-                        message=f"view {name_tok.text!r} missing vw_ prefix",
+                        message=f"view {name!r} missing vw_ prefix",
                         locator=f"{rel}:{name_tok.line}",
                     )
                 )
@@ -218,8 +226,14 @@ def s4a_migration_numbering(ctx: RuleContext) -> list[Finding]:
 def _is_guarded(toks: list[SqlToken], idx: int) -> bool:
     """True if the CREATE/ALTER/DROP at toks[idx] is an accepted guarded form."""
     verb = toks[idx].text.upper()
-    # window of the next few keyword tokens, upper-cased
-    tail = [t.text.upper() for t in toks[idx : idx + 8]]
+    # window of the next few keyword tokens, upper-cased, bounded by the
+    # statement terminator so a guard in the NEXT statement cannot vouch for
+    # this one (`DROP SCHEMA bronze; DROP TABLE IF EXISTS ...`).
+    tail: list[str] = []
+    for t in toks[idx : idx + 8]:
+        if t.text in _STATEMENT_TERMINATORS:
+            break
+        tail.append(t.text.upper())
     joined = " ".join(tail)
     if verb == "CREATE":
         # Any OR REPLACE form (VIEW / FUNCTION / PROCEDURE) is a guarded create,
@@ -373,6 +387,30 @@ def _s4b_ddl_finding(
     return _s4b_finding_for_bare_ddl(rel, tok, upper, zone)
 
 
+# Destructive DML on bronze (the source of truth): TRUNCATE always, DELETE only
+# when unfiltered (no WHERE). Kept OUT of `_DDL_VERBS` so silver/gold DML earns
+# no guard-form warning -- only a bronze target is reported.
+_DESTRUCTIVE_DML = frozenset({"TRUNCATE", "DELETE"})
+
+
+def _s4b_dml_finding(rel: str, toks: list[SqlToken], idx: int) -> Finding | None:
+    """The S4b ERROR for a bronze TRUNCATE / unfiltered DELETE, else ``None``."""
+    verb = toks[idx].text.upper()
+    if dml_target_zone(toks, idx) != "bronze":
+        return None
+    if verb == "DELETE" and statement_has_keyword(toks, idx, "WHERE"):
+        return None
+    return Finding(
+        rule_id="S4b",
+        severity=Severity.ERROR,
+        message=(
+            f"S4b bronze.* {verb} destroys source-of-truth rows; bronze is "
+            "append-only -- rebuild downstream layers instead"
+        ),
+        locator=f"{rel}:{toks[idx].line}",
+    )
+
+
 def _s4b_findings_for_file(rel: str, toks: list[SqlToken]) -> list[Finding]:
     """S4b findings for one file's already-tokenized content."""
     findings: list[Finding] = []
@@ -386,6 +424,10 @@ def _s4b_findings_for_file(rel: str, toks: list[SqlToken]) -> list[Finding]:
         boundary_state = _txn_boundary_state(toks, idx, in_txn)
         if boundary_state is not None:
             in_txn = boundary_state
+            continue
+        if tok.text.upper() in _DESTRUCTIVE_DML and not stmt_open:
+            dml = _s4b_dml_finding(rel, toks, idx)
+            findings.extend([dml] if dml is not None else [])
             continue
         if tok.text.upper() not in _DDL_VERBS:
             continue
@@ -406,14 +448,17 @@ def s4b_guard_form(ctx: RuleContext) -> list[Finding]:
 
     Policy (per DDL statement):
       - Any guarded form (IF [NOT] EXISTS / OR REPLACE VIEW) -> PASS regardless of zone.
-      - bronze bare DROP/CREATE/ALTER -> ERROR (blocks build).
+      - bronze bare DROP/CREATE/ALTER -> ERROR (blocks build); this includes
+        `DROP|CREATE|ALTER SCHEMA bronze`.
+      - bronze TRUNCATE, or DELETE without WHERE -> ERROR.
       - silver/gold bare + inside a BEGIN/COMMIT transaction -> PASS.
       - silver/gold bare + NOT in a transaction -> WARNING.
       - unknown/unqualified bare -> WARNING (fail-closed).
     """
     findings: list[Finding] = []
     for rel in iter_sql_files(ctx):
-        findings.extend(_s4b_findings_for_file(rel, _tokens(ctx, rel)))
+        toks = _tokens(ctx, rel, identifiers=True)
+        findings.extend(_s4b_findings_for_file(rel, toks))
     return findings
 
 

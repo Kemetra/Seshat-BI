@@ -13,7 +13,8 @@ Record GRAIN (FR-009, advisor-resolved option (a)):
 A multi-class rule records the FULL set (e.g. ``["error", "warning"]``); it is
 NEVER collapsed to one class. A rule that genuinely cannot be forced to fire over
 a minimal synthetic fixture records an EXPLICIT no-finding marker (FR-011), never
-a silent omission.
+a silent omission -- and must be named, with its reason, in ``UNFORCEABLE_RULES``;
+every other rule must have a fixture that actually makes it fire.
 
 Record COVERAGE (FR-010, advisor-resolved): TWO explicitly-named sections --
   * ``registered``: one entry per registry-reachable rule (``all_rules()``);
@@ -53,6 +54,7 @@ from pathlib import Path
 
 from .core import Finding, RegisteredRule, Rule, RuleContext, Severity
 from .gitutil import run_subprocess
+from .severity_fixtures_extra import EXTRA_FIXTURE_FILES
 
 # repo-relative location of the committed golden record (sibling of the manifest).
 RECORD_REL_PATH = "docs/rules/severity-posture.json"
@@ -350,10 +352,6 @@ _YAML_CT1 = (
     "accessibility:\n  min_text_contrast_ratio: '4.5:1'\n"
 )
 
-# data_colors declared without a min_categorical_deltae floor -> CT3 opt-in
-# absent -> silent skip, <no-finding> (Principle V: floor key IS the opt-in).
-_YAML_CT3 = "colors:\n  data_colors:\n    - '#2FB6C4'\n    - '#12263A'\n"
-
 # A tracked path longer than MAX_REL_PATH -> G5 ERROR. G5 reads ctx.tracked_files
 # only (the path string), never disk, so the file is NOT materialized (a >260-char
 # path would hit Windows MAX_PATH).
@@ -452,7 +450,9 @@ def _tmdl_fixture(body: str) -> _Fixture:
 
 
 # rule_id -> the synthetic-repo recipe that forces it to fire. A rule_id absent
-# from this table falls through to the default empty fixture -> no-finding marker.
+# from this table (and from EXTRA_FIXTURE_FILES merged below) falls through to
+# the default empty fixture -> no-finding marker, which is legitimate ONLY for a
+# rule on UNFORCEABLE_RULES (the posture test enforces both halves).
 _RULE_FIXTURES: dict[str, _Fixture] = {
     "S1": _Fixture(files=(("warehouse/a.sql", _SQL_S1),)),
     "S2": _Fixture(files=(("warehouse/a.sql", _SQL_S2),)),
@@ -530,8 +530,6 @@ _RULE_FIXTURES: dict[str, _Fixture] = {
         )
     ),
     "CT1": _Fixture(files=(("design/tokens/demo-design-tokens.yaml", _YAML_CT1),)),
-    "CT2": _Fixture(),
-    "CT3": _Fixture(files=(("design/tokens/demo-design-tokens.yaml", _YAML_CT3),)),
     # DS family: plant a .seshat store with the class-specific violation.
     "DS1": _Fixture(files=((".seshat/semantic-decisions.yaml", _DS1_STORE),)),
     "DS2": _Fixture(
@@ -544,6 +542,18 @@ _RULE_FIXTURES: dict[str, _Fixture] = {
     "DS4": _Fixture(files=((".seshat/semantic-decisions.yaml", _DS4_STORE),)),
     "DS5": _Fixture(files=((".seshat/kpi-contracts.yaml", _DS5_STORE),)),
 }
+
+
+_RULE_FIXTURES.update(
+    {rule_id: _Fixture(files=files) for rule_id, files in EXTRA_FIXTURE_FILES.items()}
+)
+
+# rule_id -> WHY that rule genuinely cannot be forced to fire over a minimal
+# synthetic fixture (FR-011). The ``<no-finding>`` marker is reserved for these.
+# A rule missing from BOTH this map and ``_RULE_FIXTURES`` fails the posture test,
+# so a new rule cannot slip into the record as ``<no-finding>`` because nobody
+# wrote its fixture. Empty today: every registered rule is forced by a fixture.
+UNFORCEABLE_RULES: dict[str, str] = {}
 
 
 def _git_add_best_effort(repo: Path, tracked: Iterable[str]) -> None:

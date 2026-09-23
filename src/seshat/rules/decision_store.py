@@ -33,9 +33,10 @@ from seshat.decision_store import (
     CONFIDENCE_VALUES,
     DECISION_STORE_CORPUS,
     STATUS_VALUES,
+    ApprovalFailure,
     Store,
     active_scope_conflicts,
-    approval_is_valid,
+    approval_verdict,
     is_critical,
     load_authority_map,
     load_store,
@@ -302,10 +303,6 @@ def _missing_field_findings(
     ]
 
 
-def _is_eligibility_reason(reason: str | None) -> bool:
-    return bool(reason) and ("ineligible" in reason or "eligibility" in reason)
-
-
 def _owner_findings(
     rec: dict[str, Any], authority: dict[str, frozenset[str]] | None, loc: str
 ) -> list[Finding]:
@@ -322,9 +319,10 @@ def _owner_findings(
                 loc,
             )
         ]
-    # Shape is fine; surface only the eligibility verdict from the shared predicate.
-    valid, reason = approval_is_valid(rec, authority)
-    if not valid and _is_eligibility_reason(reason):
+    # Shape is fine; surface only the eligibility verdict from the shared predicate,
+    # selected by its TYPED failure stage -- never by matching the reason's wording.
+    failure, reason = approval_verdict(rec, authority)
+    if failure is ApprovalFailure.INELIGIBLE and reason:
         return [_err("DS2", reason, loc)]
     return []
 

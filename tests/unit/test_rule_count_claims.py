@@ -131,6 +131,33 @@ def test_accurate_count_yields_no_findings(tmp_path: Path) -> None:
     assert list(check_rule_count_claims(ctx)) == []
 
 
+def test_anchor_prose_number_must_match_claimed_count(tmp_path: Path) -> None:
+    # The manifest's claimed-count was bumped to 7 but the anchored prose still
+    # says 6: the published sentence is stale even though claimed == authoritative.
+    ctx = _stage(
+        tmp_path,
+        _claim(7, anchor="Currently 6 rules"),
+        docs={"docs/x.md": "Currently 6 rules in the gate\n"},
+        count_source_len=7,
+    )
+    findings = list(check_rule_count_claims(ctx))
+    assert len(findings) == 1
+    assert findings[0].severity is Severity.ERROR
+    assert "6" in findings[0].message and "7" in findings[0].message
+
+
+def test_anchor_without_a_rule_count_fails_loud(tmp_path: Path) -> None:
+    ctx = _stage(
+        tmp_path,
+        _claim(7, anchor="Currently many rules"),
+        docs={"docs/x.md": "Currently many rules in the gate\n"},
+        count_source_len=7,
+    )
+    findings = list(check_rule_count_claims(ctx))
+    assert len(findings) == 1
+    assert "anchor" in findings[0].message.lower()
+
+
 # --- US2: per-entry fail-loud branches ---------------------------------------
 
 

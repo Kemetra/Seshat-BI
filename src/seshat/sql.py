@@ -150,6 +150,49 @@ def _scan_quoted_token(
     return SqlToken("", new_line), new_line, end
 
 
+def _quoted_ident_end(text: str, i: int) -> int:
+    """Index just past the close quote of a ``"..."`` identifier at ``text[i]``.
+
+    Unlike ``_quoted_span_end``, a doubled ``""`` is an ESCAPED quote inside the
+    same identifier (PostgreSQL's rule), so it does not end the span. An
+    unterminated identifier fails closed to EOF.
+    """
+    j = i + 1
+    while True:
+        k = text.find('"', j)
+        if k == -1:
+            return len(text)
+        if text.startswith('""', k):
+            j = k + 2
+            continue
+        return k + 1
+
+
+def _scan_quoted_ident(
+    text: str, i: int, line: int
+) -> tuple[SqlToken | None, int, int]:
+    """A ``"..."`` span is an IDENTIFIER, not a literal: emit its name.
+
+    The token text keeps the surrounding double quotes (with ``""`` collapsed to
+    ``"``), so it can never equal a keyword or a punctuation token such as ``.``
+    or ``;`` -- a quoted name is always a name. ``ident_text`` strips the quotes
+    for the rules that compare names. An empty ``""`` yields the empty
+    placeholder, like a string literal.
+    """
+    end = _quoted_ident_end(text, i)
+    new_line = line + text.count("\n", i, end)
+    closed = end > i + 1 and text[end - 1] == '"' and end - 1 > i
+    inner = text[i + 1 : end - 1 if closed else end].replace('""', '"')
+    return SqlToken(f'"{inner}"' if inner else "", new_line), new_line, end
+
+
+def ident_text(text: str) -> str:
+    """The bare name of a token: a quoted identifier loses its double quotes."""
+    if len(text) >= 2 and text[0] == '"' and text[-1] == '"':
+        return text[1:-1]
+    return text
+
+
 def _scan_dollar_token(
     text: str, i: int, line: int
 ) -> tuple[SqlToken | None, int, int]:
@@ -192,7 +235,7 @@ def _scan_meta_command(
 
 
 def _scan_span(
-    text: str, i: int, ch: str, line: int
+    text: str, i: int, ch: str, line: int, identifiers: bool = False
 ) -> tuple[SqlToken | None, int, int] | None:
     """Consume a comment/quote/dollar span opening at ``text[i]``, if any.
 
@@ -204,7 +247,7 @@ def _scan_span(
     Flattening the "producer exists" + "producer consumed" decision into this one
     helper keeps the main scan loop shallow.
     """
-    producer = _tokenize_producer(text, i, ch)
+    producer = _tokenize_producer(text, i, ch, identifiers)
     if producer is None:
         return None
     tok, new_line, next_i = producer(text, i, line)
@@ -213,12 +256,17 @@ def _scan_span(
     return tok, new_line, next_i
 
 
-def tokenize_sql(text: str) -> list[SqlToken]:
+def tokenize_sql(text: str, *, identifiers: bool = False) -> list[SqlToken]:
     """Tokenize SQL, dropping comments and string-literal contents.
 
     Each token keeps its 1-based source line so rules can emit path:line.
     String literals collapse to an empty-text placeholder token so no inner
     word leaks into rule matching while position is preserved.
+
+    ``identifiers=True`` emits a double-quoted identifier as a NAME token (see
+    ``_scan_quoted_ident``) instead of the empty placeholder. It is opt-in so
+    the rules that read names (schema/zone/view-name checks) see ``"bronze"``,
+    while the other token consumers keep the stream they were written against.
     """
     tokens: list[SqlToken] = []
     i, line, n = 0, 1, len(text)
@@ -232,7 +280,7 @@ def tokenize_sql(text: str) -> list[SqlToken]:
 
         # Comment/quote/dollar spans are dispatched here; the helper returns None
         # when no span opens (or a dollar non-opener declines) so we word-match.
-        span = _scan_span(text, i, ch, line)
+        span = _scan_span(text, i, ch, line, identifiers)
         if span is not None:
             tok, line, i = span
             _append_if_token(tokens, tok)  # comments emit no token; append the rest
@@ -271,13 +319,17 @@ def _skip_whitespace(ch: str, line: int, i: int) -> tuple[int, int] | None:
 _TokenProducer = Callable[[str, int, int], tuple["SqlToken | None", int, int]]
 
 
-def _tokenize_producer(text: str, i: int, ch: str) -> _TokenProducer | None:
+def _tokenize_producer(
+    text: str, i: int, ch: str, identifiers: bool = False
+) -> _TokenProducer | None:
     """Select the span producer for the token opening at ``text[i]``, or ``None``
     when no span opens here and the caller should word-match directly."""
     if text.startswith("--", i):
         return _scan_line_comment
     if text.startswith("/*", i):
         return _scan_block_comment
+    if identifiers and ch == '"':
+        return _scan_quoted_ident
     if ch in ("'", '"'):
         return _scan_quoted_token
     if ch == "$":
@@ -397,12 +449,20 @@ def _is_schema_qualifying_position(prev: str, prev2: str, nxt: str) -> bool:
     return prev2 == "CREATE"
 
 
-def stale_schema_tokens(text: str) -> list[tuple[str, int]]:
-    """Find raw/marts/bronze/silver in schema-qualifying positions only."""
-    toks = [t for t in tokenize_sql(text) if t.text]
+def stale_schema_tokens(
+    text: str, *, identifiers: bool = True
+) -> list[tuple[str, int]]:
+    """Find raw/marts/bronze/silver in schema-qualifying positions only.
+
+    A double-quoted schema (``"raw"."orders"``) counts, compared case-folded
+    (fail toward flagging). ``identifiers=False`` keeps the old literal-blind
+    stream for callers scanning non-SQL text (D8's raw M, where every ``"..."``
+    is an M string, not a SQL name).
+    """
+    toks = [t for t in tokenize_sql(text, identifiers=identifiers) if t.text]
     hits: list[tuple[str, int]] = []
     for idx, tok in enumerate(toks):
-        low = tok.text.lower()
+        low = ident_text(tok.text).lower()
         if low not in _SCHEMA_TOKENS:
             continue
         prev = toks[idx - 1].text.upper() if idx else ""
@@ -439,7 +499,7 @@ def _qualified_zone(stmt: list[SqlToken], pos: int) -> str:
     """
     if pos >= len(stmt):
         return "unknown"
-    candidate = stmt[pos].text.lower()
+    candidate = ident_text(stmt[pos].text).lower()
     if candidate in _ZONE_TOKENS:
         if pos + 1 < len(stmt) and stmt[pos + 1].text == ".":
             return candidate
@@ -464,6 +524,43 @@ def _index_ddl_zone(stmt: list[SqlToken], stmt_texts_upper: list[str]) -> str | 
         return None
     on_pos = stmt_texts_upper.index("ON")
     return _qualified_zone(stmt, on_pos + 1)
+
+
+def _schema_ddl_zone(stmt: list[SqlToken], stmt_texts_upper: list[str]) -> str | None:
+    """Zone for ``CREATE|DROP|ALTER SCHEMA <zone>``, or ``None`` if not one.
+
+    The target of a schema DDL is the bare schema name itself (no ``.``), so the
+    general ``<zone>.<name>`` rule cannot resolve it. ``IF [NOT] EXISTS`` is
+    skipped; any other name is "unknown".
+    """
+    if len(stmt_texts_upper) < 2 or stmt_texts_upper[1] != "SCHEMA":
+        return None
+    pos = 2
+    while pos < len(stmt) and stmt_texts_upper[pos] in ("IF", "NOT", "EXISTS"):
+        pos += 1
+    if pos >= len(stmt):
+        return "unknown"
+    candidate = ident_text(stmt[pos].text).lower()
+    return candidate if candidate in _ZONE_TOKENS else "unknown"
+
+
+def dml_target_zone(toks: list[SqlToken], stmt_start_idx: int) -> str:
+    """Zone of the target of a ``TRUNCATE`` / ``DELETE`` statement at the index.
+
+    Skips ``FROM`` / ``TABLE`` / ``ONLY`` after the verb, then requires an
+    explicit ``<zone>.<name>`` like every other zone check (fail-closed).
+    """
+    stmt = _collect_statement_tokens(toks, stmt_start_idx)
+    pos = 1
+    while pos < len(stmt) and stmt[pos].text.upper() in ("FROM", "TABLE", "ONLY"):
+        pos += 1
+    return _qualified_zone(stmt, pos)
+
+
+def statement_has_keyword(toks: list[SqlToken], stmt_start_idx: int, kw: str) -> bool:
+    """True when the statement starting at the index contains keyword ``kw``."""
+    stmt = _collect_statement_tokens(toks, stmt_start_idx)
+    return any(t.text.upper() == kw for t in stmt)
 
 
 def schema_zone(toks: list[SqlToken], stmt_start_idx: int) -> str:
@@ -491,6 +588,10 @@ def schema_zone(toks: list[SqlToken], stmt_start_idx: int) -> str:
     index_zone = _index_ddl_zone(stmt, stmt_texts_upper)
     if index_zone is not None:
         return index_zone
+
+    schema_ddl = _schema_ddl_zone(stmt, stmt_texts_upper)
+    if schema_ddl is not None:
+        return schema_ddl
 
     # General case: skip the verb and any modifier keywords to find the target.
     pos = 1

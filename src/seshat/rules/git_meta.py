@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Iterable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from .. import gitutil
 from ..core import Finding, RuleContext, Severity, is_test_path
@@ -16,6 +16,19 @@ from ..rule_coverage import (
     Requirement,
     any_tracked_file,
 )
+from .c2_scan import (  # noqa: F401  (re-exported: callers/tests import these here)
+    CONN_STRING_CRED_RE,
+    CONN_URI_RE,
+    DO_CLUSTER_SLUG_RE,
+    DO_ENDPOINT_RE,
+    MYSQL_URI_RE,
+    ODBC_SECRET_RE,
+    decode_for_scan,
+    is_env_style,
+    is_env_template,
+)
+from .c2_scan import scan_file_lines as _scan_file_lines
+from .c2_scan import scan_line_for_secret as _scan_line_for_secret  # noqa: F401
 
 # G5 reads the tracked-file list itself, so "the input" is that list being
 # non-empty. An untracked working tree makes G5 scan nothing and report nothing,
@@ -223,10 +236,24 @@ REQUIRED_IGNORES = (
     "**/.pbi/cache.abf",
     ".env",
 )
-# synthesized PBIP definition paths that must NOT be ignored
+# Synthesized PBIP definition paths that must NOT be ignored. A representative
+# file in each part of both definition/ trees, so a NARROW pattern that ignores
+# only tables/ or pages/ (and silently drops those files from git) is caught,
+# not just a pattern that ignores the whole folder.
 DEFINITION_PROBE_PATHS = (
     "powerbi/Sales.SemanticModel/definition/model.tmdl",
+    "powerbi/Sales.SemanticModel/definition/database.tmdl",
+    "powerbi/Sales.SemanticModel/definition/relationships.tmdl",
+    "powerbi/Sales.SemanticModel/definition/expressions.tmdl",
+    "powerbi/Sales.SemanticModel/definition/tables/Sales.tmdl",
+    "powerbi/Sales.SemanticModel/definition/cultures/en-US.tmdl",
+    "powerbi/Sales.SemanticModel/definition/roles/Reader.tmdl",
     "powerbi/Sales.Report/definition/report.json",
+    "powerbi/Sales.Report/definition/version.json",
+    "powerbi/Sales.Report/definition/pages/pages.json",
+    "powerbi/Sales.Report/definition/pages/p1/page.json",
+    "powerbi/Sales.Report/definition/pages/p1/visuals/v1/visual.json",
+    "powerbi/Sales.Report/definition/bookmarks/b1.bookmark.json",
 )
 
 
@@ -339,12 +366,12 @@ def _gitignored_pbip_findings(ctx: RuleContext, pbip_paths: list[str]) -> list[F
 # REJECTED -- governance rule P2 is deliberately scope-free (use `docs:` not
 # `docs(018):`).
 #
-# AUTOMATION EXEMPTION: a subject carrying a leading `[name]` prefix
-# (e.g. `[codex]`, `[bot]`) is an automated/tool-generated commit whose subject
-# format the kit does not control (it arrives via a squash merge of a bot PR).
-# Such subjects are accepted as-is, since enforcing the human convention on a
-# machine-written subject is out of the author's hands. Human subjects (no
-# bracket prefix) must still be `<type>: <desc>`, scope-free.
+# AUTOMATION EXEMPTION: a subject carrying a leading `[name]` prefix naming a
+# KNOWN automation label (``_BOT_LABELS``: `[codex]`, `[bot]`, `[ImgBot]`,
+# `[dependabot]`, case-insensitive) is an automated/tool-generated commit whose
+# subject format the kit does not control (it arrives via a squash merge of a
+# bot PR). Such subjects are accepted as-is. Any OTHER bracketed label (e.g.
+# `[wip]`) is a human subject and must still be `<type>: <desc>`, scope-free.
 # See docs/decisions/0012-p2-commit-types.md.
 _P2_TYPES = (
     "feat",
@@ -360,15 +387,17 @@ _P2_TYPES = (
     "revert",
     "brand",
 )
-_BOT_PREFIX_RE = re.compile(r"^\[[A-Za-z0-9_-]+\] ")
+_BOT_LABELS = frozenset({"codex", "bot", "imgbot", "dependabot"})
+_BOT_PREFIX_RE = re.compile(r"^\[(?P<label>[A-Za-z0-9_-]+)\] ")
 SUBJECT_RE = re.compile(r"^(?:" + "|".join(_P2_TYPES) + r"): .+")
 # Local-fallback range when neither --commit-range nor a commit-msg hook message
 # is supplied (a bare `retail check`). Scoped to the CURRENT/incoming commit only
 # (HEAD~1..HEAD) so a normal local check is green whenever the current change is
 # compliant, and is never tripped by aged-out non-conforming history (#112). On a
-# single-commit repo git rejects HEAD~1 (rc 128); the except (RuntimeError,
-# ValueError) branch below turns that into a clean P2 ERROR Finding (not a
-# traceback), exactly as the old HEAD~20 default did. CI supplies an explicit
+# single-commit repo HEAD~1 does not exist, so the fallback judges the range
+# `HEAD` (exactly that one commit) instead of erroring on an unreadable range:
+# `init, commit, check` stays green for a conforming first subject. CI supplies an
+# explicit
 # --commit-range (merge-base(origin/main, HEAD)..HEAD) and the commit-msg hook
 # uses ctx.commit_message, so BOTH bypass this fallback -- new-commit P2
 # enforcement is unaffected.
@@ -408,6 +437,19 @@ def _repo_root_has_commit(repo_root: Path) -> bool:
     return True
 
 
+def _default_range(repo_root: Path) -> str:
+    """The bare-fallback range: ``HEAD~1..HEAD``, or ``HEAD`` on a root commit.
+
+    Only reached once ``_repo_root_has_commit`` proved HEAD exists. When HEAD has
+    no parent the range ``HEAD`` lists exactly that one commit.
+    """
+    try:
+        gitutil.git_output(repo_root, "rev-parse", "--verify", "--quiet", "HEAD~1")
+    except RuntimeError:
+        return "HEAD"
+    return DEFAULT_RANGE
+
+
 def load_commit_subjects(ctx: RuleContext) -> tuple[list[str], list[Finding]]:
     """Resolve the commit subjects to validate for the contract-v2 invocation.
 
@@ -437,7 +479,11 @@ def load_commit_subjects(ctx: RuleContext) -> tuple[list[str], list[Finding]]:
     if ctx.commit_range is None and not _repo_root_has_commit(ctx.repo_root):
         return ([], [])
     # --commit-range is a full revision range; never append "..HEAD".
-    range_expr = ctx.commit_range if ctx.commit_range is not None else DEFAULT_RANGE
+    range_expr = (
+        ctx.commit_range
+        if ctx.commit_range is not None
+        else _default_range(ctx.repo_root)
+    )
     try:
         return (gitutil.git_log_subjects(ctx.repo_root, range_expr), [])
     except (RuntimeError, ValueError) as exc:
@@ -461,7 +507,10 @@ def load_commit_subjects(ctx: RuleContext) -> tuple[list[str], list[Finding]]:
 def _subject_ok(subject: str) -> bool:
     # Automated/tool-generated subjects (leading `[name]` prefix) are exempt
     # from the human convention -- the kit does not control their format.
-    return bool(_BOT_PREFIX_RE.match(subject)) or bool(SUBJECT_RE.match(subject))
+    bot = _BOT_PREFIX_RE.match(subject)
+    if bot is not None and bot.group("label").lower() in _BOT_LABELS:
+        return True
+    return bool(SUBJECT_RE.match(subject))
 
 
 def _invalid_subject_findings(subjects: list[str]) -> list[Finding]:
@@ -493,99 +542,9 @@ def rule_p2_commit_subjects(ctx: RuleContext) -> Iterable[Finding]:
 # C2 — no committed secrets
 # ---------------------------------------------------------------------------
 
-# A real DigitalOcean endpoint: a concrete subdomain label (alnum start, then
-# alnum/hyphen) directly before `.db.ondigitalocean.com`. `>` from an
-# angle-bracket placeholder cannot sit in the label class, so
-# `<your-db-host>.db.ondigitalocean.com` does NOT match.
-#
-# ReDoS-safe: the label run is BOUNDED ({0,253}, the DNS host-name max) rather
-# than an unbounded `*`. An unbounded `[A-Za-z0-9-]*` directly before the literal
-# can backtrack catastrophically on a long alnum/hyphen run that is then followed
-# by `.db.ondigitalocean.com`; bounding the quantifier caps backtracking to a
-# constant per start position, so the match is O(n) over the line. Real subdomain
-# labels are far shorter than 253, so the bound never under-matches a true
-# endpoint (and the `>`-placeholder exclusion is unchanged — `>` is still outside
-# the label class).
-DO_ENDPOINT_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,253}\.db\.ondigitalocean\.com")
-CONN_URI_RE = re.compile(r"postgres(?:ql)?://[^@\s]+@")
-# A DigitalOcean managed-database CLUSTER SLUG has the shape
-# `db-<engine>-<region-letters><digit>-<numeric-id>` (a concrete example is a
-# `db-` prefix, an engine token, a region label ending in a digit, then a run of
-# digits). It is NOT a secret on its own (it grants no access and hides the full
-# FQDN), but it IS real connection context the repo's hard rule ("never write real
-# values into tracked files") forbids -- and the audit found it committed in 8
-# files, invisible to the FQDN/URI patterns above. The pattern is anchored on the
-# engine token + `<region-letters><digit>` + trailing numeric cluster id, so
-# ordinary hyphenated tokens (table names use `_`; `dim-`/`fct-` never carry a
-# trailing `-<digits>`) do not match, and the `<...>` angle-bracket placeholder
-# cannot appear inside the character class, so a documented placeholder such as
-# `db-<engine>-<region>-<id>` does NOT match. (This very comment is deliberately
-# written to describe the shape without embedding a matching literal.)
-DO_CLUSTER_SLUG_RE = re.compile(r"\bdb-[a-z]{2,}-[a-z]{2,}\d-\d{3,}\b")
-
-# Task 11 (R4/C2 extension) — catch three more committed-secret SHAPES the
-# Postgres-only patterns above are blind to: an ODBC keyword string carrying a
-# real credential value for either of two ODBC keywords (the connection
-# password keyword and the connection user-id keyword), a MySQL connection
-# URI, and a Snowflake account-plus-password kwargs pair. Each VALUE class
-# deliberately excludes:
-#   * an angle-bracket-wrapped token (the existing documented-placeholder
-#     exemption),
-#   * a curly brace (an f-string/format-string interpolation token -- SOURCE
-#     CODE building the string, not a committed secret; this is what keeps
-#     this very module's own dialect.py resolve_config() bodies from self-
-#     tripping the scanner they extend), and
-#   * the ODBC keyword separator / whitespace / a slash (so PROSE describing
-#     "keyword A or keyword B" together, as in this very comment, cannot
-#     itself look like a real assigned value).
-# so a real literal value (letters/digits/most punctuation) still matches,
-# while the placeholder/interpolation/prose shapes do not. (This comment block
-# is deliberately written without the two ODBC keywords' literal `KEYWORD=`
-# forms appearing back to back, for the same reason the DO_CLUSTER_SLUG_RE
-# comment above avoids embedding a matching literal.)
-ODBC_SECRET_RE = re.compile(r"\b(?:PWD|UID)=[^;\s{}<>/]+")
-# The scheme is assembled from parts (mirroring validate.py's postgres scheme
-# split) so this source file never itself contains the full scheme-then-
-# userinfo-then-at-sign literal shape the pattern below exists to catch --
-# angle brackets are excluded from the userinfo class so a documented
-# placeholder (a MySQL URI with bracketed user/password/host tokens) does not
-# match either.
-_MYSQL_SCHEME = "mysql" + ":" + "//"
-MYSQL_URI_RE = re.compile(re.escape(_MYSQL_SCHEME) + r"[^@\s<>]+@")
-
-# Snowflake kwargs pair: `account=`/`account:` (optionally quoted key) with a
-# REAL value, together with a `password=`/`password:` REAL value anywhere on
-# the same line -- the pairing is what makes it connection context (a bare
-# `account=` alone is not flagged; it grants no access on its own). A regex
-# alone over-matches Python source that BUILDS such a dict from env vars (e.g.
-# `config["account"] = env.get("ANALYTICS_DB_ACCOUNT")` -- the "value" here is
-# a variable reference, not a literal), so a value is accepted only when it is
-# a quoted string OR an unquoted token NOT immediately followed by `.` or `(`
-# in the source (which would mark it as a name/attribute/call reference).
-_SNOWFLAKE_KV_RE = re.compile(
-    r"[\"']?(account|password)[\"']?\s*[:=]\s*([\"']?)([^,;\s\"'{}()<>]*)",
-    re.IGNORECASE,
-)
-
-
-def _snowflake_kv_is_real(quote: str, value: str, line: str, end_pos: int) -> bool:
-    if not value:
-        return False
-    is_unquoted = not quote
-    has_next_char = end_pos < len(line)
-    next_is_ref = has_next_char and line[end_pos] in ".("
-    if is_unquoted and next_is_ref:
-        return False  # unquoted + followed by '.'/'(' -> a name/call reference
-    return True
-
-
-def _has_snowflake_secret_pair(line: str) -> bool:
-    seen: dict[str, bool] = {}
-    for m in _SNOWFLAKE_KV_RE.finditer(line):
-        key, quote, value = m.group(1).lower(), m.group(2), m.group(3)
-        if _snowflake_kv_is_real(quote, value, line, m.end(3)):
-            seen[key] = True
-    return seen.get("account", False) and seen.get("password", False)
+# The secret-shape patterns, the per-line scanner and the text decoder live in
+# ``c2_scan`` (split out to keep this module under the size limit). They are
+# re-exported here because callers and tests import them from this module.
 
 
 REQUIRED_ENV_KEYS = (
@@ -618,21 +577,35 @@ _C2_SCAN_EXCLUDED_PREFIXES = ("docs/superpowers/", "tests/", ".superpowers/")
 
 
 def _scan_excluded(path: str) -> bool:
-    return path.startswith(_C2_SCAN_EXCLUDED_PREFIXES) or path.endswith(".example")
+    """True when ``path`` is exempt from the C2 CONTENT scan.
+
+    A generic ``*.example`` file is a documented template, but an env-style
+    template (``.env.example``) IS scanned: it is the file a developer is most
+    likely to paste a real connection string into.
+    """
+    if path.startswith(_C2_SCAN_EXCLUDED_PREFIXES):
+        return True
+    return path.endswith(".example") and not is_env_template(path)
+
+
+def _tracked_env_files(ctx: RuleContext) -> list[str]:
+    """Every tracked `.env` / `.env.<suffix>` file at any depth, bar templates."""
+    return [p for p in ctx.tracked_files if is_env_style(p) and not is_env_template(p)]
 
 
 def _check_env_file(ctx: RuleContext) -> list[Finding]:
-    findings: list[Finding] = []
-    if ".env" in ctx.tracked_files:
-        findings.append(
-            Finding(
-                rule_id="C2",
-                severity=Severity.ERROR,
-                message=".env must never be tracked",
-                locator=".env",
-            )
+    findings = [
+        Finding(
+            rule_id="C2",
+            severity=Severity.ERROR,
+            message=f"{PurePosixPath(path).name} must never be tracked",
+            locator=path,
         )
-    elif not gitutil.git_check_ignore(ctx.repo_root, ".env"):
+        for path in _tracked_env_files(ctx)
+    ]
+    if ".env" not in ctx.tracked_files and not gitutil.git_check_ignore(
+        ctx.repo_root, ".env"
+    ):
         findings.append(
             Finding(
                 rule_id="C2",
@@ -697,81 +670,20 @@ def _check_env_example(ctx: RuleContext) -> list[Finding]:
     return [*_missing_required_keys(pairs), *_nonempty_must_be_empty(pairs)]
 
 
-def _scan_line_for_secret(line: str) -> bool:
-    """True if ``line`` carries a committed connection string / secret shape.
-
-    Factored out of ``_scan_contents`` (Task 11) so the multi-engine patterns
-    (the ODBC credential keywords, a MySQL connection URI, a Snowflake
-    account-plus-password pair) share one tested seam with the original
-    Postgres URI / DigitalOcean endpoint checks.
-    Excludes the DO cluster-slug shape, which is reported as a SEPARATE, less
-    severe-sounding Finding message by ``_scan_contents`` (not "a secret").
-    """
-    # DO_ENDPOINT_RE ([A-Za-z0-9][A-Za-z0-9-]*\.db\.ondigitalocean\.com)
-    # backtracks O(n^2) on a long alnum/hyphen run (~minutes on a 200k-char
-    # minified line). stdlib re has no possessive quantifiers, so gate it
-    # behind an O(n) substring check: any real endpoint MUST contain this
-    # literal, so the prefilter is a necessary condition — behavior is
-    # identical, only the pathological scan is skipped. The other patterns'
-    # forbidden-char classes are already linear, so they run as-is.
-    do_hit = ".db.ondigitalocean.com" in line and bool(DO_ENDPOINT_RE.search(line))
-    return (
-        bool(CONN_URI_RE.search(line))
-        or do_hit
-        or bool(ODBC_SECRET_RE.search(line))
-        or bool(MYSQL_URI_RE.search(line))
-        or _has_snowflake_secret_pair(line)
-    )
-
-
-def _scan_file_lines(path: str, text: str) -> list[Finding]:
-    """Findings for one file's content, one entry per offending line.
-
-    Flattens the per-line scan out of ``_scan_contents`` so the outer loop
-    over tracked files stays shallow. A secret-shaped line and a cluster-slug
-    line are reported with distinct messages (the slug is real connection
-    context, not a secret), preserving the original per-line precedence.
-    """
-    findings: list[Finding] = []
-    for lineno, line in enumerate(text.splitlines(), start=1):
-        if _scan_line_for_secret(line):
-            findings.append(
-                Finding(
-                    rule_id="C2",
-                    severity=Severity.ERROR,
-                    message="possible committed connection string / secret",
-                    locator=f"{path}:{lineno}",
-                )
-            )
-        # A committed DO cluster slug is real connection context (not a secret,
-        # but a real value the hard rule forbids). Reported separately so the
-        # message does not overstate it as a "secret".
-        elif DO_CLUSTER_SLUG_RE.search(line):
-            findings.append(
-                Finding(
-                    rule_id="C2",
-                    severity=Severity.ERROR,
-                    message=(
-                        "committed DigitalOcean cluster slug (real connection "
-                        "context) -- move it to the gitignored .env"
-                    ),
-                    locator=f"{path}:{lineno}",
-                )
-            )
-    return findings
-
-
 def _scan_contents(ctx: RuleContext) -> list[Finding]:
     findings: list[Finding] = []
     for path in ctx.tracked_files:
         if _scan_excluded(path):
             continue
-        full = ctx.repo_root / path
         try:
-            text = full.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        findings.extend(_scan_file_lines(path, text))
+            raw = (ctx.repo_root / path).read_bytes()
+        except OSError:
+            continue  # tracked-but-deleted-on-disk (#430): nothing to scan
+        # Decoded with a fallback chain (UTF-16 / UTF-8 / Latin-1) so a file
+        # saved in a non-UTF-8 encoding is still scanned; only binary is skipped.
+        text = decode_for_scan(raw)
+        if text is not None:
+            findings.extend(_scan_file_lines(path, text))
     return findings
 
 

@@ -2,6 +2,8 @@ import builtins
 from argparse import Namespace
 from pathlib import Path
 
+import pytest
+
 from seshat.governor.service import OPERATIONS, GovernorService
 
 FIXTURE = Path(__file__).parents[1] / "fixtures/readiness/run_next/us1_blocked.yaml"
@@ -109,3 +111,27 @@ def test_missing_mcp_extra_has_actionable_guidance(monkeypatch, capsys) -> None:
     monkeypatch.setattr(builtins, "__import__", missing)
     assert cli._run_mcp(Namespace(repo=".")) == 2
     assert "seshat-bi[mcp]" in capsys.readouterr().err
+
+
+@pytest.mark.unit
+def test_static_check_scrubs_secret_shaped_finding_text(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import seshat.runner as runner
+    from seshat.core import Finding, Severity
+
+    leaked = Finding(
+        "X9",
+        Severity.ERROR,
+        "value postgresql://admin:S3cretPw@10.1.2.3:5432/prod leaked",
+        "cfg.txt:1 password=hunter2",
+    )
+    monkeypatch.setattr(runner, "collect_findings", lambda *a, **k: [leaked])
+    root = _workspace(tmp_path)
+    result = GovernorService(root).call(
+        "seshat_run_static_check", {"workspace": str(root)}
+    )
+    text = repr(result)
+    assert "S3cretPw" not in text
+    assert "hunter2" not in text
+    assert result["outcome"] == "blocked"

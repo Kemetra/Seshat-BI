@@ -40,7 +40,8 @@ NOT relax this -- `SUBJECT_RE` admits a bare type followed by `: ` only.
 ### 3. NEW automation exemption: a leading `[name] ` subject is accepted as-is
 
 A subject whose first token is a bracketed name -- matched by
-`_BOT_PREFIX_RE = ^\[[A-Za-z0-9_-]+\] ` (e.g. `[codex] ...`, `[bot] ...`) -- is
+`_BOT_PREFIX_RE = ^\[(?P<label>[A-Za-z0-9_-]+)\] ` whose label is in `_BOT_LABELS`
+(see the amendment below; e.g. `[codex] ...`, `[bot] ...`) -- is
 treated as an automated / tool-generated commit and skipped before the
 `<type>: <desc>` check. Rationale: such a subject arrives via a squash-merge of a
 bot PR; the kit does not author it and cannot enforce a format it does not
@@ -48,6 +49,14 @@ control. The exemption is narrow -- only subjects with the leading bracket
 prefix. Human subjects (no bracket prefix) must still be `<type>: <desc>`,
 scope-free; the prefix is not a general escape hatch a human can opt into for a
 malformed subject.
+
+**Amendment (2026-09):** the bracket label must be a KNOWN automation label
+(`_BOT_LABELS`: `codex`, `bot`, `imgbot`, `dependabot`, compared
+case-insensitively -- the labels observed in this repo's history plus the
+generic `bot`). Any other bracketed label (e.g. `[wip] ...`) is judged as a human
+subject. Before this, any `[label] ` prefix a human typed was exempt, which
+contradicted the "not a general escape hatch" intent above. Adding a new bot
+means adding its label to `_BOT_LABELS`.
 
 ## Consequences
 
