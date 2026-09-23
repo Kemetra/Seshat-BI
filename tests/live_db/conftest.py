@@ -193,6 +193,13 @@ class LiveDbtProject:
             self.repo_root
             / "warehouse/migrations/0004_create_gold_retail_store_sales_star.sql",
         )
+        # 0010 is 0004's follow-up (unpadded month/day labels); the oracle must
+        # apply it so it matches the dbt shadow model, which emits FM labels.
+        _run_sql_file(
+            self.dsn,
+            self.repo_root
+            / "warehouse/migrations/0010_fix_gold_retail_store_sales_date_labels.sql",
+        )
 
     def _evidence(self, result: dict) -> LiveDbtEvidence:
         relative = result.get("evidence_path")

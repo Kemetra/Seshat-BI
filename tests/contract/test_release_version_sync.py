@@ -307,7 +307,15 @@ def test_pre_tag_artifact_inspection_installs_every_tool_it_shells_out_to() -> N
     # Every `python -m <tool>` the inspector invokes must be pip-installed by the
     # step that runs it.
     invoked = set(re.findall(r'"-m",\s*\n?\s*"([a-z_][a-z0-9_]*)"', inspector))
-    installed = " ".join(re.findall(r"python -m pip install ([^\n]*)", workflow))
+    # A `-r <file>` install (the hash-locked release tooling) counts the pinned
+    # distributions in that file; a continued line is joined first.
+    install_lines = re.findall(
+        r"python -m pip install ((?:[^\n]*\\\n)*[^\n]*)", workflow
+    )
+    installed_parts = [line.replace("\\\n", " ") for line in install_lines]
+    for requirements in re.findall(r"-r\s+(\S+)", " ".join(installed_parts)):
+        installed_parts.append((ROOT / requirements).read_text(encoding="utf-8"))
+    installed = " ".join(installed_parts)
     for tool in sorted(invoked):
         assert tool in installed, (
             f"inspect_release_artifacts.py shells out to `python -m {tool}` but "

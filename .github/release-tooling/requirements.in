@@ -1,0 +1,8 @@
+# Release build tooling (build frontend + upload/metadata checker), pinned and
+# installed with --require-hashes by release.yml and
+# prepare-coordinated-release.yml. Regenerate the locked file with:
+#   uv pip compile --universal --generate-hashes --python-version 3.13 \
+#     .github/release-tooling/requirements.in \
+#     -o .github/release-tooling/requirements.txt
+build==1.6.1
+twine==7.0.0

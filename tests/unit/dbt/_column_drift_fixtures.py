@@ -26,7 +26,8 @@ REAL_MIGRATION_SHAPES = {
     "fct_sales_rss": 11,
     "dim_account_fgl": 5,
     "dim_cost_center_fgl": 4,
-    "dim_date_fgl": 10,
+    # 11, not 10: 0009 rebuilds dim_date_fgl with an added iso_year column.
+    "dim_date_fgl": 11,
     "dim_department_fgl": 3,
     "dim_fiscal_period_fgl": 5,
     "fct_gl_actuals_fgl": 13,
