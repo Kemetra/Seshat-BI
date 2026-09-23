@@ -29,12 +29,13 @@ module only.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import queue
 import threading
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from functools import partial
 from typing import Any
@@ -257,12 +258,12 @@ async def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any
     # a request dies with that request's event loop (verified under `TestClient`), so
     # the turn would silently stop after its first frame.
     _reap_abandoned_turns(app)
-    _publish_provider_session(app, thread_id)
     app.state.pending_turns[thread_id] = _PendingTurn(
         events=app.state.bridge.run_turn(
             prompt=request.prompt,
             turn_id=request.turn_id,
             requested_mode=request.requested_mode,
+            **_session_kwargs(app, thread_id),
         ),
         request=request,
         pumping=asyncio.Lock(),
@@ -272,34 +273,46 @@ async def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any
     return {"turn_id": turn_id}
 
 
-def _publish_provider_session(app: FastAPI, thread_id: str) -> None:
-    """Let this thread's turn register its live provider session for the relay.
+def _session_kwargs(app: FastAPI, thread_id: str) -> dict[str, Any]:
+    """`on_session` for a bridge whose `run_turn` accepts one; nothing otherwise.
 
     The approval relay answers a blocked `requestApproval` by writing to the child
-    process that raised it, so it must be able to find that child by thread. Nothing
-    did this before: `app.state.provider_sessions` was initialized and read but never
-    assigned, so every lookup missed and every decision returned 204 while the
-    provider stayed blocked.
+    process that raised it, so it must be able to find that child by thread.
 
-    Registration is a CLOSURE handed to the bridge rather than a value the bridge
-    returns, for two reasons. `run_turn` never receives a `thread_id`, so the bridge
-    cannot key the registry itself; and `app.state.bridge` is ONE instance shared by
-    every thread, so a session stored on it would let a second thread's turn overwrite
-    the first and answer the wrong provider.
-
-    A bridge with no session to publish -- `FakeAgentBridge` -- simply has no
-    `on_session` attribute, and this is a no-op for it.
+    The callback is passed INTO this turn's `run_turn`, never stored on the bridge:
+    `app.state.bridge` is ONE instance shared by every thread and `run_turn` is lazy,
+    so a callback installed on it was read by whichever turn advanced next -- one
+    thread's session registered under another thread's key. Keyed on the capability
+    (the parameter), not on the bridge's class: `FakeAgentBridge` has no session to
+    publish and simply does not accept one.
     """
-    if not hasattr(app.state.bridge, "on_session"):
-        return
+    run_turn = app.state.bridge.run_turn
+    if "on_session" not in inspect.signature(run_turn).parameters:
+        return {}
+    return {"on_session": _session_publisher(app, thread_id)}
+
+
+def _session_publisher(app: Any, thread_id: str) -> Callable[[Any], None]:
+    """A per-turn closure that registers, then retracts, ITS OWN session only.
+
+    Keyed by thread: the per-thread active-turn guard allows one live turn per thread,
+    and an approval envelope names its thread, not its turn. The identity check on
+    retract is what makes that key safe -- a turn that ends late (reaped after its
+    successor started) must not pop the successor's live session.
+    """
+    mine: list[Any] = []
 
     def publish(session: Any) -> None:
-        if session is None:
-            app.state.provider_sessions.pop(thread_id, None)
-        else:
-            app.state.provider_sessions[thread_id] = session
+        sessions = app.state.provider_sessions
+        if session is not None:
+            mine[:] = [session]
+            sessions[thread_id] = session
+            return
+        if mine and sessions.get(thread_id) is mine[0]:
+            sessions.pop(thread_id, None)
+        mine.clear()
 
-    app.state.bridge.on_session = publish
+    return publish
 
 
 def _interrupt_turn(app: FastAPI, thread_id: str, turn_id: str) -> Response:

@@ -28,6 +28,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -414,6 +415,23 @@ def probe_codex_account(
     return None
 
 
+def _no_publish(_session: Any) -> None:
+    """The default when a caller has no relay to register a session with."""
+
+
+@dataclass
+class _TurnState:
+    """State that belongs to ONE turn, created fresh inside every `run_turn`.
+
+    `undecided` holds the JSON-RPC ids of approval requests this turn raised that are
+    still undecided. A SET rather than a flag because a turn can raise several before
+    any is answered (the committed `approvals` capture raises three), and a flag
+    cleared by the second would have withdrawn the patience the first still needs.
+    """
+
+    undecided: set[object] = field(default_factory=set)
+
+
 class CodexBridge:
     """`AgentBridge` over a live Codex app-server.
 
@@ -444,27 +462,17 @@ class CodexBridge:
         #: BINDING refusal is `agent_routes._pump_turn`, which every bridge's output
         #: passes through. This is the same cooperation `FakeAgentBridge` offers.
         self._propose_plan = propose_plan
-        #: Called with the live `CodexSession` when a turn opens one, and with `None`
-        #: when that turn ends. This is how a decided approval finds the child process
-        #: that is blocked on it: `run_turn` does not receive a `thread_id`, so the
-        #: bridge cannot key a registry itself, and this instance is SHARED across
-        #: threads -- storing the session on `self` would let one thread's turn
-        #: overwrite another's and answer the wrong provider. The route supplies a
-        #: closure that already knows its thread. Default is a no-op so every existing
-        #: caller, and `FakeAgentBridge`, are unaffected.
-        self.on_session: Callable[[Any], None] = lambda _session: None
-        #: JSON-RPC ids of approval requests this turn raised that are still
-        #: undecided. A SET rather than a flag because a turn can raise several before
-        #: any is answered (the committed `approvals` capture raises three), and a
-        #: flag cleared by the second would have withdrawn the patience the first
-        #: still needs. Emptied at the top of every `run_turn`: a leftover id from a
-        #: previous turn would grant a wedged provider a budget it must not get.
-        self._undecided_approvals: set[object] = set()
+        # Deliberately NO per-turn state on `self`. This instance is SHARED by every
+        # thread and `run_turn` is a lazy generator, so anything stored here is read
+        # by whichever turn advances next: a session callback installed by the last
+        # `start_turn` registered EVERY turn's session under that thread, and one
+        # turn clearing a shared undecided-approval set shrank another turn's
+        # patience. Per-turn state lives in `_TurnState`, created inside `run_turn`.
 
     def describe(self) -> dict[str, Any]:
         return {"bridge": "codex", "provider": "codex", "deterministic": False}
 
-    def _settle_approval(self, frame: dict[str, Any]) -> None:
+    def _settle_approval(self, state: _TurnState, frame: dict[str, Any]) -> None:
         """Drop an approval from the undecided set once the provider says it resolved.
 
         Keyed on `serverRequest/resolved`'s `requestId` rather than on "any frame
@@ -477,9 +485,11 @@ class CodexBridge:
             return
         params = frame.get("params")
         if isinstance(params, dict):
-            self._undecided_approvals.discard(params.get("requestId"))
+            state.undecided.discard(params.get("requestId"))
 
-    def _failure_payload(self, error: BaseException) -> dict[str, Any]:
+    def _failure_payload(
+        self, state: _TurnState, error: BaseException
+    ) -> dict[str, Any]:
         """Name the failure by WHAT was being waited on, not by the exception type.
 
         A timeout while the provider is blocked on an approval is not a provider
@@ -490,7 +500,7 @@ class CodexBridge:
         The detail carries the exception TYPE and never its text, in both branches:
         provider messages can contain paths or tokens, and this payload is retained.
         """
-        if self._undecided_approvals and isinstance(error, queue.Empty):
+        if state.undecided and isinstance(error, queue.Empty):
             return {
                 "category": "approval_not_decided",
                 "detail": (
@@ -504,15 +514,20 @@ class CodexBridge:
             "detail": f"the provider session failed: {type(error).__name__}",
         }
 
-    def _budget(self) -> float:
-        """Seconds to wait for the next frame, given why we are waiting.
+    def _budget(self, state: _TurnState) -> Callable[[], float]:
+        """Seconds to wait for THIS turn's next frame, given why it is waiting.
 
-        Read fresh before every wait: an approval can be raised at any point in a
-        turn, so a budget fixed at the start could never widen to accommodate one.
+        Returned as a callable read fresh before every wait: an approval can be
+        raised at any point in a turn, so a budget fixed at the start could never
+        widen to accommodate one.
         """
-        if self._undecided_approvals:
-            return self.approval_timeout
-        return self.idle_timeout
+
+        def patience() -> float:
+            if state.undecided:
+                return self.approval_timeout
+            return self.idle_timeout
+
+        return patience
 
     def _plan_for(self, requested_mode: str) -> CodexLaunchPlan:
         if requested_mode == "propose_changes" and self._propose_plan is not None:
@@ -575,6 +590,7 @@ class CodexBridge:
         session: CodexSession,
         context: NormalizationContext,
         prompt: str,
+        state: _TurnState,
     ) -> Iterator[tuple[str, dict[str, Any]]]:
         """Drive the provider's frames to `(event_type, payload)` pairs, once.
 
@@ -592,7 +608,7 @@ class CodexBridge:
         which would leave a consumer holding both a completion and a failure for one
         turn. The shared suite pins "exactly one terminal last".
         """
-        for frame in self._frames_once_requested(session, prompt):
+        for frame in self._frames_once_requested(session, prompt, state):
             # A `requestApproval` is a REQUEST, not a notification: it carries an `id`
             # the provider blocks on, so it is translated here rather than falling
             # through `normalize_notification`, which only ever sees fire-and-forget
@@ -602,7 +618,7 @@ class CodexBridge:
             if approval is not None:
                 # The provider is now BLOCKED on a human. Widen the wait before the
                 # next read, or the analyst's reading time reads as a dead provider.
-                self._undecided_approvals.add(frame.get("id"))
+                state.undecided.add(frame.get("id"))
                 yield approval
                 continue
             for event_type, payload in normalize_notification(frame, context=context):
@@ -613,7 +629,7 @@ class CodexBridge:
                     return
 
     def _frames_once_requested(
-        self, session: CodexSession, prompt: str
+        self, session: CodexSession, prompt: str, state: _TurnState
     ) -> Iterator[dict[str, Any]]:
         """Pass frames through, sending `turn/start` as soon as the thread id lands.
 
@@ -629,8 +645,8 @@ class CodexBridge:
         """
         initialized = False
         requested = False
-        for frame in session.frames(patience=self._budget):
-            self._settle_approval(frame)
+        for frame in session.frames(patience=self._budget(state)):
+            self._settle_approval(state, frame)
             if not initialized:
                 initialized = self._negotiated(session, frame)
             if not requested:
@@ -684,11 +700,23 @@ class CodexBridge:
         )
 
     def run_turn(
-        self, *, prompt: str, turn_id: str, requested_mode: str
+        self,
+        *,
+        prompt: str,
+        turn_id: str,
+        requested_mode: str,
+        on_session: Callable[[Any], None] | None = None,
     ) -> Iterator[StudioEvent]:
+        """Drive one turn. `on_session` belongs to THIS turn, never to the bridge.
+
+        It is called with the live `CodexSession` when the turn opens one and with
+        `None` when the turn ends; the route passes a closure that already knows its
+        thread, which is how a decided approval finds the child blocked on it.
+        """
         cleaned = validate_turn_request(prompt, requested_mode)
         sequence = 0
-        self._undecided_approvals.clear()
+        state = _TurnState()
+        publish = on_session if on_session is not None else _no_publish
 
         def emit(event_type: str, payload: dict[str, Any]) -> StudioEvent:
             nonlocal sequence
@@ -705,7 +733,7 @@ class CodexBridge:
         # or the analyst's decision has nowhere to go. Retracted in the `finally`
         # beside `session.close()` -- a closed child left in the registry would accept
         # a decision and drop it, which is the silent failure this seam removes.
-        self.on_session(session)
+        publish(session)
         saw_terminal = False
         try:
             # `start()` is INSIDE the guard: a missing or non-executable binary makes
@@ -714,7 +742,9 @@ class CodexBridge:
             # active turn set so every later turn is refused as already-active.
             session.start()
             self._open_thread(session)
-            for event_type, payload in self._turn_events(session, context, cleaned):
+            for event_type, payload in self._turn_events(
+                session, context, cleaned, state
+            ):
                 if event_type in {"turn_completed", "turn_failed"}:
                     saw_terminal = True
                 yield emit(event_type, payload)
@@ -731,9 +761,9 @@ class CodexBridge:
             # The detail is the exception TYPE, never its text: provider messages can
             # carry paths or tokens, and this payload is retained.
             saw_terminal = True
-            yield emit("turn_failed", self._failure_payload(error))
+            yield emit("turn_failed", self._failure_payload(state, error))
         finally:
-            self.on_session(None)
+            publish(None)
             session.close()
 
         if not saw_terminal:

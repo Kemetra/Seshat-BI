@@ -186,7 +186,7 @@ def test_the_advertised_capability_is_backed_by_a_reachable_delivery_seam():
     # `provider_sessions` -- a dict nothing ever wrote to. The lookup existed, the
     # caller existed, and no decision ever reached a provider. So the registry's WRITE
     # side is pinned too; `test_studio_approval_reachability` proves it end to end.
-    assert "_publish_provider_session" in inspect.getsource(agent_routes), (
+    assert "_session_publisher" in inspect.getsource(agent_routes), (
         "nothing registers a provider session, so every `_frame_sink` lookup misses "
         "and `technical_approvals: True` advertises a round trip that cannot close"
     )
