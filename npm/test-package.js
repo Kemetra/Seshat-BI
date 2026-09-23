@@ -105,6 +105,36 @@ check(
   !["preinstall", "install", "postinstall"].some((s) => pkg.scripts?.[s]),
 );
 
+// --- the npm alias (npm/alias) ---------------------------------------------
+// Its version and dependency pin are a placeholder rewritten at stage time
+// (npm/stage-release-packages.js); the committed copy must never claim a real
+// release, must re-export exactly the scoped package, and must stay
+// content-only like the scoped package.
+const alias = JSON.parse(
+  readFileSync(join(repoRoot, "npm", "alias", "package.json"), "utf8"),
+);
+const ALIAS_PLACEHOLDER = "0.0.0-staged";
+check(
+  "alias version is the stage-time placeholder",
+  alias.version === ALIAS_PLACEHOLDER,
+);
+check(
+  "alias depends only on the scoped package, at the placeholder",
+  JSON.stringify(alias.dependencies) ===
+    JSON.stringify({ "@kemetra/seshat-bi": ALIAS_PLACEHOLDER }),
+);
+check(
+  "alias has no install scripts",
+  !["preinstall", "install", "postinstall", "prepare"].some(
+    (s) => alias.scripts?.[s],
+  ),
+);
+check(
+  "alias ships exactly index.js and README.md",
+  JSON.stringify([...(alias.files ?? [])].sort()) ===
+    JSON.stringify(["README.md", "index.js"]),
+);
+
 console.log(
   failures.length
     ? `\n[FAIL] ${failures.length} packaging check(s) failed.`

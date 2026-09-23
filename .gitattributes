@@ -13,6 +13,10 @@
 *.yml    text eol=lf
 *.yaml   text eol=lf
 *.cfg    text eol=lf
+# Shell scripts run under Git Bash/WSL on Windows; a CRLF checkout breaks them
+# (`$'\r': command not found`, `set: pipefail\r`).
+*.sh     text eol=lf
+*.bash   text eol=lf
 
 # Workflow scripts are loaded by the Claude Code Workflow tool, which rejects the
 # carriage-return byte as a control char -- force LF so they load on Windows checkouts.
