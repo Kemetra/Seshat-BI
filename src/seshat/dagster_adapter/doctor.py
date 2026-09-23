@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import PINNED_DAGSTER
-from .engine import resolve_build_engine
+from .engine import engine_flag_uncommitted, resolve_build_engine
 from .gate import GateState, list_mapped_tables, read_gate_state
 
 _DRIVER_DISTRIBUTIONS: dict[str, tuple[str, ...]] = {
@@ -365,6 +365,30 @@ def _engine_mode_findings(root: Path, table: str) -> list[DoctorFinding]:
     rebuilt -- FR-015/plan-review R2). A migrations-only table asserts nothing
     about dbt.
     """
+    uncommitted = _engine_uncommitted_findings(root, table)
+    return uncommitted + _resolved_engine_findings(root, table)
+
+
+def _engine_uncommitted_findings(root: Path, table: str) -> list[DoctorFinding]:
+    if not engine_flag_uncommitted(root, table):
+        return []
+    return [
+        DoctorFinding(
+            id="DAG-ENG-UNCOMMITTED",
+            severity="warning",
+            message=(
+                f"{table}: mappings/<table>/build-engine.yaml is untracked or has "
+                "uncommitted edits -- IGNORED; both layers resolve to migrations"
+            ),
+            remedy=(
+                "commit the engine flag (a reviewed, attributable change) before "
+                "relying on it, or remove the local edit"
+            ),
+        )
+    ]
+
+
+def _resolved_engine_findings(root: Path, table: str) -> list[DoctorFinding]:
     silver = resolve_build_engine(root, table, "silver")
     gold = resolve_build_engine(root, table, "gold")
     if silver != gold:

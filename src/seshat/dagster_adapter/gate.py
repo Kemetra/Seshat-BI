@@ -2,8 +2,10 @@
 
 The single implementation of the human-seam GO-signal read (research D4): the
 orchestration package (``tower_bi_orchestration``) and the ``seshat dagster``
-doctor both import THESE readers, so there is exactly one parser for the most
-safety-critical artifacts in the flow.
+doctor both import THESE readers. The mirror itself is parsed by
+``seshat.unresolved_mirror.parse_mirror`` -- the same parser the dbt Mapping
+Ready gate uses -- so one committed human ruling has exactly one meaning for
+every engine.
 
 READ-ONLY BY CONTRACT (FR-005): this module exposes no write path. It parses
 ``mappings/<table>/unresolved-questions.md`` (the ``Gate status`` line + the
@@ -15,23 +17,14 @@ by Core Authority -- never by adapter code.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
-from seshat.gitstate import is_tracked_and_clean
+from seshat.gitstate import committed_text
+from seshat.unresolved_mirror import parse_mirror
 
-# Both committed phrasings are real: the retail_store_sales instance writes a
-# bold bullet (`- **Gate status:** \`CLEARED\``); the demo_sample_orders
-# instance writes a heading (`## Gate status: CLEARED`). Read either; anything
-# else stays MISSING (fail-closed).
-_GATE_STATUS_RE = re.compile(
-    r"(?:\*\*Gate status:\*\*|^#{1,6}\s*Gate status:)\s*`?([A-Za-z]+)`?",
-    re.MULTILINE,
-)
-# An open-question table row: `| Q<n> | ... |`. The Status column carries
-# `answered` when resolved; anything else counts as open.
-_QUESTION_ROW_RE = re.compile(r"^\|\s*Q\d+\s*\|", re.MULTILINE)
+UNCOMMITTED = "UNCOMMITTED"
 
 
 @dataclass(frozen=True)
@@ -72,51 +65,60 @@ class GateState:
         return None
 
 
-def _read_unresolved(table_dir: Path) -> tuple[str, int]:
-    unresolved = table_dir / "unresolved-questions.md"
-    if not unresolved.is_file():
+def _read_unresolved(repo_root: Path, table: str) -> tuple[str, int]:
+    relative = f"mappings/{table}/unresolved-questions.md"
+    if not (Path(repo_root) / relative).is_file():
         return "MISSING", 0
-    text = unresolved.read_text(encoding="utf-8")
-    match = _GATE_STATUS_RE.search(text)
-    gate_status = match.group(1).upper() if match else "MISSING"
-    # A question row is open unless its Status cell is EXACTLY the token
-    # `answered` -- substring matching would count "unanswered" as resolved
-    # (review finding).
-    open_rows = 0
-    for line in text.splitlines():
-        if not _QUESTION_ROW_RE.match(line):
-            continue
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        status_cell = cells[5] if len(cells) > 5 else ""
-        if status_cell.strip("`").strip() != "answered":
-            open_rows += 1
-    return gate_status, open_rows
+    text = committed_text(Path(repo_root), relative)
+    if text is None:
+        return UNCOMMITTED, 0
+    state = parse_mirror(text)
+    return state.gate_status, state.open_rows
 
 
-def _read_readiness(table_dir: Path) -> tuple[tuple[Approval, ...], str]:
-    readiness = table_dir / "readiness-status.yaml"
-    if not readiness.is_file():
+def _approval_row(entry: object) -> Approval | None:
+    """A named-human row: non-blank stage and owner plus an ISO ``at`` date."""
+    if not isinstance(entry, dict):
+        return None
+    stage, owner, at = (entry.get(key) for key in ("stage", "owner", "at"))
+    if not all(isinstance(value, str) and value.strip() for value in (stage, owner)):
+        return None
+    try:
+        date.fromisoformat(str(at))
+    except ValueError:
+        return None
+    return Approval(stage=str(stage), owner=str(owner).strip(), at=str(at))
+
+
+def _publish_status(data: dict) -> str:
+    stages = data.get("stages")
+    publish = stages.get("publish_ready") if isinstance(stages, dict) else None
+    if not isinstance(publish, dict):
+        return "missing"
+    return str(publish.get("status", "missing"))
+
+
+def _read_readiness(repo_root: Path, table: str) -> tuple[tuple[Approval, ...], str]:
+    relative = f"mappings/{table}/readiness-status.yaml"
+    if not (Path(repo_root) / relative).is_file():
         return (), "missing"
+    text = committed_text(Path(repo_root), relative)
+    if text is None:
+        return (), "uncommitted"
     import yaml  # lazy: keeps module import driver- and dependency-light
 
-    data = yaml.safe_load(readiness.read_text(encoding="utf-8")) or {}
+    try:
+        data = yaml.safe_load(text) or {}
+    except yaml.YAMLError:
+        return (), "invalid"
+    if not isinstance(data, dict):
+        return (), "invalid"
+    rows = data.get("approvals")
+    candidates = rows if isinstance(rows, list) else []
     approvals = tuple(
-        Approval(
-            stage=str(entry.get("stage", "")),
-            owner=str(entry.get("owner", "")),
-            at=str(entry.get("at", "")),
-        )
-        for entry in data.get("approvals") or []
-        if isinstance(entry, dict)
+        row for row in (_approval_row(entry) for entry in candidates) if row
     )
-    stages = data.get("stages") or {}
-    publish = stages.get("publish_ready") or {}
-    publish_ready = (
-        str(publish.get("status", "missing"))
-        if isinstance(publish, dict)
-        else "missing"
-    )
-    return approvals, publish_ready
+    return approvals, _publish_status(data)
 
 
 def read_gate_state(repo_root: Path, table: str) -> GateState:
@@ -127,15 +129,13 @@ def read_gate_state(repo_root: Path, table: str) -> GateState:
     not an explicit CLEARED + zero open rows). A mirror that exists but is
     untracked or dirty against HEAD reads as UNCOMMITTED (#334): a
     worktree-only clearance never entered audit history and may disappear on
-    checkout, so it must never permit the silver build.
+    checkout, so it must never permit the silver build. The same holds for
+    ``readiness-status.yaml``: an untracked or dirty record yields NO approvals
+    and ``publish_ready='uncommitted'``, and both files are parsed from their
+    committed (HEAD) blob, never the worktree.
     """
-    table_dir = Path(repo_root) / "mappings" / table
-    gate_status, open_rows = _read_unresolved(table_dir)
-    if gate_status != "MISSING" and not is_tracked_and_clean(
-        Path(repo_root), f"mappings/{table}/unresolved-questions.md"
-    ):
-        gate_status = "UNCOMMITTED"
-    approvals, publish_ready = _read_readiness(table_dir)
+    gate_status, open_rows = _read_unresolved(repo_root, table)
+    approvals, publish_ready = _read_readiness(repo_root, table)
     return GateState(
         table=table,
         gate_status=gate_status,

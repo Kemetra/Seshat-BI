@@ -144,6 +144,30 @@ def make_fixture_repo(
     return root
 
 
+def commit_engine_flag(root: Path, body: str, table: str = TABLE) -> None:
+    """Write AND commit ``mappings/<table>/build-engine.yaml``.
+
+    The engine resolver honours only a committed, clean flag (a reviewed,
+    attributable change), so every fixture that selects an engine commits it.
+    """
+    table_dir = root / "mappings" / table
+    table_dir.mkdir(parents=True, exist_ok=True)
+    (table_dir / "build-engine.yaml").write_text(body, encoding="utf-8")
+    if not (root / ".git").exists():
+        for argv in (
+            ["git", "init", "-b", "main"],
+            ["git", "config", "user.email", "t@example.com"],
+            ["git", "config", "user.name", "Test"],
+            ["git", "config", "commit.gpgsign", "false"],
+        ):
+            subprocess.run(argv, cwd=root, check=True, capture_output=True)
+    for argv in (
+        ["git", "add", "-A", "--", f"mappings/{table}/build-engine.yaml"],
+        ["git", "commit", "--allow-empty", "-m", "engine flag"],
+    ):
+        subprocess.run(argv, cwd=root, check=True, capture_output=True)
+
+
 def mappings_digest(root: Path) -> str:
     """One hash over every byte under mappings/ -- the no-authored-truth probe."""
     digest = hashlib.sha256()

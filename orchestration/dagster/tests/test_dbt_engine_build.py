@@ -20,7 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import TABLE, mappings_digest, stub_green_db
+from conftest import TABLE, commit_engine_flag, mappings_digest, stub_green_db
 from dagster import materialize
 from tower_bi_orchestration import commands
 from tower_bi_orchestration.assets import build_table_assets
@@ -32,9 +32,7 @@ from tower_bi_orchestration.evidence_writer import (
 
 
 def _set_engine(root: Path, silver: str, gold: str) -> None:
-    (root / "mappings" / TABLE / "build-engine.yaml").write_text(
-        f"silver: {silver}\ngold: {gold}\n", encoding="utf-8"
-    )
+    commit_engine_flag(root, f"silver: {silver}\ngold: {gold}\n")
 
 
 # --------------------------------------------------------------------------
@@ -275,9 +273,7 @@ def test_nondbt_engine_takes_migrations_branch(
 ) -> None:
     stub_green_db(monkeypatch)
     if engine_body is not None:
-        (green_repo / "mappings" / TABLE / "build-engine.yaml").write_text(
-            engine_body, encoding="utf-8"
-        )
+        commit_engine_flag(green_repo, engine_body)
     calls = _stub_dbt_bridge(monkeypatch, exit_code=0)
 
     through_silver = [

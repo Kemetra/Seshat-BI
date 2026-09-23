@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import TABLE, mappings_digest
+from conftest import TABLE, commit_engine_flag, mappings_digest
 from dagster import Failure, build_asset_context
 from tower_bi_orchestration import commands
 from tower_bi_orchestration.assets import build_table_assets
@@ -24,9 +24,7 @@ from tower_bi_orchestration.evidence_writer import EvidenceWriter
 
 
 def _dbt_engine(root: Path) -> None:
-    (root / "mappings" / TABLE / "build-engine.yaml").write_text(
-        "silver: dbt\ngold: dbt\n", encoding="utf-8"
-    )
+    commit_engine_flag(root, "silver: dbt\ngold: dbt\n")
 
 
 def _silver_asset(root: Path):

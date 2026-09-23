@@ -184,6 +184,72 @@ class TestReadGateState:
         assert state.approval_for("semantic_model_ready") is None
 
 
+class TestCommittedReadiness:
+    """Approvals and publish_ready come only from the COMMITTED readiness file."""
+
+    def test_uncommitted_approval_is_never_returned(self, tmp_path: Path) -> None:
+        repo = _committed_table(tmp_path, "demo_table", UNRESOLVED_CLEARED)
+        readiness = repo / "mappings" / "demo_table" / "readiness-status.yaml"
+        readiness.write_text(
+            readiness.read_text(encoding="utf-8")
+            + '  - stage: "semantic_model_ready"\n'
+            + '    owner: "Named Human (metric_owner)"\n'
+            + '    at: "2026-06-26"\n',
+            encoding="utf-8",
+        )
+        state = gate.read_gate_state(repo, "demo_table")
+        assert state.approvals == ()
+        assert state.approval_for("semantic_model_ready") is None
+        assert state.publish_ready == "uncommitted"
+
+    def test_untracked_readiness_yields_no_approvals(self, tmp_path: Path) -> None:
+        repo = make_git_repo(tmp_path)
+        _make_table(repo, "demo_table", UNRESOLVED_CLEARED, publish_status="pass")
+        state = gate.read_gate_state(repo, "demo_table")
+        assert state.approvals == ()
+        assert state.publish_ready == "uncommitted"
+
+    @pytest.mark.parametrize(
+        "row",
+        [
+            '  - stage: "semantic_model_ready"\n    at: "2026-06-26"\n',
+            '  - stage: "semantic_model_ready"\n    owner: "  "\n'
+            '    at: "2026-06-26"\n',
+            '  - stage: "semantic_model_ready"\n    owner: "Named Human (x)"\n'
+            '    at: "yesterday"\n',
+        ],
+    )
+    def test_blank_owner_or_bad_date_is_not_an_approval(
+        self, tmp_path: Path, row: str
+    ) -> None:
+        repo = make_git_repo(tmp_path)
+        _make_table(repo, "demo_table", UNRESOLVED_CLEARED)
+        readiness = repo / "mappings" / "demo_table" / "readiness-status.yaml"
+        readiness.write_text(
+            readiness.read_text(encoding="utf-8") + row, encoding="utf-8"
+        )
+        commit_all(repo, "gate fixture")
+        state = gate.read_gate_state(repo, "demo_table")
+        assert state.approval_for("semantic_model_ready") is None
+        assert state.approval_for("mapping_ready") is not None
+
+    def test_mirror_is_parsed_from_the_committed_blob(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Prove the net: with the cleanliness probe disabled the committed
+        blob (OPEN) is still what is parsed, not the CLEARED worktree edit."""
+        from seshat import gitstate
+
+        repo = _committed_table(tmp_path, "demo_table", UNRESOLVED_OPEN)
+        (repo / "mappings" / "demo_table" / "unresolved-questions.md").write_text(
+            UNRESOLVED_CLEARED, encoding="utf-8"
+        )
+        monkeypatch.setattr(gitstate, "is_tracked_and_clean", lambda root, rel: True)
+        state = gate.read_gate_state(repo, "demo_table")
+        assert state.gate_status == "OPEN"
+        assert state.silver_permitted is False
+
+
 class TestListMappedTables:
     def test_lists_only_dirs_with_source_map(self, tmp_path: Path) -> None:
         _make_table(tmp_path, "alpha", UNRESOLVED_CLEARED)
