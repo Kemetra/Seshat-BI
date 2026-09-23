@@ -15,12 +15,22 @@ to something that floats.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.parse import quote, urlsplit
+from urllib.request import (
+    HTTPDefaultErrorHandler,
+    HTTPErrorProcessor,
+    HTTPRedirectHandler,
+    HTTPSHandler,
+    OpenerDirector,
+    Request,
+    UnknownHandler,
+)
 
 from seshat.integrations.catalog import Channel, Component, SourceType
 from seshat.integrations.procs import scrub
@@ -37,6 +47,15 @@ GITHUB_API = "https://api.github.com"
 NPM_REGISTRY_URL = "https://registry.npmjs.org/{package}"
 
 _TIMEOUT = 30
+
+# A metadata document larger than this is refused rather than read into memory.
+_MAX_BODY_BYTES = 20 * 1024 * 1024
+
+# A release tag is interpolated into an API path and later handed to
+# `git clone --branch`; anything outside this conservative refname subset (or
+# starting with `-`, or containing `..`) is refused rather than escaped into a
+# lookup that could describe a different ref than the one cloned.
+_SAFE_REF = re.compile(r"(?!-)(?!.*\.\.)[A-Za-z0-9._/+-]{1,255}")
 
 
 # --------------------------------------------------------------------------- #
@@ -215,6 +234,10 @@ def resolve_github(item: Component, index: GitHubIndex) -> Resolution:
         tag = str(release.get("tag_name") or "").strip()
         if not tag:
             return _refuse(item.id, FAILED, "release carries no tag_name")
+        if not _SAFE_REF.fullmatch(tag):
+            return _refuse(
+                item.id, FAILED, f"release tag {tag!r} is not a safe git ref name"
+            )
         commit = _commit(item, index, tag)
         if isinstance(commit, Resolution):
             return commit
@@ -396,12 +419,57 @@ def resolve(item: Component, resolvers: Resolvers) -> Resolution:
 # --------------------------------------------------------------------------- #
 
 
+class _HttpsSameHostRedirect(HTTPRedirectHandler):
+    """Follow a redirect only to https on the host originally requested."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        old, new = urlsplit(req.full_url), urlsplit(newurl)
+        if new.scheme != "https" or new.hostname != old.hostname:
+            raise HTTPError(
+                newurl,
+                code,
+                f"refusing a redirect to {new.scheme}://{new.hostname}",
+                headers,
+                fp,
+            )
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _build_opener() -> OpenerDirector:
+    """An opener that can speak https ONLY.
+
+    `urllib.request.build_opener` also installs file, ftp and data handlers; a
+    redirect could otherwise reach them. Nothing but https is registered here.
+    """
+    opener = OpenerDirector()
+    for handler in (
+        HTTPSHandler(),
+        _HttpsSameHostRedirect(),
+        HTTPDefaultErrorHandler(),
+        HTTPErrorProcessor(),
+        UnknownHandler(),
+    ):
+        opener.add_handler(handler)
+    return opener
+
+
+_OPENER = _build_opener()
+
+
+def urlopen(request: Request, *, timeout: float):
+    """The one network call site (tests replace this name to forbid the network)."""
+    return _OPENER.open(request, timeout=timeout)
+
+
 def _get_json(url: str) -> dict:
-    request = Request(url, headers={"Accept": "application/json"})  # noqa: S310
-    if not url.startswith("https://"):  # pragma: no cover - constants are https
+    if urlsplit(url).scheme != "https":
         raise ValueError(f"refusing a non-https URL: {url}")
-    with urlopen(request, timeout=_TIMEOUT) as response:  # noqa: S310
-        return json.loads(response.read().decode("utf-8"))
+    request = Request(url, headers={"Accept": "application/json"})  # noqa: S310
+    with urlopen(request, timeout=_TIMEOUT) as response:
+        body = response.read(_MAX_BODY_BYTES + 1)
+    if len(body) > _MAX_BODY_BYTES:
+        raise ValueError(f"response from {url} exceeds {_MAX_BODY_BYTES} bytes")
+    return json.loads(body.decode("utf-8"))
 
 
 class LivePypi:
@@ -429,7 +497,7 @@ class LiveGitHub:
 
     def commit_for_ref(self, repo: str, ref: str) -> dict | None:
         try:
-            return _get_json(f"{GITHUB_API}/repos/{repo}/commits/{ref}")
+            return _get_json(f"{GITHUB_API}/repos/{repo}/commits/{quote(ref, safe='')}")
         except HTTPError as exc:
             if exc.code == 404:
                 return None
