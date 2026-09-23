@@ -185,7 +185,9 @@ def _make_file_reader(path, sheet: str | None):
             f"error: --sheet applies to an Excel --file only, not to {suffix} "
             "(a CSV/TSV has exactly one table)."
         )
-    return make_csv_reader(str(path), encoding="utf-8", delimiter=delimiter), None
+    # utf-8-sig: Excel's "CSV UTF-8" export starts with a BOM, which plain utf-8
+    # leaves glued to the first header name. A strict superset for BOM-less files.
+    return make_csv_reader(str(path), encoding="utf-8-sig", delimiter=delimiter), None
 
 
 def _adapt_file_result(file_result: object) -> object:
@@ -257,7 +259,11 @@ def _run_file_profile(args: argparse.Namespace) -> int:
 
     try:
         result = profile_file(
-            reader, source=str(path), candidate_pk=tuple(candidate_pk)
+            # The file NAME, not the local path: the label lands in a committable
+            # source-profile.md, and an absolute path discloses the machine.
+            reader,
+            source=path.name,
+            candidate_pk=tuple(candidate_pk),
         )
     except (ValueError, OSError, UnicodeDecodeError, KeyError) as exc:
         print(f"error: could not profile {args.source_file!r}: {exc}", file=sys.stderr)
