@@ -383,3 +383,46 @@ def to_findings_dict(
             for h in _handoffs(findings)
         ],
     }
+
+
+PORTFOLIO_ARTIFACT_SCHEMA_VERSION = "1.0"
+
+
+def _portfolio_item(finding: dict, owners: dict[str, str]) -> dict:
+    return {
+        "class": finding["drift_class"],
+        "subject_locator": finding["column"],
+        "measured": f"{finding['before']} -> {finding['after']}",
+        "principle_v": finding["principle_v"] is True,
+        "owner": owners.get(finding["drift_class"]),
+    }
+
+
+def to_portfolio_artifact(
+    findings_doc: dict, captured_at_revision: str | None = None
+) -> dict:
+    """Translate a ``to_findings_dict`` document into the Portfolio Watch artifact.
+
+    The ONE contract between the drift producer and the portfolio consumer
+    (``mappings/<scope>/drift-findings.json``): ``class`` is the drift status,
+    each finding becomes an item keyed by drift class + column, and Principle-V
+    owners come from the handoff list. ``captured_at_revision`` is the commit
+    the re-profile ran against; the native document cannot carry it (its schema
+    is closed), so an unstamped artifact is read as stale -- never as current.
+    Raises ``KeyError``/``TypeError`` on a document that is not this shape.
+    """
+    owners = {
+        handoff["drift_class"]: handoff["owner"]
+        for handoff in findings_doc["principle_v_handoff"]
+        if isinstance(handoff.get("owner"), str)
+    }
+    items = [_portfolio_item(f, owners) for f in findings_doc["findings"]]
+    return {
+        "schema_version": PORTFOLIO_ARTIFACT_SCHEMA_VERSION,
+        "captured_at_revision": captured_at_revision,
+        "live_leg_available": findings_doc["observed"]["available"] is True,
+        "class": findings_doc["status"],
+        "measured": f"{len(items)} finding(s)",
+        "owner": next(iter(owners.values()), None),
+        "items": items,
+    }
