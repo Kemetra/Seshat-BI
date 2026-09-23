@@ -297,3 +297,40 @@ def test_a_pending_upgrade_is_never_summarised_as_present(tmp_path: Path) -> Non
     assert "Dry run only" in as_text(outcome)
     legacy = render_results([IntegrationResult("duckdb", installer.UPGRADE, "x")])
     assert "are present" not in legacy
+
+
+def _lock_with(root: Path, *component_ids: str) -> None:
+    from seshat.integrations.lockfile import SCHEMA, write_lock
+
+    write_lock(
+        root,
+        {
+            "schema": SCHEMA,
+            "profile": "analytics-full",
+            "resolved_at": "2026-08-19T00:00:00Z",
+            "components": {cid: {"version": "1.0.0"} for cid in component_ids},
+        },
+    )
+
+
+def test_a_profile_plan_warns_which_locked_components_it_would_drop(
+    tmp_path: Path,
+) -> None:
+    """Owner-gated semantics are unchanged; the loss is announced beforehand."""
+    root = _workspace(tmp_path)
+    _lock_with(root, "fabric-skills", "dbt-core")
+
+    outcome = installer.plan(root, profile="transformation")
+
+    dropped = [note for note in outcome.notes if "outside profile" in note]
+    assert dropped and "fabric-skills" in dropped[0]
+    assert "dbt-core" not in dropped[0]
+
+
+def test_a_derived_plan_does_not_warn_about_dropping(tmp_path: Path) -> None:
+    root = _workspace(tmp_path)
+    _lock_with(root, "fabric-skills")
+
+    outcome = installer.plan(root, components=(component("duckdb"),))
+
+    assert not [note for note in outcome.notes if "outside profile" in note]

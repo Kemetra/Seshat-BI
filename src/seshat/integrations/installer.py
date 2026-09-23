@@ -233,6 +233,8 @@ def plan(
         python_version=resolvers.python_version if resolvers else None,
     )
     outcome.notes.extend(verdict.reasons)
+    if not derived:
+        outcome.notes.extend(_dropped_from_lock(lock, components, profile))
     outcome.resolutions = {
         item.id: resolved for item, resolved in zip(components, verdict.resolutions)
     }
@@ -257,6 +259,28 @@ def plan(
         )
     )
     return outcome
+
+
+def _dropped_from_lock(lock, components, profile: str) -> list[str]:
+    """A warning naming locked components a PROFILE apply would drop from the lock.
+
+    A profile run rewrites the whole lock with only its own components (spec
+    144 FR-010/FR-011; making the merge symmetric is an owner decision, spec 155
+    owner decision 3), so the loss is stated before it happens rather than
+    discovered later as "absent from the integration lock".
+    """
+    if lock is None:
+        return []
+    selected = {item.id for item in components}
+    dropped = sorted(set(lock.components) - selected)
+    if not dropped:
+        return []
+    return [
+        f"{len(dropped)} component(s) recorded in {LOCK_FILE.as_posix()} are "
+        f"outside profile {profile} ({', '.join(dropped)}); an --apply of this "
+        "profile rewrites the lock without them. Use the profile that includes "
+        "them (analytics-full) to keep them recorded."
+    ]
 
 
 def _refusal_row(component: str, label: str, source: str, detail: str) -> ComponentPlan:
@@ -502,14 +526,17 @@ def apply(
     components = components if derived else profile_components(profile)
 
     refusal = _authorization_refusal(root, components, label)
+    lock = None
     if refusal is None:
         try:
-            read_lock(root)
+            lock = read_lock(root)
         except LockError as exc:
             refusal = _refusal_row("lock", label, LOCK_FILE.as_posix(), str(exc))
     if refusal is not None:
         outcome.rows.append(refusal)
         return outcome
+    if not derived:
+        outcome.notes.extend(_dropped_from_lock(lock, components, profile))
 
     resolutions = [_apply_resolution(item, resolvers, pinned) for item in components]
     verdict = apply_policy(
