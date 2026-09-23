@@ -298,7 +298,7 @@ def run_describe(context: MethodContext) -> MethodResult:
     )
     counts = _Counts(
         observed=sample.retained_count,
-        missing=sample.total_count - sample.retained_count,
+        missing=sample.total_count - sample.retained_count - sample.incomplete_count,
         excluded=sample.excluded_count,
         distinct=len(set(sample.values.tolist())),
     )

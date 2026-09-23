@@ -145,6 +145,10 @@ def test_complete_case_drops_rows_missing_any_bound_role() -> None:
     )
     assert _estimate(complete, "count_observed") == 4
     assert _estimate(available, "count_observed") == 5
+    # The response itself has no nulls: the dropped row is an incomplete row,
+    # excluded, never reported as a missing response.
+    assert _estimate(complete, "count_missing") == 0
+    assert _estimate(complete, "count_excluded") == 1
 
 
 def test_governed_missing_policies_match_the_schema_enum() -> None:

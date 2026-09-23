@@ -20,6 +20,9 @@ class NumericSample:
     retained_count: int
     excluded_count: int
     exclusion_reasons: tuple[str, ...]
+    # Rows dropped by complete_case because ANOTHER bound role was missing; kept
+    # apart so this role's own missing count is never overstated.
+    incomplete_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,28 +142,33 @@ def _row_complete(context: MethodContext, row: tuple) -> bool:
 
 
 def _present_values(context: MethodContext, index: int):
-    """Split one column into its present values, their rows, and a missing count.
+    """Split one column into present values, its OWN missing count, and the rows
+    complete_case dropped because another bound role was missing.
 
     Under complete_case a row counts as present only when every bound role is
     present; available_case and explicit_status use per-column availability.
     """
 
     complete_case = context.spec.missing_policy == "complete_case"
-    present = [
-        (row_index, row[index])
+    available = [
+        (row_index, row)
         for row_index, row in enumerate(context.data.rows)
         if not _is_missing(row[index])
-        and (not complete_case or _row_complete(context, row))
     ]
-    missing_count = len(context.data.rows) - len(present)
-    return present, missing_count
+    present = [
+        (row_index, row[index])
+        for row_index, row in available
+        if not complete_case or _row_complete(context, row)
+    ]
+    own_missing = len(context.data.rows) - len(available)
+    return present, own_missing, len(available) - len(present)
 
 
 def numeric_role(context: MethodContext, role: str) -> NumericSample:
     """Prepare one role with explicit missingness and minimum-data behavior."""
 
     index = _column_index(context, role)
-    present, missing_count = _present_values(context, index)
+    present, missing_count, incomplete = _present_values(context, index)
     enforce_missing_policy(
         context, missing_count, f"The {role} role contains missing observations."
     )
@@ -178,13 +186,16 @@ def numeric_role(context: MethodContext, role: str) -> NumericSample:
     reasons = list(context.data.exclusion_reasons)
     if missing_count:
         reasons.append(f"{role}:missing={missing_count}")
+    if incomplete:
+        reasons.append(f"complete_case:incomplete_row={incomplete}")
     return NumericSample(
         values=values,
         row_indices=tuple(row_index for row_index, _ in present),
         total_count=context.data.total_count,
         retained_count=len(values),
-        excluded_count=context.data.excluded_count + missing_count,
+        excluded_count=context.data.excluded_count + missing_count + incomplete,
         exclusion_reasons=tuple(reasons),
+        incomplete_count=incomplete,
     )
 
 
@@ -204,7 +215,7 @@ def safe_groups(context: MethodContext, role: str = "group") -> SafeGroups:
     """Suppress undersized groups before any group-level method executes."""
 
     index = _column_index(context, role)
-    present, missing_count = _present_values(context, index)
+    present, missing_count, _incomplete = _present_values(context, index)
     grouped: dict[str, list[int]] = {}
     for row_index, value in present:
         grouped.setdefault(str(value), []).append(row_index)
