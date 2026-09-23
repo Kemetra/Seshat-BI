@@ -376,9 +376,13 @@ def make_excel_reader(path: str, *, sheet: str, header_row: int = 0) -> FrameRea
     # a genuine surplus NON-blank far cell stays, so profile_file's ragged_row_count
     # surfaces it (adversarial re-review: row[:width] silently dropped real far-column
     # values and defeated the never-silent ragged contract for the Excel path).
+    # Blanks INSIDE the header width are genuine empty cells (a sparse last column),
+    # never padding -- stripping them would count every such row as ragged (F142).
+    width = len(header)
+
     def _rstrip_padding(r: tuple[str, ...]) -> tuple[str, ...]:
         cells = list(r)
-        while cells and str(cells[-1]).strip() == "":
+        while len(cells) > width and str(cells[-1]).strip() == "":
             cells.pop()
         return tuple(cells)
 

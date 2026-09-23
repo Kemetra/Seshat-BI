@@ -256,19 +256,45 @@ def _run_file_profile(args: argparse.Namespace) -> int:
         return 1
 
     try:
+        # The basename, never the absolute local path: this output is pasted
+        # into a committed source-profile.md.
         result = profile_file(
-            reader, source=str(path), candidate_pk=tuple(candidate_pk)
+            reader, source=path.name, candidate_pk=tuple(candidate_pk)
         )
     except (ValueError, OSError, UnicodeDecodeError, KeyError) as exc:
         print(f"error: could not profile {args.source_file!r}: {exc}", file=sys.stderr)
         return 1
 
-    adapted = _adapt_file_result(result)
-    if args.output_format == "json":
-        print(_render_json(adapted, candidate_pk))
-    else:
-        print(_render_markdown(adapted, candidate_pk))
+    print(_render_file_result(result, candidate_pk, args.output_format))
     return 0
+
+
+def _render_file_result(
+    result: object, candidate_pk: tuple[str, ...], output_format: str
+) -> str:
+    """Render a file profile, carrying the ragged-row count the DB shape lacks.
+
+    ``ragged_row_count`` is the file profiler's never-silent signal that rows
+    were padded or truncated to the header width (a delimiter/quote mismatch).
+    It is appended as its own field / finding so the shared DB renderers stay
+    unforked.
+    """
+    import json
+
+    adapted = _adapt_file_result(result)
+    ragged = result.ragged_row_count
+    if output_format == "json":
+        payload = json.loads(_render_json(adapted, candidate_pk))
+        payload["ragged_row_count"] = ragged
+        return json.dumps(payload, indent=2)
+    finding = (
+        f"**Ragged rows:** {ragged:,} of {result.row_count:,} data rows did not "
+        "match the header width and were padded/truncated to it -- a delimiter "
+        "or quoting mismatch; this stage cannot pass until the source is fixed."
+        if ragged
+        else "**Ragged rows:** 0 (every data row matched the header width)."
+    )
+    return f"{_render_markdown(adapted, candidate_pk)}\n\n{finding}"
 
 
 def run_profile(args: argparse.Namespace) -> int:

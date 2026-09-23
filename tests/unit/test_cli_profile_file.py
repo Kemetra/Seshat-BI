@@ -253,3 +253,71 @@ def test_profile_sheet_rejected_for_table(capsys: pytest.CaptureFixture[str]) ->
     err = capsys.readouterr().err
     assert rc == 1
     assert "--sheet" in err
+
+
+# --- F142: the ragged-row count must reach the rendered profile ---------------
+
+
+def _write_ragged_csv(tmp_path) -> str:
+    """Unquoted commas inside names: two of three rows are wider than the header."""
+    path = tmp_path / "r.csv"
+    path.write_text(
+        "id,customer,amount\n1,Smith, John,100\n2,Doe, Jane,200\n3,Lee,300\n",
+        encoding="utf-8",
+    )
+    return str(path)
+
+
+def test_profile_file_json_carries_ragged_row_count(
+    tmp_path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rc = main_under_test(
+        ["profile", "--file", _write_ragged_csv(tmp_path), "--pk", "id"]
+        + ["--format", "json"]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["ragged_row_count"] == 2
+    assert payload["table"] == "r.csv"  # never the absolute local path
+
+
+def test_profile_file_markdown_names_ragged_rows_as_a_finding(
+    tmp_path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rc = main_under_test(["profile", "--file", _write_ragged_csv(tmp_path)] + ["--pk", "id"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "**Ragged rows:** 2" in out
+    assert str(tmp_path) not in out
+
+
+def test_profile_file_clean_csv_reports_zero_ragged(
+    tmp_path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rc = main_under_test(
+        ["profile", "--file", _write_csv(tmp_path), "--pk", "order_id"]
+        + ["--format", "json"]
+    )
+    assert rc == 0
+    assert json.loads(capsys.readouterr().out)["ragged_row_count"] == 0
+
+
+def test_ragged_finding_keeps_the_markdown_a_readable_baseline(
+    tmp_path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The appended ragged finding must not break read_source_profile's parse."""
+    from pathlib import Path
+
+    from seshat.source_profile_reader import read_source_profile
+
+    main_under_test(["profile", "--file", _write_ragged_csv(tmp_path), "--pk", "id"])
+    rendered = capsys.readouterr().out
+    header = "## Header" + "NL" + "| Field | Value |" + "NL" + "|-------|-------|" + "NL"
+    header += "| Table id | `T` |" + "NL" + "| Landed location | `r.csv` |" + "NL"
+    doc = header.replace("NL", chr(10)) + chr(10) + rendered
+    path = Path(tmp_path) / "source-profile.md"
+    path.write_text(doc, encoding="utf-8")
+    parsed = read_source_profile(path)
+    assert parsed.uncomparable is None, parsed.uncomparable
+    assert parsed.profile.row_count == 3
+
