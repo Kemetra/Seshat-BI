@@ -5,15 +5,12 @@ from __future__ import annotations
 import importlib.metadata
 import json
 import re
-import subprocess
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from secrets import token_hex
 from types import SimpleNamespace
 from typing import Any
-
-import yaml
 
 from seshat.dbt import (
     DBT_CORE_VERSION,
@@ -158,7 +155,13 @@ def _verify_required_paths(root: Path) -> None:
 
 
 def _verify_ignore_rules(root: Path) -> None:
-    ignore_lines = set((root / ".gitignore").read_text(encoding="utf-8").splitlines())
+    try:
+        text = (root / ".gitignore").read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeError) as exc:
+        raise _pending(
+            ".gitignore is missing or unreadable; add the dbt local-output ignore rules"
+        ) from exc
+    ignore_lines = {line.strip() for line in text.splitlines()}
     required_ignores = {
         "/profiles.yml",
         "/.user.yml",
@@ -170,51 +173,16 @@ def _verify_ignore_rules(root: Path) -> None:
         raise _pending("dbt local-output ignore rules are incomplete")
 
 
-def _profile_document(path: Path, label: str) -> dict[str, Any]:
-    try:
-        document = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, yaml.YAMLError) as exc:
-        raise _pending(f"{label} is missing or invalid") from exc
-    if not isinstance(document, dict):
-        raise _pending(f"{label} must be a YAML mapping")
-    return document
-
-
 def _verify_local_profile(root: Path) -> None:
-    local_profile = root / "profiles.yml"
-    if not local_profile.is_file():
-        raise _pending("copy profiles.example.yml to the gitignored profiles.yml")
-    local = _profile_document(local_profile, "profiles.yml")
-    governed = _profile_document(root / "profiles.example.yml", "profiles.example.yml")
-    if local != governed:
-        raise _pending("profiles.yml must match the exact governed template")
+    from seshat.dbt.profile_guard import verify_local_profile
 
-
-def _profile_git_result(root: Path, *args: str) -> int:
-    # `root` is a user-supplied `--repo`, and `cwd=root` makes git read THAT
-    # tree's `.git/config`, so the FULL untrusted-tree hardening set is required
-    # here -- `check-ignore` / `ls-files` (the two callers) are exactly the
-    # subcommands that trigger git's config-driven execution. Sourced from the
-    # single shared tuple: this site previously carried `core.fsmonitor` alone
-    # and left `core.hooksPath` / `protocol.ext` open.
-    from seshat.gitutil import GIT_HARDENING
-
-    completed = subprocess.run(
-        ["git", *GIT_HARDENING, *args, "--", "profiles.yml"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-        shell=False,
-    )
-    return completed.returncode
+    verify_local_profile(root)
 
 
 def _verify_profile_git_boundary(root: Path) -> None:
-    ignored = _profile_git_result(root, "check-ignore", "--quiet")
-    tracked = _profile_git_result(root, "ls-files", "--error-unmatch")
-    if (ignored, tracked) != (0, 1):
-        raise _pending("profiles.yml must remain untracked and gitignored")
+    from seshat.dbt.profile_guard import verify_profile_git_boundary
+
+    verify_profile_git_boundary(root)
 
 
 def _verify_environment(root: Path) -> None:

@@ -142,16 +142,22 @@ def test_dbt_profile_git_leg_carries_full_hardening_set(
     Asserts on the ARGV actually handed to git -- not on the source text -- so
     the test stays honest whether the flags are inlined or imported.
     """
-    from seshat.cli.commands import dbt as dbt_cmd
+    from seshat import gitutil
+    from seshat.dbt import profile_guard
 
     seen: dict[str, list[str]] = {}
 
     def _capture(cmd, **kwargs):
         seen["cmd"] = list(cmd)
+        seen["stdin"] = kwargs.get("stdin")
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
-    monkeypatch.setattr(dbt_cmd.subprocess, "run", _capture)
-    dbt_cmd._profile_git_result(tmp_path, "check-ignore", "--quiet")
+    # The profile leg now runs through the shared hardened wrapper
+    # (gitstate.run_git -> gitutil.run_subprocess).
+    monkeypatch.setattr(gitutil.subprocess, "run", _capture)
+    profile_guard._profile_git_result(tmp_path, "check-ignore", "--quiet")
+    assert seen["stdin"] == subprocess.DEVNULL
+    assert any(part.startswith("safe.directory=") for part in seen["cmd"])
 
     argv = seen["cmd"]
     for flag in _REQUIRED_HARDENING:
