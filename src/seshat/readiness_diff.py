@@ -40,6 +40,7 @@ from .run_next import _STAGE_ORDER
 # Statuses in progress order (docs/readiness/readiness-model.md). The index
 # answers only the boolean "did this go backwards".
 _STATUS_PROGRESS: tuple[str, ...] = ("not_started", "blocked", "warning", "pass")
+_VERIFIED: frozenset[str] = frozenset({"warning", "pass"})
 
 
 def _progress_of(status: str | None) -> int | None:
@@ -230,12 +231,17 @@ def _stage_change(
         return None
     before_rank = _progress_of(before_status)
     after_rank = _progress_of(after_status)
+    # A verified (pass/warning) base that becomes missing or unrecognized LOSES
+    # its recorded state: that is a regression, not a guessed rank (audit F081).
+    # Only an unknown BASE leaves the direction unclaimed.
+    lost_verified = before_status in _VERIFIED and after_rank is None
     return StageChange(
         table=table,
         stage=stage,
         base_status=before_status,
         head_status=after_status,
-        is_regression=(
+        is_regression=lost_verified
+        or (
             before_rank is not None
             and after_rank is not None
             and after_rank < before_rank

@@ -40,9 +40,11 @@ Ratified rulings (spec 057 ## Clarifications):
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Optional
 
 from .core import Finding, Severity
+from .pbi_mcp.scan import SECRET_PATTERNS
 from .redaction_core import replace_fragments, uri_components
 
 _VALID_MODES = ("live", "deferred")
@@ -58,12 +60,16 @@ def _scrub(text: str, dsn: Optional[str]) -> str:
     (#385 class). Idempotent: a string with no surviving credential is unchanged.
     """
     out = str(text)
-    if not dsn:
-        return out
-    # Literal DSN first (keeps the "<redacted DSN>" token), then every component;
-    # uri_components sorts longest-first and is ValueError-total on a malformed DSN.
-    out = out.replace(dsn, "<redacted DSN>")
-    return replace_fragments(out, uri_components([dsn]), "<redacted>")
+    if dsn:
+        # Literal DSN first (keeps the "<redacted DSN>" token), then every
+        # component; uri_components sorts longest-first and is ValueError-total.
+        out = out.replace(dsn, "<redacted DSN>")
+        out = replace_fragments(out, uri_components([dsn]), "<redacted>")
+    # Layer two (audit F181): secret-shaped spans the DSN decomposition cannot
+    # see -- a pasted credential or a tenant GUID -- using the shipped table.
+    for _label, pattern in SECRET_PATTERNS:
+        out = pattern.sub("<redacted>", out)
+    return out
 
 
 def build_gold_ready_block(
@@ -72,6 +78,7 @@ def build_gold_ready_block(
     run_mode: str = "live",
     timestamp: Optional[str] = None,
     dsn: Optional[str] = None,
+    executed_rules: Iterable[str] = (),
 ) -> dict:
     """Build a proposed ``gold_ready`` readiness block from live-check findings.
 
@@ -126,8 +133,13 @@ def build_gold_ready_block(
     block["evidence"] = [
         f"live validate run for {table}: "
         f"{len(errors)} ERROR, {len(warnings)} WARNING findings",
-        # FR-014: an empty V-RC2 is an observation, not a ratified grain claim.
-        "no duplicate observed on current rows (V-RC2 clean) -- an observation, "
-        "not a ratified grain/uniqueness claim",
     ]
+    # FR-014: an empty V-RC2 is an observation, not a ratified grain claim -- and
+    # only when a V-RC2 check actually RAN (audit F181); with no PK declared the
+    # check never ran and claiming it clean would fabricate an observation.
+    if "V-RC2" in set(executed_rules):
+        block["evidence"].append(
+            "no duplicate observed on current rows (V-RC2 clean) -- an "
+            "observation, not a ratified grain/uniqueness claim"
+        )
     return block

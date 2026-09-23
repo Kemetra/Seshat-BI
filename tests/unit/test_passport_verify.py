@@ -105,11 +105,38 @@ def test_escaping_artifact_path_is_incompatible(tmp_path: Path) -> None:
 
 def test_null_hash_evidence_is_unavailable_not_verified(tmp_path: Path) -> None:
     _write_table(tmp_path)
+    status = tmp_path / "mappings/orders/readiness-status.yaml"
+    status.write_text(
+        status.read_text(encoding="utf-8").replace(
+            "evidence: [mappings/orders/source-profile.md]",
+            'evidence: ["an owner-confirmed prose fact"]',
+        ),
+        encoding="utf-8",
+    )
     passport = build_passport(tmp_path)
-    passport["artifacts"][0]["sha256"] = None
     result = verify_passport(tmp_path, passport)
     assert result["outcome"] == "unavailable"
-    assert result["artifacts"][0]["verification"] == "unavailable"
+    assert any(i["verification"] == "unavailable" for i in result["artifacts"])
+
+
+def test_empty_artifacts_is_incompatible_not_verified(tmp_path: Path) -> None:
+    """Audit F075: nothing checked must never read as 'verified'."""
+    _write_table(tmp_path)
+    passport = build_passport(tmp_path)
+    passport["artifacts"] = []
+    assert verify_passport(tmp_path, passport)["outcome"] == "incompatible"
+
+
+def test_edited_body_changes_the_outcome(tmp_path: Path) -> None:
+    """Audit F075: passport_id is re-derived, so a forged approval body is caught."""
+    _write_table(tmp_path)
+    passport = build_passport(tmp_path)
+    passport["approvals"] = [
+        {"stage": "publish_ready", "owner": "data_owner", "valid_shape": True}
+    ]
+    result = verify_passport(tmp_path, passport)
+    assert result["outcome"] == "changed"
+    assert result["passport_id_match"] is False
 
 
 def test_uninterpretable_passport_is_incompatible(tmp_path: Path) -> None:

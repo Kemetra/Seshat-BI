@@ -529,3 +529,10 @@ def test_finalize_blocks_on_stale_decision_evidence() -> None:
     result = _finalize(_bound_draft(), decisions=decisions)
     assert result["readiness"]["status"] == "blocked"
     assert any("stale" in r for r in result["readiness"]["blocking_reasons"])
+
+
+def test_answerability_evidence_order_is_deterministic() -> None:
+    """Audit F179: evidence order must not depend on PYTHONHASHSEED."""
+    evidence = ["z.md", "a.md", "m.md"]
+    inputs = AnswerabilityInputs(scope="orders", evidence=evidence)
+    assert inputs.evidence == ("a.md", "m.md", "z.md")

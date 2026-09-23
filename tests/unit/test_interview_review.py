@@ -148,3 +148,23 @@ def test_empty_store_renders_all_sections_as_none(tmp_path: Path) -> None:
     for section in _ELEVEN_SECTIONS:
         assert section in text
     assert "_None._" in text
+
+
+def test_proposed_decisions_are_listed_awaiting_the_owner(tmp_path: Path) -> None:
+    """Audit F180: agent proposals (the main interview output) must appear."""
+    store = (
+        "decisions:\n"
+        "  - id: assumption_note.blank_discount\n"
+        "    decision_type: assumption_note\n"
+        "    statement: blank discount means unknown\n"
+        "    scope: {columns: [fct.discount]}\n"
+        "    status: proposed\n"
+        "    confidence: medium\n"
+        "    evidence: [ev.md]\n"
+        "    proposed_by: agent\n"
+        '    proposed_at: "2026-01-01"\n'
+    )
+    root, tracked = _repo(tmp_path, {_SEMANTIC: store})
+    text = generate_review(root, tracked, "kpi_contracts")
+    section = text.split("## Proposed (awaiting owner)", 1)[1].split("## ", 1)[0]
+    assert "assumption_note.blank_discount" in section

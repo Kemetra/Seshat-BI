@@ -100,6 +100,9 @@ _OPEN_STATUSES: frozenset[str] = frozenset(
     }
 )
 
+#: Public name for the unresolved-status vocabulary (the review renderer uses it).
+OPEN_STATUSES = _OPEN_STATUSES
+
 # Terminal non-open statuses: settled records that do not block by themselves.
 _TERMINAL_STATUSES: frozenset[str] = frozenset({"approved", "rejected", "superseded"})
 
@@ -152,7 +155,7 @@ def _read_store_text(root: Path, rel: str, committed: bool) -> tuple[str | None,
         text = committed_text(root, rel)
         if text is None:
             return None, "decision store is not committed (untracked or dirty)"
-        return text.lstrip("﻿"), ""
+        return text.lstrip("\ufeff"), ""
     try:
         return (root / rel).read_text(encoding="utf-8-sig"), ""
     except (OSError, UnicodeDecodeError) as exc:

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from seshat.decision_gate import Verdict, compute_verdict
+from seshat.decision_store import OPEN_STATUSES as _STORE_OPEN_STATUSES
 from seshat.decision_store import Store, load_store
 
 REVIEW_REL_PATH = "evidence/business-interview-review.md"
@@ -39,7 +40,12 @@ def _mask(text: str) -> str:
     return text
 
 
-_OPEN_STATUSES = ("pending", "needs_user_input", "needs_sample", "blocked")
+# Every unresolved status except the two with their own sections (proposed,
+# deferred), derived from decision_store so the lists cannot drift (audit F180).
+_PROPOSED = "proposed"
+_OPEN_STATUSES = tuple(
+    sorted(s for s in _STORE_OPEN_STATUSES if s not in (_PROPOSED, "deferred"))
+)
 _GRAIN_TYPES = ("table_grain", "primary_key", "relationship_cardinality")
 _KPI_TYPES = ("kpi_definition", "policy_ruling")
 _CLEANING_TYPES = ("missing_value_rule",)
@@ -85,11 +91,11 @@ def _verdict_section(verdict: Verdict) -> str:
     if verdict.blocking:
         lines.append("Blocking decisions:\n")
         for b in verdict.blocking:
-            lines.append(f"- `{b.decision_id}`: {b.reason}")
+            lines.append(f"- `{_mask(str(b.decision_id))}`: {_mask(b.reason)}")
         lines.append("")
     if verdict.warnings:
         lines.append("Warnings:\n")
-        lines += [f"- {w}" for w in verdict.warnings]
+        lines += [f"- {_mask(w)}" for w in verdict.warnings]
         lines.append("")
     return "\n".join(lines) + "\n"
 
@@ -107,6 +113,7 @@ def render_review(store: Store, verdict: Verdict) -> str:
         _verdict_section(verdict),
         _section("Approved decisions", _by_status(decisions, "approved")),
         _section("Pending decisions", _by_status(decisions, *_OPEN_STATUSES)),
+        _section("Proposed (awaiting owner)", _by_status(decisions, _PROPOSED)),
         _section("Blocking decisions", blocking),
         _section("Rejected assumptions", _by_status(decisions, "rejected")),
         _section("Deferred decisions", _by_status(decisions, "deferred")),
