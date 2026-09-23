@@ -63,14 +63,46 @@ def projection(
     return result
 
 
+@dataclass(frozen=True)
+class _Named:
+    """A path step that selects the list entry whose ``name`` equals ``name``.
+
+    Selecting by position (``plugins[0]``) audited whichever plugin came first;
+    a second plugin prepended to the catalog was compared in Seshat's place.
+    """
+
+    name: str
+
+
+class _EntryMissing(KeyError):
+    """The identified entry is absent -- a blocker, never "not supported"."""
+
+
+def _named_entry(value: object, name: str) -> object:
+    """The list entry whose ``name`` is ``name``; ``_EntryMissing`` otherwise."""
+    entries = value if isinstance(value, list) else []
+    matches = (
+        entry
+        for entry in entries
+        if isinstance(entry, Mapping) and entry.get("name") == name
+    )
+    found = next(matches, None)
+    if found is None:
+        raise _EntryMissing(name)
+    return found
+
+
+def _container_for(key: object) -> type:
+    """The container type a positional (``int``) or mapping key indexes into."""
+    return list if isinstance(key, int) else Mapping
+
+
 def _value_at_key(value: object, key: object) -> object:
-    if isinstance(key, int):
-        if not isinstance(value, list):
-            raise KeyError(key)
-        return value[key]
-    if not isinstance(value, Mapping):
+    if isinstance(key, _Named):
+        return _named_entry(value, key.name)
+    if not isinstance(value, _container_for(key)):
         raise KeyError(key)
-    return value[key]
+    return value[key]  # type: ignore[index]
 
 
 def _json_value(path: Path, value_path: tuple[object, ...]) -> object:
@@ -108,6 +140,12 @@ def _json_version_projection(
         )
     try:
         value = _json_value(path, value_path)
+    except _EntryMissing as exc:
+        return projection(
+            target,
+            None,
+            blocker=f"governed entry {exc.args[0]!r} is missing: {target.path}",
+        )
     except (KeyError, IndexError, TypeError):
         return _missing_json_projection(target, schema_optional)
     return projection(target, str(value))
@@ -179,7 +217,7 @@ def distribution_projections(
             ProjectionTarget(
                 "codex_catalog", ".agents/plugins/marketplace.json", version
             ),
-            value_path=("plugins", 0, "version"),
+            value_path=("plugins", _Named("seshat-bi"), "version"),
             schema_optional=True,
         ),
         _json_version_projection(

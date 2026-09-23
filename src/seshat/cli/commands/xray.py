@@ -234,16 +234,24 @@ def xray_main(args: argparse.Namespace) -> int:
 def _base_model_files(root: Path, base: str) -> list[tuple[str, str]]:
     """Model files at ``base``, via git plumbing only (read-only).
 
-    Raises RuntimeError (from ``git_output``) on an unresolvable ref.
+    Raises RuntimeError (from ``git_output``) on an unresolvable ref, and on an
+    option-shaped one before git sees it. The listing uses ``-z`` so a
+    non-ASCII table file is not C-quoted, and each read uses ``REV:./path`` so
+    it names the same cwd-relative path ``ls-tree`` listed.
     """
-    listing = git_output(root, "ls-tree", "-r", "--name-only", base)
+    from seshat.gitutil import committed_ref, list_paths, validate_revision
+
+    try:
+        validate_revision(base)
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
     out: list[tuple[str, str]] = []
-    for rel in listing.splitlines():
+    for rel in list_paths(root, "ls-tree", "-r", "--name-only", base):
         if is_test_path(rel) or ".SemanticModel/definition/" not in rel:
             continue
         if not rel.endswith(".tmdl"):
             continue
-        out.append((rel, git_output(root, "show", f"{base}:{rel}")))
+        out.append((rel, git_output(root, "show", committed_ref(base, rel))))
     return out
 
 

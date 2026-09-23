@@ -219,3 +219,50 @@ def test_readiness_diff_rejects_unsafe_range(
 
     assert rc == 1
     assert capsys.readouterr().err != ""
+
+
+def test_readiness_diff_refuses_a_symmetric_range(
+    tmp_path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """'a...b' passes the range validator but must not be split into ref '.b'."""
+    repo = _make_repo(tmp_path, _HEAD_DOC_REGRESSED)
+
+    rc = main_under_test(["readiness-diff", "--repo", str(repo), "HEAD~1...HEAD"])
+
+    assert rc == 1
+    assert "symmetric range" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [
+        ["--base=--format=%(objectname)", "--head", "HEAD"],
+        ["--base", "HEAD", "--head=-n1"],
+        ["--base", "HEAD~1..HEAD", "--head", "HEAD"],
+    ],
+)
+def test_readiness_diff_refuses_unsafe_base_or_head(
+    tmp_path, capsys: pytest.CaptureFixture[str], flags: list[str]
+) -> None:
+    """Each of --base/--head is one safe revision, validated before git runs."""
+    repo = _make_repo(tmp_path)
+
+    rc = main_under_test(["readiness-diff", "--repo", str(repo), *flags])
+
+    assert rc == 1
+    assert "unsafe git revision" in capsys.readouterr().err
+
+
+def test_readiness_diff_reads_a_non_ascii_table_directory(
+    tmp_path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = _make_repo(tmp_path)
+    arabic = repo / "mappings" / "مبيعات"
+    arabic.mkdir()
+    (arabic / "readiness-status.yaml").write_text(_BASE_DOC, encoding="utf-8")
+    _run_git(repo, "add", "-A")
+    _run_git(repo, "commit", "-m", "arabic table")
+
+    payload = _diff_json(repo, capsys, "HEAD~1..HEAD")
+
+    assert payload["tables_added"] == ["مبيعات"]

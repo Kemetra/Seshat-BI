@@ -77,6 +77,10 @@ class Runner:
         failed = bool(self.fail_on) and self.fail_on in joined
         if not failed and "clone" in command:
             self._write_payload(command)
+        if command[:3] == ["git", "rev-parse", "HEAD"]:
+            # A real clone of the resolved tag sits at the resolved commit; the
+            # installer now verifies that before activating the tree.
+            return subprocess.CompletedProcess(command, 0, "a" * 40 + "\n", "")
         return subprocess.CompletedProcess(
             command, 1 if failed else 0, "", "boom" if failed else ""
         )

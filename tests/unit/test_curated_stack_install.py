@@ -405,6 +405,10 @@ def test_a_clone_missing_required_payload_is_not_activated(tmp_path: Path) -> No
             target = Path(command[-1])
             target.mkdir(parents=True)
             (target / "README.md").write_text("incomplete\n", encoding="utf-8")
+        if command[:3] == ["git", "rev-parse", "HEAD"]:
+            # The clone sits at the resolved commit, so the payload check is
+            # what refuses it -- the property this test isolates.
+            return subprocess.CompletedProcess(command, 0, "9" * 40 + "\n", "")
         return subprocess.CompletedProcess(command, 0, "", "")
 
     outcome = apply_profile(
@@ -453,3 +457,83 @@ def test_a_failed_clone_does_not_activate_the_staged_tree(tmp_path: Path) -> Non
     assert fabric.status == "failed"
     assert not (root / SKILLS_DIR / "fabric-skills" / ".seshat-installed").exists()
     assert outcome.lock_written is None
+
+
+def _payload_clone(sha: str):
+    """A runner whose clone writes the full fabric payload; HEAD reads ``sha``."""
+    import subprocess
+
+    from seshat.integrations.catalog import component
+
+    def _runner(command: list[str], cwd: Path):
+        if command[:2] == ["git", "clone"]:
+            target = Path(command[-1])
+            for rel in component("fabric-skills").required_paths:
+                path = target / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("x\n", encoding="utf-8")
+        if command[:3] == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(command, 0, sha + "\n", "")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    return _runner
+
+
+def _fabric_row(root: Path, sha: str):
+    outcome = apply_profile(
+        root,
+        profile="powerbi-fabric",
+        resolvers=Resolvers(
+            github=FakeGitHub(
+                release={"tag_name": "v3.0.0"}, commits={"v3.0.0": {"sha": "9" * 40}}
+            ),
+            npm=FakeNpm({"@microsoft/powerbi-modeling-mcp": {"dist-tags": {}}}),
+            python_version=(3, 13),
+        ),
+        runner=_payload_clone(sha),
+    )
+    return next(row for row in outcome.rows if row.component == "fabric-skills")
+
+
+def test_a_clone_at_the_resolved_commit_is_activated(tmp_path: Path) -> None:
+    from seshat.integrations.catalog import SKILLS_DIR
+
+    root = _workspace(tmp_path)
+    assert _fabric_row(root, "9" * 40).status == "installed"
+    assert (root / SKILLS_DIR / "fabric-skills").is_dir()
+
+
+def test_a_clone_whose_head_moved_off_the_resolved_commit_is_refused(
+    tmp_path: Path,
+) -> None:
+    """A tag moved after resolution must not install different content."""
+    from seshat.integrations.catalog import SKILLS_DIR
+
+    root = _workspace(tmp_path)
+    fabric = _fabric_row(root, "e" * 40)
+
+    assert fabric.status == "failed"
+    assert "not the resolved commit" in fabric.detail
+    assert not (root / SKILLS_DIR / "fabric-skills").exists()
+
+
+def test_install_subprocesses_never_prompt_and_are_bounded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import subprocess
+
+    from seshat.integrations import installer
+
+    seen: dict = {}
+
+    def fake(args, **kwargs):
+        seen.update(kwargs)
+        raise subprocess.TimeoutExpired(cmd=args, timeout=kwargs["timeout"])
+
+    monkeypatch.setattr(installer, "run_subprocess", fake)
+    result = installer._run(["git", "clone", "x"], tmp_path)
+
+    assert result.returncode != 0 and "timed out" in result.stderr
+    assert seen["env"]["GIT_TERMINAL_PROMPT"] == "0"
+    assert seen["env"]["GCM_INTERACTIVE"] == "never"
+    assert seen["timeout"] > 120

@@ -12,7 +12,8 @@ from typing import Any
 
 import yaml
 
-from seshat.gitutil import GIT_HARDENING
+from seshat.git_worktree import worktree_matches_revision
+from seshat.gitutil import GIT_HARDENING, committed_ref
 
 from .contracts import (
     Blocker,
@@ -101,8 +102,9 @@ def _require_tracked_source_map(root: Path, relative_map: str) -> None:
 
 
 def _require_clean_source_map(root: Path, relative_map: str) -> None:
-    clean = _git(root, "diff", "--quiet", "HEAD", "--", relative_map)
-    if clean.returncode != 0:
+    # Filter-free comparison: `git diff HEAD -- <path>` would run the tree's own
+    # attribute-selected content filters on a user-supplied `--repo` tree.
+    if not worktree_matches_revision(root, "HEAD", relative_map):
         raise GovernanceError(
             "DBT_SOURCE_MAP_DIRTY",
             "approved source map differs from its committed approval revision",
@@ -110,7 +112,7 @@ def _require_clean_source_map(root: Path, relative_map: str) -> None:
 
 
 def _committed_revision(root: Path, relative_map: str) -> str:
-    revision_result = _git(root, "rev-parse", f"HEAD:{relative_map}")
+    revision_result = _git(root, "rev-parse", committed_ref("HEAD", relative_map))
     revision = revision_result.stdout.strip()
     if revision_result.returncode != 0 or not re.fullmatch(
         r"[0-9a-f]{40,64}", revision

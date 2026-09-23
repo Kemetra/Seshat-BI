@@ -357,14 +357,17 @@ def iter_sql_files(ctx: RuleContext) -> list[str]:
     return sorted(
         p
         for p in ctx.tracked_files
-        if p.startswith("warehouse/") and p.endswith(".sql")
+        if p.startswith("warehouse/") and p.lower().endswith(".sql")
     )
 
 
 # The coverage declaration for every rule that scans the corpus above. Kept HERE,
 # beside the iterator, so the glob and the iteration cannot drift apart: the
-# pattern is exactly `startswith("warehouse/") and endswith(".sql")` in fnmatch
-# form (fnmatch's `*` spans `/`, so nested migration files match).
+# pattern is exactly `startswith("warehouse/") and lower().endswith(".sql")` in
+# fnmatch form (fnmatch's `*` spans `/`, so nested migration files match). The
+# suffix is case-insensitive in BOTH places -- an SSMS/Windows export names files
+# `X.SQL` -- and the runner matches with `fnmatchcase`, so the census selects the
+# same corpus on every OS (plain `fnmatch` normcases on Windows only).
 #
 # Declaring it makes a rule report `unevaluable` -- not a silent pass -- when the
 # repo tracks no warehouse SQL at all, which is precisely when these rules iterate
@@ -372,7 +375,7 @@ def iter_sql_files(ctx: RuleContext) -> list[str]:
 # `tests/` out of this same corpus, which removes nothing from a `warehouse/`-
 # prefixed list, so those rules share this identical requirement.
 WAREHOUSE_SQL_CORPUS = Requirement(
-    pattern="warehouse/*.sql",
+    pattern="warehouse/*.[sS][qQ][lL]",
     note=(
         "no tracked warehouse/**.sql exists, so this rule examined no SQL and its "
         "silence is not a verified pass"

@@ -29,6 +29,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from seshat.git_worktree import worktree_matches_revision
 from seshat.gitstate import committed_text, is_tracked_and_clean, run_git
 from seshat.rules.readiness_status import approval_is_shape_valid
 
@@ -268,16 +269,14 @@ def _ref_holds_target(repo_root: Path, ref: str, relative: str) -> bool:
         )
         if commitish.returncode != 0:
             return False
-        # The ref must actually CONTAIN the target, not merely differ from nothing:
-        # `git diff` against a tree that lacks the path reports no difference.
-        listed = run_git(root, "cat-file", "-e", f"{ref}:{relative}")
-        if listed.returncode != 0:
-            return False
-        diff = run_git(root, "diff", "--quiet", ref, "--", relative)
     except (OSError, RuntimeError):
         return False
-    # returncode 0 == no difference: the ref holds exactly this content.
-    return diff.returncode == 0
+    # The ref must actually CONTAIN the target with exactly its current content.
+    # `worktree_matches_revision` fails closed on a path the ref lacks (where
+    # `git diff` would report "no difference"), resolves the path in the same
+    # cwd-relative frame as every other probe here, and compares filter-free --
+    # `git diff <ref> -- <path>` would run the tree's own content filters.
+    return worktree_matches_revision(root, ref, relative)
 
 
 def _load_committed_yaml(repo_root: Path, relpath: str) -> tuple[dict | None, bool]:

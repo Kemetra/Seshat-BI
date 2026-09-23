@@ -76,3 +76,32 @@ def test_a_filename_undecodable_in_the_locale_codec_does_not_kill_stdout(
     assert listed.returncode == 0
     assert listed.stdout is not None, "stdout was lost to the locale codec"
     assert "Ё.tmdl" in listed.stdout.replace("\x00", "")
+
+
+# --------------------------------------------------------------------------
+# A governed root that is a SUBDIRECTORY of the git toplevel (monorepo /
+# drop-in layout): the committed read must name the SAME file the tracked/clean
+# probe verified, never a same-named twin at the toplevel.
+# --------------------------------------------------------------------------
+
+
+def test_subdirectory_root_reads_its_own_committed_file(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path)
+    rel = "mappings/t/unresolved-questions.md"
+    (repo / "mappings" / "t").mkdir(parents=True)
+    (repo / rel).write_text("Gate status: CLEARED\n", encoding="utf-8")
+    (repo / "proj" / "mappings" / "t").mkdir(parents=True)
+    (repo / "proj" / rel).write_text("Gate status: OPEN\n", encoding="utf-8")
+    commit_all(repo, "toplevel twin plus project file")
+
+    assert is_tracked_and_clean(repo / "proj", rel) is True
+    assert committed_text(repo / "proj", rel) == "Gate status: OPEN\n"
+
+
+def test_subdirectory_root_without_a_twin_is_still_readable(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path)
+    (repo / "proj").mkdir()
+    (repo / "proj" / "artifact.md").write_text("project truth\n", encoding="utf-8")
+    commit_all(repo, "project only")
+
+    assert committed_text(repo / "proj", "artifact.md") == "project truth\n"
