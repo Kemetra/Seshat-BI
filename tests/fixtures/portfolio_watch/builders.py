@@ -136,6 +136,11 @@ def write_readiness_status(root: Path, scope_dir: str, **overrides: object) -> P
     path = root / "mappings" / scope_dir / "readiness-status.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if approvals:
+        # Approvals count only once committed at HEAD (audit F045).
+        from tests.unit._gitfix import commit_readiness_status
+
+        commit_readiness_status(path)
     return path
 
 
