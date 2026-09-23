@@ -119,6 +119,32 @@ def _explain_annotator(args: object):
     return explain_renderer(_explain_guidance(Path(getattr(args, "repo", "."))))
 
 
+def _read_commit_message(path: str | None) -> tuple[str | None, bool]:
+    """``(message, failed)`` for ``--commit-msg-file``; the error is printed here.
+
+    ``(None, False)`` when no file was given. A missing, unreadable, or
+    non-UTF-8 file (a cp1252 COMMIT_EDITMSG) fails the commit-msg hook with a
+    clean error, never a traceback.
+    """
+    if path is None:
+        return None, False
+    try:
+        raw = Path(path).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        print(f"error: commit message file not found: {path}", file=sys.stderr)
+        return None, True
+    except (OSError, UnicodeDecodeError) as exc:
+        print(
+            f"error: commit message file could not be read as UTF-8: "
+            f"{path} ({exc.__class__.__name__})",
+            file=sys.stderr,
+        )
+        return None, True
+    # git's COMMIT_EDITMSG ends in a trailing newline (\r\n on Windows) —
+    # strip it so the message passed to rules is the bare text.
+    return raw.rstrip("\r\n"), False
+
+
 def _run_check(args: object) -> int:
     """Handler for ``check``. Kept as a wrapper (not a lazy-imported handler)
     -- see the module docstring for why: it reads ``build_context`` / ``run``
@@ -132,28 +158,9 @@ def _run_check(args: object) -> int:
     if annotate is _EXPLAIN_REFUSED:
         return 2
 
-    commit_message: str | None = None
-    if args.commit_msg_file is not None:  # type: ignore[attr-defined]
-        try:
-            raw = Path(args.commit_msg_file).read_text(encoding="utf-8")  # type: ignore[attr-defined]
-        except FileNotFoundError:
-            print(
-                f"error: commit message file not found: {args.commit_msg_file}",  # type: ignore[attr-defined]
-                file=sys.stderr,
-            )
-            return 1  # main() is -> int; the __main__ guard does sys.exit(main())
-        except (OSError, UnicodeDecodeError) as exc:
-            # A cp1252 COMMIT_EDITMSG (or an unreadable path) must fail the
-            # commit-msg hook with a clean error, not a traceback.
-            print(
-                f"error: commit message file could not be read as UTF-8: "
-                f"{args.commit_msg_file} ({exc.__class__.__name__})",  # type: ignore[attr-defined]
-                file=sys.stderr,
-            )
-            return 1
-        # git's COMMIT_EDITMSG ends in a trailing newline (\r\n on Windows) —
-        # strip it so the message passed to rules is the bare text.
-        commit_message = raw.rstrip("\r\n")
+    commit_message, failed = _read_commit_message(args.commit_msg_file)  # type: ignore[attr-defined]
+    if failed:
+        return 1  # main() is -> int; the __main__ guard does sys.exit(main())
 
     try:
         ctx = build_context(

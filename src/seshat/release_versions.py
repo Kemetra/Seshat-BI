@@ -78,20 +78,31 @@ class _EntryMissing(KeyError):
     """The identified entry is absent -- a blocker, never "not supported"."""
 
 
+def _named_entry(value: object, name: str) -> object:
+    """The list entry whose ``name`` is ``name``; ``_EntryMissing`` otherwise."""
+    entries = value if isinstance(value, list) else []
+    matches = (
+        entry
+        for entry in entries
+        if isinstance(entry, Mapping) and entry.get("name") == name
+    )
+    found = next(matches, None)
+    if found is None:
+        raise _EntryMissing(name)
+    return found
+
+
+def _container_for(key: object) -> type:
+    """The container type a positional (``int``) or mapping key indexes into."""
+    return list if isinstance(key, int) else Mapping
+
+
 def _value_at_key(value: object, key: object) -> object:
     if isinstance(key, _Named):
-        entries = value if isinstance(value, list) else []
-        for entry in entries:
-            if isinstance(entry, Mapping) and entry.get("name") == key.name:
-                return entry
-        raise _EntryMissing(key.name)
-    if isinstance(key, int):
-        if not isinstance(value, list):
-            raise KeyError(key)
-        return value[key]
-    if not isinstance(value, Mapping):
+        return _named_entry(value, key.name)
+    if not isinstance(value, _container_for(key)):
         raise KeyError(key)
-    return value[key]
+    return value[key]  # type: ignore[index]
 
 
 def _json_value(path: Path, value_path: tuple[object, ...]) -> object:

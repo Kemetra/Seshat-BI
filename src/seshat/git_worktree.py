@@ -114,12 +114,19 @@ def blob_ids(data: bytes, algorithm: str = "sha1") -> frozenset[str]:
     return frozenset(ids)
 
 
+def _is_plain_relative(relative: str) -> bool:
+    """A non-empty, relative POSIX path with no ``..`` component."""
+    path = PurePosixPath(relative)
+    if path.is_absolute():
+        return False
+    return bool(path.parts) and ".." not in path.parts
+
+
 def _contained_file(root: Path, relative: str) -> Path | None:
     """``root/relative`` when it provably stays inside ``root``; else None."""
-    parts = PurePosixPath(relative).parts
-    if not parts or PurePosixPath(relative).is_absolute() or ".." in parts:
+    if not _is_plain_relative(relative):
         return None
-    candidate = root.joinpath(*parts)
+    candidate = root.joinpath(*PurePosixPath(relative).parts)
     try:
         candidate.parent.resolve(strict=False).relative_to(root.resolve())
     except (OSError, ValueError):
