@@ -135,6 +135,23 @@ def test_consumed_or_expired_approval_cannot_be_reused() -> None:
         )
 
 
+def test_post_dated_approval_cannot_authorize_before_it_was_granted() -> None:
+    approval = _approval()
+    with pytest.raises(EvidenceValidationError, match="not yet valid"):
+        validate_action_authorization(
+            approval,
+            _request(
+                candidate_id=str(approval["candidate_id"]),
+                version=str(approval["version"]),
+                source_revision=SOURCE_REVISION,
+                artifact_digests=ARTIFACT_DIGESTS,
+                action=str(approval["action"]),
+                # One minute before the fixture's approved_at (00:10Z).
+                at=datetime(2026, 7, 13, 0, 9, tzinfo=timezone.utc),
+            ),
+        )
+
+
 def test_action_authorization_rejects_an_unbound_scope() -> None:
     with pytest.raises(EvidenceValidationError, match="exact action scope"):
         validate_action_authorization(

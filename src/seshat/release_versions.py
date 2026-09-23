@@ -63,7 +63,28 @@ def projection(
     return result
 
 
+@dataclass(frozen=True)
+class _Named:
+    """A path step that selects the list entry whose ``name`` equals ``name``.
+
+    Selecting by position (``plugins[0]``) audited whichever plugin came first;
+    a second plugin prepended to the catalog was compared in Seshat's place.
+    """
+
+    name: str
+
+
+class _EntryMissing(KeyError):
+    """The identified entry is absent -- a blocker, never "not supported"."""
+
+
 def _value_at_key(value: object, key: object) -> object:
+    if isinstance(key, _Named):
+        entries = value if isinstance(value, list) else []
+        for entry in entries:
+            if isinstance(entry, Mapping) and entry.get("name") == key.name:
+                return entry
+        raise _EntryMissing(key.name)
     if isinstance(key, int):
         if not isinstance(value, list):
             raise KeyError(key)
@@ -108,6 +129,12 @@ def _json_version_projection(
         )
     try:
         value = _json_value(path, value_path)
+    except _EntryMissing as exc:
+        return projection(
+            target,
+            None,
+            blocker=f"governed entry {exc.args[0]!r} is missing: {target.path}",
+        )
     except (KeyError, IndexError, TypeError):
         return _missing_json_projection(target, schema_optional)
     return projection(target, str(value))
@@ -179,7 +206,7 @@ def distribution_projections(
             ProjectionTarget(
                 "codex_catalog", ".agents/plugins/marketplace.json", version
             ),
-            value_path=("plugins", 0, "version"),
+            value_path=("plugins", _Named("seshat-bi"), "version"),
             schema_optional=True,
         ),
         _json_version_projection(
