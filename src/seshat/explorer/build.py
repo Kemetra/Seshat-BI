@@ -398,7 +398,7 @@ def render_explorer_html(projection: dict[str, Any], *, repo: Path) -> str:
     {_lineage_section(projection["lineage"])}
   </main>
   <footer>
-    <span>Generated from committed evidence only</span>
+    <span>Generated from the evidence recorded in this workspace</span>
     <span>No readiness score; no inferred pass</span>
   </footer>
   <script>{javascript}</script>

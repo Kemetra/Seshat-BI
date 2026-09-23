@@ -105,6 +105,31 @@ def test_artifact_without_a_provable_head_is_stale(tmp_path: Path) -> None:
     assert dimension["state"] == pw.STATE_STALE
 
 
+def test_summary_builds_the_readiness_projection_once(
+    tmp_path: Path, monkeypatch
+) -> None:
+    calls: list[Path] = []
+    real = pw.build_readiness_projection
+
+    def counting(root):
+        calls.append(root)
+        return real(root)
+
+    monkeypatch.setattr(pw, "build_readiness_projection", counting)
+    write_readiness_status(tmp_path, "sales", current_stage="source_ready")
+
+    pw.build_portfolio_watch_summary(tmp_path)
+
+    assert len(calls) == 1
+
+
+def test_explorer_footer_does_not_claim_committed_only_evidence() -> None:
+    from seshat.explorer import build
+
+    source = Path(build.__file__).read_text(encoding="utf-8")
+    assert "Generated from committed evidence only" not in source
+
+
 def test_malformed_item_degrades_to_unreadable(tmp_path: Path) -> None:
     """A corrupted item must not vanish and later read as 'resolved'."""
     write_readiness_status(tmp_path, "sales", current_stage="source_ready")
