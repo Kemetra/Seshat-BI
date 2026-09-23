@@ -47,12 +47,10 @@ def _args(root: Path, **overrides) -> Namespace:
 
 
 def _mark_installed(root: Path, *component_ids: str) -> None:
-    from seshat.integrations.catalog import SKILLS_DIR
+    """Write each component's real install evidence (see the shared helper)."""
+    from tests.unit._curated_stack_fixtures import _mark_installed as mark
 
-    for component_id in component_ids:
-        target = root / SKILLS_DIR / component_id
-        target.mkdir(parents=True, exist_ok=True)
-        (target / ".seshat-installed").write_text("v1\n", encoding="utf-8")
+    mark(root, *component_ids)
 
 
 def _catalog_coordinates() -> set[str]:

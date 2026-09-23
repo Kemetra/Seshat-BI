@@ -197,8 +197,11 @@ def test_one_failed_component_leaves_the_other_capability_untouched(
 
     root = _project(tmp_path)
     runner = Runner(fail_on="connectorx")
+    # The scope is derived BEFORE the apply, as the CLI does: afterwards the
+    # installed capability is satisfied and no longer in scope at all.
+    scope = derive_scope(root)
     outcome = _derived_apply(root, runner, monkeypatch)
-    readiness, next_actions = readiness_from(root, derive_scope(root), outcome)
+    readiness, next_actions = readiness_from(root, scope, outcome)
     statuses = {row.component: row.status for row in outcome.rows}
 
     assert readiness["database-connectivity"] == "failed"
@@ -288,3 +291,29 @@ def test_a_derived_apply_does_not_claim_a_curated_profile(
     outcome = _derived_apply(_project(tmp_path), Runner(), monkeypatch)
 
     assert outcome.profile == "derived"
+
+
+def test_an_installed_mcp_and_github_component_satisfy_their_capability(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FR-019 'Ready' is reachable: satisfaction reads the real install markers.
+
+    The markers are produced by the REAL apply (fake runner and resolvers), not
+    hand-written, so a change in install layout breaks this test rather than
+    leaving derivation reading a path nothing writes.
+    """
+    from seshat.integrations import derivation
+
+    root = _project(tmp_path)
+    before = derivation.derive(root)
+    assert not _capability(before, "powerbi-integration").satisfied
+
+    _derived_apply(root, Runner(), monkeypatch)
+
+    after = derivation.derive(root)
+    assert _capability(after, "powerbi-integration").satisfied
+    assert not _capability(after, "powerbi-integration").needs_action
+
+
+def _capability(plan, capability_id: str):
+    return next(row for row in plan.rows if row.capability.id == capability_id)

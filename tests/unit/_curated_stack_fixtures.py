@@ -157,6 +157,41 @@ def _tools_on_path(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(installer.shutil, "which", lambda name: f"/bin/{name}")
 
 
+def _mark_installed(root: Path, *component_ids: str) -> None:
+    """Write each component's REAL install evidence, then prove it counts.
+
+    Layout comes from the presence module's own helpers (not literals), and the
+    helper asserts `verified_present` afterwards, so a layout change fails here
+    loudly instead of leaving a fixture that no presence check reads.
+    """
+    from seshat.integrations import presence
+    from seshat.integrations.catalog import NODE_DIR, component, profiles_for
+
+    for component_id in component_ids:
+        item = component(component_id)
+        if item.mcp_server:
+            marker = root / NODE_DIR / item.id / ".seshat-installed"
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("1.0.0\n", encoding="utf-8")
+        elif item.source_type is SourceType.GITHUB:
+            target = root / presence._skill_dir(item)
+            for relative in item.required_paths:
+                (target / relative).parent.mkdir(parents=True, exist_ok=True)
+                (target / relative).write_text("# payload\n", encoding="utf-8")
+            target.mkdir(parents=True, exist_ok=True)
+            (target / ".seshat-installed").write_text("v1\n", encoding="utf-8")
+        elif item.source_type is SourceType.PYPI:
+            env = root / presence._profile_env(profiles_for(item.id)[0])
+            python = presence._venv_python(env)
+            python.parent.mkdir(parents=True, exist_ok=True)
+            python.write_text("", encoding="utf-8")
+            dist = presence._canonical_dist(item.coordinate)
+            (env / "Lib/site-packages" / f"{dist}-1.0.0.dist-info").mkdir(
+                parents=True, exist_ok=True
+            )
+        assert installer.verified_present(root, item), component_id
+
+
 def _grant_provisioning(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stand in a committed provisioning approval for INSTALL-BEHAVIOUR tests.
 

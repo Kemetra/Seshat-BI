@@ -60,13 +60,15 @@ def test_a_satisfied_capability_is_reported_and_proposed_for_no_change(
 def test_satisfaction_is_not_inferred_from_a_successful_install(tmp_path: Path) -> None:
     """T037/FR-019: the module must not treat "installed" as "satisfied".
 
-    Asserted on the source: satisfaction must route through the discovery probe,
-    and no install-result token may appear.
+    No install-result token may appear in the module. The POSITIVE half -- that
+    real install markers make a capability satisfied -- is behavioural, in
+    test_guided_setup_results.py, rather than a required token here: the old
+    `installed_ref` requirement pinned a helper that only GitHub bundles write,
+    so no capability could ever be satisfied.
     """
     from seshat.integrations import derivation
 
     source = Path(derivation.__file__).read_text(encoding="utf-8")
-    assert "installed_ref" in source, "satisfaction must consult the discovery surface"
     for forbidden in ("apply_profile", "SetupOutcome", '"installed"'):
         assert forbidden not in source, forbidden
 

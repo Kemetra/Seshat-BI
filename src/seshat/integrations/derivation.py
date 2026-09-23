@@ -361,16 +361,19 @@ class CapabilityDetail:
 
 
 def _component_present(root: Path, component_id: str) -> bool:
-    """Whether the discovery surface reports this component installed.
+    """Whether the control plane's own presence check passes for this component.
 
-    Routed through `installed_ref` rather than an install RESULT: a successful
-    install is not evidence of readiness (FR-019). Seam kept small so a test can
-    substitute it.
+    Routed through `installer.verified_present`, which re-reads the filesystem
+    for every source type (install marker plus required payload, distribution
+    metadata in a profile environment, MCP registration marker, bundled
+    artifact) rather than an install RESULT: a command exiting zero is not
+    evidence of readiness (FR-019). Seam kept small so a test can substitute it.
     """
-    from seshat.integrations.discovery import installed_ref
+    from seshat.integrations.catalog import component
+    from seshat.integrations.installer import verified_present
 
     try:
-        return installed_ref(root, component_id) is not None
+        return verified_present(root, component(component_id))
     except Exception:
         return False
 
