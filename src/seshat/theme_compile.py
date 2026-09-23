@@ -503,8 +503,9 @@ def _resolve_out(
     out = root / compiles_to
     try:
         # compiles_to is committed repo content, so it may not steer the write
-        # outside the repository (a PR-supplied "../x" or absolute path).
-        resolve_within(root, out)
+        # outside the repository. Checked as the RELATIVE candidate: joining
+        # `out` onto a relative root again would double the prefix.
+        resolve_within(root, compiles_to)
     except ValueError:
         raise ThemeCompileError(
             "meta.compiles_to resolves outside the repository; "
