@@ -160,6 +160,18 @@ def test_run_forecast_records_candidates_folds_intervals_and_selection() -> None
     assert any(item.name.startswith("fold_predicted:") for item in result.estimates)
 
 
+def test_run_forecast_accepts_gold_provider_date_rows() -> None:
+    """#735: rows holding datetime.date (what psycopg2 returns) run a forecast."""
+    values = [10 + (index % 4) * 3 + index * 0.2 for index in range(28)]
+    context = _context(np.array(values, dtype=float))
+    dated_rows = tuple(
+        (date.fromisoformat(stamp), value) for stamp, value in context.data.rows
+    )
+    context = replace(context, data=replace(context.data, rows=dated_rows))
+    result = run_forecast(context)
+    assert any(item.code == "STAT_FORECAST_SELECTED" for item in result.diagnostics)
+
+
 def test_mandatory_baseline_and_two_fold_floor_are_enforced() -> None:
     values = np.arange(1.0, 25.0)
     with pytest.raises(AnalysisWithheld) as exc_info:

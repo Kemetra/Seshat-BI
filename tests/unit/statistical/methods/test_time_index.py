@@ -71,6 +71,54 @@ def test_unsorted_unique_series_is_normalized_after_validation() -> None:
     assert result.excluded_partial_period is None
 
 
+def test_gold_provider_date_and_datetime_values_are_parsed() -> None:
+    """#735: psycopg2 returns datetime.date/datetime, not ISO strings."""
+    from datetime import date, datetime
+
+    dated = regular_series(
+        time_context([date(2024, 1, day) for day in (3, 1, 2)], [3, 1, 2])
+    )
+    assert dated.timestamps == ("2024-01-01", "2024-01-02", "2024-01-03")
+    stamped = regular_series(
+        time_context(
+            [datetime(2024, 1, 1, hour) for hour in (0, 1, 2)],
+            [1, 2, 3],
+            cadence="hourly",
+        )
+    )
+    assert stamped.timestamps[0] == "2024-01-01T00:00:00"
+
+
+def test_none_timestamp_is_still_missing() -> None:
+    with pytest.raises(AnalysisWithheld) as exc_info:
+        regular_series(time_context(["2024-01-01", None, "2024-01-03"], [1, 2, 3]))
+    assert exc_info.value.blockers[0].code == "STAT_TIME_MISSING"
+
+
+def test_month_end_series_is_contiguous() -> None:
+    """#735: Jan 31 -> Feb 29 -> Mar 31 -> Apr 30 is a regular monthly grain."""
+    result = regular_series(
+        time_context(
+            ["2024-01-31", "2024-02-29", "2024-03-31", "2024-04-30"],
+            [1, 2, 3, 4],
+            cadence="monthly",
+        )
+    )
+    assert result.frequency == "monthly"
+
+
+def test_month_mid_to_month_end_step_is_still_irregular() -> None:
+    with pytest.raises(AnalysisWithheld) as exc_info:
+        regular_series(
+            time_context(
+                ["2024-01-15", "2024-02-29", "2024-03-15"],
+                [1, 2, 3],
+                cadence="monthly",
+            )
+        )
+    assert exc_info.value.blockers[0].code == "STAT_TIME_IRREGULAR"
+
+
 @pytest.mark.parametrize(
     ("timestamps", "code"),
     (
