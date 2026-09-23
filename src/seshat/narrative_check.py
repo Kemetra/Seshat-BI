@@ -48,7 +48,11 @@ from typing import Any, NamedTuple
 
 import yaml
 
-from .gitstate import run_git
+from .narrative_paths import (
+    blob_state,
+    contained_brief_path,
+    contained_contract_path,
+)
 
 SCHEMA_LITERAL = "seshat.narrative-brief/v1"
 BINDING_MAP_SCHEMA_LITERAL = "seshat.binding-map/v1"
@@ -147,64 +151,74 @@ def _blocked(dimension: str, locator: str, message: str) -> NarrativeCheckResult
     )
 
 
-def _load_front(
-    brief_path: Path,
-) -> tuple[tuple[dict[str, Any], str] | None, NarrativeCheckResult | None]:
-    """``((front mapping, body), None)`` or the fail-closed result naming why the
-    front section could not be produced (missing / unreadable / no fence /
-    malformed / non-mapping / wrong schema literal).
+class _Fenced(NamedTuple):
+    """How one fenced-front artifact is named in its fail-closed findings."""
 
-    The body travels with the mapping so the "human-first body" rule is checked
-    without re-reading the file at a second site.
+    name: str  # the file name used in messages
+    missing: tuple[str, str]  # (dimension, remedy) when the file is absent
+    fence_need: str  # what the absent fenced section carries
+    schema: str  # the required `schema` literal
+
+
+_CLOSED = "-- check blocked (fail closed)"
+_BRIEF = _Fenced(
+    "narrative-brief.md",
+    ("missing_brief", "author the brief first via bi-analyst-knowledge"),
+    "the machine-readable schema",
+    SCHEMA_LITERAL,
+)
+
+
+def _load_fenced(
+    path: Path, kind: _Fenced
+) -> tuple[tuple[dict[str, Any], str] | None, NarrativeCheckResult | None]:
+    """``((front mapping, full text), None)`` or the fail-closed result naming
+    why the front section could not be produced (missing / unreadable / no
+    fence / malformed / non-mapping / wrong schema literal). One loader for the
+    brief and the binding map, so a fail-closed branch cannot drift between them.
     """
-    locator = str(brief_path)
-    if not brief_path.is_file():
-        return None, _blocked(
-            "missing_brief",
-            locator,
-            f"no narrative-brief.md at {brief_path} -- nothing to check "
-            f"(fail closed); author the brief first via bi-analyst-knowledge",
-        )
+    loc, name = str(path), kind.name
+    if not path.is_file():
+        message = f"no {name} at {path} -- nothing to check (fail closed); "
+        return None, _blocked(kind.missing[0], loc, message + kind.missing[1])
     try:
-        text = brief_path.read_text(encoding="utf-8-sig")
+        text = path.read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError):
-        return None, _blocked(
-            "unreadable_brief",
-            locator,
-            "narrative-brief.md is unreadable -- check blocked (fail closed)",
-        )
+        unreadable = f"unreadable_{kind.missing[0].removeprefix('missing_')}"
+        message = f"{name} is unreadable -- check blocked (fail closed)"
+        return None, _blocked(unreadable, loc, message)
     front = _extract_front_section(text)
     if front is None:
-        return None, _blocked(
-            "no_front_section",
-            locator,
-            "narrative-brief.md has no fenced ```yaml front section -- the "
-            "machine-readable schema is required (fail closed)",
-        )
+        message = f"{name} has no fenced ```yaml front section -- "
+        message += f"{kind.fence_need} is required (fail closed)"
+        return None, _blocked("no_front_section", loc, message)
     try:
         data = yaml.safe_load(front)
     except yaml.YAMLError as exc:
-        return None, _blocked(
-            "malformed_front_section",
-            locator,
-            f"narrative-brief.md front section is not valid YAML ({exc}) "
-            f"-- check blocked (fail closed)",
-        )
+        message = f"{name} front section is not valid YAML ({exc}) {_CLOSED}"
+        return None, _blocked("malformed_front_section", loc, message)
     if not isinstance(data, dict):
-        return None, _blocked(
-            "malformed_front_section",
-            locator,
-            "narrative-brief.md front section is not a YAML mapping "
-            "-- check blocked (fail closed)",
-        )
-    if data.get("schema") != SCHEMA_LITERAL:
-        return None, _blocked(
-            "wrong_schema",
-            locator,
+        message = f"{name} front section is not a YAML mapping {_CLOSED}"
+        return None, _blocked("malformed_front_section", loc, message)
+    if data.get("schema") != kind.schema:
+        message = (
             f"front section schema is {data.get('schema')!r}, expected "
-            f"{SCHEMA_LITERAL!r} -- check blocked (fail closed)",
+            f"{kind.schema!r} -- check blocked (fail closed)"
         )
-    return (data, _front_body(text)), None
+        return None, _blocked("wrong_schema", loc, message)
+    return (data, text), None
+
+
+def _load_front(
+    brief_path: Path,
+) -> tuple[tuple[dict[str, Any], str] | None, NarrativeCheckResult | None]:
+    """``((front mapping, body), None)`` or the brief's fail-closed result; the
+    body travels with the mapping so the human-first body rule is checked
+    without re-reading the file."""
+    loaded, failure = _load_fenced(brief_path, _BRIEF)
+    if loaded is None:
+        return None, failure
+    return (loaded[0], _front_body(loaded[1])), None
 
 
 # --------------------------------------------------------------------------- #
@@ -388,14 +402,42 @@ def _grounded_measure_ids(data: dict[str, Any]) -> set[str]:
 # --------------------------------------------------------------------------- #
 
 
-def _blob_sha(repo_root: Path, contract_path: Path) -> str | None:
-    """The git blob sha of the contract's CURRENT content, via the hardened
-    read-only probe. None when git is unavailable or the file is missing --
-    the caller treats an unverifiable revision as a finding, never a pass."""
-    if not contract_path.is_file():
-        return None
-    result = run_git(repo_root, "hash-object", str(contract_path))
-    return result.stdout.strip() if result.returncode == 0 else None
+def _revision_finding(
+    repo_root: Path, table: str, cid: str, declared: str
+) -> NarrativeFinding | None:
+    """One cited contract's revision check against its COMMITTED blob.
+
+    The store is mappings/<table>/metrics/<Measure>.yaml (the kit convention);
+    an id resolving outside it is refused. Inside a git repository the citation
+    must equal ``HEAD:<path>`` and a worktree edit is its own finding; without
+    git the current content's blob is the only revision there is.
+    """
+    path = contained_contract_path(repo_root, table, cid)
+    state = blob_state(repo_root, path) if path is not None else None
+    expected = state and (state.committed if state.in_repository else state.worktree)
+    if path is None or not expected:
+        where = "outside the table's metrics store" if path is None else str(path)
+        return NarrativeFinding(
+            "stale_contract_revision",
+            cid,
+            f"contract {cid!r} cited by the brief cannot be located ({where}) "
+            "to verify its revision (fail closed)",
+        )
+    if declared != expected:
+        return NarrativeFinding(
+            "stale_contract_revision",
+            cid,
+            f"contract {cid!r} revision in the brief ({declared}) does not match "
+            f"the contract's recorded blob ({expected}) -- the citation is STALE",
+        )
+    if state.in_repository and state.worktree != state.committed:
+        return NarrativeFinding(
+            "uncommitted_contract_change",
+            cid,
+            f"contract {cid!r} has uncommitted changes; the cited committed "
+            "revision is not what the working tree holds",
+        )
+    return None
 
 
 def _check_contract_revisions(
@@ -405,36 +447,12 @@ def _check_contract_revisions(
     for contract in data.get("contracts") or []:
         if not isinstance(contract, dict):
             continue
-        cid = contract.get("id")
-        declared = contract.get("revision")
+        cid, declared = contract.get("id"), contract.get("revision")
         if not _stated(cid) or not _stated(declared):
             continue  # shape already reported by _check_contract_entries
-        # The F009 contract store is mappings/<table>/metrics/<Measure>.yaml --
-        # the convention the rest of the kit uses (gap_detector,
-        # dashboard_coordinator, the --metrics-dir default). A real workspace
-        # ships no `contracts/` dir, so resolving there fail-closed EVERY real
-        # brief on `stale_contract_revision: cannot be located`.
-        contract_path = repo_root / "mappings" / table / "metrics" / f"{cid}.yaml"
-        actual = _blob_sha(repo_root, contract_path)
-        if actual is None:
-            findings.append(
-                NarrativeFinding(
-                    "stale_contract_revision",
-                    str(cid),
-                    f"contract {cid!r} cited by the brief cannot be located at "
-                    f"{contract_path} to verify its revision (fail closed)",
-                )
-            )
-        elif str(declared) != actual:
-            findings.append(
-                NarrativeFinding(
-                    "stale_contract_revision",
-                    str(cid),
-                    f"contract {cid!r} revision in the brief ({declared}) does "
-                    f"not match the committed contract's current blob ({actual}) "
-                    f"-- the citation is STALE",
-                )
-            )
+        finding = _revision_finding(repo_root, table, str(cid), str(declared))
+        if finding is not None:
+            findings.append(finding)
     return findings
 
 
@@ -908,58 +926,16 @@ def check_narrative(*, table: str, repo_root: Path) -> NarrativeCheckResult:
 def _load_binding_map_front(
     map_path: Path,
 ) -> tuple[dict[str, Any] | None, NarrativeCheckResult | None]:
-    """The parsed binding-map front section, or the fail-closed result naming why
-    it could not be produced (missing / unreadable / no fence / malformed /
-    non-mapping / wrong schema literal). Same fail-closed posture as the brief."""
-    locator = str(map_path)
-    if not map_path.is_file():
-        return None, _blocked(
-            "missing_binding_map",
-            locator,
-            f"no visual-contract-binding-map.md at {map_path} -- nothing to check "
-            f"(fail closed); author the three-way map via dashboard-design first",
-        )
-    try:
-        text = map_path.read_text(encoding="utf-8-sig")
-    except (OSError, UnicodeDecodeError):
-        return None, _blocked(
-            "unreadable_binding_map",
-            locator,
-            "visual-contract-binding-map.md is unreadable -- check blocked "
-            "(fail closed)",
-        )
-    front = _extract_front_section(text)
-    if front is None:
-        return None, _blocked(
-            "no_front_section",
-            locator,
-            "visual-contract-binding-map.md has no fenced ```yaml front section "
-            "-- the machine-readable three-way map is required (fail closed)",
-        )
-    try:
-        data = yaml.safe_load(front)
-    except yaml.YAMLError as exc:
-        return None, _blocked(
-            "malformed_front_section",
-            locator,
-            f"visual-contract-binding-map.md front section is not valid YAML "
-            f"({exc}) -- check blocked (fail closed)",
-        )
-    if not isinstance(data, dict):
-        return None, _blocked(
-            "malformed_front_section",
-            locator,
-            "visual-contract-binding-map.md front section is not a YAML mapping "
-            "-- check blocked (fail closed)",
-        )
-    if data.get("schema") != BINDING_MAP_SCHEMA_LITERAL:
-        return None, _blocked(
-            "wrong_schema",
-            locator,
-            f"front section schema is {data.get('schema')!r}, expected "
-            f"{BINDING_MAP_SCHEMA_LITERAL!r} -- check blocked (fail closed)",
-        )
-    return data, None
+    """The parsed binding-map front section, or its fail-closed result (same
+    loader and posture as the brief)."""
+    kind = _Fenced(
+        "visual-contract-binding-map.md",
+        ("missing_binding_map", "author the three-way map via dashboard-design first"),
+        "the machine-readable three-way map",
+        BINDING_MAP_SCHEMA_LITERAL,
+    )
+    loaded, failure = _load_fenced(map_path, kind)
+    return (loaded[0] if loaded else None), failure
 
 
 class _BriefGrounding(NamedTuple):
@@ -1266,11 +1242,19 @@ def check_binding_map(*, table: str, repo_root: Path) -> NarrativeCheckResult:
     assert data is not None
 
     brief_ref = data.get("brief")
-    brief_path = (
-        repo_root / brief_ref
-        if _is_nonempty_str(brief_ref)
-        else repo_root / "mappings" / table / "narrative-brief.md"
+    brief_path = contained_brief_path(
+        repo_root, table, brief_ref if _is_nonempty_str(brief_ref) else None
     )
+    if brief_path is None:
+        return _blocked(
+            "brief_outside_table",
+            str(brief_ref),
+            f"the map's brief must be mappings/{table}/narrative-brief.md "
+            "(fail closed)",
+        )
+    brief_result = check_narrative(table=table, repo_root=repo_root)
+    if brief_result.status != "pass":
+        return brief_result  # a map is grounded only against a valid brief
     grounding = _load_brief_grounding(brief_path)
     if isinstance(grounding, NarrativeCheckResult):
         return grounding

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import calendar
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Mapping, Sequence
 
 from ..contracts import AnalysisWithheld, MethodContext, require, withheld
@@ -52,6 +53,16 @@ def _withheld(code: str, message: str, recovery: str) -> AnalysisWithheld:
 
 
 def _parse(value: object) -> datetime:
+    """Parse one governed timestamp: ISO text, or a driver date/datetime value.
+
+    A Gold provider returns raw driver rows, so a DATE/TIMESTAMP column arrives
+    as `datetime.date`/`datetime.datetime`, not text (#735). `datetime` is a
+    subclass of `date`, so it is checked first; a bare date becomes midnight.
+    """
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime.combine(value, time())
     require(
         isinstance(value, str) and value.strip(),
         "STAT_TIME_MISSING",
@@ -80,13 +91,31 @@ def _frequency(value: str) -> str:
     return str(frequency)
 
 
+def _is_month_end(value: datetime) -> bool:
+    return value.day == calendar.monthrange(value.year, value.month)[1]
+
+
 def _contiguous(previous: datetime, current: datetime, frequency: str) -> bool:
     fixed_step = _FIXED_STEPS.get(frequency)
     if fixed_step is not None:
         return current - previous == fixed_step
     months = (current.year - previous.year) * 12 + current.month - previous.month
-    same_position = current.day == previous.day and current.time() == previous.time()
+    # A month-end grain (Jan 31 -> Feb 29 -> Mar 31) keeps its position even
+    # though the day number differs (#735).
+    same_day = current.day == previous.day or (
+        _is_month_end(current) and _is_month_end(previous)
+    )
+    same_position = same_day and current.time() == previous.time()
     return months == _MONTH_STEPS[frequency] and same_position
+
+
+def _timestamp_text(value: object, parsed: datetime) -> str:
+    """The recorded key for a timestamp: its own text, or ISO for driver values."""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, datetime):
+        return parsed.isoformat()
+    return parsed.date().isoformat()
 
 
 def _role_indexes(context: MethodContext) -> tuple[int, ...]:
@@ -136,7 +165,7 @@ def _observations(context: MethodContext, roles: tuple[int, ...]) -> list[_Obser
             "The governed series contains a missing response value.",
             "Resolve the gap under an approved missing-data decision.",
         )
-        parsed.append((timestamp, str(row[time_index]).strip(), value))
+        parsed.append((timestamp, _timestamp_text(row[time_index], timestamp), value))
     require(
         len(offsets) <= 1,
         "STAT_TIMEZONE_MIXED",

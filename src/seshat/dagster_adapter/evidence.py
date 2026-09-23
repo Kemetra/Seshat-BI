@@ -75,7 +75,13 @@ def _tracked_paths(root: Path) -> set[str]:
 
 
 def _is_workspace_dirty(root: Path) -> bool:
-    """Record Git dirtiness as execution context, never as an approval signal."""
+    """Record Git dirtiness as execution context, never as an approval signal.
+
+    Fails closed: when git cannot answer (not a repository, dubious ownership,
+    missing executable) the workspace is recorded as dirty, because an unknown
+    state must not read as a clean one downstream (Portfolio Watch treats a
+    dirty run as stale evidence).
+    """
     try:
         # Raw per-run records are deliberately local runtime output.  Exclude the
         # directory this run just wrote, otherwise every otherwise-clean run
@@ -91,7 +97,7 @@ def _is_workspace_dirty(root: Path) -> bool:
             )
         )
     except (RuntimeError, OSError):
-        return False
+        return True
 
 
 def _contained_tracked_path(root: Path, relative: str) -> Path | None:

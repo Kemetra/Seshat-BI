@@ -14,7 +14,7 @@ from ..contracts import (
     withheld,
 )
 from ..evidence import decimal_text
-from .common import finite_array
+from .common import enforce_missing_policy, finite_array
 from .inference import BootstrapRequest, adjust_pvalues, bootstrap_interval
 
 
@@ -49,11 +49,8 @@ def _complete_pairs(context: MethodContext, roles: tuple[int, ...]):
         if not _missing(row[left_index]) and not _missing(row[right_index])
     ]
     excluded = len(context.data.rows) - len(pairs)
-    require(
-        not excluded or context.spec.missing_policy != "fail",
-        "STAT_MISSING_DATA",
-        "Association input contains incomplete pairs.",
-        "Resolve missing values or approve pairwise/complete-case exclusion.",
+    enforce_missing_policy(
+        context, excluded, "Association input contains incomplete pairs."
     )
     return pairs, excluded
 

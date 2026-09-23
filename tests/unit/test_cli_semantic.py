@@ -227,7 +227,7 @@ def test_same_measure_name_in_different_tables_binds_by_scope(
     contract = """\
 name: TotalSales
 owner: metric_owner
-binds_to: {gold_table: GOLD_TABLE}
+binds_to: {gold_table: GOLD_TABLE, columns: [amount]}
 definition: {kind: base, aggregation: sum, filter: []}
 readiness:
   status: pass
@@ -247,7 +247,8 @@ readiness:
             / "definition"
             / "tables"
             / f"gold {scope}.tmdl",
-            f"table 'gold {scope}'\n\tmeasure TotalSales = SUM({scope}[amount])\n",
+            f"table 'gold {scope}'\n"
+            f"\tmeasure TotalSales = SUM('gold {scope}'[amount])\n",
         )
 
     code = main(
@@ -256,6 +257,36 @@ readiness:
 
     assert code == 0
     assert "no drift" in capsys.readouterr().err
+
+
+def test_base_measure_on_wrong_column_fails_via_binds_to(
+    tmp_path: Path, capsys
+) -> None:
+    """#734: the CLI threads `binds_to` so a wrong-column base measure is drift."""
+    contract = """\
+name: NetSales
+owner: metric_owner
+binds_to: {gold_table: gold.fct_sales, columns: [net_amount]}
+definition: {kind: base, aggregation: sum, filter: []}
+readiness:
+  status: pass
+  evidence: [approved by named metric owner]
+  blocking_reasons: []
+"""
+    _write_semantic_approval(tmp_path, "sales", ("NetSales",))
+    _write(tmp_path / "mappings/sales/metrics/NetSales.yaml", contract)
+    _write(
+        tmp_path / "powerbi/S.SemanticModel/definition/tables/gold fct_sales.tmdl",
+        "table 'gold fct_sales'\n"
+        "\tmeasure NetSales = SUM('gold fct_sales'[discount_amount])\n",
+    )
+
+    code = main(
+        ["semantic-check", "--repo", str(tmp_path), "--metrics-dir", "mappings"]
+    )
+
+    assert code == 1
+    assert "discount_amount" in capsys.readouterr().out
 
 
 def test_semantic_check_rejects_duplicate_contract_bindings(

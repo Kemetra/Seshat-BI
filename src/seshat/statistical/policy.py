@@ -15,11 +15,21 @@ from seshat.status_surface import build_status_projection
 
 from .contracts import AnalysisSpec, Blocker
 
-_LIVE_COMMAND = re.compile(r"\b(?:seshat|retail)\s+validate\b", re.IGNORECASE)
 # Only an explicit exit status proves a live run succeeded. A bare verdict word
-# also matches its own negation ("retail validate did not pass"), which would let
-# failed -- or merely narrated -- validation clear the live-proof gate.
-_LIVE_SUCCESS = re.compile(r"\bexit\s*0\b", re.IGNORECASE)
+# also matches its own negation ("retail validate did not pass"), and so does a
+# bare "exit 0" ("did not exit 0", "expected exit 0", "until exit 0"). A proof
+# line must therefore START with the validate command, record exit 0 after it,
+# carry no non-zero exit, and contain no negation or expectation wording.
+_LIVE_RECORD = re.compile(
+    r"^\s*(?:seshat|retail)\s+validate\b.*?\bexit(?:ed)?\s*(?:code\s*)?0\b",
+    re.IGNORECASE,
+)
+_NONZERO_EXIT = re.compile(r"\bexit(?:ed)?\s*(?:code\s*)?[1-9]", re.IGNORECASE)
+_NARRATIVE = re.compile(
+    r"n't\b|\b(?:not|never|no longer|expected|expect|until|todo|pending|rerun|"
+    r"should|will|would|fail(?:s|ed|ure|ing)?)\b",
+    re.IGNORECASE,
+)
 _CODE_ORDER = (
     "STAT_GOLD_NOT_READY",
     "STAT_LIVE_VALIDATION_MISSING",
@@ -250,7 +260,11 @@ def _is_live_proof(item: object) -> bool:
 
     if not isinstance(item, str):
         return False
-    return bool(_LIVE_COMMAND.search(item)) and bool(_LIVE_SUCCESS.search(item))
+    return (
+        bool(_LIVE_RECORD.search(item))
+        and not _NONZERO_EXIT.search(item)
+        and not _NARRATIVE.search(item)
+    )
 
 
 def _has_live_proof(evidence: object) -> bool:

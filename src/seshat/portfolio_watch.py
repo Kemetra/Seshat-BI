@@ -44,8 +44,9 @@ Dimension -> committed-evidence map (research.md D5; data-model.md):
   - ``approvals``                  -- read directly from the approval inbox
     (``approval_inbox.py``); no separate artifact.
   - ``source_drift``               -- a committed
-    ``mappings/<scope>/drift-findings.json`` artifact (the shape
-    ``drift.to_findings_dict`` emits, schema_version "1.0"); absent when a
+    ``mappings/<scope>/drift-findings.json`` artifact (the
+    ``drift.to_portfolio_artifact`` shape, schema_version "1.0"; a native
+    ``drift.to_findings_dict`` document is translated through it); absent when a
     baseline ``source-profile.md`` exists -> ``[PENDING LIVE]`` (the live
     re-profile leg is unavailable); absent with no baseline at all ->
     ``not_applicable_with_reason``.
@@ -77,8 +78,14 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .approval_inbox import build_approval_inbox
+from .contract_binding import CONTRACT_BINDING_STATES, contract_binding_state
 from .disclosure import scan_disclosure
 from .gitutil import run_subprocess
+from .portfolio_watch_artifacts import (
+    artifact_stale_reason,
+    normalize_artifact,
+    valid_item_entries,
+)
 from .portfolio_watch_baseline import (
     CHANGE_LABELS,
     LABEL_NEW,
@@ -126,7 +133,6 @@ DIMENSIONS: tuple[str, ...] = (
     "review",
 )
 
-CONTRACT_BINDING_STATES = frozenset({"missing", "blocked", "verified"})
 
 # A succeeded live run whose ONLY record is the git-ignored
 # `.seshat/dagster/runs/` scratch, with no matching committed
@@ -261,18 +267,22 @@ def _source_revision(root: Path) -> str | None:
 # --------------------------------------------------------------------------- #
 # Governed-scope enumeration (T006; research D6: committed paths, no live DB)
 # --------------------------------------------------------------------------- #
-def enumerate_governed_scopes(repo_root: Path | str = ".") -> tuple[GovernedScope, ...]:
+def enumerate_governed_scopes(
+    repo_root: Path | str = ".", projection: dict[str, Any] | None = None
+) -> tuple[GovernedScope, ...]:
     """Enumerate governed scopes from committed ``mappings/*/readiness-status.
     yaml`` paths -- the SAME source ``status_surface``/``readiness_projection``
     already track (FR-002). Never opens a database connection; a malformed
     readiness-status.yaml still yields a scope entry (current_stage=None) so a
     read error degrades that scope's dimension, never silently drops it
-    (FR-017/FR-022)."""
+    (FR-017/FR-022). A caller that already built the readiness projection
+    passes it in so it is not rebuilt."""
     root = Path(repo_root).resolve()
     mappings_dir = root / "mappings"
     if not mappings_dir.is_dir():
         return ()
-    projection = build_readiness_projection(root)
+    if projection is None:
+        projection = build_readiness_projection(root)
     by_path = {t["source_path"]: t for t in projection["tables"]}
     scopes: list[GovernedScope] = []
     for status_path in sorted(mappings_dir.glob("*/readiness-status.yaml")):
@@ -306,29 +316,24 @@ def _read_json(path: Path) -> tuple[dict[str, Any] | None, str | None]:
     return data, None
 
 
-def _parse_items(raw: object) -> tuple[DimensionItem, ...]:
-    if not isinstance(raw, list):
-        return ()
-    items: list[DimensionItem] = []
-    for entry in raw:
-        if not isinstance(entry, dict):
-            continue
-        cls = entry.get("class")
-        locator = entry.get("subject_locator")
-        if not isinstance(cls, str) or not isinstance(locator, str):
-            continue
-        measured = entry.get("measured")
-        owner = entry.get("owner")
-        items.append(
-            DimensionItem(
-                class_=cls,
-                subject_locator=locator,
-                measured=measured if isinstance(measured, str) else None,
-                owner=owner if isinstance(owner, str) else None,
-                principle_v=bool(entry.get("principle_v", False)),
-            )
+def _parse_items(raw: object) -> tuple[tuple[DimensionItem, ...], int]:
+    """Parsed items plus the count of malformed entries (never silently dropped)."""
+    entries, dropped = valid_item_entries(raw)
+    items = tuple(
+        DimensionItem(
+            class_=entry["class"],
+            subject_locator=entry["subject_locator"],
+            measured=_opt_str(entry.get("measured")),
+            owner=_opt_str(entry.get("owner")),
+            principle_v=bool(entry.get("principle_v", False)),
         )
-    return tuple(items)
+        for entry in entries
+    )
+    return items, dropped
+
+
+def _opt_str(value: object) -> str | None:
+    return value if isinstance(value, str) else None
 
 
 def _missing_artifact_finding(
@@ -373,97 +378,6 @@ def _scope_dir(root: Path, scope: GovernedScope) -> Path:
     return root / Path(scope.source_path).parent
 
 
-def _semantic_inputs(root: Path, scope_dir: str) -> tuple[tuple[Path, ...], bool]:
-    """Return committed semantic paths and whether their worktree is dirty."""
-    from .cli.commands.semantic import _semantic_files
-    from .gitutil import git_output
-
-    inputs = _semantic_files(root, include_untracked=False)
-    try:
-        dirty = bool(
-            git_output(
-                root,
-                "status",
-                "--porcelain",
-                "--untracked-files=all",
-                "--",
-                f"mappings/{scope_dir}/metrics",
-                f"mappings/{scope_dir}/readiness-status.yaml",
-                "powerbi",
-            )
-        )
-    except RuntimeError:
-        dirty = False
-    return inputs, dirty
-
-
-def _tmdl_measure_bindings(paths: tuple[Path, ...]) -> set[tuple[str, str]]:
-    """Table-scoped model measures, using the semantic-check identity."""
-    from .metric_contract_inventory import normalize_table_binding
-    from .tmdl import parse_tmdl
-
-    bindings: set[tuple[str, str]] = set()
-    for path in paths:
-        if path.suffix != ".tmdl":
-            continue
-        try:
-            table = parse_tmdl(path.read_text(encoding="utf-8-sig"))
-        except OSError:
-            continue
-        if table is not None:
-            table_name = normalize_table_binding(table.name)
-            bindings.update((table_name, measure.name) for measure in table.measures)
-    return bindings
-
-
-def contract_binding_state(
-    repo_root: Path | str,
-    scope_dir: str,
-    semantic_finding: CoveredDimensionFinding | None = None,
-) -> str:
-    """Categorize one scope's metric contracts without granting an approval.
-
-    The inventory is the shared Task-5 reader; this merely checks whether its
-    approved names bind the model measures.  A supplied semantic finding must
-    be a clean, current covered record before the portfolio calls it verified.
-    """
-    from .metric_contract_inventory import load_contract_inventory
-
-    root = Path(repo_root).resolve()
-    metrics_dir = root / "mappings" / scope_dir / "metrics"
-    if not metrics_dir.is_dir():
-        return "missing"
-    inputs, dirty = _semantic_inputs(root, scope_dir)
-    if dirty:
-        return "blocked"
-    contract_paths = tuple(
-        path
-        for path in inputs
-        if path.suffix == ".yaml" and path.is_relative_to(metrics_dir)
-    )
-    if not contract_paths:
-        return "missing"
-    inventory = load_contract_inventory(contract_paths, root)
-    if inventory.errors or not inventory.approved:
-        return "blocked"
-    contracts = inventory.for_scope(scope_dir)
-    contract_bindings = {contract.binding for contract in contracts.values()}
-    model_bindings = _tmdl_measure_bindings(inputs)
-    bound_tables = {table for table, _measure in contract_bindings}
-    scoped_model_bindings = {
-        binding for binding in model_bindings if binding[0] in bound_tables
-    }
-    if not contract_bindings or contract_bindings != scoped_model_bindings:
-        return "blocked"
-    if semantic_finding is not None and (
-        semantic_finding.state != STATE_COVERED
-        or semantic_finding.class_ not in {"pass", "no_drift"}
-        or semantic_finding.items
-    ):
-        return "blocked"
-    return "verified"
-
-
 def _run_inputs_are_stale(root: Path, summary: dict[str, Any]) -> bool:
     """Compare a verified run's recorded input digests with current files."""
     from .dagster_adapter.evidence_digest import sha256_file
@@ -506,7 +420,7 @@ def _git_try(root: Path, *args: str) -> str | None:
     unpassable-gate failure mode as the staleness deadlock, so the two
     revision-reading paths must agree on this option.
     """
-    from .gitutil import _GIT_HARDENING
+    from .gitutil import GIT_HARDENING as _GIT_HARDENING
 
     try:
         result = run_subprocess(
@@ -733,17 +647,23 @@ class _ArtifactContext:
 def _stale_artifact_finding(
     ctx: _ArtifactContext, data: dict[str, Any], source_revision: str | None
 ) -> CoveredDimensionFinding | None:
-    captured_at = data.get("captured_at_revision")
-    if not _is_stale_captured_at(captured_at, source_revision):
+    """Stale when the capture revision is absent, unprovable, or behind HEAD.
+
+    The recorded items are still relayed, so a Principle-V condition in a
+    stale artifact keeps raising attention for its named owner.
+    """
+    reason = artifact_stale_reason(data.get("captured_at_revision"), source_revision)
+    if reason is None:
         return None
     return CoveredDimensionFinding(
         dimension=ctx.dimension,
         state=STATE_STALE,
-        class_=data.get("class") if isinstance(data.get("class"), str) else None,
-        measured=f"captured_at_revision={captured_at} vs current={source_revision}",
+        class_=_opt_str(data.get("class")),
+        measured=reason,
         evidence=ctx.rel_artifact,
-        owner=data.get("owner") if isinstance(data.get("owner"), str) else None,
+        owner=_opt_str(data.get("owner")),
         source_surface=ctx.surface,
+        items=_parse_items(data.get("items"))[0],
     )
 
 
@@ -768,47 +688,59 @@ def _covered_artifact_finding(
     ctx: _ArtifactContext, data: dict[str, Any]
 ) -> CoveredDimensionFinding:
     cls = data.get("class")
-    if not isinstance(cls, str) or not cls:
-        return CoveredDimensionFinding(
-            dimension=ctx.dimension,
-            state=STATE_UNREADABLE,
-            measured="artifact is missing a required 'class' field",
-            evidence=ctx.rel_artifact,
-            source_surface=ctx.surface,
-        )
+    items, dropped = _parse_items(data.get("items"))
+    problem = (
+        "artifact is missing a required 'class' field"
+        if not isinstance(cls, str) or not cls
+        else f"{dropped} malformed item(s) in the artifact"
+        if dropped
+        else None
+    )
+    if problem is not None:
+        return _unreadable(ctx, problem)
     return CoveredDimensionFinding(
         dimension=ctx.dimension,
         state=STATE_COVERED,
         class_=cls,
-        measured=data.get("measured")
-        if isinstance(data.get("measured"), str)
-        else None,
+        measured=_opt_str(data.get("measured")),
         evidence=ctx.rel_artifact,
-        owner=data.get("owner") if isinstance(data.get("owner"), str) else None,
+        owner=_opt_str(data.get("owner")),
         source_surface=ctx.surface,
-        items=_parse_items(data.get("items")),
+        items=items,
+    )
+
+
+def _unreadable(ctx: _ArtifactContext, measured: str) -> CoveredDimensionFinding:
+    return CoveredDimensionFinding(
+        dimension=ctx.dimension,
+        state=STATE_UNREADABLE,
+        measured=measured,
+        evidence=ctx.rel_artifact,
+        source_surface=ctx.surface,
     )
 
 
 def _parsed_artifact_finding(
     ctx: _ArtifactContext, data: dict[str, Any], source_revision: str | None
 ) -> CoveredDimensionFinding:
+    normalized, problem = normalize_artifact(ctx.dimension, data)
+    if normalized is None:
+        return _unreadable(ctx, str(problem))
+    data = normalized
     schema_version = data.get("schema_version")
     if schema_version != _ARTIFACT_SCHEMA_VERSION:
-        return CoveredDimensionFinding(
-            dimension=ctx.dimension,
-            state=STATE_UNREADABLE,
-            measured=f"unknown schema_version {schema_version!r}",
-            evidence=ctx.rel_artifact,
-            source_surface=ctx.surface,
-        )
-    stale = _stale_artifact_finding(ctx, data, source_revision)
-    if stale is not None:
-        return stale
-    pending = _pending_live_artifact_finding(ctx, data)
-    if pending is not None:
-        return pending
-    return _covered_artifact_finding(ctx, data)
+        return _unreadable(ctx, f"unknown schema_version {schema_version!r}")
+    # A malformed artifact is unreadable, and a declared-unavailable live leg is
+    # pending, before freshness is judged; only a well-formed live artifact
+    # captured at HEAD is covered.
+    covered = _covered_artifact_finding(ctx, data)
+    if covered.state == STATE_UNREADABLE:
+        return covered
+    return (
+        _pending_live_artifact_finding(ctx, data)
+        or _stale_artifact_finding(ctx, data, source_revision)
+        or covered
+    )
 
 
 def _artifact_dimension_finding(
@@ -1101,8 +1033,8 @@ def _assemble(
     """Build the summary body + the full set of magnitude-free condition keys
     it carries. Read-only; deterministic; never fails the whole run on one
     scope's read error (FR-017)."""
-    scopes = enumerate_governed_scopes(root)
     projection = build_readiness_projection(root)
+    scopes = enumerate_governed_scopes(root, projection)
     by_path = {t["source_path"]: t for t in projection["tables"]}
     revision = _source_revision(root)
     ctx = _AssembleContext(

@@ -17,12 +17,12 @@ from ..contracts import (
     withheld,
 )
 from ..evidence import decimal_text
-from .common import finite_array, numeric_role, safe_groups
+from .common import finite_array, numeric_role, privacy_floor, safe_groups
 from .inference import (
     BootstrapRequest,
     adjust_pvalues,
     bootstrap_interval,
-    epsilon_squared,
+    eta_squared_h,
     hedges_g,
     omega_squared,
     paired_standardized_change,
@@ -92,7 +92,7 @@ def _prepared_groups(context: MethodContext) -> _Prepared:
     sample = numeric_role(context, "response")
     grouped = safe_groups(context)
     by_row = dict(zip(sample.row_indices, sample.values.tolist(), strict=True))
-    floor = int(context.spec.pii["minimum_group_count"])
+    floor = privacy_floor(context)
     values: dict[str, object] = {}
     rows: dict[str, tuple[int, ...]] = {}
     suppressed = grouped.suppressed_count
@@ -365,19 +365,22 @@ def _omnibus_outcome(samples: tuple[object, ...], plan: _Plan) -> _Outcome:
     total = sum(len(sample) for sample in samples)
     if plan.test == "welch_anova":
         result = stats.f_oneway(*samples, equal_var=False)
+        # The test is Welch's, but omega^2 is derived from the classical
+        # equal-variance F; feeding it the Welch F mis-states the effect (#735).
+        classical = stats.f_oneway(*samples)
         effect = omega_squared(
-            _finite(result.statistic, "test statistic"),
+            _finite(classical.statistic, "classical F statistic"),
             group_count=len(samples),
             total_count=total,
         )
         return _outcome(result, "omega_squared", effect)
     result = stats.kruskal(*samples)
-    effect = epsilon_squared(
+    effect = eta_squared_h(
         _finite(result.statistic, "test statistic"),
         group_count=len(samples),
         total_count=total,
     )
-    return _outcome(result, "epsilon_squared", effect)
+    return _outcome(result, "eta_squared_h", effect)
 
 
 def _omnibus_evidence(

@@ -11,6 +11,7 @@ from .common import (
     NumericSample,
     finite_array,
     numeric_role,
+    privacy_floor,
     safe_groups,
     unit_for_role,
 )
@@ -152,11 +153,25 @@ def _shape_estimates(values, style: _Style):
             "Skewness and kurtosis are undefined for a constant sample.",
         )
         return undefined, [warning]
+    # scipy silently returns the BIASED estimate below these sizes (#735), so
+    # an undefined bias-corrected statistic is reported as None, never a number.
+    size = len(values)
+    skewness = float(stats.skew(values, bias=False)) if size >= 3 else None
+    kurtosis = float(stats.kurtosis(values, bias=False)) if size >= 4 else None
     estimates = [
-        _named(style, "skewness", float(stats.skew(values, bias=False)), False),
-        _named(style, "kurtosis", float(stats.kurtosis(values, bias=False)), False),
+        _named(style, "skewness", skewness, False),
+        _named(style, "kurtosis", kurtosis, False),
     ]
-    return estimates, []
+    if kurtosis is not None:
+        return estimates, []
+    warning = Diagnostic(
+        "STAT_SHAPE_UNDEFINED",
+        "warning",
+        f"n={size}",
+        "Bias-corrected skewness needs at least 3 and kurtosis at least 4 "
+        "observations.",
+    )
+    return estimates, [warning]
 
 
 def _iqr_outliers(values, style: _Style, spread: _Spread) -> list[Estimate]:
@@ -246,13 +261,13 @@ def _grouped_summaries(context: MethodContext, sample: NumericSample, style: _St
 
     grouped = safe_groups(context)
     by_row = dict(zip(sample.row_indices, sample.values.tolist(), strict=True))
-    privacy_floor = int(context.spec.pii["minimum_group_count"])
+    floor = privacy_floor(context)
     suppressed = grouped.suppressed_count
     estimates: list[Estimate] = []
     diagnostics: list[Diagnostic] = []
     for group in grouped.groups:
         retained = [by_row[index] for index in group.row_indices if index in by_row]
-        if len(retained) < privacy_floor:
+        if len(retained) < floor:
             suppressed += 1
             continue
         group_style = _Style(
@@ -283,7 +298,7 @@ def run_describe(context: MethodContext) -> MethodResult:
     )
     counts = _Counts(
         observed=sample.retained_count,
-        missing=sample.total_count - sample.retained_count,
+        missing=sample.total_count - sample.retained_count - sample.incomplete_count,
         excluded=sample.excluded_count,
         distinct=len(set(sample.values.tolist())),
     )

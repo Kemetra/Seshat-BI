@@ -291,11 +291,21 @@
           "$ref": "#/$defs/repo_path"
         },
         "revision": {
-          "type": "integer",
+          "type": [
+            "integer",
+            "null"
+          ],
           "minimum": 1
         },
         "sha256": {
-          "$ref": "#/$defs/sha256"
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "observed_state": {
           "type": "string",

@@ -117,10 +117,55 @@ def test_complete_case_records_missing_and_excluded_counts() -> None:
     assert _estimate(result, "count_excluded") == 3
 
 
-def test_fail_missing_policy_withholds() -> None:
+def test_explicit_status_policy_withholds_on_missing_values() -> None:
+    """#735: the schema-valid `explicit_status` policy refuses unexplained NULLs."""
     with pytest.raises(AnalysisWithheld) as exc_info:
-        run_describe(_context([1, None, 2], missing_policy="fail"))
+        run_describe(_context([1, None, 2], missing_policy="explicit_status"))
     assert exc_info.value.blockers[0].code == "STAT_MISSING_DATA"
+
+
+def test_explicit_status_policy_runs_on_complete_data() -> None:
+    result = run_describe(_context([1, 2, 3], missing_policy="explicit_status"))
+    assert _estimate(result, "count_observed") == 3
+
+
+def test_ungoverned_missing_policy_is_refused() -> None:
+    with pytest.raises(AnalysisWithheld) as exc_info:
+        run_describe(_context([1, 2, 3], missing_policy="fail"))
+    assert exc_info.value.blockers[0].code == "STAT_MISSING_POLICY_INVALID"
+
+
+def test_complete_case_drops_rows_missing_any_bound_role() -> None:
+    """complete_case uses only rows with every bound role present."""
+    values = [1, 2, 3, 4, 5]
+    groups = ["A", "A", None, "A", "A"]
+    complete = run_describe(_context(values, groups=groups))
+    available = run_describe(
+        _context(values, groups=groups, missing_policy="available_case")
+    )
+    assert _estimate(complete, "count_observed") == 4
+    assert _estimate(available, "count_observed") == 5
+    # The response itself has no nulls: the dropped row is an incomplete row,
+    # excluded, never reported as a missing response.
+    assert _estimate(complete, "count_missing") == 0
+    assert _estimate(complete, "count_excluded") == 1
+
+
+def test_governed_missing_policies_match_the_schema_enum() -> None:
+    import json
+    from pathlib import Path
+
+    from seshat.statistical.methods.common import MISSING_POLICIES
+
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[4]
+            / "schemas"
+            / "statistical-analysis-spec.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    enum = schema["properties"]["missing_data"]["properties"]["policy"]["enum"]
+    assert MISSING_POLICIES == frozenset(enum)
 
 
 @pytest.mark.parametrize("values", ([], [None, ""], [1]))
@@ -143,6 +188,20 @@ def test_singleton_and_constant_samples_never_emit_non_finite_results() -> None:
     assert _estimate(constant, "kurtosis") is None
     assert _estimate(constant, "outlier_count") is None
     assert _diagnostic(constant, "STAT_MAD_ZERO").status == "warning"
+
+
+def test_small_n_shape_statistics_are_undefined_not_biased() -> None:
+    """#735: scipy silently returns the BIASED skew (n<3) and kurtosis (n<4)."""
+    pair = run_describe(_context([1, 2]))
+    assert _estimate(pair, "skewness") is None
+    assert _estimate(pair, "kurtosis") is None
+    assert _diagnostic(pair, "STAT_SHAPE_UNDEFINED").status == "warning"
+
+    triple = run_describe(_context([1, 2, 4]))
+    assert _estimate(triple, "skewness") == pytest.approx(
+        stats.skew([1.0, 2.0, 4.0], bias=False)
+    )
+    assert _estimate(triple, "kurtosis") is None
 
 
 def test_groups_below_privacy_floor_are_suppressed_without_label_leakage() -> None:

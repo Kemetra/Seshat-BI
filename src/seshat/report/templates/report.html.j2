@@ -3,7 +3,10 @@
    page a reader prints.
 
    The stylesheet is inlined rather than linked, so the document is a single file an
-   adopter can email or open offline. There is deliberately no `|safe` and no
+   adopter can email or open offline. It is INCLUDED as package template source,
+   not passed as a value: autoescaping a value inside the raw-text <style> element
+   would turn `"` into `&#34;`, which browsers do not decode there, breaking the
+   RTL selector and the font stack. There is deliberately no `|safe` and no
    `Markup` anywhere in this template or its children: every value here is
    reachable from the bundle, and one exemption would make escaping a convention
    rather than a guarantee. #}
@@ -15,7 +18,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ cover_title }}</title>
 {% block styles %}
-  <style>{{ screen_stylesheet }}</style>
+  <style>{% include "report.css" %}</style>
 {% endblock %}
 </head>
 <body>

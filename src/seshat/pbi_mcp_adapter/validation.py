@@ -254,11 +254,11 @@ def _target_was_examined(repo_root: Path, artifact: Path) -> bool:
     Fails CLOSED throughout: an unreadable file or a discovery error is "not
     examined", never "examined and fine".
     """
-    from seshat.cli.commands.semantic import _semantic_files
+    from seshat.semantic_inputs import semantic_files
     from seshat.tmdl import parse_tmdl
 
     try:
-        discovered = _semantic_files(Path(repo_root).resolve(), False)
+        discovered = semantic_files(Path(repo_root).resolve(), False)
     except (OSError, RuntimeError, ValueError):
         return False
     resolved = artifact.resolve()
