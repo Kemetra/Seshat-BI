@@ -83,7 +83,7 @@ def _scrub(text: str, root: Path) -> str:
     for form in {str(root), root.as_posix()}:
         text = text.replace(form, "<workspace>")
     # Whole database URIs first: the credential-URL pattern alone strips only
-    # `scheme://user:pass@` and would leave host, port and database behind.
+    # scheme and userinfo prefix and would leave host, port and database behind.
     for label, pattern in SECRET_PATTERNS:
         if label == "database connection URL":
             text = pattern.sub("[REDACTED]", text)
