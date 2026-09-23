@@ -10,6 +10,7 @@ tags fail closed with the same governance codes the rest of the family raises.
 
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,7 +20,6 @@ from seshat import star_discovery as _stars
 from seshat.dbt.contracts import GovernanceError
 from seshat.dbt.fact_semantics import load_fact_semantics
 from seshat.dbt.gate import evaluate_mapping_gate, resolve_working_set
-from seshat.gitutil import GIT_HARDENING
 
 from . import model_plan, sql_render, writer, yaml_render
 
@@ -63,36 +63,15 @@ _CONFORMED_MAP = "docs/quality/conformed-dimension-map.yaml"
 
 
 def _git(root: Path, *args: str):
-    """Run a hardened, read-only git command (mirrors ``gate._git``): pins
-    ``safe.directory`` (so a dubious-ownership checkout does not silently fail this
-    read while the gate's read succeeds, #419-review), disables the fsmonitor,
-    hooks, and the ext protocol. Returns the CompletedProcess or raises OSError.
+    """Run a hardened, read-only git command through the ONE shared wrapper
+    (``seshat.gitstate.run_git``): the full untrusted-tree hardening set, a
+    pinned ``safe.directory`` (#419-review), ``stdin=DEVNULL``, a timeout, and a
+    lossless UTF-8 decode (a governance YAML may hold non-ASCII bytes; an
+    undecodable byte then fails the downstream ``yaml.safe_load`` -> None).
+    Raises OSError or SubprocessError; callers fail SAFE on either."""
+    from seshat.gitstate import run_git
 
-    Decodes with explicit ``encoding='utf-8', errors='replace'`` -- NOT the locale
-    default: unlike ``gate._git`` (which reads only ASCII hashes/status), this is
-    the first consumer that reads arbitrary COMMITTED FILE CONTENT (a governance
-    YAML may hold non-ASCII bytes). Locale decoding (e.g. cp1252 on Windows) would
-    raise ``UnicodeDecodeError`` mid-read and break the documented fail-safe;
-    ``errors='replace'`` keeps the read total, and a mangled byte then fails the
-    downstream ``yaml.safe_load``/``isinstance`` check -> None (fail-safe)."""
-    import subprocess
-
-    return subprocess.run(
-        [
-            "git",
-            *GIT_HARDENING,
-            "-c",
-            f"safe.directory={root.as_posix()}",
-            *args,
-        ],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        shell=False,
-    )
+    return run_git(root, *args)
 
 
 def _committed_blob(root: Path, rel: str) -> str | None:
@@ -103,7 +82,7 @@ def _committed_blob(root: Path, rel: str) -> str | None:
     suppress dimension models from unreviewed content (#419/#418 review)."""
     try:
         result = _git(root, "show", f"HEAD:{rel}")
-    except (OSError, UnicodeDecodeError):
+    except (OSError, UnicodeDecodeError, subprocess.SubprocessError):
         return None
     return result.stdout if result.returncode == 0 else None
 
@@ -138,7 +117,7 @@ def _committed_tracked_files(root: Path) -> list[str]:
     still present at HEAD -- both a false owner-absent verdict."""
     try:
         result = _git(root, "ls-tree", "-r", "--name-only", "HEAD")
-    except (OSError, UnicodeDecodeError):
+    except (OSError, UnicodeDecodeError, subprocess.SubprocessError):
         return []
     return (result.stdout or "").splitlines() if result.returncode == 0 else []
 
