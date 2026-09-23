@@ -17,6 +17,7 @@ from seshat.approval_requests import (
     has_open_request,
     open_request_caveats,
 )
+from tests.unit._gitfix import commit_readiness_status
 
 pytestmark = pytest.mark.unit
 
@@ -222,6 +223,8 @@ def _repo_with_table(tmp_path, *, request_qid: str | None):
     directory = tmp_path / "mappings" / "demo_sales"
     directory.mkdir(parents=True)
     (directory / "readiness-status.yaml").write_text(_TERMINAL_STATUS, encoding="utf-8")
+    # Approvals count only once committed at HEAD (audit F045).
+    commit_readiness_status(directory / "readiness-status.yaml")
     if request_qid is not None:
         _request(directory, request_qid)
     return tmp_path

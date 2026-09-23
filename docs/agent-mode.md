@@ -48,6 +48,17 @@ harness to consume: `current_stage`, `readiness_state`, `evidence`,
 `blocking_reasons`, `next_allowed_action`, `forbidden_scope`,
 `validation_commands`, `stop_point`.
 
+By default `seshat next` exits 0 whatever it reports. A shell conductor that
+halts on status alone can pass the opt-in `--exit-code`: 0 = proceed, 3 = STOP
+(blocked, approval required, or a STOP-phrased `next_allowed_action` such as the
+post-Gold live-validation stop), 2 = input defect. Any unrecognised outcome is
+non-zero.
+
+Approvals count only once COMMITTED: an approval that exists only in the
+uncommitted worktree copy of `readiness-status.yaml` does not advance a stage
+and is reported as an `uncommitted_approval` caveat. Outside a git repository no
+approval is honoured.
+
 Two further keys carry INFORMATIONAL guidance rather than gate state. Both are
 always present, and are `null` where they do not apply:
 

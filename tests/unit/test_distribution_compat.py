@@ -45,11 +45,23 @@ def _run_module(module: str, workspace: Path) -> subprocess.CompletedProcess[str
 
 
 def test_retail_import_shim_resolves() -> None:
-    import retail
-    import seshat
+    """The shim's real capability: ``retail.cli.main`` IS ``seshat.cli.main``.
 
-    assert retail is not None
-    assert seshat is not None
+    ``retail`` is a console-entry-point shim only, not a module alias -- asserting
+    ``retail is not None`` could never fail after a successful import (F151).
+    """
+    import retail.cli
+    import seshat.cli
+
+    assert retail.cli.main is seshat.cli.main
+
+
+def test_retail_shim_does_not_claim_to_alias_seshat_modules() -> None:
+    import retail
+
+    doc = (retail.__doc__ or "").lower()
+    assert "entry point" in doc
+    assert "retail.cli" in doc
 
 
 def test_legacy_module_cli_matches_seshat(tmp_path: Path) -> None:

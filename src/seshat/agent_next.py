@@ -21,7 +21,9 @@ This module is a COMPOSITION, not a second source of truth:
     (issue #401), reused verbatim -- also read-only, also no DB, no network.
 
 Contract (same posture as every parent): read-only -- no writes, no DB, no
-network; deterministic -- same committed state, byte-identical document; never
+network; deterministic -- same readiness files (read from the worktree) and
+the same HEAD, byte-identical document; approvals count only when committed
+at HEAD (``seshat.committed_approvals``, audit F045); never
 a numeric readiness value -- only the four categorical statuses plus named
 evidence/blocker strings (hard rule #9, Principle V). When evidence is missing
 the document degrades to the conservative evidence-first action (start at
@@ -584,8 +586,13 @@ def _next_allowed_action(response: dict[str, Any]) -> str:
 def _contract_next_override(
     root: Path, response: dict[str, Any], entry: dict[str, Any] | None
 ) -> str | None:
-    """Surface the existing metric-owner seam after Gold without moving a stage."""
+    """Surface the existing metric-owner seam after Gold without moving a stage.
+
+    Never replaces a STOP outcome (audit F042): see ``_held_override_caveats``.
+    """
     stage = response.get("stage")
+    if response.get("outcome") in _STOP_OUTCOMES:
+        return None
     if entry is None or stage not in {
         "semantic_model_ready",
         "dashboard_ready",
@@ -607,8 +614,15 @@ def _contract_next_override(
 def _live_validation_next_override(
     root: Path, response: dict[str, Any], entry: dict[str, Any] | None
 ) -> str | None:
-    """Keep the live DB boundary explicit after Gold; do not connect from next."""
+    """Keep the live DB boundary explicit after Gold; do not connect from next.
+
+    Never replaces a STOP outcome (audit F042): a table blocked or awaiting an
+    approval at a post-Gold stage keeps its own STOP and stop point, and this
+    guidance rides in ``caveats`` instead (``_held_override_caveats``).
+    """
     stage = response.get("stage")
+    if response.get("outcome") in _STOP_OUTCOMES:
+        return None
     terminal_pass = response.get("outcome") == "terminal_pass"
     post_gold_stage = stage in {
         "semantic_model_ready",
@@ -668,9 +682,10 @@ def _dbt_execution_caveats(
     REPLACES ``next_allowed_action`` and flips ``control_outcome`` to
     ``next_action``, which feeds ``stop_point``; a dbt caveat joining that chain
     would displace a blocked table's STOP sentence and skip its blocked-specific
-    stop point. The existing two overrides are safe only because both are gated
-    to ``terminal_pass or post_gold_stage`` and so cannot fire on a blocked
-    table -- the dbt signal has no such gate, because it never competes for the
+    stop point. The existing two overrides are safe only because both return
+    ``None`` for every ``_STOP_OUTCOMES`` outcome (audit F042) -- gating on
+    ``terminal_pass or post_gold_stage`` alone did NOT keep them off a blocked
+    table. The dbt signal needs no such gate, because it never competes for the
     action string at all. It rides in ``caveats`` and changes nothing else.
 
     A clean build and a table that has never run dbt are both silent: evidence
@@ -696,6 +711,24 @@ def _dbt_execution_caveats(
     if evidence.readiness_effect:
         detail += f"; readiness effect: {evidence.readiness_effect}"
     return [{"kind": "dbt_execution", "detail": detail}]
+
+
+def _held_override_caveats(
+    root: Path, response: dict[str, Any], entry: dict[str, Any] | None
+) -> list[dict[str, str]]:
+    """The post-Gold override guidance a STOP outranked, kept as caveats (F042).
+
+    The table's own STOP stays authoritative; the live-validation and contract
+    requirements are still true, so they are reported rather than dropped.
+    """
+    if response.get("outcome") not in _STOP_OUTCOMES:
+        return []
+    probe = {**response, "outcome": "next_action"}
+    held = (
+        ("live_validation", _live_validation_next_override(root, probe, entry)),
+        ("metric_contract", _contract_next_override(root, probe, entry)),
+    )
+    return [{"kind": kind, "detail": text} for kind, text in held if text]
 
 
 def _control_stage(
@@ -929,6 +962,7 @@ def _compose(
         # touches no other field, so it can never soften an existing stop.
         "caveats": [
             *response.get("caveats", []),
+            *_held_override_caveats(root, response, entry),
             *_dbt_execution_caveats(root, entry),
         ],
         "tables": list(context.summaries),

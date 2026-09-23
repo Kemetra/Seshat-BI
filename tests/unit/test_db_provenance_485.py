@@ -29,6 +29,7 @@ import pytest
 
 from seshat import db_provenance, db_provenance_reader, run_next
 from seshat.dialect import get_dialect
+from tests.unit._gitfix import commit_readiness_status
 
 # A worked identity: the writer connected here, so the reader must agree.
 _HOST = "db-postgresql-fra1-12345.b.db.example.com"
@@ -100,6 +101,7 @@ def _repo(
         f"approvals:\n{approvals}\n",
         encoding="utf-8",
     )
+    commit_readiness_status(mapping / "readiness-status.yaml")  # F045
     if record is not None:
         (mapping / db_provenance.RECORD_FILENAME).write_text(
             json.dumps(record, indent=2), encoding="utf-8"

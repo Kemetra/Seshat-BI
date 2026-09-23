@@ -7,8 +7,10 @@ committed ``mappings/<table>/readiness-status.yaml`` (see
 ``templates/readiness-status.yaml``, ``docs/readiness/readiness-model.md``).
 
 Contract:
-  - Read-only: globs and reads committed YAML files; writes nothing, opens no DB
-    connection, makes no network call (B1/B3, FR-004).
+  - Read-only: globs and reads the WORKTREE copies of the readiness YAML files
+    (committed or not -- this projection is a display, not a gate; the run-next
+    decision honours only COMMITTED approvals, see ``seshat.committed_approvals``);
+    writes nothing, opens no DB connection, makes no network call (B1/B3, FR-004).
   - No new computation: ``current_stage`` / ``stages[*].status`` / ``evidence[]`` /
     ``blocking_reasons[]`` / ``next_action`` are projected verbatim from the
     source file -- this module never derives, grants, or upgrades a stage.

@@ -59,6 +59,42 @@ def commit_all(repo: Path, message: str) -> None:
     )
 
 
+def commit_readiness_status(status_path: Path) -> None:
+    """Commit ONE ``mappings/<t>/readiness-status.yaml`` at its workspace root.
+
+    run-next honours an approval only when it is committed at HEAD (audit F045),
+    so a fixture whose approvals must count commits the file it just wrote. Only
+    that file is added -- the rest of the workspace keeps its tracked/untracked
+    shape. The workspace becomes a repository first when it is not one.
+    """
+    root = status_path.parents[2]
+    if not (root / ".git").exists():
+        subprocess.run(
+            ["git", "init", "-q", "-b", "main"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        )
+        for key, value in (
+            ("user.email", "t@example.com"),
+            ("user.name", "Test"),
+            ("commit.gpgsign", "false"),
+        ):
+            subprocess.run(
+                ["git", "config", key, value], cwd=root, check=True, capture_output=True
+            )
+    relative = status_path.relative_to(root).as_posix()
+    subprocess.run(
+        ["git", "add", "--", relative], cwd=root, check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "commit", "-q", "--allow-empty", "-m", "test: readiness fixture"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+
+
 def context_for(repo: Path) -> RuleContext:
     out = subprocess.run(
         ["git", "ls-files"], cwd=repo, check=True, capture_output=True, text=True

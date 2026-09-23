@@ -84,7 +84,9 @@ def run_subprocess(
 
     **Deliberately NOT routed through here** -- the dbt/dagster execution runners
     (``dbt/gate.py``, ``dbt/runner.py``, ``dbt/scaffold/orchestrator.py``,
-    ``dagster_adapter/runner.py``, ``cli/commands/dbt.py``). Those invoke
+    ``dagster_adapter/runner.py``; ``cli/commands/dbt.py`` reaches dbt only
+    through ``dbt/runner.py``, and its read-only ``dbt doctor`` git probes DO
+    route through here). Those invoke
     user-authored builds that legitimately run longer than ``SUBPROCESS_TIMEOUT``,
     so a shared cap would abort real work. They are also not reachable from the
     read-only governor tools, so they do not carry the #557 deadlock. If any of
