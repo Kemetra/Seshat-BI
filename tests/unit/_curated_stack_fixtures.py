@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from seshat.integrations import installer, resolvers
+from seshat.integrations import handlers, installer, resolvers
 from seshat.integrations.catalog import (
     ANALYTICS_FULL,
     Channel,
@@ -154,7 +154,7 @@ def _tools_on_path(monkeypatch: pytest.MonkeyPatch) -> None:
     property under test. Whether a launcher happens to exist on the machine
     running the suite is never what these tests are about.
     """
-    monkeypatch.setattr(installer.shutil, "which", lambda name: f"/bin/{name}")
+    monkeypatch.setattr(handlers.shutil, "which", lambda name: f"/bin/{name}")
 
 
 def _mark_installed(root: Path, *component_ids: str) -> None:

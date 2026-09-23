@@ -115,11 +115,11 @@ def test_compatibility_apply_without_committed_approval_is_refused(
     controls; without a committed named-human approval the facade must still
     refuse, run nothing, and write no lock.
     """
-    from seshat.integrations import installer
+    from seshat.integrations import handlers
     from seshat.integrations.resolvers import Resolvers
     from tests.unit._curated_stack_fixtures import FakePypi, _release
 
-    monkeypatch.setattr(installer.shutil, "which", lambda name: f"/bin/{name}")
+    monkeypatch.setattr(handlers.shutil, "which", lambda name: f"/bin/{name}")
     commands: list[list[str]] = []
 
     def _runner(command: list[str], cwd: Path):
