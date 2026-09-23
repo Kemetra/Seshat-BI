@@ -106,35 +106,46 @@ def test_compatibility_apply_requires_explicit_resolvers(tmp_path: Path) -> None
     ]
 
 
-def test_compatibility_apply_delegates_with_injected_resolvers(
+def test_compatibility_apply_without_committed_approval_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    sentinel_resolvers = object()
-    sentinel_runner = object()
-    called: dict[str, object] = {}
+    """Inverted from the old delegation test, which pinned the missing gate.
 
-    def _apply(root: Path, *, profile: str, resolvers, runner=None) -> SetupOutcome:
-        called.update(root=root, profile=profile, resolvers=resolvers, runner=runner)
-        return _canonical_outcome(status="installed")
+    Supplying exact resolvers and a runner is everything a direct Python caller
+    controls; without a committed named-human approval the facade must still
+    refuse, run nothing, and write no lock.
+    """
+    from seshat.integrations import handlers
+    from seshat.integrations.resolvers import Resolvers
+    from tests.unit._curated_stack_fixtures import FakePypi, _release
 
-    monkeypatch.setattr(integrations_setup, "apply_profile", _apply)
+    monkeypatch.setattr(handlers.shutil, "which", lambda name: f"/bin/{name}")
+    commands: list[list[str]] = []
+
+    def _runner(command: list[str], cwd: Path):
+        commands.append(command)
+        raise AssertionError("a handler ran without a committed approval")
 
     results = setup_integrations(
-        tmp_path,
+        _workspace(tmp_path),
         apply=True,
-        resolvers=sentinel_resolvers,
-        runner=sentinel_runner,
+        profile="analytics-core",
+        resolvers=Resolvers(
+            pypi=FakePypi(
+                {
+                    name: {"releases": {"1.0.0": _release("1.0.0")}}
+                    for name in ("duckdb", "polars", "pyarrow", "pandera", "connectorx")
+                }
+            ),
+            python_version=(3, 13),
+        ),
+        runner=_runner,
     )
 
-    assert called == {
-        "root": tmp_path.resolve(),
-        "profile": "analytics-full",
-        "resolvers": sentinel_resolvers,
-        "runner": sentinel_runner,
-    }
-    assert results == [
-        IntegrationResult("fabric-skills", "installed", "canonical result")
-    ]
+    assert commands == []
+    assert [(item.name, item.status) for item in results] == [("approval", "failed")]
+    assert "approval" in results[0].detail
+    assert not (tmp_path / LOCK_FILE).exists()
 
 
 def test_compatibility_metadata_is_derived_from_canonical_truth() -> None:

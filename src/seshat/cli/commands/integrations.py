@@ -16,7 +16,7 @@ prompt, no banner -- so a consumer can pipe it straight into a parser. That also
 means JSON mode never prompts: a machine has no answer to give.
 
 `--derived` is a fourth, ORTHOGONAL concern (spec 155). It changes WHAT is
-selected -- the components this project's committed evidence needs, instead of a
+selected -- the components this project's evidence needs, instead of a
 curated profile -- and changes nothing about whether coordinates are resolved,
 whether anything is written, or who may authorize it. The profile default is
 untouched: `DEFAULT_PROFILE` keeps its value and `--profile` keeps its behavior.
@@ -116,7 +116,12 @@ def _derived_main(args: Namespace, root: Path) -> int:
         else (False, "")
     )
 
-    if _approved(args, "") and not scope.blocked and scope.proposes_change:
+    # The prompt shows the derived plan it asks about: confirming an install of
+    # an unseen set of capabilities is not an informed yes.
+    preview = guided_setup.render_text(
+        scope, guided_setup.capability_statuses(scope, approval_met=authorized)
+    )
+    if _approved(args, preview) and not scope.blocked and scope.proposes_change:
         if not authorized:
             print(
                 "error: provisioning needs a committed named-human approval -- "
@@ -245,7 +250,14 @@ def integrations_main(args: Namespace) -> int:
             )
             return 2
         try:
-            apply_kwargs = {"profile": profile, "resolvers": resolvers}
+            # `pinned` binds the install to the resolutions the operator just
+            # confirmed; without it apply would re-resolve live and could install
+            # a release published after the prompt was answered.
+            apply_kwargs = {
+                "profile": profile,
+                "resolvers": resolvers,
+                "pinned": getattr(outcome, "resolutions", None),
+            }
             if harnesses:
                 apply_kwargs["harnesses"] = harnesses
             outcome = apply_profile(root, **apply_kwargs)

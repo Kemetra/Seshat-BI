@@ -141,18 +141,22 @@ def _requires_python(files: object) -> str:
 
 
 def artifact_sha256(files: object, version_files: object = None) -> str | None:
-    """The SHA256 of a release's preferred artifact, when PyPI reports one.
+    """The SHA256 of the ONE artifact a release publishes, else None.
 
-    A wheel is preferred over an sdist because that is what an install would
-    fetch. Returns None when no digest is published -- recorded as null in the
-    lock file rather than fabricated.
+    A release usually publishes many files (a wheel per platform and Python tag,
+    plus an sdist), and which one an installer selects depends on the machine.
+    Recording any single one of them would be a digest of an artifact that may
+    not be the one installed, so a digest is recorded only when it is
+    unambiguous: exactly one non-yanked file with a published digest. Otherwise
+    the lock carries null rather than a plausible-looking wrong value. The field
+    is evidence, not an install-time check: hash-checking an install would need
+    a digest for every dependency in the closure, which this lock does not hold.
     """
     candidates = version_files if version_files is not None else files
     if not isinstance(candidates, list):
         return None
     published = _published_digests(candidates)
-    wheel = next((digest for kind, digest in published if kind == "bdist_wheel"), None)
-    return wheel or (published[0][1] if published else None)
+    return published[0][1] if len(published) == 1 else None
 
 
 def _published_digests(candidates: list) -> list[tuple[str, str]]:

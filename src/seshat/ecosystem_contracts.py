@@ -281,13 +281,98 @@ def _validate_conditional(
     return validate_json_contract(value, applied, path, root_schema)
 
 
+# The keywords this validator IMPLEMENTS, plus annotations that assert nothing.
+# Anything else in a schema is refused: an ignored keyword is a constraint the
+# schema author believes is enforced and is not (fail-open).
+_SUPPORTED_KEYWORDS = frozenset(
+    {
+        "type",
+        "const",
+        "enum",
+        "minLength",
+        "pattern",
+        "minimum",
+        "maximum",
+        "required",
+        "additionalProperties",
+        "properties",
+        "items",
+        "minItems",
+        "maxItems",
+        "uniqueItems",
+        "$ref",
+        "oneOf",
+        "allOf",
+        "if",
+        "then",
+        "else",
+    }
+)
+_ANNOTATION_KEYWORDS = frozenset(
+    {
+        "$schema",
+        "$id",
+        "$defs",
+        "title",
+        "description",
+        "$comment",
+        "default",
+        "examples",
+        # Annotation-only in JSON Schema 2020-12 unless the format-assertion
+        # vocabulary is enabled, so ignoring it is the specified behaviour.
+        "format",
+    }
+)
+
+
+def _subschemas(schema: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """Every nested schema position this validator descends into."""
+    nested: list[object] = []
+    for key in ("properties", "$defs"):
+        mapping = schema.get(key)
+        if isinstance(mapping, Mapping):
+            nested.extend(mapping.values())
+    for key in ("items", "additionalProperties", "if", "then", "else"):
+        nested.append(schema.get(key))
+    for key in ("oneOf", "allOf"):
+        branches = schema.get(key)
+        if isinstance(branches, list):
+            nested.extend(branches)
+    return [item for item in nested if isinstance(item, Mapping)]
+
+
+def _unsupported_keywords(schema: Mapping[str, Any]) -> set[str]:
+    allowed = _SUPPORTED_KEYWORDS | _ANNOTATION_KEYWORDS
+    found = {str(key) for key in schema if key not in allowed}
+    for nested in _subschemas(schema):
+        found |= _unsupported_keywords(nested)
+    return found
+
+
+def require_supported_keywords(schema: Mapping[str, Any]) -> None:
+    """Raise :class:`ContractError` if ``schema`` uses a keyword not implemented."""
+    unsupported = _unsupported_keywords(schema)
+    if unsupported:
+        raise ContractError(
+            "schema uses unsupported JSON-Schema keyword(s) "
+            f"{sorted(unsupported)}; implement them in ecosystem_contracts "
+            "before relying on them"
+        )
+
+
 def validate_json_contract(
     value: object,
     schema: Mapping[str, Any],
     path: str = "$",
     root_schema: Mapping[str, Any] | None = None,
 ) -> list[str]:
-    """Validate the JSON-Schema subset used by Seshat ecosystem contracts."""
+    """Validate the JSON-Schema subset used by Seshat ecosystem contracts.
+
+    A top-level call first refuses any keyword outside the implemented subset
+    (:class:`ContractError`), so a schema cannot silently stop being enforced.
+    """
+    if root_schema is None:
+        require_supported_keywords(schema)
     root = schema if root_schema is None else root_schema
     resolved = _resolve_local_ref(schema, root)
     branch_errors = _validate_one_of(value, resolved, path, root)

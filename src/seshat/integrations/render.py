@@ -100,7 +100,9 @@ def _fact(value: bool | None) -> str:
 
 
 def _summary(outcome: SetupOutcome) -> str:
-    if any(row.status == "planned" for row in outcome.rows):
+    # An UPGRADE is planned work too: the installed coordinate is not the
+    # resolved one, so "present" would misstate what is on disk.
+    if any(row.status in {"planned", "upgrade"} for row in outcome.rows):
         return (
             "Dry run only. Nothing was written. Approve explicitly "
             "(--refresh --apply) to install."

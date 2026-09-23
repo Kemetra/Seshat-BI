@@ -8,11 +8,23 @@ caller can fail closed.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 
 from seshat.integrations.catalog import McpSurfacePolicy, NativePluginPolicy
+from seshat.integrations.plugin_components import (
+    COMPONENT_KEYS,
+    InvalidDeclaration,
+    declarations,
+    declared_paths,
+    inline_hook_events,
+    markdown_names,
+    skill_names,
+)
+
+# plugin.json component declarations, keyed by component field.
+_Declared = Mapping[str, object]
 
 
 @dataclass(frozen=True)
@@ -36,6 +48,9 @@ class ObservedPlugin:
     mcp_servers: tuple[ObservedMcpServer, ...] | None
     agents: frozenset[str] | None
     hooks: frozenset[str] | None
+    commands: frozenset[str] | None = frozenset()
+    # plugin.json keys this firewall cannot review; any one of them blocks.
+    unknown_components: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -73,7 +88,7 @@ def _children(root: Path) -> tuple[Path, ...] | None:
         return None
 
 
-def _observe_skills(root: Path) -> frozenset[str] | None:
+def _default_skills(root: Path) -> frozenset[str] | None:
     skills_root = root / "skills"
     if not skills_root.exists():
         return frozenset()
@@ -88,7 +103,7 @@ def _observe_skills(root: Path) -> frozenset[str] | None:
     return frozenset(names)
 
 
-def _observe_agents(root: Path) -> frozenset[str] | None:
+def _default_agents(root: Path) -> frozenset[str] | None:
     agents_root = root / "agents"
     if not agents_root.exists():
         return frozenset()
@@ -101,6 +116,53 @@ def _observe_agents(root: Path) -> frozenset[str] | None:
             return None
         names.add(child.stem)
     return frozenset(names)
+
+
+def _default_commands(root: Path) -> frozenset[str] | None:
+    commands_root = root / "commands"
+    if not commands_root.exists():
+        return frozenset()
+    if not commands_root.is_dir():
+        return None
+    try:
+        return markdown_names(commands_root)
+    except InvalidDeclaration:
+        return None
+
+
+def _declared_union(
+    root: Path,
+    declared: _Declared,
+    key: str,
+    default: frozenset[str] | None,
+    names_at: Callable[[Path], frozenset[str]],
+) -> frozenset[str] | None:
+    """Default-directory names plus every name under the plugin.json paths."""
+    if default is None or key not in declared:
+        return default
+    names = set(default)
+    try:
+        for path in declared_paths(root, declared[key]):
+            names |= names_at(path)
+    except (InvalidDeclaration, OSError):
+        return None
+    return frozenset(names)
+
+
+def _observe_skills(root: Path, declared: _Declared) -> frozenset[str] | None:
+    return _declared_union(root, declared, "skills", _default_skills(root), skill_names)
+
+
+def _observe_agents(root: Path, declared: _Declared) -> frozenset[str] | None:
+    return _declared_union(
+        root, declared, "agents", _default_agents(root), markdown_names
+    )
+
+
+def _observe_commands(root: Path, declared: _Declared) -> frozenset[str] | None:
+    return _declared_union(
+        root, declared, "commands", _default_commands(root), markdown_names
+    )
 
 
 def _hook_manifest_path(root: Path) -> Path | None:
@@ -139,12 +201,31 @@ def _hook_name(name: object) -> str:
     return name
 
 
-def _observe_hooks(root: Path) -> frozenset[str] | None:
+def _declared_hook_names(root: Path, value: object) -> frozenset[str]:
+    """Hook events declared in plugin.json: an inline object or manifest paths."""
+    if isinstance(value, dict):
+        return _hook_names({"hooks": inline_hook_events(value)})
+    try:
+        paths = declared_paths(root, value)
+    except InvalidDeclaration as exc:
+        raise _InvalidHookManifest from exc
+    names: set[str] = set()
+    for path in paths:
+        names |= _hook_names(_read_hook_manifest(path))
+    return frozenset(names)
+
+
+def _observe_hooks(root: Path, declared: _Declared) -> frozenset[str] | None:
     try:
         manifest = _hook_manifest_path(root)
-        if manifest is None:
-            return frozenset()
-        return _hook_names(_read_hook_manifest(manifest))
+        names = (
+            frozenset()
+            if manifest is None
+            else _hook_names(_read_hook_manifest(manifest))
+        )
+        if "hooks" in declared:
+            names |= _declared_hook_names(root, declared["hooks"])
+        return names
     except _InvalidHookManifest:
         return None
 
@@ -234,50 +315,82 @@ def _read_mcp_manifest(manifest: Path) -> object:
         raise _InvalidMcpManifest from exc
 
 
-def _plugin_manifest_mcp_payload(payload: object) -> object | None:
-    if not isinstance(payload, dict) or "mcpServers" not in payload:
-        return None
-    return {"mcpServers": payload["mcpServers"]}
+def _servers_from(payload: object) -> tuple[ObservedMcpServer, ...]:
+    servers = _normalize_mcp_servers(payload)
+    if servers is None:
+        raise _InvalidMcpManifest
+    return servers
 
 
-def _plugin_manifest_mcp_servers(
-    manifest: Path,
-) -> tuple[ObservedMcpServer, ...] | None:
-    if not manifest.exists():
-        return ()
-    payload = _plugin_manifest_mcp_payload(_read_mcp_manifest(manifest))
-    if payload is None:
-        return ()
-    return _normalize_mcp_servers(payload)
-
-
-def _observe_mcp_servers(root: Path) -> tuple[ObservedMcpServer, ...] | None:
+def _declared_mcp_servers(root: Path, value: object) -> list[ObservedMcpServer]:
+    """MCP servers declared in plugin.json: an inline object or config paths."""
+    if isinstance(value, dict):
+        return list(_servers_from({"mcpServers": value}))
     try:
+        paths = declared_paths(root, value)
+    except InvalidDeclaration as exc:
+        raise _InvalidMcpManifest from exc
+    servers: list[ObservedMcpServer] = []
+    for path in paths:
+        servers.extend(_servers_from(_read_mcp_manifest(path)))
+    return servers
+
+
+def _merge_servers(
+    servers: list[ObservedMcpServer],
+) -> tuple[ObservedMcpServer, ...]:
+    """Merge every declaration; one name declared two different ways is unknown."""
+    by_name: dict[str, ObservedMcpServer] = {}
+    for server in servers:
+        if by_name.get(server.name, server) != server:
+            raise _InvalidMcpManifest
+        by_name[server.name] = server
+    return tuple(sorted(by_name.values(), key=lambda server: server.name))
+
+
+def _observe_mcp_servers(
+    root: Path, declared: _Declared
+) -> tuple[ObservedMcpServer, ...] | None:
+    """Every MCP server: `.mcp.json` AND plugin.json's own `mcpServers`, merged."""
+    try:
+        servers: list[ObservedMcpServer] = []
         standalone = root / ".mcp.json"
         if standalone.exists():
-            return _normalize_mcp_servers(_read_mcp_manifest(standalone))
-        plugin_manifest = root / ".claude-plugin" / "plugin.json"
-        return _plugin_manifest_mcp_servers(plugin_manifest)
+            servers.extend(_servers_from(_read_mcp_manifest(standalone)))
+        if "mcpServers" in declared:
+            servers.extend(_declared_mcp_servers(root, declared["mcpServers"]))
+        return _merge_servers(servers)
     except _InvalidMcpManifest:
         return None
 
 
 def observe_plugin(
-    install_path: Path, inventory_entry: Mapping[str, object]
+    install_path: Path,
+    inventory_entry: Mapping[str, object],
+    declared_elsewhere: Mapping[str, object] | None = None,
 ) -> ObservedPlugin:
-    """Observe every standard capability class under one installed plugin."""
+    """Observe every standard capability class under one installed plugin.
+
+    The default directories AND the component fields of the plugin's own
+    ``plugin.json`` are enumerated; ``declared_elsewhere`` adds component fields
+    declared outside it (a marketplace entry). Unrecognised plugin.json keys are
+    carried as ``unknown_components`` so the comparison fails closed on them.
+    """
 
     raw_id = inventory_entry.get("id", inventory_entry.get("name", install_path.name))
     plugin_id = raw_id if isinstance(raw_id, str) else ""
     raw_version = inventory_entry.get("version")
     version = raw_version if isinstance(raw_version, str) and raw_version else None
+    declared, unknown = declarations(install_path, declared_elsewhere)
     return ObservedPlugin(
         plugin_id=plugin_id,
         version=version,
-        skills=_observe_skills(install_path),
-        mcp_servers=_observe_mcp_servers(install_path),
-        agents=_observe_agents(install_path),
-        hooks=_observe_hooks(install_path),
+        skills=_observe_skills(install_path, declared),
+        mcp_servers=_observe_mcp_servers(install_path, declared),
+        agents=_observe_agents(install_path, declared),
+        hooks=_observe_hooks(install_path, declared),
+        commands=_observe_commands(install_path, declared),
+        unknown_components=unknown,
     )
 
 
@@ -327,17 +440,13 @@ def locked_plugin_policy(
     source = _locked_plugin_source(upstream_root, entry, policy.plugin_id)
     inventory = dict(entry)
     inventory["id"] = policy.plugin_id
-    return observe_plugin(source, inventory)
+    elsewhere = {key: entry[key] for key in COMPONENT_KEYS if key in entry}
+    return observe_plugin(source, inventory, elsewhere)
 
 
 def _surface_sets(
     plugin: ObservedPlugin,
-) -> tuple[
-    tuple[str, frozenset[str] | None],
-    tuple[str, frozenset[str] | None],
-    tuple[str, frozenset[str] | None],
-    tuple[str, frozenset[str] | None],
-]:
+) -> tuple[tuple[str, frozenset[str] | None], ...]:
     mcp_names = (
         None
         if plugin.mcp_servers is None
@@ -348,6 +457,7 @@ def _surface_sets(
         ("mcp", mcp_names),
         ("agent", plugin.agents),
         ("hook", plugin.hooks),
+        ("command", plugin.commands),
     )
 
 
@@ -359,6 +469,7 @@ def _allowed_sets(
         "mcp": frozenset(server.name for server in policy.allowed_mcp_servers),
         "agent": frozenset(policy.allowed_agents),
         "hook": frozenset(policy.allowed_hooks),
+        "command": frozenset(policy.allowed_commands),
     }
 
 
@@ -539,6 +650,19 @@ def _plugin_surface_blockers(
     return blockers
 
 
+def _unknown_component_blockers(
+    origin: str, plugin: ObservedPlugin
+) -> list[ManifestBlocker]:
+    return [
+        ManifestBlocker(
+            "unknown-component",
+            f"{origin} plugin.json declares {key!r}, a capability this firewall "
+            "cannot enumerate",
+        )
+        for key in sorted(plugin.unknown_components)
+    ]
+
+
 def _plugin_mcp_blockers(
     origin: str, policy: NativePluginPolicy, plugin: ObservedPlugin
 ) -> list[ManifestBlocker]:
@@ -564,6 +688,7 @@ def compare_plugin(
     blockers.extend(_version_blockers(locked, observed))
     for origin, plugin in (("locked", locked), ("active", observed)):
         blockers.extend(_plugin_surface_blockers(origin, policy, plugin))
+        blockers.extend(_unknown_component_blockers(origin, plugin))
         blockers.extend(_plugin_mcp_blockers(origin, policy, plugin))
 
     return tuple(blockers)

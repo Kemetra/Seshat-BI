@@ -218,11 +218,11 @@ def _declared_file_findings(root: Path, manifest: PackManifest) -> list[dict[str
         suffix = _suffix_finding(declared, locator, kind)
         if suffix is not None:
             findings.append(suffix)
-        candidate = (
-            f"{manifest.directory}/{declared}" if manifest.directory else declared
-        )
+        # Contained in the PACK directory, not merely the workspace: a pack may
+        # not claim a governed repository file as its own declarative content.
+        pack_root = root / manifest.directory if manifest.directory else root
         findings.extend(
-            _location_findings(root, candidate, locator, f"{kind} {declared!r}")
+            _location_findings(pack_root, declared, locator, f"{kind} {declared!r}")
         )
     return findings
 

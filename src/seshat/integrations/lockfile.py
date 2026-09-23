@@ -148,30 +148,28 @@ def build_lock(
     }
 
 
-def write_lock(root: Path, document: dict) -> Path:
-    """Write the lock atomically: temp sibling, fsync, then `os.replace`.
+def write_text_atomically(path: Path, text: str, *, prefix: str) -> Path:
+    """Write ``text`` to ``path`` atomically: temp sibling, fsync, ``os.replace``.
 
     The temp file is a SIBLING of the target, not a file in the system temp
     directory: `os.replace` is only atomic within one filesystem, and a
     cross-device replace silently degrades to a copy -- which is exactly the
-    window where a crash would leave a truncated lock. On any failure the temp
-    file is removed and the previous lock is left byte-for-byte intact.
+    window where a crash would leave a truncated file. On any failure the temp
+    file is removed and the previous file is left byte-for-byte intact.
     """
-    path = root / LOCK_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
-    body = json.dumps(document, indent=2, sort_keys=True) + "\n"
     temp_name: str | None = None
     try:
         with NamedTemporaryFile(
             mode="w",
             encoding="utf-8",
             dir=path.parent,
-            prefix=".lock-",
+            prefix=prefix,
             suffix=".tmp",
             delete=False,
         ) as handle:
             temp_name = handle.name
-            handle.write(body)
+            handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp_name, path)
@@ -183,3 +181,9 @@ def write_lock(root: Path, document: dict) -> Path:
             except OSError:  # pragma: no cover - best-effort cleanup
                 pass
     return path
+
+
+def write_lock(root: Path, document: dict) -> Path:
+    """Write the lock atomically (see :func:`write_text_atomically`)."""
+    body = json.dumps(document, indent=2, sort_keys=True) + "\n"
+    return write_text_atomically(root / LOCK_FILE, body, prefix=".lock-")

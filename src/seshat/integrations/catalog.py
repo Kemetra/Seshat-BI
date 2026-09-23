@@ -112,6 +112,7 @@ class NativePluginPolicy:
     allowed_agents: tuple[str, ...] = ()
     allowed_hooks: tuple[str, ...] = ()
     incompatible_capabilities: tuple[str, ...] = ()
+    allowed_commands: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.plugin_id.strip():
@@ -125,6 +126,9 @@ class NativePluginPolicy:
         _validate_unique_strings(self.plugin_id, "allowed agent", self.allowed_agents)
         _validate_unique_strings(self.plugin_id, "allowed hook", self.allowed_hooks)
         _validate_unique_strings(
+            self.plugin_id, "allowed command", self.allowed_commands
+        )
+        _validate_unique_strings(
             self.plugin_id,
             "incompatible capability",
             self.incompatible_capabilities,
@@ -136,6 +140,7 @@ class NativePluginPolicy:
             | set(mcp_names)
             | set(self.allowed_agents)
             | set(self.allowed_hooks)
+            | set(self.allowed_commands)
         )
         overlap = allowed & set(self.incompatible_capabilities)
         if overlap:

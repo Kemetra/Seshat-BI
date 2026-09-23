@@ -17,25 +17,17 @@ Two boundaries are inherited from the shipped verb and preserved verbatim:
 
 from __future__ import annotations
 
-import shutil
-import subprocess
-import sys
-from collections.abc import Callable
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
-from seshat.integrations import mcp_config
 from seshat.integrations.catalog import (
     DAGSTER_PROJECT,
     DEFAULT_PROFILE,
-    ENV_DIR,
     LOCK_FILE,
     MCP_CONFIG,
-    NODE_DIR,
     PROFILE_NAMES,
-    SKILLS_DIR,
-    STAGING_DIR,
     Channel,
     Component,
     SourceType,
@@ -43,32 +35,40 @@ from seshat.integrations.catalog import (
     profiles_for,
 )
 from seshat.integrations.compat import apply_policy
+from seshat.integrations.coordinates import (
+    _disk_resolution,
+    _matches,
+    _on_disk_resolution,
+    _upgrade_from,
+)
 from seshat.integrations.discovery import (
     DiscoveryInputs,
     SkillDiscovery,
     inspect_official_skills,
 )
+from seshat.integrations.handlers import (
+    CONFLICT,
+    FAILED,
+    INCOMPATIBLE,
+    INSTALLED,
+    NEEDS_ACTION,
+    PLANNED,
+    PRESENT,
+    UNAVAILABLE,
+    UPGRADE,
+    _handler_for,
+    _Install,
+)
 from seshat.integrations.lockfile import LockError, build_lock, read_lock, write_lock
+from seshat.integrations.presence import (
+    _BUNDLED_SKILLS,
+    _is_installed,
+    _profile_env,
+    _skill_dir,
+    installed_coordinate,
+)
+from seshat.integrations.procs import _run
 from seshat.integrations.resolvers import Resolution, Resolvers, resolve
-
-PRESENT = "present"
-PLANNED = "planned"
-INSTALLED = "installed"
-UNAVAILABLE = "unavailable"
-FAILED = "failed"
-CONFLICT = "conflict"
-INCOMPATIBLE = "incompatible"
-
-# The statuses that mean a human has something to do.
-NEEDS_ACTION = frozenset({FAILED, UNAVAILABLE, CONFLICT, INCOMPATIBLE})
-
-# Bundled skill paths, validated locally rather than downloaded.
-_BUNDLED_SKILLS = {
-    "seshat-dagster-workflows": (
-        "integrations/claude-code/seshat-bi/skills/dagster-workflows/SKILL.md"
-    ),
-    "seshat-dagster-adapter": "src/seshat/dagster_adapter/__init__.py",
-}
 
 
 @dataclass(frozen=True)
@@ -99,38 +99,16 @@ class SetupOutcome:
     lock_written: Path | None = None
     notes: list[str] = field(default_factory=list)
     discovery: list[SkillDiscovery] = field(default_factory=list)
+    # The exact resolutions this outcome reports, keyed by component id. A plan
+    # a human confirmed is passed back to `apply(pinned=...)` so the install is
+    # bound to what was shown rather than to a fresh lookup (not rendered).
+    resolutions: dict[str, Resolution] = field(default_factory=dict)
 
     @property
     def needs_action(self) -> bool:
         return any(row.needs_action for row in self.rows) or any(
             result.needs_action for result in self.discovery
         )
-
-
-@dataclass(frozen=True)
-class _Install:
-    """Everything one component's install needs: where, what, and how to run it.
-
-    Every handler took the same five positional arguments, so the shape was
-    already a record; naming it means a new handler cannot silently reorder
-    `profile` and `root` (both `str`-ish at a call site) and the runner seam
-    travels with the request rather than as a trailing bare callable.
-    """
-
-    root: Path
-    item: Component
-    resolved: Resolution
-    profile: str
-    runner: Callable[[list[str], Path], subprocess.CompletedProcess]
-
-    @property
-    def env(self) -> Path:
-        """The absolute profile environment this component installs into."""
-        return self.root / _profile_env(self.profile)
-
-    def run(self, command: list[str], cwd: Path | None = None):
-        """Run `command` through the injected seam, defaulting to the repo root."""
-        return self.runner(command, self.root if cwd is None else cwd)
 
 
 def _now() -> str:
@@ -201,29 +179,6 @@ def _lock_resolution(item: Component, lock) -> Resolution | None:
 # --------------------------------------------------------------------------- #
 
 
-def _skill_dir(item: Component) -> Path:
-    return SKILLS_DIR / item.id
-
-
-def _missing_required_payload(root: Path, item: Component) -> tuple[str, ...]:
-    """Catalog-declared payload files absent below ``root``."""
-    return tuple(
-        required
-        for required in item.required_paths
-        if not (root / Path(*required.split("/"))).is_file()
-    )
-
-
-def _venv_python(env: Path) -> Path:
-    if sys.platform == "win32":
-        return env / "Scripts/python.exe"
-    return env / "bin/python"
-
-
-def _profile_env(profile: str) -> Path:
-    return ENV_DIR / profile
-
-
 def _resolved_refs(
     components: list[Component], resolutions: list[Resolution]
 ) -> dict[str, str]:
@@ -240,55 +195,6 @@ def _resolved_refs(
         and not item.mcp_server
         and (resolved.tag or resolved.commit)
     }
-
-
-def _is_installed(root: Path, item: Component, profile: str) -> bool:
-    """Whether the component is fully installed -- never partially.
-
-    A skill bundle counts only when its marker file is on disk, and a Python
-    component only when its profile interpreter exists AND the distribution has
-    metadata inside it. A half-finished clone or a venv without the package
-    reports as not installed, so it is re-planned rather than claimed.
-    """
-    if item.source_type is SourceType.BUNDLED:
-        relative = _BUNDLED_SKILLS.get(item.id)
-        return bool(relative) and (root / relative).is_file()
-    if item.mcp_server:
-        # An MCP component is installed when its registration marker exists,
-        # whatever index its version came from.
-        return (root / NODE_DIR / item.id / ".seshat-installed").is_file()
-    if item.source_type is SourceType.GITHUB:
-        target = root / _skill_dir(item)
-        marker = target / ".seshat-installed"
-        return marker.is_file() and not _missing_required_payload(target, item)
-    interpreter = root / _venv_python(_profile_env(profile))
-    if not interpreter.is_file():
-        return False
-    return _distribution_present(root / _profile_env(profile), item.coordinate)
-
-
-# Where a venv keeps installed distribution metadata, on Windows and on POSIX.
-_SITE_PACKAGES = ("Lib/site-packages", "lib/python*/site-packages")
-
-
-def _canonical_dist(name: str) -> str:
-    """PEP 503-style canonical form, so `dbt-core` matches `dbt_core.dist-info`."""
-    return name.replace("-", "_").lower()
-
-
-def _distribution_present(env: Path, dist: str) -> bool:
-    """Whether `dist` has install metadata inside `env`.
-
-    Reads `*.dist-info` directory names rather than importing anything: an
-    import would execute third-party code just to answer a status question.
-    """
-    canonical = _canonical_dist(dist)
-    return any(
-        _canonical_dist(info.name.split("-", 1)[0]) == canonical
-        for pattern in _SITE_PACKAGES
-        for site in env.glob(pattern)
-        for info in site.glob("*.dist-info")
-    )
 
 
 # --------------------------------------------------------------------------- #
@@ -324,17 +230,7 @@ def plan(
     except LockError as exc:
         # Fail closed: a lock we cannot trust stops the run rather than being
         # treated as absent.
-        outcome.rows.append(
-            ComponentPlan(
-                component="lock",
-                profile=label,
-                channel="-",
-                pinned="-",
-                source=LOCK_FILE.as_posix(),
-                status=FAILED,
-                detail=str(exc),
-            )
-        )
+        outcome.rows.append(_refusal_row("lock", label, LOCK_FILE.as_posix(), str(exc)))
         return outcome
 
     resolutions = _resolve_all(components, resolvers, lock)
@@ -343,18 +239,21 @@ def plan(
         python_version=resolvers.python_version if resolvers else None,
     )
     outcome.notes.extend(verdict.reasons)
+    if not derived:
+        outcome.notes.extend(_dropped_from_lock(lock, components, profile))
+    outcome.resolutions = {
+        item.id: resolved for item, resolved in zip(components, verdict.resolutions)
+    }
 
     envs = {item.id: _env_profile(root, item, profile, derived) for item in components}
     for item, resolved in zip(components, verdict.resolutions):
         outcome.rows.append(_plan_row(root, item, resolved, envs[item.id]))
     outcome.discovery.extend(
-        inspect_official_skills(
+        _discover(
             root,
             components,
-            installed={
-                item.id: _is_installed(root, item, envs[item.id]) for item in components
-            },
-            inputs=DiscoveryInputs(
+            envs,
+            DiscoveryInputs(
                 harnesses=tuple(harnesses),
                 runner=discovery_runner,
                 harness_roots=harness_roots,
@@ -364,6 +263,41 @@ def plan(
         )
     )
     return outcome
+
+
+def _dropped_from_lock(lock, components, profile: str) -> list[str]:
+    """A warning naming locked components a PROFILE apply would drop from the lock.
+
+    A profile run rewrites the whole lock with only its own components (spec
+    144 FR-010/FR-011; making the merge symmetric is an owner decision, spec 155
+    owner decision 3), so the loss is stated before it happens rather than
+    discovered later as "absent from the integration lock".
+    """
+    if lock is None:
+        return []
+    selected = {item.id for item in components}
+    dropped = sorted(set(lock.components) - selected)
+    if not dropped:
+        return []
+    return [
+        f"{len(dropped)} component(s) recorded in {LOCK_FILE.as_posix()} are "
+        f"outside profile {profile} ({', '.join(dropped)}); an --apply of this "
+        "profile rewrites the lock without them. Use the profile that includes "
+        "them (analytics-full) to keep them recorded."
+    ]
+
+
+def _refusal_row(component: str, label: str, source: str, detail: str) -> ComponentPlan:
+    """A run-level FAILED row that stops the run before any component is touched."""
+    return ComponentPlan(
+        component=component,
+        profile=label,
+        channel="-",
+        pinned="-",
+        source=source,
+        status=FAILED,
+        detail=detail,
+    )
 
 
 def _resolve_all(
@@ -449,6 +383,8 @@ def _settled_row(
             item, resolved, resolved.status or UNAVAILABLE, resolved.reason or item.role
         )
     if _is_installed(root, item, profile):
+        if _upgrade_from(root, item, resolved, profile) is not None:
+            return None
         return _row(item, resolved, PRESENT, _present_detail(item, resolved))
     if item.source_type is SourceType.BUNDLED:
         relative = _BUNDLED_SKILLS.get(item.id, "")
@@ -467,6 +403,9 @@ def _plan_row(
     detail = _planned_detail(item, resolved, profile)
     if resolved.reason:
         detail = f"{detail} ({resolved.reason})"
+    previous = _upgrade_from(root, item, resolved, profile)
+    if previous is not None:
+        return _row(item, resolved, UPGRADE, f"upgrade from {previous}: {detail}")
     return _row(item, resolved, PLANNED, detail)
 
 
@@ -513,12 +452,20 @@ def apply(
     discovery_runner=None,
     harness_roots: dict[str, Path] | None = None,
     discovery_tool_lookup=None,
+    pinned: Mapping[str, Resolution] | None = None,
 ) -> SetupOutcome:
     """Install the approved plan into isolation, validate, then write the lock.
 
     `resolvers` is REQUIRED: installing without having resolved exact
     coordinates is the thing this whole module exists to prevent. `runner` is
     the subprocess seam, injected so tests never spawn a real clone or venv.
+
+    Authority is checked HERE, at the mutation site, against the component set
+    this function derives itself: a committed named-human approval must cover
+    every component, or nothing runs (the #671 argument -- a gate that lives in
+    a caller is a precondition the caller supplies). `pinned` is the confirmed
+    plan's resolutions; when given, apply installs exactly those coordinates and
+    refuses any component the plan did not show, instead of re-resolving live.
     """
     root = Path(root).resolve()
     runner = runner or _run
@@ -527,23 +474,20 @@ def apply(
     outcome = SetupOutcome(profile=label)
     components = components if derived else profile_components(profile)
 
-    try:
-        read_lock(root)
-    except LockError as exc:
-        outcome.rows.append(
-            ComponentPlan(
-                component="lock",
-                profile=label,
-                channel="-",
-                pinned="-",
-                source=LOCK_FILE.as_posix(),
-                status=FAILED,
-                detail=str(exc),
-            )
-        )
+    refusal = _authorization_refusal(root, components, label)
+    lock = None
+    if refusal is None:
+        try:
+            lock = read_lock(root)
+        except LockError as exc:
+            refusal = _refusal_row("lock", label, LOCK_FILE.as_posix(), str(exc))
+    if refusal is not None:
+        outcome.rows.append(refusal)
         return outcome
+    if not derived:
+        outcome.notes.extend(_dropped_from_lock(lock, components, profile))
 
-    resolutions = [resolve(item, resolvers) for item in components]
+    resolutions = [_apply_resolution(item, resolvers, pinned) for item in components]
     verdict = apply_policy(
         list(zip(components, resolutions)),
         python_version=resolvers.python_version,
@@ -551,33 +495,31 @@ def apply(
     outcome.notes.extend(verdict.reasons)
 
     envs = {item.id: _env_profile(root, item, profile, derived) for item in components}
-    installed: list[tuple[str, str, str, Resolution]] = []
-    for item, resolved in zip(components, verdict.resolutions):
-        row, landed = _install_one(
+    installed = _install_all(
+        outcome.rows,
+        [
             _Install(
                 root=root,
                 item=item,
                 resolved=resolved,
                 profile=envs[item.id],
                 runner=runner,
+                python_version=resolvers.python_version,
             )
-        )
-        outcome.rows.append(row)
-        if landed is not None:
-            installed.append((item.id, item.source_type.value, item.source, landed))
+            for item, resolved in zip(components, verdict.resolutions)
+        ],
+    )
 
     # The lock records what LANDED, and only after the installs above returned.
     # A run in which nothing installed writes nothing, so a failed apply leaves
     # the previous lock byte-for-byte intact.
     outcome.lock_written = _record_lock(root, label, installed, derived=derived)
     outcome.discovery.extend(
-        inspect_official_skills(
+        _discover(
             root,
             components,
-            installed={
-                item.id: _is_installed(root, item, envs[item.id]) for item in components
-            },
-            inputs=DiscoveryInputs(
+            envs,
+            DiscoveryInputs(
                 harnesses=tuple(harnesses),
                 runner=discovery_runner,
                 harness_roots=harness_roots,
@@ -587,6 +529,88 @@ def apply(
         )
     )
     return outcome
+
+
+def _discover(
+    root: Path,
+    components: tuple[Component, ...],
+    envs: dict[str, str],
+    inputs: DiscoveryInputs,
+) -> list[SkillDiscovery]:
+    """Discovery verdicts for `components`, with install state read from disk."""
+    installed = {
+        item.id: _is_installed(root, item, envs[item.id]) for item in components
+    }
+    return list(
+        inspect_official_skills(root, components, installed=installed, inputs=inputs)
+    )
+
+
+def _install_all(
+    rows: list[ComponentPlan], requests: list[_Install]
+) -> list[tuple[str, str, str, Resolution]]:
+    """Install each request, append its row, and return the lock entries.
+
+    Rows are verified against disk after EVERY install ran (see
+    `_verify_landed`), so the entries describe what is actually installed.
+    """
+    landed: dict[str, tuple] = {}
+    for req in requests:
+        row, resolution = _install_one(req)
+        rows.append(row)
+        if resolution is not None:
+            landed[req.item.id] = (req.item, req.profile, resolution)
+    if requests:
+        _verify_landed(requests[0].root, rows, landed)
+    return [
+        (item.id, item.source_type.value, item.source, resolution)
+        for item, _profile, resolution in landed.values()
+    ]
+
+
+def _authorize(root: Path, component_ids: tuple[str, ...]):
+    """The committed provisioning-approval verdict for exactly these components."""
+    from seshat.integrations.approval import evaluate  # lazy: HEAD + yaml readers
+
+    return evaluate(root, component_ids)
+
+
+def _authorization_refusal(
+    root: Path, components: tuple[Component, ...], label: str
+) -> ComponentPlan | None:
+    """A FAILED `approval` row unless a committed approval covers `components`."""
+    from seshat.integrations.approval import PROVISIONING_APPROVALS_RELPATH
+
+    verdict = _authorize(root, tuple(item.id for item in components))
+    if verdict.authorized:
+        return None
+    return _refusal_row(
+        "approval",
+        label,
+        PROVISIONING_APPROVALS_RELPATH,
+        "provisioning needs a committed named-human approval -- "
+        f"{verdict.next_action}; nothing was installed",
+    )
+
+
+def _apply_resolution(
+    item: Component,
+    resolvers: Resolvers,
+    pinned: Mapping[str, Resolution] | None,
+) -> Resolution:
+    """The confirmed plan's resolution for `item`, or a live one when unbound."""
+    if pinned is None:
+        return resolve(item, resolvers)
+    confirmed = pinned.get(item.id)
+    if confirmed is not None:
+        return confirmed
+    return Resolution(
+        component_id=item.id,
+        ok=False,
+        channel=item.channel,
+        status=FAILED,
+        reason="not part of the confirmed plan; re-run the plan and confirm it",
+    )
 
 
 def verified_present(root: Path, item: Component) -> bool:
@@ -653,21 +677,6 @@ def _carry_forward(root: Path, document: dict) -> dict:
     return {**document, "components": merged}
 
 
-def _handler_for(item: Component):
-    """The install handler for one component.
-
-    Registration wins over the source index: `dbt-mcp` resolves from PyPI but
-    installs as an MCP entry, not into a virtual environment.
-    """
-    if item.mcp_server:
-        return _install_mcp_server
-    return {
-        SourceType.PYPI: _install_pypi,
-        SourceType.GITHUB: _install_github,
-        SourceType.NPM: _install_npm,
-    }[item.source_type]
-
-
 def _install_one(req: _Install) -> tuple[ComponentPlan, Resolution | None]:
     """Install one component, returning its row and what to record in the lock.
 
@@ -681,167 +690,62 @@ def _install_one(req: _Install) -> tuple[ComponentPlan, Resolution | None]:
 
     status, detail = _handler_for(req.item)(req)
     row = _row(req.item, req.resolved, status, detail)
-    return row, (req.resolved if status == INSTALLED else None)
+    if status == INSTALLED:
+        return row, req.resolved
+    return row, _on_disk_resolution(req.root, req.item, req.resolved, req.profile)
 
 
-def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess:
-    return subprocess.run(  # noqa: S603 - fixed argv, no shell
-        command, cwd=cwd, text=True, capture_output=True, check=False
-    )
+def _verify_landed(
+    root: Path, rows: list[ComponentPlan], landed: dict[str, tuple]
+) -> None:
+    """Re-read each installed distribution once EVERY install has run.
 
-
-def _detail(result: subprocess.CompletedProcess, fallback: str) -> str:
-    return (result.stderr or result.stdout or "").strip() or fallback
-
-
-def _install_pypi(req: _Install) -> tuple[str, str]:
-    """Install one exact version into the profile's own virtual environment.
-
-    `uv venv` + `uv pip install -p <env>` targets that environment explicitly.
-    `sys.executable` is never a target: mutating the operator's active
-    interpreter is the boundary this verb was built to hold.
+    Components install one `uv pip install` at a time into a shared environment,
+    so a later install can move an earlier one. A distribution whose on-disk
+    version no longer matches what was installed is reported FAILED and locked
+    at the version actually present, instead of at the one resolved.
     """
-    if shutil.which("uv") is None:
-        return UNAVAILABLE, "uv is not on PATH; needed to build an isolated environment"
-    if not (req.root / _venv_python(_profile_env(req.profile))).is_file():
-        created = req.run(["uv", "venv", str(req.env)])
-        if created.returncode:
-            return FAILED, _detail(created, "failed to create the profile environment")
-    spec = f"{req.item.coordinate}=={req.resolved.version}"
-    result = req.run(["uv", "pip", "install", "-p", str(req.env), spec])
-    if result.returncode:
-        return FAILED, _detail(result, f"failed to install {spec}")
-    return INSTALLED, f"{spec} in {_profile_env(req.profile).as_posix()}"
-
-
-def _clone_at_ref(req: _Install, staging: Path, ref: str) -> str | None:
-    """Clone into `staging` pinned to `ref`. A failure detail, or None on success.
-
-    A tagless rolling pin cannot be `--branch`-cloned to a commit, so a failed
-    shallow clone falls back to a full clone plus an exact detached checkout.
-    Still exact, never a floating default branch.
-    """
-    url = f"https://github.com/{req.item.coordinate}.git"
-    shallow = req.run(
-        ["git", "clone", "--depth", "1", "--branch", ref, url, str(staging)]
-    )
-    if not shallow.returncode:
-        return None
-    shutil.rmtree(staging, ignore_errors=True)
-    full = req.run(["git", "clone", url, str(staging)])
-    if full.returncode:
-        return _detail(full, "git clone failed")
-    checkout = req.run(["git", "checkout", "--detach", ref], staging)
-    if checkout.returncode:
-        return _detail(checkout, f"could not check out {ref}")
-    return None
-
-
-def _install_github(req: _Install) -> tuple[str, str]:
-    """Clone into staging at an exact ref, then activate by rename.
-
-    Staging is what keeps a partial clone from ever being reported installed:
-    the marker file that `_is_installed` looks for is written only after the
-    clone succeeded and the tree moved into place.
-    """
-    if shutil.which("git") is None:
-        return UNAVAILABLE, "git is not on PATH"
-    target = req.root / _skill_dir(req.item)
-    if target.exists():
-        return FAILED, f"incomplete existing directory: {target}"
-    ref = req.resolved.tag or req.resolved.commit
-    if not ref:
-        return FAILED, "refusing to clone without an exact tag or commit"
-
-    staging = req.root / STAGING_DIR / req.item.id
-    if staging.exists():
-        shutil.rmtree(staging, ignore_errors=True)
-    staging.parent.mkdir(parents=True, exist_ok=True)
-    failure = _clone_at_ref(req, staging, ref)
-    if failure is not None:
-        shutil.rmtree(staging, ignore_errors=True)
-        return FAILED, failure
-
-    missing = _missing_required_payload(staging, req.item)
-    if missing:
-        shutil.rmtree(staging, ignore_errors=True)
-        return FAILED, f"missing required payload: {', '.join(missing)}"
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        staging.replace(target)
-    except OSError as exc:
-        shutil.rmtree(staging, ignore_errors=True)
-        return FAILED, f"could not activate the staged clone: {exc}"
-    (target / ".seshat-installed").write_text(f"{ref}\n", encoding="utf-8")
-    return (
-        INSTALLED,
-        f"{req.item.coordinate} at {ref} in {_skill_dir(req.item).as_posix()}",
-    )
-
-
-def _install_npm(
-    req: _Install,
-) -> tuple[str, str]:  # pragma: no cover - every npm component is an MCP server
-    """An npm component that is not an MCP registration has no install path yet."""
-    return UNAVAILABLE, f"{req.item.coordinate} has no supported npm install path"
-
-
-# The launcher each MCP server needs on PATH, and the entry builder for it.
-_MCP_LAUNCHERS = {
-    "powerbi-modeling-mcp": ("npx", "Node.js/npx is not on PATH"),
-    "dbt-mcp": ("uvx", "uvx is not on PATH"),
-}
-
-_MCP_ENTRIES = {
-    "powerbi-modeling-mcp": mcp_config.powerbi_entry,
-    "dbt-mcp": mcp_config.dbt_entry,
-}
-
-
-def _install_mcp_server(req: _Install) -> tuple[str, str]:
-    """Register an MCP server at an exact version, refusing a name conflict.
-
-    The launcher gate is per component: the Power BI server needs `npx`, the dbt
-    server needs `uvx`. Gating both on `npx` would report the dbt server as
-    installable on a machine that cannot launch it.
-    """
-    item, version = req.item, req.resolved.version
-    launcher, requirement = _MCP_LAUNCHERS[item.id]
-    if shutil.which(launcher) is None:
-        return UNAVAILABLE, requirement
-    entry = _MCP_ENTRIES[item.id](version or "")
-    path = req.root / MCP_CONFIG
-    try:
-        config = mcp_config.load_config(path)
-    except mcp_config.McpConfigError as exc:
-        return FAILED, str(exc)
-    verdict = mcp_config.classify(config, item.id, entry)
-    if verdict == mcp_config.PRESENT:
-        return PRESENT, f"already registered at {version}"
-    if verdict == mcp_config.CONFLICT:
-        return (
-            CONFLICT,
-            f"{item.id} is already registered with a different configuration in "
-            f"{MCP_CONFIG.as_posix()}; refusing to overwrite an operator's entry",
+    for index, row in enumerate(rows):
+        if row.status not in {INSTALLED, PRESENT} or row.component not in landed:
+            continue
+        item, profile, resolution = landed[row.component]
+        if item.source_type is not SourceType.PYPI or item.mcp_server:
+            continue
+        on_disk = installed_coordinate(root, item, profile)
+        if on_disk is None or _matches(item, on_disk, {resolution.version or ""}):
+            continue
+        rows[index] = replace(
+            row,
+            status=FAILED,
+            detail=(
+                f"{item.coordinate}=={resolution.version} was installed but "
+                f"{on_disk} is now on disk; a later install in the same "
+                "environment changed it"
+            ),
         )
-    try:
-        mcp_config.write_config(path, mcp_config.merge(config, item.id, entry))
-    except OSError as exc:
-        return FAILED, str(exc)
-    marker = req.root / NODE_DIR / item.id / ".seshat-installed"
-    marker.parent.mkdir(parents=True, exist_ok=True)
-    marker.write_text(f"{version}\n", encoding="utf-8")
-    mode = f" ({item.mode})" if item.mode else ""
-    return INSTALLED, f"{item.coordinate}@{version}{mode}"
+        landed[row.component] = (
+            item,
+            profile,
+            _disk_resolution(item, resolution, on_disk),
+        )
 
 
 # `DAGSTER_PROJECT` is re-exported for the docs and tests that name the governed
 # orchestration project's location.
 __all__ = [
+    "CONFLICT",
     "DAGSTER_PROJECT",
+    "FAILED",
+    "INCOMPATIBLE",
+    "INSTALLED",
+    "NEEDS_ACTION",
+    "PLANNED",
+    "PRESENT",
+    "UNAVAILABLE",
+    "UPGRADE",
     "ComponentPlan",
     "SetupOutcome",
     "apply",
     "plan",
+    "verified_present",
 ]
