@@ -8,6 +8,8 @@ the settings a human sets in the Power BI UI's Format pane.
 THE FR-003 GUARANTEE (formatting, never binding): the writer NEVER touches the
 visual's data binding. It asserts ``visual.query`` and ``visual.visualType`` are
 byte-identical before and after the edit, and refuses to write if they would change.
+It also refuses to overwrite a non-Literal expression inside a formatting container
+(a measure-driven title, field-value colours), even under force.
 The data binding (``query.queryState.*.projections[].field`` Column/Measure
 references) belongs to the human who authored the visual; this adapter only styles it.
 
@@ -43,7 +45,8 @@ class PbirFormatError(Exception):
 
 
 def _dump(doc: object) -> str:
-    return json.dumps(doc, indent=2, sort_keys=True) + "\n"
+    # ensure_ascii=False keeps an Arabic title readable instead of escaping it.
+    return json.dumps(doc, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
 def _encode_literal_value(value: object) -> str:
@@ -151,14 +154,39 @@ class _SetCtx(NamedTuple):
     force: bool
 
 
+def _is_data_binding(existing: object) -> bool:
+    """True when ``existing`` holds, at ANY depth, an ``expr`` that is not a Literal.
+
+    Recursive because field-value colours nest the binding
+    (``fill.solid.color.expr.Measure``), not only a top-level ``expr``.
+    """
+    if isinstance(existing, list):
+        return any(_is_data_binding(item) for item in existing)
+    if not isinstance(existing, dict):
+        return False
+    expr = existing.get("expr")
+    if isinstance(expr, dict) and set(expr) != {"Literal"}:
+        return True
+    return any(_is_data_binding(value) for value in existing.values())
+
+
 def _set_property(props_bag: dict, prop: str, value: object, ctx: _SetCtx) -> None:
     """Set one property in ``props_bag`` (expr/Literal wrapped), honouring force.
 
     An idempotent re-set of the same value is always allowed; overwriting a
-    DIFFERENT existing value is refused unless ``ctx.force`` is set.
+    DIFFERENT existing value is refused unless ``ctx.force`` is set. An existing
+    non-Literal expression (Measure/Column/Aggregation/FillRule/...) is a DATA
+    BINDING carried inside a formatting container -- a dynamic title, a
+    field-value colour -- and is refused even under force (FR-003).
     """
     new_val = _literal(value)
     is_conflicting_overwrite = prop in props_bag and props_bag[prop] != new_val
+    if is_conflicting_overwrite and _is_data_binding(props_bag[prop]):
+        raise PbirFormatError(
+            f"{ctx.container}.{ctx.group}.{prop} is a data binding (a non-Literal "
+            "expression such as a measure) -- this adapter formats only, never "
+            "rebinds, so it will not overwrite it even with force (FR-003)"
+        )
     if is_conflicting_overwrite and not ctx.force:
         raise PbirFormatError(
             f"{ctx.container}.{ctx.group}.{prop} already set to a different "
@@ -234,9 +262,9 @@ def apply_visual_format(
             "(query/visualType) -- this adapter formats only, never binds (FR-003)"
         )
 
+    # Round-trip stable by construction (a canonical sorted dump of a parsed
+    # document); a re-parse/re-dump comparison here could never fail.
     text = _dump(doc)
-    if _dump(json.loads(text)) != text:
-        raise PbirFormatError("staged visual.json is not round-trip stable")
     visual_json.write_text(text, encoding="utf-8", newline="\n")
     return visual_json
 

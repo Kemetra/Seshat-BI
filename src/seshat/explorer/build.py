@@ -3,7 +3,8 @@
 :func:`build_explorer_projection` extends the shared readiness projection
 with navigation-ready evidence states, approval receipts, explicit
 input-defect entries for malformed readiness files, and the available metric
-lineage read from committed metric contracts. Nothing is inferred: a missing
+lineage read from the metric contracts on disk (the working tree, not HEAD --
+so an uncommitted edit shows, and the footer says so). Nothing is inferred: a missing
 file renders as missing, a deferred live check as deferred, a malformed file
 as an input defect -- never as a pass (FR-045).
 
@@ -398,7 +399,8 @@ def render_explorer_html(projection: dict[str, Any], *, repo: Path) -> str:
     {_lineage_section(projection["lineage"])}
   </main>
   <footer>
-    <span>Generated from committed evidence only</span>
+    <span>Generated from evidence files as on disk
+      (working tree; may include uncommitted changes)</span>
     <span>No readiness score; no inferred pass</span>
   </footer>
   <script>{javascript}</script>

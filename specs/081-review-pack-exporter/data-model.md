@@ -100,9 +100,10 @@ section's status the compact summary reports as the pack's overall result (FR-00
 ```text
 Severity rank (highest number = reported first / "worst"):
   4  blocked
+  4  unrecognized token (section 1's fallback row) -- fails closed, level with "blocked",
+     so it is never hidden behind a warning (the original rank 2 sat BELOW warning,
+     contradicting this row's own "never hidden" intent; corrected in audit F238)
   3  warning
-  2  unrecognized token (section 1's fallback row) -- surfaced, never silently ranked below
-     a known-safe token; treated as at least as severe as "warning" so it is never hidden
   1  pending
   1  not_started
   0  pass

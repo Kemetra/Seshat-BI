@@ -328,16 +328,33 @@ def test_profile_rejects_unsafe_table_name() -> None:
 
 
 def test_profile_imports_without_psycopg2() -> None:
-    import importlib
-    import sys
+    """Importing seshat.profile must not pull psycopg2 into sys.modules.
 
-    # If psycopg2 were imported at module scope this would already have failed at
-    # the test's `from seshat.profile import profile`. Re-import to lock it in.
-    # The guard relies on profile.py's module-scope import path being driver-free,
-    # so importing it must not pull psycopg2 into sys.modules.
-    mod = importlib.import_module("seshat.profile")
-    assert hasattr(mod, "profile")
-    assert "psycopg2" not in sys.modules
+    Probed in a fresh interpreter: the in-process ``sys.modules`` is polluted by
+    whatever earlier tests imported, which made this assertion order-dependent.
+    """
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parents[2] / "src"
+    probe = (
+        "import sys; import seshat.profile as m; "
+        "assert hasattr(m, 'profile'); "
+        "print('psycopg2' in sys.modules)"
+    )
+    env = {**os.environ, "PYTHONPATH": str(src)}
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "False"
 
 
 # --- audit fix (2026-06-26): _safe_identifier must use fullmatch ------------

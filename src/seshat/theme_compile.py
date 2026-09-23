@@ -25,6 +25,7 @@ import json
 import sys
 from pathlib import Path
 
+from .artifact_identity import resolve_within
 from .color import is_valid_hex
 from .theme_gen import (
     MIN_LABEL_FONT_PT,
@@ -499,7 +500,18 @@ def _resolve_out(
         root = tokens_path.parents[2]
     else:  # a flat/fixture layout: resolve beside the tokens file
         root = tokens_path.parent
-    return root / compiles_to
+    out = root / compiles_to
+    try:
+        # compiles_to is committed repo content, so it may not steer the write
+        # outside the repository. Checked as the RELATIVE candidate: joining
+        # `out` onto a relative root again would double the prefix.
+        resolve_within(root, compiles_to)
+    except ValueError:
+        raise ThemeCompileError(
+            "meta.compiles_to resolves outside the repository; "
+            "pass --out to name the theme file explicitly"
+        ) from None
+    return out
 
 
 def _deferred_field_conflicts(existing: dict, rendered: dict) -> list[str]:

@@ -205,9 +205,9 @@ def set_geometry(visual_json: Path, position: dict) -> Path:
             "(query/visualType) -- this adapter lays out only, never binds (FR-003)"
         )
 
+    # Round-trip stable by construction (a canonical sorted dump of a parsed
+    # document); a re-parse/re-dump comparison here could never fail.
     text = _dump(doc)
-    if _dump(json.loads(text)) != text:
-        raise PbirGeometryError("staged visual.json is not round-trip stable")
     visual_json.write_text(text, encoding="utf-8", newline="\n")
     return visual_json
 

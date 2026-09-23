@@ -120,3 +120,44 @@ def test_refuses_traversal_relative_path(tmp_path: Path) -> None:
 
     with pytest.raises(SafeWriteError):
         write_if_absent(tmp_path, "../escape.yml", b"data\n")
+
+
+def _make_junction(link: Path, target: Path) -> None:
+    """Create an NTFS directory junction (no elevation needed) or skip."""
+    try:
+        import _winapi  # Windows-only CPython module
+    except ImportError:
+        pytest.skip("directory junctions are Windows-only")
+    try:
+        _winapi.CreateJunction(str(target), str(link))
+    except (AttributeError, OSError):
+        pytest.skip("junction creation not available in this environment")
+
+
+def test_refuses_an_in_workspace_junction_alias(tmp_path: Path) -> None:
+    """A junction is not a symlink to ``Path.is_symlink()`` on 3.12+, so an
+    in-workspace junction alias used to pass the component guard (F235)."""
+    from seshat.safe_write import SafeWriteError, write_if_absent
+
+    real = tmp_path / "mappings" / "real"
+    real.mkdir(parents=True)
+    _make_junction(tmp_path / "mappings" / "alias", real)
+
+    with pytest.raises(SafeWriteError):
+        write_if_absent(tmp_path, "mappings/alias/x.txt", b"hi")
+    assert not (real / "x.txt").exists()
+
+
+def test_stage1_scaffold_refuses_a_junction_alias(tmp_path: Path) -> None:
+    from seshat.stage1_scaffold import (
+        Stage1ScaffoldError,
+        _guard_destination_within_root,
+    )
+
+    real = tmp_path / "mappings" / "real"
+    real.mkdir(parents=True)
+    alias = tmp_path / "mappings" / "alias"
+    _make_junction(alias, real)
+
+    with pytest.raises(Stage1ScaffoldError):
+        _guard_destination_within_root(tmp_path.resolve(), alias)

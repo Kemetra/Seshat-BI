@@ -154,3 +154,20 @@ def test_compact_dual_worst_rank_lists_all_reasons():
     out = to_compact_ci_summary(pack)
     assert "reason-A" in out
     assert "reason-C" in out
+
+
+def test_compact_unrecognized_token_is_never_hidden_behind_warning():
+    """F238: a mis-cased 'Blocked' must not rank below a warning section and
+    drop its blocking reasons (fail closed: unrecognized ranks as blocked)."""
+    from seshat.review_pack_export import to_compact_ci_summary
+
+    pack = Pack(
+        title="t",
+        sections=(
+            Section(name="w", status="warning", blocking_reasons=("minor drift",)),
+            Section(name="b", status="Blocked", blocking_reasons=("grain unproven",)),
+        ),
+    )
+    out = to_compact_ci_summary(pack)
+    assert out.startswith("[Blocked (UNRECOGNIZED)] t")
+    assert "grain unproven" in out

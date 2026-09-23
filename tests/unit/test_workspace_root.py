@@ -109,3 +109,26 @@ def test_the_markers_are_derived_from_the_scaffold_not_duplicated(
     for relative in workspace_init._EMPTY_DIRS:
         (root / relative).mkdir(parents=True)
     assert mod.resolve_workspace_root(start=root) == root
+
+
+@pytest.mark.parametrize("generic", ["reports", "evidence", "powerbi"])
+def test_discovery_ignores_an_ancestor_with_only_a_generic_folder(
+    tmp_path: Path, generic: str
+) -> None:
+    """F239: 'reports'/'evidence' are common folder names in a Documents tree;
+    upward discovery must not adopt such an ancestor as the workspace."""
+    mod = _resolver()
+    documents = tmp_path / "Documents"
+    (documents / generic).mkdir(parents=True)
+    notes = documents / "ClientA" / "notes"
+    notes.mkdir(parents=True)
+    with pytest.raises(mod.WorkspaceRootError):
+        mod.resolve_workspace_root(start=notes)
+
+
+def test_discovery_still_finds_a_mappings_only_workspace(tmp_path: Path) -> None:
+    """A cloned workspace keeps mappings/ (empty scaffold dirs are not tracked)."""
+    mod = _resolver()
+    root = tmp_path / "clone"
+    (root / "mappings" / "orders").mkdir(parents=True)
+    assert mod.resolve_workspace_root(start=root / "mappings" / "orders") == root
