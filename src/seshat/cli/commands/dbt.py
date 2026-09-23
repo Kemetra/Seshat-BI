@@ -536,7 +536,10 @@ def _inspect(args: Any) -> CommandResult:
         table_id=args.table,
         outcome=evidence.outcome,
         exit_code=evidence.seshat_exit_code,
-        message="local dbt run artifacts were validated as derived evidence",
+        message=(
+            "evidence re-derived from local, unauthenticated run artifacts; it "
+            "counts only once reviewed and committed"
+        ),
         evidence_path=path.relative_to(root).as_posix(),
         blocking_reasons=tuple(
             _blocker_dict(blocker) for blocker in evidence.blocking_reasons
