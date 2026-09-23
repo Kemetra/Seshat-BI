@@ -77,11 +77,27 @@ def _validated(explicit: str | Path) -> Path:
     return candidate
 
 
+def _identity_markers() -> tuple[str, ...]:
+    """Markers specific enough to identify a workspace during UPWARD discovery.
+
+    Generic scaffold names (`reports`, `evidence`, `powerbi`, ...) are common in
+    any Documents tree, so an ancestor carrying only one of them must not be
+    adopted. `.seshat/` or `mappings/` is required (mappings is kept because a
+    cloned workspace loses its empty scaffold dirs); an explicit `--repo` keeps
+    the looser `looks_like_workspace` rule.
+    """
+    return tuple(m for m in _markers() if m in (BOOTSTRAP_MARKER, "mappings"))
+
+
+def _is_identified_workspace(candidate: Path) -> bool:
+    return any((candidate / marker).is_dir() for marker in _identity_markers())
+
+
 def _discovered(start: Path | None) -> Path:
     """The nearest enclosing workspace, searching upwards from `start`."""
     origin = (start or Path.cwd()).resolve()
     for candidate in (origin, *origin.parents):
-        if looks_like_workspace(candidate):
+        if _is_identified_workspace(candidate):
             return candidate
     raise WorkspaceRootError(_describe(origin))
 
