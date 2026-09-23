@@ -261,6 +261,16 @@ verdict reports the same value. It is `null`, never a placeholder, when no hands
 completed -- a run that never reached the runtime measured nothing, and a string
 there would read as a measurement.
 
+When the runtime fails, the record and the `--json` verdict also carry `vendor_detail`:
+a bounded tail of the vendor's own transcript, already redacted through both layers and
+scrubbed again by the evidence writer, so a refusal like `PBIMCP-RUN-05` arrives with the
+vendor's reason. It is `null` on every other ending.
+
+The before/after scope snapshot must list every file a run could touch. If git cannot
+(it skips a directory it cannot open, or fails outright), the run is refused **before**
+the runtime launches with `PBIMCP-EFF-03`; the same blocker after the write means the
+effect could not be verified.
+
 The supported-version *range* stays `unknown` in `drift.py`, and `PBIMCP-DRIFT-03`
 still refuses to treat `unknown` as compatible. Capability **drift**, not version
 compatibility, remains the gate while the vendor is a preview.
