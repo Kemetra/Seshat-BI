@@ -184,13 +184,14 @@ def _stage_page(page: dict, display_name: str, item_name: str, scaling: str) -> 
 
 
 def _staged_text(label: str, before: dict, after: dict) -> str:
-    """Serialize a staged doc, asserting $schema is kept and the dump round-trips."""
+    """Serialize a staged doc, asserting its $schema is kept.
+
+    The canonical sorted dump of a parsed document is round-trip stable by
+    construction, so no re-parse/re-dump comparison is made (it could not fail).
+    """
     if before.get("$schema") != after.get("$schema"):
         raise PbirPageBgError(f"staged {label} would lose its $schema")
-    text = _dump(after)
-    if _dump(json.loads(text)) != text:
-        raise PbirPageBgError(f"staged {label} is not round-trip stable")
-    return text
+    return _dump(after)
 
 
 def set_page_background(

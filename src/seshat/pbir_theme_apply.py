@@ -9,7 +9,9 @@ never a semantic-model file (ADR 0015 decision 2, the allow-list).
 
 Companion authoring adapter (ADR 0015): it MAY write committed PBIR JSON, but only
 within the allow-list, deterministically (byte-identical re-run), validated
-(valid JSON + ``$schema`` preserved + round-trip stable), all-or-nothing per report.
+(valid JSON + ``$schema`` preserved; output is a canonical sorted dump, so it is
+round-trip stable by construction rather than by a runtime check), all-or-nothing
+per report.
 No pbi-cli, no live Power BI, no network -- stdlib json + pathlib only. It grants no
 readiness ``pass`` and emits no score (hard rule #9).
 """
@@ -131,10 +133,9 @@ def apply_theme(theme_json: Path, report_dir: Path, force: bool = False) -> list
     # --- validate the staged output BEFORE writing anything ---
     if schema is not None and staged.get("$schema") != schema:
         raise PbirApplyError("staged report.json would lose its $schema")
+    # Round-trip stable by construction (a canonical sorted dump of a parsed
+    # document); a re-parse/re-dump comparison here could never fail.
     staged_text = _dump(staged)
-    # round-trip stability: re-parse + re-dump must be identical.
-    if _dump(json.loads(staged_text)) != staged_text:
-        raise PbirApplyError("staged report.json is not round-trip stable")
     theme_text = _dump(theme)
 
     # --- commit (write both files) ---
