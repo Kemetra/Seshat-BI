@@ -220,13 +220,32 @@ _DSN_PRESENT = DoctorFinding(
 )
 
 
+def _dagster_pinned_exactly(pyproject: str) -> bool:
+    """True only when ``[project].dependencies`` pins ``dagster`` EXACTLY.
+
+    Parsed, not substring-matched: ``dagster==1.13.170`` or the pin quoted in a
+    comment must not satisfy DAG-PAIR-01."""
+    import tomllib
+
+    try:
+        document = tomllib.loads(pyproject)
+    except tomllib.TOMLDecodeError:
+        return False
+    project = document.get("project")
+    deps = project.get("dependencies") if isinstance(project, dict) else None
+    if not isinstance(deps, list):
+        return False
+    wanted = f"dagster=={PINNED_DAGSTER}"
+    return any(isinstance(dep, str) and dep.replace(" ", "") == wanted for dep in deps)
+
+
 def _project_findings(root: Path) -> list[DoctorFinding]:
     orch = orchestration_dir(root)
     if not (orch / "pyproject.toml").is_file():
         return [_PROJECT_ABSENT]
     findings: list[DoctorFinding] = []
     pyproject = (orch / "pyproject.toml").read_text(encoding="utf-8")
-    if f"dagster=={PINNED_DAGSTER}" not in pyproject:
+    if not _dagster_pinned_exactly(pyproject):
         findings.append(_PIN_MISMATCH)
     if orchestration_python(root) is None:
         findings.append(_VENV_ABSENT)

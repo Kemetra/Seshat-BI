@@ -87,6 +87,30 @@ def test_pin_mismatch_is_a_blocker(tmp_path: Path) -> None:
     assert "DAG-PAIR-01" in _ids(findings)
 
 
+@pytest.mark.parametrize(
+    "pin",
+    [f"dagster=={PINNED_DAGSTER}0", f"dagster=={PINNED_DAGSTER}.post1"],
+)
+def test_pin_with_a_longer_version_is_a_mismatch(tmp_path: Path, pin: str) -> None:
+    bad = GOOD_PYPROJECT.replace(f"dagster=={PINNED_DAGSTER}", pin)
+    findings = doctor.run_doctor(_repo(tmp_path, pyproject=bad))
+    assert "DAG-PAIR-01" in _ids(findings)
+
+
+def test_pin_mentioned_only_in_a_comment_is_a_mismatch(tmp_path: Path) -> None:
+    bad = (
+        GOOD_PYPROJECT.replace(f'"dagster=={PINNED_DAGSTER}"', '"dagster>=1.0"')
+        + f"# dagster=={PINNED_DAGSTER}\n"
+    )
+    findings = doctor.run_doctor(_repo(tmp_path, pyproject=bad))
+    assert "DAG-PAIR-01" in _ids(findings)
+
+
+def test_exact_pin_is_not_a_mismatch(tmp_path: Path) -> None:
+    findings = doctor.run_doctor(_repo(tmp_path))
+    assert "DAG-PAIR-01" not in _ids(findings)
+
+
 def test_open_gate_is_a_warning_not_a_blocker(tmp_path: Path) -> None:
     findings = doctor.run_doctor(_repo(tmp_path, gate_status="OPEN"))
     gate_findings = [f for f in findings if f.id == "DAG-GATE-01"]

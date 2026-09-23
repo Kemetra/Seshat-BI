@@ -76,6 +76,14 @@ class TestValidateRecords:
         errors = evidence.validate_records(_summary(), [bad])
         assert any("unknown key" in error for error in errors)
 
+    @pytest.mark.parametrize(
+        "key", ["confidence", "maturity_level", "health", "Rating"]
+    )
+    def test_confidence_like_keys_are_rejected_inside_measured(self, key: str) -> None:
+        bad = _record(measured={key: 0.87})
+        errors = evidence.validate_records(_summary(), [bad])
+        assert any(key in error for error in errors)
+
     def test_score_keys_are_rejected_even_inside_measured(self) -> None:
         bad = _record(measured={"health_score": 97})
         errors = evidence.validate_records(_summary(), [bad])
