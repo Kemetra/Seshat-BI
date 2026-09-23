@@ -116,7 +116,12 @@ def _derived_main(args: Namespace, root: Path) -> int:
         else (False, "")
     )
 
-    if _approved(args, "") and not scope.blocked and scope.proposes_change:
+    # The prompt shows the derived plan it asks about: confirming an install of
+    # an unseen set of capabilities is not an informed yes.
+    preview = guided_setup.render_text(
+        scope, guided_setup.capability_statuses(scope, approval_met=authorized)
+    )
+    if _approved(args, preview) and not scope.blocked and scope.proposes_change:
         if not authorized:
             print(
                 "error: provisioning needs a committed named-human approval -- "

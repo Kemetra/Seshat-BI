@@ -86,6 +86,28 @@ def test_the_derived_plan_is_reachable_through_the_verb(
     assert "Power BI Integration" in out
 
 
+def test_the_attended_prompt_shows_the_derived_plan_before_asking(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    """A human is never asked to confirm an install they have not been shown."""
+    from seshat import integrations_setup
+    from seshat.cli.commands import integrations as command
+
+    shown_before_prompt: list[str] = []
+
+    def _confirm(question: str) -> bool:
+        shown_before_prompt.append(capsys.readouterr().out)
+        return False
+
+    monkeypatch.setattr(command, "_attended", lambda: True)
+    monkeypatch.setattr(integrations_setup, "confirm", _confirm)
+
+    command.integrations_main(_args(_project(tmp_path), apply=True))
+
+    assert shown_before_prompt, "the attended run never prompted"
+    assert "Power BI Integration" in shown_before_prompt[0]
+
+
 def test_the_derived_plan_reports_the_proposed_change_count(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
