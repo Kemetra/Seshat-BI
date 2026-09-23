@@ -318,6 +318,29 @@ def conninfo_component_values(secret: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(values))
 
 
+_PASSWORD_RUN = re.compile(
+    r"(?i)\b(?:ssl)?password\s*=\s*(.+?)(?=\s+[A-Za-z_][A-Za-z0-9_]*\s*=|\s*$)"
+)
+
+
+def conninfo_password_words(secret: str) -> tuple[str, ...]:
+    """Every word of each ``password=`` run in a keyword conninfo string.
+
+    :func:`conninfo_component_values` tokenizes on whitespace, so an UNQUOTED
+    password containing spaces (``password=correct horse battery dbname=d``)
+    yields only its first word. libpq then fails to parse the string and names a
+    LATER word in its error (``missing "=" after "horse"``). This returns the
+    whole run up to the next ``key=`` plus each of its words (quotes stripped),
+    so a boundary redactor can remove every one of them.
+    """
+    words: list[str] = []
+    for match in _PASSWORD_RUN.finditer(secret):
+        run = match.group(1).strip()
+        words.append(run)
+        words.extend(word.strip("'\"") for word in run.split())
+    return tuple(dict.fromkeys(word for word in words if word))
+
+
 def uri_components(secrets: Iterable[str]) -> tuple[str, ...]:
     """Return the deduped union of every secret's components, longest first.
 
@@ -342,4 +365,20 @@ def replace_fragments(text: str, fragments: Iterable[str], token: str) -> str:
     """Replace every fragment in ``text`` with ``token`` (no-op when absent)."""
     for fragment in fragments:
         text = text.replace(fragment, token)
+    return text
+
+
+def replace_bounded(text: str, fragments: Iterable[str], token: str) -> str:
+    """Replace each fragment only where it is not inside a longer alphanumeric run.
+
+    :func:`replace_fragments` replaces substrings, so a one-character password
+    ``p`` rewrote ``port`` into ``<token>ort`` and a user ``u`` shredded every
+    word containing a ``u``. The value is still removed wherever it stands on its
+    own -- between quotes, ``@``, ``:``, ``/``, spaces -- which is how a driver
+    prints it. Pass fragments longest first, as :func:`uri_components` returns.
+    """
+    for fragment in fragments:
+        if fragment:
+            bounded = rf"(?<![A-Za-z0-9]){re.escape(fragment)}(?![A-Za-z0-9])"
+            text = re.sub(bounded, lambda _m: token, text)
     return text

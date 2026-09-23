@@ -1,4 +1,4 @@
-"""Machine-written, server-echoed live-DB provenance (issue #485, option A2).
+"""Machine-written, server-checked live-DB provenance (issue #485, option A2).
 
 The trust boundary this module exists to hold:
 
@@ -59,10 +59,15 @@ and the server echo is spent where it actually earns its keep:
     one a claimant would otherwise be free to type, and it is exactly the one a
     server reports reliably. So the writer REFUSES to record unless the server's
     own ``current_database()`` answer AGREES with the configured database name
-    (:func:`assert_database_name_agrees`). The recorded name is therefore
-    server-confirmed even though the digest is offline-reproducible. That is what
-    defeats A1's forgeability: a hand-authored record cannot pass a check that
-    only a process holding a live connection can perform.
+    (:func:`assert_database_name_agrees`). That check runs in the WRITER only
+    and leaves no trace a later reader can verify: the digest is an unsalted hash
+    of configuration values, so anyone who can edit the working tree can compute
+    it offline and write a correctly-labelled record. A record is therefore NOT
+    unforgeable, and nothing here claims it is. What the reader can honestly say
+    is narrower: the COMMITTED record (``git show HEAD:``, never the worktree --
+    see ``db_provenance_reader``) carries a configuration digest equal to the
+    current one. It is as trustworthy as the commit that introduced it, which
+    is reviewable like any other change.
   * **Outside the digest, recorded as information**: whether the server's
     reported endpoint agreed with the configured one
     (``server_endpoint_agreed_with_config``). Useful to a human -- it names a
@@ -106,6 +111,15 @@ gap for the database name, not for the host.
 This module is a stdlib-only leaf: it imports nothing from ``seshat`` except the
 shared DSN decomposition in ``redaction_core``, emits no numeric score of any
 kind, grants no stage, and writes no ``readiness-status.yaml``.
+
+## What a record vouches for (schema 2)
+
+A record is written ONLY by a validate run whose live checks produced zero ERROR
+findings, and it carries ``outcome: "pass"`` plus a digest of the source-map that
+run validated. The reader compares only a record that says it passed, and only
+while that digest equals the COMMITTED source-map's. A schema-1 record carries
+neither field -- the writer used to overwrite it on failing runs too -- so it
+reads as not comparable until a passing run rewrites it.
 """
 
 from __future__ import annotations
@@ -132,7 +146,11 @@ RECORD_FILENAME = "db-provenance.json"
 # was not produced by a process that asked the server, so it cannot be compared.
 SERVER_ECHO = "server_echo"
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
+
+# The only outcome a comparable record may carry. The writer records nothing for a
+# run with ERROR findings, so a record that says otherwise was not written by it.
+OUTCOME_PASS = "pass"
 
 # Digest length. A truncated hex sha256 is still far beyond collision reach for a
 # set of database endpoints, and a short value keeps the committed record readable.
@@ -180,9 +198,17 @@ UNCOMPARABLE_BAD_ENV = (
 )
 UNCOMPARABLE_BAD_RECORD = (
     "this table has a database-identity record that is unreadable, incomplete, "
-    "or was not produced by a server echo, so it cannot be compared -- this is "
-    "NOT agreement. Re-run `seshat validate --source-map "
-    "mappings/<table>/source-map.yaml` to rewrite it."
+    "from an older schema, or does not record a passing validate run, so it "
+    "cannot be compared -- this is NOT agreement. Re-run `seshat validate "
+    "--source-map mappings/<table>/source-map.yaml` (a passing run rewrites it) "
+    "and commit the record."
+)
+UNCOMPARABLE_STALE_MAP = (
+    "this table's database-identity record was written by a validate run over a "
+    "source-map that differs from the committed mappings/<table>/source-map.yaml "
+    "(or that file is not committed), so it cannot vouch for the current mapping "
+    "-- this is NOT agreement. Re-run `seshat validate --source-map "
+    "mappings/<table>/source-map.yaml` and commit the rewritten record."
 )
 
 
@@ -261,10 +287,11 @@ def database_names_agree(server_name: str, configured_name: str) -> bool:
 def assert_database_name_agrees(server_name: str, configured_name: str) -> None:
     """Raise ``ValueError`` unless the server confirms the configured DB name.
 
-    The check that makes an offline-reproducible digest UNFORGEABLE. A record can
-    only be written by a process that held a live connection and heard the server
-    agree, so a hand-authored (A1-shaped) record cannot be produced by editing
-    `.env`.
+    A WRITE-side check: ``seshat validate`` records nothing when the server it is
+    connected to names a different database than the configuration. It does not
+    make the resulting record unforgeable -- a reader cannot re-run it offline,
+    and the digest is computable from configuration alone (see the module
+    docstring).
 
     Deliberately fails the WRITE rather than recording a disagreement: a record
     whose name component the server contradicts describes no coherent target, and
@@ -280,6 +307,17 @@ def assert_database_name_agrees(server_name: str, configured_name: str) -> None:
             "identity can be recorded (values withheld: they are redacted "
             "connection settings)"
         )
+
+
+def source_map_digest(text: str) -> str:
+    """Digest a source-map's TEXT, stable across checkout line endings.
+
+    A leading BOM is dropped and CRLF folded to LF before hashing: the writer reads
+    the worktree file, the reader the committed blob, and under
+    ``core.autocrlf=true`` those differ only in line endings.
+    """
+    normalized = text.lstrip("\ufeff").replace("\r\n", "\n")
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:_DIGEST_CHARS]
 
 
 def configured_digest_from_env(env: dict[str, str]) -> str | None:
@@ -353,17 +391,20 @@ def build_record(
     captured_at: str,
     table: str,
     engine: str,
+    source_map_digest: str,
 ) -> dict[str, Any]:
-    """Build the provenance record for ONE live validate run.
+    """Build the provenance record for ONE PASSING live validate run.
 
     Pure: returns a NEW dict, mutates nothing, and reads no clock -- the
     timestamp is an explicit argument, mirroring ``readiness_evidence``'s
     determinism rule so the writer's output is reproducible in a test.
 
     The identity's server-reported database name is CHECKED against its
-    configured one (raising ``ValueError`` on disagreement); that check is what
-    makes this record unforgeable, while the digest itself is computed over the
-    offline-reproducible canonical form. See this module's docstring.
+    configured one (raising ``ValueError`` on disagreement), so validate records
+    nothing for an incoherent target. The digest itself is computed over the
+    offline-reproducible canonical form. ``source_map_digest`` binds the record
+    to the source-map the run validated (:func:`source_map_digest`). See this
+    module's docstring for what a record does and does not prove.
 
     Only a digest is stored: no raw host, port, or database name reaches the
     returned dict, so a caller cannot accidentally persist one.
@@ -371,6 +412,8 @@ def build_record(
     assert_database_name_agrees(
         identity.server_database_name, identity.configured_database_name
     )
+    if not source_map_digest.strip():
+        raise ValueError("a provenance record needs the validated source-map digest")
     return {
         "schema_version": _SCHEMA_VERSION,
         "table": table.strip(),
@@ -383,16 +426,19 @@ def build_record(
             identity.server_endpoint_agreed_with_config
         ),
         "source": SERVER_ECHO,
+        "outcome": OUTCOME_PASS,
+        "source_map_digest": source_map_digest.strip(),
         "captured_at": captured_at,
         "captured_by": "seshat validate",
         "scope": (
             "a digest of the canonical identity (normalized configured host, "
-            "port, database name) of the live system that answered this table's "
-            "validate run. The database-name component was CONFIRMED by the "
-            "server's own report at capture time, so this record could only be "
-            "written by a process holding a live connection. The digest itself is "
-            "offline-reproducible on purpose, so a correctly-configured repo can "
-            "never look wrong. No raw host, port, or database name is recorded."
+            "port, database name) of the live system that answered a PASSING "
+            "validate run of this table, plus a digest of the source-map it "
+            "validated. At capture time the server's own database name agreed "
+            "with the configuration. The digest is offline-reproducible on "
+            "purpose, so it is a configuration comparison, not a proof: this file "
+            "is as trustworthy as the commit that introduced it. No raw host, "
+            "port, or database name is recorded."
         ),
     }
 
@@ -416,6 +462,12 @@ def read_record(path: Path) -> dict[str, Any] | None:
         return None
     except (OSError, UnicodeDecodeError):
         return {}
+    return parse_record(raw)
+
+
+def parse_record(raw: str) -> dict[str, Any]:
+    """Parse one record's text; the sentinel ``{}`` for anything malformed."""
+    raw = raw.lstrip("\ufeff")
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
@@ -432,12 +484,22 @@ def comparable_digest(record: dict[str, Any] | None) -> str | None:
     exactly the A1 shape the ruling rejects, so it is never compared as if it
     were); for a record whose ``identity_components`` are not the canonical set
     (a digest over different components is not comparable with ours, and
-    pretending otherwise would be a false mismatch); and for a record with no
-    digest at all.
+    pretending otherwise would be a false mismatch); for a record that does not
+    say its run PASSED or carries no source-map digest (schema 1, or not the
+    writer's output); and for a record with no digest at all.
+
+    These are label checks. A correctly-labelled record can be written by hand;
+    what keeps a worktree edit from counting is that the reader only reads
+    COMMITTED records.
     """
     if not isinstance(record, dict):
         return None
     if record.get("source") != SERVER_ECHO:
+        return None
+    if record.get("outcome") != OUTCOME_PASS:
+        return None
+    map_digest = record.get("source_map_digest")
+    if not isinstance(map_digest, str) or not map_digest.strip():
         return None
     if record.get("database_name_server_confirmed") is not True:
         return None
@@ -451,7 +513,9 @@ def comparable_digest(record: dict[str, Any] | None) -> str | None:
 
 
 def compare(
-    record: dict[str, Any] | None, configured: str | None
+    record: dict[str, Any] | None,
+    configured: str | None,
+    committed_map_digest: str | None = None,
 ) -> tuple[str, str | None]:
     """Compare a recorded provenance record against the configured digest.
 
@@ -461,14 +525,16 @@ def compare(
         today's behavior plus the shipped option-B caveat. NEVER a blocker; no
         committed record carries provenance, so gating on absence would fail
         every table at once.
-      * ``"match"``        -- record and configuration agree. The option-B caveat
-        is satisfied and drops: a machine that connected recorded this target,
-        and recorded the server's own view of itself beside it.
+      * ``"match"``        -- the committed record says a passing run over the
+        committed source-map recorded a configuration digest equal to the current
+        one. A configuration comparison, not a proof (see the module docstring).
       * ``"mismatch"``     -- they disagree. The caller downgrades with the named
         blocker. Never a fabricated pass and never a silent pass.
       * ``"uncomparable"`` -- a record exists but the comparison could not be
-        made (no configured DSN, no resolvable host/database in it, or an
-        unreadable/incomplete/non-server-echo record). ``detail`` says which.
+        made (no configured DSN, no resolvable host/database in it, an
+        unreadable/incomplete/non-passing record, or a record whose source-map
+        digest differs from ``committed_map_digest`` -- ``None`` there means the
+        committed source-map could not be read). ``detail`` says which.
         Absence of a configured DSN is NOT agreement, so this is reported.
 
     ``detail`` is ``None`` only for ``absent`` and ``match``. No verdict's detail
@@ -479,6 +545,8 @@ def compare(
     digest = comparable_digest(record)
     if digest is None:
         return "uncomparable", UNCOMPARABLE_BAD_RECORD
+    if record.get("source_map_digest", "").strip() != committed_map_digest:
+        return "uncomparable", UNCOMPARABLE_STALE_MAP
     if configured is None:
         return "uncomparable", UNCOMPARABLE_NO_DSN
     if digest == configured:

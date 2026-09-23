@@ -5,14 +5,19 @@ findings, and set an exit code. Ruling R7 authorizes it to persist ONE committed
 provenance record, and nothing else. That narrowness is the point, so this module
 is the whole of the write path and it is deliberately small.
 
-What makes the record trustworthy is that only a process holding a live
-connection can produce one. This code runs after ``validate`` has already
-connected, and it asks the SERVER to name its own database -- via
-``Dialect.identity_query()``, resolved through the dialect layer rather than
-hardcoded, because ``select current_database()`` fails on SQL Server and MySQL.
-The record is written ONLY if the server's answer AGREES with the configured
-database name. A hand-authored (A1-shaped) record cannot pass a check that
-requires a live socket, which is why A1 stays rejected.
+This code runs after ``validate`` has already connected and its live checks
+PASSED (zero ERROR findings -- a failing run records nothing, so it can never
+overwrite the record a passing run earned). It asks the SERVER to name its own
+database -- via ``Dialect.identity_query()``, resolved through the dialect layer
+rather than hardcoded, because ``select current_database()`` fails on SQL Server
+and MySQL. The record is written ONLY if the server's answer AGREES with the
+configured database name, and only for a source-map at
+``<repo>/mappings/<table>/source-map.yaml``, whose digest it carries.
+
+That write-side check leaves no trace a reader can verify, and the digest is
+computable from configuration alone, so a hand-authored record with the right
+labels is possible. The reader's defence is procedural, not cryptographic: it
+reads only COMMITTED records (see ``db_provenance_reader``).
 
 The digest itself is over the offline-reproducible canonical form (normalized
 configured host, port, database name), NOT over the server's reported endpoint.
@@ -113,15 +118,24 @@ def _endpoint_agreement(
     return bool(reported_host) and reported_host == host
 
 
-def _table_directory(source_map: str) -> str | None:
+def _table_directory(source_map: str, repo_root: Path | str) -> str | None:
     """The ``mappings/<dir>/`` name containing ``source_map``, or ``None``.
 
     The provenance record is a SIBLING of the source map the run validated, so the
     directory comes from the path the operator actually passed -- never from a
     table name, which may be schema-qualified and need not equal the directory.
+
+    ``None`` unless ``source_map`` resolves to exactly
+    ``<repo_root>/mappings/<dir>/source-map.yaml``: a map elsewhere whose parent
+    directory merely shares a local mapping's name validated OTHER targets, and
+    attributing its run to the local table would vouch for evidence that table's
+    own map never produced.
     """
-    parent = Path(source_map).resolve().parent
-    return parent.name or None
+    resolved = Path(source_map).resolve()
+    mappings = (Path(repo_root) / "mappings").resolve()
+    if resolved.name != "source-map.yaml" or resolved.parent.parent != mappings:
+        return None
+    return resolved.parent.name or None
 
 
 @dataclass(frozen=True)
@@ -153,7 +167,10 @@ class LiveRunContext:
 
 
 def record_live_run(context: LiveRunContext) -> Path | None:
-    """Persist ONE server-confirmed provenance record for a completed live run.
+    """Persist ONE provenance record for a completed, PASSING live run.
+
+    The caller (``validate``) invokes this only when the run had zero ERROR
+    findings.
 
     Returns the record's path, or ``None`` when nothing was recorded (with the
     reason on the context's stream). Never raises and never influences the
@@ -201,13 +218,20 @@ def _write(context: LiveRunContext, identity: tuple[str | None, str]) -> Path | 
     failure, so a provenance problem never fails a successful validate run."""
     from seshat import db_provenance
 
-    table_dir = _table_directory(context.source_map)
+    table_dir = _table_directory(context.source_map, context.repo_root)
+    if table_dir is None:
+        print(
+            "note: recorded no live-DB provenance for this run -- the source-map "
+            "is not <repo>/mappings/<table>/source-map.yaml under the repo root "
+            "(--repo, default: the current directory).",
+            file=context.out,
+        )
+        return None
     configured = _configured_parts(context.configured_dsn)
-    if table_dir is None or configured is None:
+    if configured is None:
         print(
             "note: recorded no live-DB provenance for this run -- could not "
-            "resolve the mapping directory and the configured host/database from "
-            "the connection settings.",
+            "resolve the configured host/database from the connection settings.",
             file=context.out,
         )
         return None
@@ -223,14 +247,16 @@ def _write(context: LiveRunContext, identity: tuple[str | None, str]) -> Path | 
         ),
     )
     try:
+        map_text = Path(context.source_map).read_text(encoding="utf-8-sig")
         record = db_provenance.build_record(
             captured,
             captured_at=_now_iso(),
             table=table_dir,
             engine=context.engine,
+            source_map_digest=db_provenance.source_map_digest(map_text),
         )
         path = db_provenance.write_record(context.repo_root, table_dir, record)
-    except (OSError, ValueError, FileNotFoundError) as exc:
+    except (OSError, ValueError, UnicodeDecodeError) as exc:
         # ValueError includes the server-vs-configured database-name
         # disagreement: no coherent identity exists, so record nothing.
         print(
@@ -240,11 +266,11 @@ def _write(context: LiveRunContext, identity: tuple[str | None, str]) -> Path | 
         )
         return None
     print(
-        f"note: recorded server-confirmed live-DB provenance at "
+        f"note: recorded live-DB provenance for this passing run at "
         f"{path.relative_to(Path(context.repo_root)).as_posix()} -- digests only, "
-        "no raw host or database name. Commit it so `seshat next` / `seshat "
-        "status` can verify this evidence was earned against the database you are "
-        "pointed at.",
+        "no raw host or database name. `seshat next` / `seshat status` read only "
+        "the COMMITTED record, so commit it (with the source-map it validated) "
+        "for them to compare it with the database you are pointed at.",
         file=context.out,
     )
     return path

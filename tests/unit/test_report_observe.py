@@ -103,7 +103,7 @@ def test_a_ratio_compiles_to_one_query_over_one_snapshot() -> None:
     query = compile_query(_RATIO)
     assert query.is_ratio is True
     assert query.sql.count("SELECT") == 1
-    assert 'count(*) FILTER (WHERE "discount_applied" IS TRUE)' in query.sql
+    assert 'count(*) FILTER (WHERE "discount_applied" = TRUE)' in query.sql
     assert 'count(*) FILTER (WHERE "discount_applied" IS NOT NULL)' in query.sql
 
 
@@ -354,7 +354,7 @@ def test_the_revenue_contract_compiles_to_the_sum_its_evidence_records() -> None
 def test_the_discount_rate_is_recognized_as_a_ratio() -> None:
     query = compile_query(_committed("DiscountedTransactionRate"))
     assert query.is_ratio is True
-    assert "IS TRUE" in query.sql and "IS NOT NULL" in query.sql
+    assert "= TRUE" in query.sql and "IS NOT NULL" in query.sql
 
 
 def test_the_average_contract_divides_a_sum_by_a_filtered_count() -> None:

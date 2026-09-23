@@ -407,8 +407,9 @@ def _db_extra_hint(engine: str = "postgres") -> str:
     Sourced from ONE place so the brand + remedy can't drift per command.
 
     ``engine`` selects the right driver/extra so a non-Postgres run (SQL Server /
-    MySQL / Snowflake) is told to install ITS driver, not psycopg2 (PR #409). The
-    default is ``postgres`` -- unchanged output for callers that don't pass one.
+    MySQL / Snowflake) is told to install ITS driver, not psycopg2 (PR #409).
+    Every live-DB verb passes its resolved engine. DOUBLE quotes, for the
+    ``cmd.exe`` reason :func:`_extra_install_hint` documents.
     """
     driver, extra = {
         "postgres": ("psycopg2-binary", "db"),
@@ -418,7 +419,7 @@ def _db_extra_hint(engine: str = "postgres") -> str:
     }.get(engine, ("psycopg2-binary", "db"))
     return (
         f"       pipx install:  pipx inject seshat-bi {driver}\n"
-        f"       pip install:   pip install 'seshat-bi[{extra}]'"
+        f'       pip install:   pip install "seshat-bi[{extra}]"'
     )
 
 
@@ -531,8 +532,8 @@ def main(argv: list[str] | None = None, *, prog: str | None = None) -> int:
 def _safe_target_label(engine: str, config: object) -> str:
     """A credential-free label for the "running against ..." status line.
 
-    A Postgres DSN string keeps only the host segment (matches the
-    pre-existing behavior, unchanged). Every OTHER string-shaped config --
+    A Postgres DSN string renders the engine plus a short target digest (see
+    ``_postgres_target_label``). Every OTHER string-shaped config --
     today that's only the SQL-Server ODBC keyword string, which embeds
     PWD=/UID= directly with no "@" delimiter to split on -- is NOT safe to
     echo even partially, so it falls through to the engine-only label (same
@@ -545,43 +546,27 @@ def _safe_target_label(engine: str, config: object) -> str:
 
 
 def _postgres_target_label(config: str) -> str:
-    """A credential-free label from a Postgres config string.
+    """A disclosure-free label from a Postgres config string.
 
-    Classify by OUTER syntax, never by content (#409 P1). A libpq KEYWORD
-    conninfo can embed anything inside a quoted credential -- ``@``, ``host=``,
-    even a scheme separator (e.g. a password quoting ``abc``, a ``:``, a secret,
-    then a host, joined the way a URL joins userinfo to host) -- so any
-    content-based test
-    (``"://" in config``, a ``host=`` regex, an ``@`` split) can be spoofed into
-    surfacing the secret. A genuine Postgres URL is identified ONLY by its
-    leading ``postgresql://`` / ``postgres://`` scheme, which a keyword conninfo
-    (always ``keyword=value ...``) can never produce at offset 0. Anything that
-    is not outwardly a URL renders NO component -- just the bare engine label.
+    Host and database name are on this repo's secret/redaction lists (the error
+    path scrubs them, and provenance stores only digests), so the success-path
+    banner must not print them either. The label is the engine plus the first 8
+    hex characters of the canonical target digest
+    (``db_provenance.digest_for_dsn``): enough to tell two targets apart in a
+    log, nothing that names one. A config with no resolvable host and database
+    name renders the bare engine label.
+
+    The digest is computed by the shared total decomposition, never by string
+    splitting, so no spoofed keyword conninfo can surface a component (#409 P1);
+    a malformed port is simply part of what cannot be resolved.
     """
-    if config.lstrip().lower().startswith(("postgresql://", "postgres://")):
-        # URL form. Parse STRUCTURALLY (urlsplit) rather than string-splitting on
-        # "@"/"?": a query-string credential whose value contains a raw "@"
-        # defeats a split-then-strip and leaks the trailing fragment (#409 P1).
-        # urlsplit.hostname excludes any userinfo and .path excludes the query,
-        # so only host[:port]/dbname is surfaced.
-        from urllib.parse import urlsplit
+    from ..db_provenance import digest_for_dsn
 
-        try:
-            parts = urlsplit(config.lstrip())
-            host = parts.hostname
-            # .port is a lazily-parsed property: it raises ValueError on a
-            # non-numeric / out-of-range port (`host:notaport`). This label is
-            # computed BEFORE the handler's DB-boundary try, so an unguarded
-            # access would surface an uncaught traceback instead of the clean
-            # config error (#409). Access it inside the guard.
-            port = parts.port
-        except ValueError:
-            return "postgres"
-        if not host:
-            return "postgres"
-        label = f"{host}:{port}" if port else host
-        return f"{label}{parts.path}" if parts.path not in ("", "/") else label
-    return "postgres"
+    try:
+        digest = digest_for_dsn(config)
+    except ValueError:
+        return "postgres"
+    return f"postgres (target {digest[:8]})" if digest else "postgres"
 
 
 def _current_engine() -> str:
@@ -663,7 +648,7 @@ def _redact_dsn(message: object, dsn: str) -> str:
     scrubs the DB-NAME and the percent-decoded form of every component, and can
     never drift from the shared decomposition (#385).
     """
-    from ..redaction_core import replace_fragments, uri_components
+    from ..redaction_core import replace_bounded, uri_components
 
     text = str(message) or message.__class__.__name__
     if not dsn:
@@ -682,7 +667,10 @@ def _redact_dsn(message: object, dsn: str) -> str:
         fragments = uri_components([dsn])
     except ValueError:
         return text
-    return replace_fragments(text, fragments, "<redacted>")
+    # Bounded: a one-character password must not rewrite `port` into
+    # `<redacted>ort`. The boundary error chain (seshat.db_boundary) then applies
+    # the remaining layers.
+    return replace_bounded(text, fragments, "<redacted>")
 
 
 __all__ = [

@@ -203,7 +203,20 @@ def check_date_coverage(
         f"IS NULL AND f.d IS NOT NULL"
     )
     rows = runner.run(sql)
-    missing = rows[0][0] if rows else 0
+    if not rows:
+        # Fail closed, like the PK and reconcile checks: an empty result is an
+        # unanswered query, not zero defects.
+        return [
+            Finding(
+                rule_id="V-RC15",
+                severity=Severity.ERROR,
+                message=(
+                    f"date coverage check returned no rows for {target.fact} (RC15)"
+                ),
+                locator=target.date_dim,
+            )
+        ]
+    missing = rows[0][0]
     if missing:
         return [
             Finding(
@@ -240,7 +253,19 @@ def check_orphan_fks(
             f"AND f.{fk_col_q} IS NOT NULL"
         )
         rows = runner.run(sql)
-        orphans = rows[0][0] if rows else 0
+        if not rows:
+            findings.append(
+                Finding(
+                    rule_id="V-RC16",
+                    severity=Severity.ERROR,
+                    message=(
+                        f"{target.fact}.{fk_col}: orphan check returned no rows (RC16)"
+                    ),
+                    locator=f"{target.fact}.{fk_col}",
+                )
+            )
+            continue
+        orphans = rows[0][0]
         if orphans:
             findings.append(
                 Finding(

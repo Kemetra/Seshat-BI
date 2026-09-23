@@ -11,32 +11,34 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections.abc import Callable
 from pathlib import Path
 
 
-def _filter_to_sql(filters: object, quote: Callable[..., str]) -> str | None:
+def _filter_to_sql(filters: object, dialect: object) -> str | None:
     """Translate an L3 ``filter`` list into a SQL WHERE predicate (AND-joined).
 
     Reuses the L3 recognized-op vocabulary (``is_not_null`` / ``is_true``); each
-    column is quoted via the hardened identifier helper. Returns None for an
-    unrecognized op or a malformed entry (the caller fails the check closed).
-    Empty/None filter list => "TRUE" (count all rows).
+    column is quoted via the dialect's hardened identifier helper. Returns None for
+    an unrecognized op or a malformed entry (the caller fails the check closed).
+    Empty/None filter list => ``1 = 1`` (count all rows; portable, unlike a bare
+    ``TRUE``, which SQL Server rejects).
     """
+    from seshat.dialect import ALWAYS_TRUE
+
     if not filters:
-        return "TRUE"
+        return ALWAYS_TRUE
     if not isinstance(filters, list):
         return None
     parts: list[str] = []
     for f in filters:
-        predicate = _filter_entry_to_sql(f, quote)
+        predicate = _filter_entry_to_sql(f, dialect)
         if predicate is None:
             return None
         parts.append(predicate)
     return " AND ".join(parts)
 
 
-def _filter_entry_to_sql(entry: object, quote: Callable[..., str]) -> str | None:
+def _filter_entry_to_sql(entry: object, dialect: object) -> str | None:
     """Map one L3 filter entry to a SQL predicate, or None if unrecognized.
 
     A recognized op (``is_not_null`` / ``is_true``) yields a predicate over the
@@ -48,11 +50,13 @@ def _filter_entry_to_sql(entry: object, quote: Callable[..., str]) -> str | None
     col, op = entry.get("column"), entry.get("op")
     if not col:
         return None
-    qcol = quote(col, context="L4 ratio filter column")
+    from seshat.dialect import true_predicate
+
+    qcol = dialect.quote_ident(col, context="L4 ratio filter column")  # type: ignore[attr-defined]
     if op == "is_not_null":
         return f"{qcol} IS NOT NULL"
     if op == "is_true":
-        return f"{qcol} = TRUE"
+        return true_predicate(dialect, qcol)
     return None
 
 
@@ -148,12 +152,8 @@ def _resolve_ratio_filters(
     """
     import dataclasses
 
-    num_sql = _filter_to_sql(
-        (definition or {}).get("numerator", {}).get("filter"), dialect.quote_ident
-    )
-    den_sql = _filter_to_sql(
-        (definition or {}).get("denominator", {}).get("filter"), dialect.quote_ident
-    )
+    num_sql = _filter_to_sql(_count_rows_side(name, definition, "numerator"), dialect)
+    den_sql = _filter_to_sql(_count_rows_side(name, definition, "denominator"), dialect)
     if num_sql is None or den_sql is None:
         raise _ContractError(
             f"error: contract {name}: ratio numerator/denominator filter "
@@ -164,6 +164,29 @@ def _resolve_ratio_filters(
         numerator_count_sql_filter=num_sql,
         denominator_count_sql_filter=den_sql,
     )
+
+
+def _count_rows_side(name: str, definition: object, which: str) -> object:
+    """One ratio side's ``filter``, after proving the side is a row count.
+
+    L4 recomputes a ratio as count(*)/count(*). A side that aggregates anything
+    else (a SUM over a count, as AvgTransactionValue does) would be compared as
+    a count ratio against an approved average -- a meaningless number -- so it is
+    refused, as is a side that is not a mapping (``numerator: null``).
+    """
+    side = definition.get(which) if isinstance(definition, dict) else None
+    if not isinstance(side, dict):
+        raise _ContractError(
+            f"error: contract {name}: ratio {which} is not a mapping "
+            "(L4 cannot recompute it)"
+        )
+    if side.get("aggregation") != "count_rows":
+        raise _ContractError(
+            f"error: contract {name}: ratio {which} aggregation "
+            f"{side.get('aggregation')!r} is not count_rows; L4 recomputes a ratio "
+            "only as a count over a count"
+        )
+    return side.get("filter")
 
 
 def _load_expectations(metrics_root: Path, dialect: object) -> list[tuple[str, object]]:
@@ -216,7 +239,7 @@ def _preflight_config(
         prog = cli._prog(args)
         raise _ContractError(
             f"error: `{prog} value-check` needs the optional DB driver.\n"
-            f"{cli._db_extra_hint()}\n"
+            f"{cli._db_extra_hint(engine)}\n"
             f"       (the static `{prog} check` core stays dependency-free)."
         )
     return config
@@ -248,9 +271,12 @@ def _recompute_findings(
             f"error: value-check rejected an unsafe contract identifier: {exc}"
         ) from exc
     except Exception as exc:
+        from seshat.db_boundary import boundary_error_text
+
         raise _ContractError(
             "error: live value-check failed at the DB boundary "
-            f"({exc.__class__.__name__}): {dialect.redact(exc, config)}"
+            f"({exc.__class__.__name__}): "
+            f"{boundary_error_text(dialect, exc, config)}"
         ) from exc
     return findings
 

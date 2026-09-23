@@ -54,15 +54,48 @@ def _identity(**overrides: object) -> db_provenance.CapturedIdentity:
     return db_provenance.CapturedIdentity(**fields)
 
 
+# The committed source-map every fixture table carries. The record binds to its
+# digest, and the reader compares only while the committed map still matches.
+_SOURCE_MAP_TEXT = 'meta:\n  table: "sales_c086_raw"\ncolumns: []\n'
+
+
 def _record(**overrides: object) -> dict:
     record = db_provenance.build_record(
         _identity(),
         captured_at="2026-07-26T00:00:00+00:00",
         table="sales_c086_raw",
         engine="postgres",
+        source_map_digest=db_provenance.source_map_digest(_SOURCE_MAP_TEXT),
     )
     record.update(overrides)
     return record
+
+
+def _commit(root: Path) -> None:
+    """Commit ``root/mappings`` -- the reader trusts only COMMITTED records."""
+    import subprocess
+
+    def git(*args: str) -> None:
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.email=t@example.com",
+                "-c",
+                "user.name=Test",
+                "-c",
+                "commit.gpgsign=false",
+                *args,
+            ],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        )
+
+    if not (root / ".git").exists():
+        git("init", "-q")
+    git("add", "mappings")
+    git("commit", "-q", "--allow-empty", "-m", "fixture")
 
 
 def _repo(
@@ -100,10 +133,12 @@ def _repo(
         f"approvals:\n{approvals}\n",
         encoding="utf-8",
     )
+    (mapping / "source-map.yaml").write_text(_SOURCE_MAP_TEXT, encoding="utf-8")
     if record is not None:
         (mapping / db_provenance.RECORD_FILENAME).write_text(
             json.dumps(record, indent=2), encoding="utf-8"
         )
+    _commit(tmp_path)
     if dsn is not None:
         (tmp_path / ".env").write_text(f"DATABASE_URL={dsn}\n", encoding="utf-8")
     return tmp_path
@@ -267,6 +302,7 @@ def test_a_corrupt_record_reports_cannot_compare_not_absence(tmp_path: Path) -> 
     root = _repo(tmp_path, dsn=_dsn(), record=None)
     path = root / "mappings" / "sales_c086_raw" / db_provenance.RECORD_FILENAME
     path.write_text("{not json", encoding="utf-8")
+    _commit(root)
 
     response = run_next.build_run_next_response(root, "sales_c086_raw")
 
@@ -406,15 +442,16 @@ def test_a_different_host_serving_the_same_database_name_mismatches() -> None:
 
 
 def test_the_server_must_confirm_the_configured_database_name() -> None:
-    """What makes an offline-reproducible digest unforgeable: only a process
-    holding a live connection can satisfy this, so an A1-shaped hand-authored
-    record cannot be produced by editing `.env`."""
+    """The WRITER refuses to build a record when the server names a different
+    database than the configuration. This is a write-side check only: it does
+    not make a record unforgeable (see the committed-record tests below)."""
     with pytest.raises(ValueError) as excinfo:
         db_provenance.build_record(
             _identity(server_database_name="actually_this_one"),
             captured_at="2026-07-26T00:00:00+00:00",
             table="sales_c086_raw",
             engine="postgres",
+            source_map_digest=db_provenance.source_map_digest(_SOURCE_MAP_TEXT),
         )
     # The error can reach a log, so it must name neither value.
     assert "actually_this_one" not in str(excinfo.value)

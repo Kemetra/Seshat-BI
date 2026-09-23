@@ -87,6 +87,22 @@ def _add_validate_parser(sub: argparse._SubParsersAction) -> None:
             "deferred state."
         ),
     )
+    _add_workspace_repo(validate, records=True)
+
+
+def _add_workspace_repo(parser: argparse.ArgumentParser, *, records: bool) -> None:
+    """``--repo``: the workspace whose `.env` is applied (default: cwd)."""
+    extra = (
+        " A live-DB provenance record is written only under <repo>/mappings/, "
+        "and only for a --source-map at <repo>/mappings/<table>/source-map.yaml."
+        if records
+        else ""
+    )
+    parser.add_argument(
+        "--repo",
+        default=".",
+        help=f"workspace root whose gitignored .env is applied (default: .).{extra}",
+    )
 
 
 def _add_profile_parser(sub: argparse._SubParsersAction) -> None:
@@ -151,6 +167,7 @@ def _add_profile_parser(sub: argparse._SubParsersAction) -> None:
         "ProfileResult and stays silent on stderr on success, so "
         "`--format json 2>&1 | jq` is safe (#436).",
     )
+    _add_workspace_repo(profile, records=False)
 
 
 def _add_drift_parser(sub: argparse._SubParsersAction) -> None:
@@ -189,6 +206,7 @@ def _add_drift_parser(sub: argparse._SubParsersAction) -> None:
         help="'text' (default) human summary; 'json' emits the "
         "source-drift-findings.schema.json document.",
     )
+    _add_workspace_repo(drift, records=False)
 
 
 def _add_semantic_and_value_check_parsers(sub: argparse._SubParsersAction) -> None:

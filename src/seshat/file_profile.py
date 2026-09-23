@@ -105,6 +105,15 @@ def _validate_columns(
                 f"misread (a title/blank line above the real header, or a merged "
                 f"Excel header). Fix the header-row detection before profiling."
             )
+    # A `|` or backtick splits the pasted markdown table row, so the profile would
+    # no longer round-trip through read_source_profile() as a drift baseline.
+    for i, name in enumerate(reader_columns):
+        if any(ch in str(name) for ch in "|`"):
+            raise ValueError(
+                f"header name at position {i} contains '|' or '`' -- it would "
+                f"corrupt the source-profile.md table. Rename the column (record "
+                f"the rename in the source-map) before profiling."
+            )
     # Duplicate header names are the same "header you cannot trust" class as a blank
     # name: columns.index(name) below resolves a candidate-PK column to only its FIRST
     # occurrence, so two columns named 'id' would silently prove uniqueness against the
