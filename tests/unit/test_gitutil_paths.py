@@ -52,3 +52,19 @@ def test_committed_ref_is_cwd_relative(tmp_path: Path) -> None:
         check=True,
     )
     assert shown.stdout == "proj\n"
+
+
+def test_no_toplevel_relative_head_path_literal_in_src() -> None:
+    """Committed reads go through ``committed_ref`` (``HEAD:./path``).
+
+    A bare ``f"HEAD:{rel}"`` resolves from the git TOPLEVEL while every pathspec
+    probe resolves from the cwd; the two name different files for a governed
+    root below the toplevel.
+    """
+    src = Path(__file__).resolve().parents[2] / "src"
+    offenders = [
+        str(path.relative_to(src))
+        for path in src.rglob("*.py")
+        if 'f"HEAD:{' in path.read_text(encoding="utf-8")
+    ]
+    assert offenders == []
