@@ -126,9 +126,11 @@ def _timestamp() -> str:
 
 
 def _sanitized_text(value: object, context: RunContext) -> str:
-    cleaned = sanitize(
-        value or "", secret_values(context.environment), context.repo_root
-    )
+    # Render FIRST: sanitize() walks strings and containers only, so a raw
+    # exception object would pass through untouched and str() would then
+    # surface its unredacted message.
+    text = "" if value is None else str(value)
+    cleaned = sanitize(text, secret_values(context.environment), context.repo_root)
     return str(cleaned)
 
 

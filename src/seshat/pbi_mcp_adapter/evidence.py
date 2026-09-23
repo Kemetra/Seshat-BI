@@ -33,11 +33,14 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from seshat.dagster_adapter import OUTCOMES
-from seshat.pbi_mcp.scan import SECRET_PATTERNS, refuse_if_secret_shaped
+from seshat.pbi_mcp.scan import refuse_if_secret_shaped
 from seshat.redaction_core import (
     conninfo_component_values,
     replace_fragments,
     uri_component_values,
+)
+from seshat.redaction_core import (
+    scrub_secret_shaped as _scrub_secret_shaped,
 )
 
 #: The fixed authority label. Never computed, never elevated, never parameterized
@@ -236,13 +239,7 @@ def scrub_secret_shaped(text: str) -> tuple[str, tuple[str, ...]]:
     matched -- the labels are what makes the substitution AUDITABLE rather than a
     silent swap.
     """
-    applied: list[str] = []
-    scrubbed = text
-    for label, pattern in SECRET_PATTERNS:
-        if pattern.search(scrubbed):
-            scrubbed = pattern.sub(REDACTED, scrubbed)
-            applied.append(label)
-    return scrubbed, tuple(applied)
+    return _scrub_secret_shaped(text, REDACTED)
 
 
 def _redact_payload(payload: dict[str, object]) -> tuple[str, ...]:

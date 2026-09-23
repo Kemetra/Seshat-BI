@@ -21,7 +21,12 @@ from __future__ import annotations
 import os
 import re
 
-from seshat.redaction_core import replace_fragments, uri_components
+from seshat.dbt.redaction import SECRET_DBT_ENVIRONMENT_KEYS
+from seshat.redaction_core import (
+    replace_fragments,
+    scrub_secret_shaped,
+    uri_components,
+)
 
 _DSN_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9+.-]*://[^\s'\"]+")
 _KEYWORD_RE = re.compile(
@@ -57,6 +62,11 @@ _SECRET_ANALYTICS_KEYS = frozenset(
     }
 )
 
+# The dbt credentials the child receives (environment.py forwards every
+# SESHAT_DBT_* key): host/user/password/dbname. The non-secret schema, port and
+# sslmode stay excluded for the reason documented in seshat.dbt.redaction.
+_KNOWN_CREDENTIAL_KEYS = _SECRET_ANALYTICS_KEYS | frozenset(SECRET_DBT_ENVIRONMENT_KEYS)
+
 
 # A generic `_SECRET_ENV_RE`-matched key (e.g. `MY_DEPLOY_TOKEN`) can carry a
 # tiny value (a flag `1`, a version `v2`) that is NOT a credential; replacing it
@@ -79,7 +89,7 @@ def _secret_env_values() -> list[str]:
     for key, value in os.environ.items():
         if not value:
             continue
-        if key == "DATABASE_URL" or key in _SECRET_ANALYTICS_KEYS:
+        if key == "DATABASE_URL" or key in _KNOWN_CREDENTIAL_KEYS:
             values.append(value)
         elif len(value) >= _GENERIC_SECRET_MIN_LEN and bool(_SECRET_ENV_RE.search(key)):
             values.append(value)
@@ -101,7 +111,8 @@ def redact_text(text: str) -> str:
     out = replace_fragments(out, uri_components(secrets), "[REDACTED-ENV]")
     out = _DSN_RE.sub("[REDACTED-DSN]", out)
     out = _KEYWORD_RE.sub(lambda m: f"{m.group(1)}=[REDACTED]", out)
-    return out
+    # Layer two: secret-SHAPED spans (tokens, key ids, GUIDs) no value knew.
+    return scrub_secret_shaped(out)[0]
 
 
 def redact_and_tail(text: str, max_chars: int) -> str:
