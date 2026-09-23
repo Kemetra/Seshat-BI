@@ -174,3 +174,35 @@ def test_missing_status_policy_is_explicit() -> None:
 
     result = run_proportion(_context([(1, 2), (None, 3)]))
     assert result.diagnostics[0].observed == "1"
+
+
+def test_small_success_cell_below_privacy_floor_is_withheld() -> None:
+    """#735: successes=3 under a floor of 10 is never published."""
+    rows = [(3, 500, "store_A"), (40, 500, "store_B")]
+    for _ in range(9):
+        rows += [(0, 0, "store_A"), (0, 0, "store_B")]
+    with pytest.raises(AnalysisWithheld) as exc_info:
+        run_proportion(
+            _context(rows, grouped=True, comparison="chi_square", privacy_floor=10)
+        )
+    assert exc_info.value.blockers[0].code == "STAT_PRIVACY_FLOOR"
+
+
+def test_small_failure_cell_below_privacy_floor_is_withheld() -> None:
+    rows = [(497, 500)] + [(0, 0)] * 9
+    with pytest.raises(AnalysisWithheld) as exc_info:
+        run_proportion(_context(rows, privacy_floor=10))
+    assert exc_info.value.blockers[0].code == "STAT_PRIVACY_FLOOR"
+
+
+def test_too_few_contributing_rows_is_withheld() -> None:
+    """A single pre-aggregated row cannot clear a row-count privacy floor."""
+    with pytest.raises(AnalysisWithheld) as exc_info:
+        run_proportion(_context([(40, 500)], privacy_floor=10))
+    assert exc_info.value.blockers[0].code == "STAT_PRIVACY_FLOOR"
+
+
+def test_rows_and_cells_at_the_floor_are_published() -> None:
+    rows = [(1, 50)] * 10
+    result = run_proportion(_context(rows, privacy_floor=10))
+    assert next(item.value for item in result.estimates if item.name == "successes")

@@ -11,6 +11,7 @@ from .common import (
     NumericSample,
     finite_array,
     numeric_role,
+    privacy_floor,
     safe_groups,
     unit_for_role,
 )
@@ -246,13 +247,13 @@ def _grouped_summaries(context: MethodContext, sample: NumericSample, style: _St
 
     grouped = safe_groups(context)
     by_row = dict(zip(sample.row_indices, sample.values.tolist(), strict=True))
-    privacy_floor = int(context.spec.pii["minimum_group_count"])
+    floor = privacy_floor(context)
     suppressed = grouped.suppressed_count
     estimates: list[Estimate] = []
     diagnostics: list[Diagnostic] = []
     for group in grouped.groups:
         retained = [by_row[index] for index in group.row_indices if index in by_row]
-        if len(retained) < privacy_floor:
+        if len(retained) < floor:
             suppressed += 1
             continue
         group_style = _Style(

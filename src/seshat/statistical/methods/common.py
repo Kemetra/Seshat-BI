@@ -188,8 +188,9 @@ def numeric_role(context: MethodContext, role: str) -> NumericSample:
     )
 
 
-def _privacy_floor(context: MethodContext) -> int:
-    floor = context.spec.pii.get("minimum_group_count", 1)
+def privacy_floor(context: MethodContext) -> int:
+    """The approved pii.minimum_group_count, read strictly (no default)."""
+    floor = context.spec.pii.get("minimum_group_count")
     require(
         isinstance(floor, int) and not isinstance(floor, bool) and floor >= 1,
         "STAT_PRIVACY_FLOOR_INVALID",
@@ -208,7 +209,7 @@ def safe_groups(context: MethodContext, role: str = "group") -> SafeGroups:
     for row_index, value in present:
         grouped.setdefault(str(value), []).append(row_index)
 
-    floor = _privacy_floor(context)
+    floor = privacy_floor(context)
     safe = tuple(
         SafeGroup(label, tuple(row_indices))
         for label, row_indices in sorted(grouped.items())

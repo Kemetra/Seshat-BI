@@ -17,7 +17,7 @@ from ..contracts import (
     withheld,
 )
 from ..evidence import decimal_text
-from .common import finite_array, numeric_role, safe_groups
+from .common import finite_array, numeric_role, privacy_floor, safe_groups
 from .inference import (
     BootstrapRequest,
     adjust_pvalues,
@@ -92,7 +92,7 @@ def _prepared_groups(context: MethodContext) -> _Prepared:
     sample = numeric_role(context, "response")
     grouped = safe_groups(context)
     by_row = dict(zip(sample.row_indices, sample.values.tolist(), strict=True))
-    floor = int(context.spec.pii["minimum_group_count"])
+    floor = privacy_floor(context)
     values: dict[str, object] = {}
     rows: dict[str, tuple[int, ...]] = {}
     suppressed = grouped.suppressed_count
