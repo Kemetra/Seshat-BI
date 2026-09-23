@@ -524,7 +524,14 @@ def main(argv: list[str] | None = None, *, prog: str | None = None) -> int:
 
     handler = _DISPATCH.get(args.command)
     if handler is None:
-        return 0
+        # Fail LOUD: a parsed verb with no dispatch row is a wiring defect, and
+        # returning 0 would report a do-nothing gate as a pass (audit F154).
+        print(
+            f"{resolved_prog}: internal error -- no handler registered for "
+            f"{args.command!r}",
+            file=sys.stderr,
+        )
+        return 2
     return handler(args)
 
 
