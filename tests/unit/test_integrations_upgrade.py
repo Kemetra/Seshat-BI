@@ -151,6 +151,49 @@ def test_a_matching_version_is_present_and_needs_no_install(tmp_path: Path) -> N
     assert _lock(root)["duckdb"]["version"] == "1.0.0"
 
 
+def test_a_present_distribution_moved_by_a_later_install_is_not_locked_as_resolved(
+    tmp_path: Path,
+) -> None:
+    root = _workspace(tmp_path)
+    _set_disk_version(root, "duckdb", "2.0.0")  # already PRESENT at the resolution
+
+    def _install(command: list[str]) -> None:
+        name, version = command[-1].split("==")
+        _set_disk_version(root, name, version)
+        _set_disk_version(root, "duckdb", "0.5.0")  # polars moves duckdb
+
+    outcome = installer.apply(
+        root,
+        components=(component("duckdb"), component("polars")),
+        resolvers=_pypi("2.0.0", "duckdb", "polars"),
+        runner=_runner(_install),
+    )
+
+    statuses = {row.component: row.status for row in outcome.rows}
+    assert statuses["duckdb"] == installer.FAILED
+    assert _lock(root)["duckdb"]["version"] == "0.5.0"
+
+
+def test_an_unnormalised_release_key_settles_instead_of_upgrading_forever(
+    tmp_path: Path,
+) -> None:
+    """PyPI may key a release `1.0.0-rc1`; its dist-info says `1.0.0rc1`."""
+    root = _workspace(tmp_path)
+    _set_disk_version(root, "duckdb", "1.0.0rc1")
+    duckdb = component("duckdb")
+    from dataclasses import replace
+
+    from seshat.integrations.resolvers import Resolution
+
+    resolved = Resolution(
+        "duckdb", ok=True, channel=duckdb.channel, version="1.0.0-rc1"
+    )
+    assert installer._upgrade_from(root, duckdb, resolved, "analytics-core") is None
+    trailing = replace(resolved, version="1.0")
+    _set_disk_version(root, "duckdb", "1.0.0")
+    assert installer._upgrade_from(root, duckdb, trailing, "analytics-core") is None
+
+
 def test_a_later_install_that_moves_an_earlier_one_is_not_locked_as_resolved(
     tmp_path: Path,
 ) -> None:

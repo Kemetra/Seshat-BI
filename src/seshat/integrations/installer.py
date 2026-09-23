@@ -35,6 +35,12 @@ from seshat.integrations.catalog import (
     profiles_for,
 )
 from seshat.integrations.compat import apply_policy
+from seshat.integrations.coordinates import (
+    _disk_resolution,
+    _matches,
+    _on_disk_resolution,
+    _upgrade_from,
+)
 from seshat.integrations.discovery import (
     DiscoveryInputs,
     SkillDiscovery,
@@ -243,13 +249,11 @@ def plan(
     for item, resolved in zip(components, verdict.resolutions):
         outcome.rows.append(_plan_row(root, item, resolved, envs[item.id]))
     outcome.discovery.extend(
-        inspect_official_skills(
+        _discover(
             root,
             components,
-            installed={
-                item.id: _is_installed(root, item, envs[item.id]) for item in components
-            },
-            inputs=DiscoveryInputs(
+            envs,
+            DiscoveryInputs(
                 harnesses=tuple(harnesses),
                 runner=discovery_runner,
                 harness_roots=harness_roots,
@@ -405,61 +409,6 @@ def _plan_row(
     return _row(item, resolved, PLANNED, detail)
 
 
-def _wanted_coordinates(item: Component, resolved: Resolution) -> set[str]:
-    if item.source_type is SourceType.GITHUB and not item.mcp_server:
-        return {ref for ref in (resolved.tag, resolved.commit) if ref}
-    return {resolved.version} if resolved.version else set()
-
-
-def _upgrade_from(
-    root: Path, item: Component, resolved: Resolution, profile: str
-) -> str | None:
-    """The installed coordinate when it differs from the resolved one, else None."""
-    if not _is_installed(root, item, profile):
-        return None
-    on_disk = installed_coordinate(root, item, profile)
-    wanted = _wanted_coordinates(item, resolved)
-    if on_disk and wanted and on_disk not in wanted:
-        return on_disk
-    return None
-
-
-def _on_disk_resolution(
-    root: Path, item: Component, resolved: Resolution, profile: str
-) -> Resolution | None:
-    """What the lock should say for a component whose install did not land.
-
-    The component may still be installed at its PREVIOUS coordinate (a failed
-    upgrade); the lock then records that coordinate, with no digest, because the
-    lock is evidence of what is on disk, not of what was resolved this run.
-    """
-    if not _is_installed(root, item, profile):
-        return None
-    on_disk = installed_coordinate(root, item, profile)
-    if on_disk is None:
-        return None
-    return _disk_resolution(item, resolved, on_disk)
-
-
-def _disk_resolution(item: Component, resolved: Resolution, on_disk: str) -> Resolution:
-    """A digest-free resolution describing the coordinate found on disk."""
-    is_ref = item.source_type is SourceType.GITHUB and not item.mcp_server
-    is_commit = (
-        is_ref
-        and len(on_disk) == 40
-        and all(char in "0123456789abcdef" for char in on_disk)
-    )
-    return Resolution(
-        component_id=item.id,
-        ok=True,
-        channel=resolved.channel or item.channel,
-        version=None if is_ref else on_disk,
-        tag=on_disk if is_ref and not is_commit else None,
-        commit=on_disk if is_commit else None,
-        status="installed",
-    )
-
-
 def _present_detail(item: Component, resolved: Resolution) -> str:
     if item.source_type is SourceType.BUNDLED:
         return "ships with Seshat; validated locally"
@@ -546,9 +495,9 @@ def apply(
     outcome.notes.extend(verdict.reasons)
 
     envs = {item.id: _env_profile(root, item, profile, derived) for item in components}
-    landed: dict[str, tuple] = {}
-    for item, resolved in zip(components, verdict.resolutions):
-        row, resolution = _install_one(
+    installed = _install_all(
+        outcome.rows,
+        [
             _Install(
                 root=root,
                 item=item,
@@ -557,28 +506,20 @@ def apply(
                 runner=runner,
                 python_version=resolvers.python_version,
             )
-        )
-        outcome.rows.append(row)
-        if resolution is not None:
-            landed[item.id] = (item, envs[item.id], resolution)
-    _verify_landed(root, outcome.rows, landed)
-    installed = [
-        (item.id, item.source_type.value, item.source, resolution)
-        for item, _profile, resolution in landed.values()
-    ]
+            for item, resolved in zip(components, verdict.resolutions)
+        ],
+    )
 
     # The lock records what LANDED, and only after the installs above returned.
     # A run in which nothing installed writes nothing, so a failed apply leaves
     # the previous lock byte-for-byte intact.
     outcome.lock_written = _record_lock(root, label, installed, derived=derived)
     outcome.discovery.extend(
-        inspect_official_skills(
+        _discover(
             root,
             components,
-            installed={
-                item.id: _is_installed(root, item, envs[item.id]) for item in components
-            },
-            inputs=DiscoveryInputs(
+            envs,
+            DiscoveryInputs(
                 harnesses=tuple(harnesses),
                 runner=discovery_runner,
                 harness_roots=harness_roots,
@@ -588,6 +529,43 @@ def apply(
         )
     )
     return outcome
+
+
+def _discover(
+    root: Path,
+    components: tuple[Component, ...],
+    envs: dict[str, str],
+    inputs: DiscoveryInputs,
+) -> list[SkillDiscovery]:
+    """Discovery verdicts for `components`, with install state read from disk."""
+    installed = {
+        item.id: _is_installed(root, item, envs[item.id]) for item in components
+    }
+    return list(
+        inspect_official_skills(root, components, installed=installed, inputs=inputs)
+    )
+
+
+def _install_all(
+    rows: list[ComponentPlan], requests: list[_Install]
+) -> list[tuple[str, str, str, Resolution]]:
+    """Install each request, append its row, and return the lock entries.
+
+    Rows are verified against disk after EVERY install ran (see
+    `_verify_landed`), so the entries describe what is actually installed.
+    """
+    landed: dict[str, tuple] = {}
+    for req in requests:
+        row, resolution = _install_one(req)
+        rows.append(row)
+        if resolution is not None:
+            landed[req.item.id] = (req.item, req.profile, resolution)
+    if requests:
+        _verify_landed(requests[0].root, rows, landed)
+    return [
+        (item.id, item.source_type.value, item.source, resolution)
+        for item, _profile, resolution in landed.values()
+    ]
 
 
 def _authorize(root: Path, component_ids: tuple[str, ...]):
@@ -728,13 +706,13 @@ def _verify_landed(
     at the version actually present, instead of at the one resolved.
     """
     for index, row in enumerate(rows):
-        if row.status != INSTALLED or row.component not in landed:
+        if row.status not in {INSTALLED, PRESENT} or row.component not in landed:
             continue
         item, profile, resolution = landed[row.component]
         if item.source_type is not SourceType.PYPI or item.mcp_server:
             continue
         on_disk = installed_coordinate(root, item, profile)
-        if on_disk is None or on_disk == resolution.version:
+        if on_disk is None or _matches(item, on_disk, {resolution.version or ""}):
             continue
         rows[index] = replace(
             row,
