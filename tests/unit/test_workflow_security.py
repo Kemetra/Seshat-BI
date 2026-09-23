@@ -100,18 +100,25 @@ def _workflows() -> dict[str, dict]:
     }
 
 
+def _checkout_steps() -> list[tuple[str, str, dict]]:
+    """``(workflow, job, step)`` for every actions/checkout step in the repo."""
+    return [
+        (name, job_name, step)
+        for name, workflow in _workflows().items()
+        for job_name, job in workflow.get("jobs", {}).items()
+        for step in job.get("steps", [])
+        if str(step.get("uses", "")).startswith("actions/checkout@")
+    ]
+
+
 def test_every_checkout_drops_the_persisted_token() -> None:
     """PR code and third-party build tooling run after checkout in every job; the
     job token must not sit in .git/config for them to lift."""
-    for name, workflow in _workflows().items():
-        for job_name, job in workflow.get("jobs", {}).items():
-            for step in job.get("steps", []):
-                if str(step.get("uses", "")).startswith("actions/checkout@"):
-                    settings = step.get("with") or {}
-                    assert settings.get("persist-credentials") is False, (
-                        name,
-                        job_name,
-                    )
+    checkouts = _checkout_steps()
+    assert checkouts, "expected at least one checkout step"
+    for name, job_name, step in checkouts:
+        settings = step.get("with") or {}
+        assert settings.get("persist-credentials") is False, (name, job_name)
 
 
 def test_release_prep_token_reaches_only_the_push_and_pr_steps() -> None:
