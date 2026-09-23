@@ -666,6 +666,19 @@ _DIALECTS: dict[str, type] = {
 }
 
 
+# Portable spellings for the contract filter vocabulary. SQL Server has neither a
+# TRUE literal nor `IS TRUE`, so `col = TRUE` / `WHERE TRUE` fail there; its bit
+# columns compare to 1. Module functions (not Protocol methods) so a caller's
+# stand-in dialect needs nothing new -- only `name` is consulted.
+ALWAYS_TRUE = "1 = 1"
+
+
+def true_predicate(dialect: object, quoted_column: str) -> str:
+    """``<col> = TRUE``, or ``<col> = 1`` on SQL Server."""
+    literal = "1" if getattr(dialect, "name", "") == "sqlserver" else "TRUE"
+    return f"{quoted_column} = {literal}"
+
+
 def get_dialect(name: str) -> Dialect:
     """Return the Dialect for ``name`` (postgres|sqlserver|mysql|snowflake)."""
     try:
