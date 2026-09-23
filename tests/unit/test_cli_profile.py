@@ -10,6 +10,7 @@ validate tests).
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -169,8 +170,12 @@ def test_rendered_markdown_round_trips_as_a_drift_baseline(tmp_path) -> None:
 
 
 def test_profile_no_creds_errors_clearly(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
+    # An empty cwd: a developer's own workspace .env must not supply creds.
+    monkeypatch.chdir(tmp_path)
     for var in ("DATABASE_URL", "ANALYTICS_DB_HOST"):
         monkeypatch.delenv(var, raising=False)
 

@@ -333,8 +333,12 @@ def test_validate_with_source_map_runs_live_checks(
 
 
 def test_validate_source_map_no_creds_errors_clearly(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
+    # An empty cwd: a developer's own workspace .env must not supply creds.
+    monkeypatch.chdir(tmp_path)
     # --source-map but NO DSN -> clear actionable error, return 1, never a connect.
     for var in ("DATABASE_URL", "ANALYTICS_DB_HOST"):
         monkeypatch.delenv(var, raising=False)
