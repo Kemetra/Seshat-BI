@@ -83,13 +83,15 @@ def run_subprocess(
     green" contract.
 
     **Deliberately NOT routed through here** -- the dbt/dagster execution runners
-    (``dbt/gate.py``, ``dbt/runner.py``, ``dbt/scaffold/orchestrator.py``,
-    ``dagster_adapter/runner.py``, ``cli/commands/dbt.py``). Those invoke
+    (``dbt/runner.py``, ``dagster_adapter/runner.py``). Those invoke
     user-authored builds that legitimately run longer than ``SUBPROCESS_TIMEOUT``,
-    so a shared cap would abort real work. They are also not reachable from the
-    read-only governor tools, so they do not carry the #557 deadlock. If any of
-    them is ever exposed over stdio, give it ``stdin=DEVNULL`` and a timeout sized
-    to that workload -- do not adopt this helper's cap.
+    so a shared cap would abort real work. The short governance git reads in the
+    dbt area (``dbt/gate.py``, ``dbt/scaffold/orchestrator.py``,
+    ``dbt/profile_guard.py``) DO route here, via ``gitstate.run_git``. The two
+    runners are also not reachable from the read-only governor tools, so they
+    do not carry the #557 deadlock. If either of them is ever exposed over
+    stdio, give it ``stdin=DEVNULL`` and a timeout sized to that workload
+    -- do not adopt this helper's cap.
     """
     kwargs.setdefault("stdin", subprocess.DEVNULL)
     kwargs.setdefault("timeout", SUBPROCESS_TIMEOUT)

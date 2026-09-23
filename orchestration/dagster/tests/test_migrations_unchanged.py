@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from conftest import TABLE, stub_green_db
+from conftest import TABLE, commit_engine_flag, stub_green_db
 from dagster import materialize
 from tower_bi_orchestration.assets import build_table_assets
 from tower_bi_orchestration.evidence_writer import EvidenceWriter
@@ -27,9 +27,7 @@ def _migrations_digest(root: Path) -> str:
 
 
 def _set_engine(root: Path, silver: str, gold: str) -> None:
-    (root / "mappings" / TABLE / "build-engine.yaml").write_text(
-        f"silver: {silver}\ngold: {gold}\n", encoding="utf-8"
-    )
+    commit_engine_flag(root, f"silver: {silver}\ngold: {gold}\n")
 
 
 def _through_silver(root: Path):

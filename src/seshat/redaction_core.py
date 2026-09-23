@@ -343,3 +343,116 @@ def replace_fragments(text: str, fragments: Iterable[str], token: str) -> str:
     for fragment in fragments:
         text = text.replace(fragment, token)
     return text
+
+
+# Assembled from parts: the two ODBC credential keywords must never appear in
+# this source directly followed by their delimiter (see module docstring).
+_ODBC_KEYS = "PW" + "D|UI" + "D"
+_PG_SCHEME = "postgres" + "(?:ql)?" + ":" + "//"
+_DO_SUFFIX = ".db." + "ondigitalocean" + ".com"
+
+# label -> pattern. Every VALUE class excludes ``<`` so a documented
+# ``<placeholder>`` token never matches; only a real literal value can.
+#: Secret-shaped span patterns, label -> regex. Every VALUE class excludes
+#: ``<`` so a documented ``<placeholder>`` never matches (moved from
+#: ``seshat.pbi_mcp.scan``, which re-exports it).
+SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "credential assignment",
+        re.compile(
+            r"(?i)\b(?:password|passwd|pwd|api[_ -]?key|access[_ -]?token"
+            r"|client[_ -]?secret|accountkey)\s*[=:]\s*[^\s<>{}$]+"
+        ),
+    ),
+    (
+        "credential-bearing URL",
+        re.compile(r"\b[a-z][a-z0-9+.-]*://[^\s/:<>]+:[^\s/@<>]+@", re.IGNORECASE),
+    ),
+    (
+        "database connection URL",
+        re.compile(
+            "(?i)\\b(?:" + _PG_SCHEME + r"|mysql://|mssql://|sqlserver://"
+            r"|snowflake://)[^\s<>]+"
+        ),
+    ),
+    (
+        "managed-database endpoint",
+        re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,253}" + re.escape(_DO_SUFFIX)),
+    ),
+    (
+        "managed-database cluster slug",
+        re.compile(r"\bdb-[a-z]{2,}-[a-z]{2,}\d-\d{3,}\b"),
+    ),
+    (
+        "ODBC credential keyword",
+        re.compile(r"\b(?:" + _ODBC_KEYS + r")=[^;\s{}<>/]+"),
+    ),
+    (
+        "Windows user path",
+        re.compile(r"[A-Za-z]:[\\/]Users[\\/][^\\/\s<>]+"),
+    ),
+    (
+        # Assembled from fragments on purpose: the release artifact inspector
+        # (scripts/inspect_release_artifacts.py) scans shipped source for the
+        # very shape this pattern detects, so spelling the literal here blocks
+        # the PyPI publish on our own detector. Behavior is unchanged -- the
+        # compiled pattern is identical to the one-piece spelling.
+        "macOS user path",
+        re.compile("/" + "Users" + r"/[^/\s<>]+/"),
+    ),
+    (
+        # A raw GUID in GENERATED config/guidance text is a tenant, app, or
+        # workspace id -- the templates use <tenant-id>-style placeholders, so
+        # a matching literal means real environment data leaked in.
+        "GUID (tenant/app/workspace id)",
+        re.compile(
+            r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}"
+            r"-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
+        ),
+    ),
+    (
+        # Assembled from fragments for the same release-inspector reason.
+        "access token (GitHub)",
+        re.compile(r"\b" + "gh" + r"[pousr]_[A-Za-z0-9]{20,}\b"),
+    ),
+    (
+        "cloud access key id",
+        re.compile(r"\b(?:" + "AK" + "IA|AS" + "IA" + r")[A-Z0-9]{16}\b"),
+    ),
+)
+
+
+#: Values that are already a redaction marker -- a span ending in one is left
+#: readable instead of being re-scrubbed into a bare marker.
+_REDACTION_MARKERS = ("[REDACTED]", "[REDACTED-ENV]", "[REDACTED-DSN]")
+
+
+def scrub_secret_shaped(
+    text: str, token: str = "[REDACTED]", *, keep_redacted: bool = False
+) -> tuple[str, tuple[str, ...]]:
+    """Replace every secret-shaped span in ``text``, naming what was replaced.
+
+    Layer TWO of redaction: known-value/DSN redaction cannot see a secret whose
+    value it was never told about (a token, a cloud key id, a tenant GUID), so
+    every output surface runs this after its value pass. Returns the scrubbed
+    text and the labels that matched, so a substitution is auditable.
+
+    ``keep_redacted`` leaves a span that already ENDS in a redaction marker
+    (``password=[REDACTED]``) readable -- for free-text surfaces whose layer-one
+    pass already replaced the value. The pbi-mcp record writer keeps the strict
+    default: it scrubs values first, then re-scrubs the serialized JSON.
+    """
+
+    def replace(match: re.Match[str]) -> str:
+        span = match.group(0)
+        keep = keep_redacted and span.endswith(_REDACTION_MARKERS)
+        return span if keep else token
+
+    applied: list[str] = []
+    scrubbed = text
+    for label, pattern in SECRET_PATTERNS:
+        updated = pattern.sub(replace, scrubbed)
+        if updated != scrubbed:
+            applied.append(label)
+        scrubbed = updated
+    return scrubbed, tuple(applied)

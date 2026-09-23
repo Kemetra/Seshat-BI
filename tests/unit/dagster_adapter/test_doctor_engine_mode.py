@@ -10,6 +10,7 @@ FR-015). No numeric score is ever emitted and the DSN is never echoed.
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -53,7 +54,21 @@ def _repo(tmp_path: Path, engines: dict[str, str] | None) -> Path:
     scripts = orch / ".venv" / "Scripts"
     scripts.mkdir(parents=True)
     (scripts / "python.exe").write_text("", encoding="utf-8")
+    # The engine flag counts only once committed (a reviewed change).
+    _commit_fixture(root)
     return root
+
+
+def _commit_fixture(root: Path) -> None:
+    for argv in (
+        ["git", "init", "-b", "main"],
+        ["git", "config", "user.email", "t@example.com"],
+        ["git", "config", "user.name", "Test"],
+        ["git", "config", "commit.gpgsign", "false"],
+        ["git", "add", "-A"],
+        ["git", "commit", "-m", "fixture"],
+    ):
+        subprocess.run(argv, cwd=root, check=True, capture_output=True)
 
 
 @pytest.fixture(autouse=True)

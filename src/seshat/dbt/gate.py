@@ -12,7 +12,8 @@ from typing import Any
 
 import yaml
 
-from seshat.gitutil import GIT_HARDENING
+from seshat.gitstate import is_tracked_and_clean, run_git
+from seshat.unresolved_mirror import parse_mirror
 
 from .contracts import (
     Blocker,
@@ -23,30 +24,11 @@ from .contracts import (
 )
 
 _TABLE_ID = re.compile(r"^[a-z][a-z0-9_]*$")
-_GATE_STATUS = re.compile(
-    r"^[ \t]*(?:[-*>]\s*)?\*{0,2}Gate status:\*{0,2}\s*`?([A-Za-z]+)`?",
-    re.IGNORECASE | re.MULTILINE,
-)
-_QUESTION_ROW = re.compile(r"^\|\s*Q[0-9A-Za-z_-]*\s*\|", re.IGNORECASE)
-_ANSWERED = frozenset({"answered", "resolved", "n/a", "not applicable"})
 
 
 def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    command = [
-        "git",
-        *GIT_HARDENING,
-        "-c",
-        f"safe.directory={repo_root.as_posix()}",
-        *args,
-    ]
-    return subprocess.run(
-        command,
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=False,
-        shell=False,
-    )
+    """One hardened, read-only git call (the shared ``gitstate`` wrapper)."""
+    return run_git(repo_root, *args)
 
 
 def _require_file(path: Path, code: str, label: str) -> None:
@@ -236,26 +218,56 @@ def _approval(rows: Any) -> MappingApproval | None:
 
 
 def _mirror_state(text: str) -> tuple[bool, bool]:
-    statuses = [match.upper() for match in _GATE_STATUS.findall(text)]
-    mirror_cleared = len(statuses) == 1 and statuses[0] == "CLEARED"
-    questions_answered = True
-    for line in text.splitlines():
-        if not _QUESTION_ROW.match(line):
-            continue
-        cells = [
-            cell.strip().strip("`*_ ").lower() for cell in line.strip("|").split("|")
-        ]
-        if len(cells) < 3 or cells[-2] not in _ANSWERED:
-            questions_answered = False
-    return mirror_cleared, questions_answered
+    state = parse_mirror(text)
+    return state.gate_status == "CLEARED", state.open_rows == 0
 
 
-def _read_readiness(working_set: WorkingSet) -> tuple[dict[str, Any] | None, str]:
+def _relative(working_set: WorkingSet, path: Path) -> str:
+    return path.relative_to(working_set.repo_root).as_posix()
+
+
+def _committed_blob(working_set: WorkingSet, path: Path) -> str | None:
+    """The HEAD text of a governed file, or None when it is not committed.
+
+    The gate trusts only audited state: an untracked or dirty readiness record
+    or mirror never entered history, so it can never unlock the gate. The
+    content parsed is the committed blob, never the worktree bytes."""
+    relative = _relative(working_set, path)
+    if not is_tracked_and_clean(working_set.repo_root, relative):
+        return None
+    shown = _git(working_set.repo_root, "show", f"HEAD:{relative}")
+    return shown.stdout if shown.returncode == 0 else None
+
+
+def committed_sha256(working_set: WorkingSet, path: Path) -> str | None:
+    """SHA-256 of a governed file's committed blob, or None if not committed."""
+    text = _committed_blob(working_set, path)
+    if text is None:
+        return None
+    return hashlib.sha256(text.encode("utf-8", "surrogateescape")).hexdigest()
+
+
+def _uncommitted(working_set: WorkingSet) -> GateDecision:
+    return GateDecision(
+        allowed=False,
+        table_id=working_set.table_id,
+        mapping_status="uncommitted",
+        approval=None,
+        mirror_cleared=False,
+        blocking_reasons=(
+            Blocker(
+                "DBT_MAPPING_UNCOMMITTED",
+                "readiness status and the unresolved-question mirror must be "
+                "committed and clean before dbt may trust them",
+            ),
+        ),
+    )
+
+
+def _read_readiness(text: str) -> tuple[dict[str, Any] | None, str]:
     try:
-        document = yaml.safe_load(
-            working_set.readiness_status.read_text(encoding="utf-8")
-        )
-    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        document = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
         return None, f"readiness status is not valid YAML: {exc.__class__.__name__}"
     if not isinstance(document, dict):
         return None, "readiness status must be a YAML mapping"
@@ -280,14 +292,6 @@ def _mapping_status(document: dict[str, Any]) -> str:
         mapping.get("status", "missing") if isinstance(mapping, dict) else "missing"
     )
     return status if isinstance(status, str) else "invalid"
-
-
-def _read_mirror(working_set: WorkingSet) -> tuple[bool, bool]:
-    try:
-        text = working_set.unresolved_questions.read_text(encoding="utf-8")
-    except (OSError, UnicodeError):
-        return False, False
-    return _mirror_state(text)
 
 
 def _gate_blockers(
@@ -330,14 +334,18 @@ def _gate_blockers(
 
 
 def evaluate_mapping_gate(working_set: WorkingSet) -> GateDecision:
-    """Read Mapping Ready and its mirror without changing either artifact."""
+    """Read the COMMITTED Mapping Ready state and mirror; change neither."""
 
-    document, error = _read_readiness(working_set)
+    readiness_text = _committed_blob(working_set, working_set.readiness_status)
+    mirror_text = _committed_blob(working_set, working_set.unresolved_questions)
+    if readiness_text is None or mirror_text is None:
+        return _uncommitted(working_set)
+    document, error = _read_readiness(readiness_text)
     if document is None:
         return _invalid_readiness(working_set, error)
     mapping_status = _mapping_status(document)
     approval = _approval(document.get("approvals"))
-    mirror_cleared, questions_answered = _read_mirror(working_set)
+    mirror_cleared, questions_answered = _mirror_state(mirror_text)
     blockers = _gate_blockers(
         mapping_status, approval, mirror_cleared, questions_answered
     )

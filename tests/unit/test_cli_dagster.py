@@ -202,6 +202,33 @@ class TestDoctorLoadsDotenv:
         assert seen["ANALYTICS_DB_HOST"] == "child.example"
         assert seen["UNRELATED_REVIEW_SECRET"] is None
 
+    @pytest.mark.parametrize("table", ["Demo_Table", "demo_tabel"])
+    def test_run_refuses_an_unmapped_table_before_launching(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys,
+        _no_dsn: None,
+        table: str,
+    ) -> None:
+        from seshat.cli.commands.dagster import dagster_main
+        from seshat.dagster_adapter import doctor, runner
+
+        root = _green_repo(tmp_path)
+        monkeypatch.setattr(doctor, "run_doctor", lambda r: [])
+
+        def must_not_launch(*args, **kwargs):
+            raise AssertionError("child must not launch for an unmapped table")
+
+        monkeypatch.setattr(runner, "execute_run", must_not_launch)
+        code = dagster_main(
+            _args(
+                dagster_cmd="run", repo=str(root), job="full_sequence_job", table=table
+            )
+        )
+        assert code == 2
+        assert "not a mapped table" in capsys.readouterr().err
+
     def test_exception_redacts_dotenv_secret_before_overlay_teardown(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys, _no_dsn: None
     ) -> None:

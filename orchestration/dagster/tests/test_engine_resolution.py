@@ -13,15 +13,14 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import commit_engine_flag
 from tower_bi_orchestration.engine import resolve_build_engine
 
 TABLE = "demo_table"
 
 
 def _write_engine_file(root: Path, body: str) -> None:
-    table_dir = root / "mappings" / TABLE
-    table_dir.mkdir(parents=True, exist_ok=True)
-    (table_dir / "build-engine.yaml").write_text(body, encoding="utf-8")
+    commit_engine_flag(root, body, TABLE)
 
 
 @pytest.mark.parametrize("layer", ["silver", "gold"])
@@ -99,4 +98,12 @@ def test_resolution_never_leaks_the_path_on_a_broken_file(tmp_path: Path) -> Non
     secret_dir.mkdir(parents=True)
     (secret_dir / "build-engine.yaml").write_text("silver: dbt\n\t: broken\n")
     # Must return a value (not raise); the fail-closed default on malformed input.
+    assert resolve_build_engine(tmp_path, TABLE, "silver") == "migrations"
+
+
+def test_uncommitted_dbt_flag_fails_closed_to_migrations(tmp_path: Path) -> None:
+    commit_engine_flag(tmp_path, "silver: migrations\ngold: migrations\n", TABLE)
+    (tmp_path / "mappings" / TABLE / "build-engine.yaml").write_text(
+        "silver: dbt\ngold: dbt\n", encoding="utf-8"
+    )
     assert resolve_build_engine(tmp_path, TABLE, "silver") == "migrations"

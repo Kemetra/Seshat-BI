@@ -287,10 +287,22 @@ class EvidenceWriter:
         ]
 
 
-def _skip_outcome(asset: str, table: str, halted_upstream: dict | None) -> AssetOutcome:
+_UNRUN_TABLE_REASON = (
+    "no asset recorded anything for this table -- the child did not run it "
+    "(check the --table name against the mapped tables)"
+)
+
+
+def _skip_outcome(
+    asset: str, table: str, halted_upstream: dict | None, unrun: bool = False
+) -> AssetOutcome:
     """The back-filled ``skipped`` record for an asset a STOP edge prevented
-    from running -- cites the first halted upstream asset + its named owner."""
-    if halted_upstream is None:
+    from running -- cites the first halted upstream asset + its named owner.
+    ``unrun`` marks a table for which no asset recorded anything at all."""
+    if unrun:
+        reason = _UNRUN_TABLE_REASON
+        owner = "orchestration owner"
+    elif halted_upstream is None:
         reason = "not selected / run ended before this asset"
         owner = "orchestration owner"
     else:
@@ -312,26 +324,35 @@ def _skip_outcome(asset: str, table: str, halted_upstream: dict | None) -> Asset
     )
 
 
-def _backfill_skipped(writer: EvidenceWriter, tables: list[str]) -> None:
+def _backfill_skipped(writer: EvidenceWriter, tables: list[str]) -> list[str]:
+    """Back-fill every missing asset; return the tables that recorded NOTHING.
+
+    A table with zero real records never ran -- a clean child exit over an
+    empty selection must not read as a succeeded run (the caller fails it)."""
     by_table: dict[str, dict[str, dict]] = {}
     for row in writer.records():
         by_table.setdefault(row["table"], {})[row["asset"]] = row
+    unrun: list[str] = []
     for table in tables:
         rows = by_table.get(table, {})
+        if not rows:
+            unrun.append(table)
         halted_upstream: dict | None = None
         for asset in ASSET_ORDER:
             row = rows.get(asset)
             if row is None:
-                writer.record(_skip_outcome(asset, table, halted_upstream))
+                writer.record(_skip_outcome(asset, table, halted_upstream, not rows))
             elif row["outcome"] in {"failed", "blocked"}:
                 halted_upstream = halted_upstream or row
+    return unrun
 
 
 def finalize_run(root: Path, run_id: str, tables: list[str], meta: RunMeta) -> dict:
     """Back-fill ``skipped`` records and atomically bind their evidence summary.
 
-    Computes ``run_status``: failed when anything failed or blocked (the CI
-    signal), else succeeded. A skipped back-fill is what the committed evidence
+    Computes ``run_status``: failed when anything failed or blocked, when the
+    child exited non-zero, or when any table in scope recorded no asset at all
+    (the CI signal), else succeeded. A skipped back-fill is what the committed evidence
     table must show for a STOP-edge halt (US1/US3). The summary records the
     exact raw-record digest plus safely contained, tracked inputs; none of these
     execution facts decides a readiness state or human approval.
@@ -339,12 +360,13 @@ def finalize_run(root: Path, run_id: str, tables: list[str], meta: RunMeta) -> d
     if not tables:
         raise ValueError("cannot finalize a Dagster run without mapped tables")
     writer = EvidenceWriter(root, run_id)
-    _backfill_skipped(writer, tables)
+    unrun = _backfill_skipped(writer, tables)
     halted = any(row["outcome"] in {"failed", "blocked"} for row in writer.records())
     # Fail closed on the CHILD's exit too: a run whose process died before
     # recording anything must never read as succeeded (review finding, spec
-    # 024 FR-013 -- the failed run status is the CI signal).
-    halted = halted or meta.child_failed
+    # 024 FR-013 -- the failed run status is the CI signal). A table with no
+    # real record at all never ran, whatever the exit code says.
+    halted = halted or meta.child_failed or bool(unrun)
     summary = {
         "run_id": run_id,
         "commit_sha": commit_sha(root),

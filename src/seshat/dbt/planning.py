@@ -44,7 +44,12 @@ from seshat.dbt.contracts import (
     WorkingSet,
 )
 from seshat.dbt.fact_semantics import load_fact_semantics
-from seshat.dbt.gate import evaluate_mapping_gate, resolve_working_set
+from seshat.dbt.gate import (
+    committed_sha256,
+    evaluate_mapping_gate,
+    resolve_working_set,
+)
+from seshat.dbt.profile_guard import verify_runtime_profile
 from seshat.dbt.project import validate_project
 from seshat.dbt.redaction import load_child_environment
 from seshat.dbt.runner import build_dbt_argv, target_lock
@@ -629,13 +634,13 @@ def resolve_selected_ids(
     return tuple(sorted(ids))
 
 
-def _sha256(path: Path) -> str:
-    try:
-        return hashlib.sha256(path.read_bytes()).hexdigest()
-    except OSError as exc:
-        raise ArtifactIntegrityError(
-            f"governance input is unavailable: {path.name}"
-        ) from exc
+def _committed_digest(working_set: WorkingSet, path: Path) -> str:
+    """Bind a governance input to its COMMITTED blob -- the exact bytes the
+    Mapping Ready gate parsed -- never to worktree bytes read later."""
+    digest = committed_sha256(working_set, path)
+    if digest is None:
+        raise ArtifactIntegrityError(f"governance input is not committed: {path.name}")
+    return digest
 
 
 def _run_id() -> str:
@@ -778,8 +783,12 @@ def _build_plan(context: _PlanBuildContext) -> ExecutionPlan:
             path=mapping_path,
             git_blob=working_set.source_map_revision,
             sha256=working_set.source_map_sha256,
-            readiness_sha256=_sha256(working_set.readiness_status),
-            unresolved_questions_sha256=_sha256(working_set.unresolved_questions),
+            readiness_sha256=_committed_digest(
+                working_set, working_set.readiness_status
+            ),
+            unresolved_questions_sha256=_committed_digest(
+                working_set, working_set.unresolved_questions
+            ),
             approval_id=context.approval.approval_id,
         ),
         fact=context.fact,
@@ -806,6 +815,7 @@ def create_plan(repo_root: Path, table_id: str, runner: DbtRunner) -> ExecutionP
 
     root = Path(repo_root).resolve()
     working_set, approval = _approved_mapping(root, table_id)
+    verify_runtime_profile(root)
     fact = load_fact_semantics(working_set.source_map)
     environment = load_child_environment(root)
     target_schema = environment.get("SESHAT_DBT_SCHEMA") or None

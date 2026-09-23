@@ -97,6 +97,10 @@ class _WorkspaceSignals:
     # The categorical `.mcp.json` verdict from pbi_mcp.detect, NOT a bool:
     # `absent` / `unparseable` do not evidence Power BI adoption.
     mcp_config: str = "absent"
+    # Tables whose readiness-status.yaml could not be parsed. They still count
+    # toward table_count (a broken file is a table, not an absence) and are
+    # surfaced in the output so the result degrades loudly.
+    unreadable_tables: tuple[str, ...] = ()
 
     @property
     def all_tables_gold(self) -> bool:
@@ -174,6 +178,8 @@ def _is_gold_ready(data: dict) -> bool:
     never-fabricate posture): it returns False. Every committed/template readiness
     record carries a ``stages`` block, so this only ever undercounts a malformed
     record toward "consider orchestration" -- never a false "you don't need it".
+    An UNPARSEABLE file never reaches here: ``_read_signals`` still counts it
+    toward ``table_count`` and reports it in ``unreadable_tables``.
     """
     stages = data.get("stages")
     if not isinstance(stages, dict):
@@ -186,17 +192,19 @@ def _read_signals(root: Path) -> _WorkspaceSignals:
     mappings_dir = root / "mappings"
     table_count = 0
     gold_ready_count = 0
+    unreadable: list[str] = []
     if mappings_dir.is_dir():
         for status_path in sorted(mappings_dir.glob("*/readiness-status.yaml")):
+            table_count += 1  # a malformed file is still a table
             data = _load_yaml_mapping(status_path)
             if data is None:
-                continue  # malformed -> skipped, not fatal
-            table_count += 1
-            if _is_gold_ready(data):
+                unreadable.append(status_path.parent.name)  # reported, not fatal
+            elif _is_gold_ready(data):
                 gold_ready_count += 1
     return _WorkspaceSignals(
         table_count=table_count,
         gold_ready_count=gold_ready_count,
+        unreadable_tables=tuple(unreadable),
         dbt_present=root.joinpath(*_DBT_PROJECT_MARKER).is_file(),
         dagster_present=root.joinpath(*_DAGSTER_PROJECT_MARKER).is_file(),
         pbip_present=_has_semantic_model(root),
@@ -416,6 +424,22 @@ def _recommended_action(
     """One plain-language headline. Strongly asserts the derivable
     "neither needed" case (the C086 case) with a concrete revisit trigger; stays
     a recommendation, never a decision, everywhere else."""
+    headline = _headline(s, dbt, dagster, pbi_mcp)
+    if not s.unreadable_tables:
+        return headline
+    return (
+        "Unreadable readiness-status.yaml for "
+        f"{', '.join(s.unreadable_tables)} -- fix it before trusting this "
+        f"assessment. {headline}"
+    )
+
+
+def _headline(
+    s: _WorkspaceSignals,
+    dbt: _AdapterAssessment,
+    dagster: _AdapterAssessment,
+    pbi_mcp: _AdapterAssessment | None,
+) -> str:
     pbi_advised = pbi_mcp is not None and pbi_mcp.recommendation == _CONSIDER
     if s.table_count == 0 and not pbi_advised:
         return (
@@ -467,6 +491,7 @@ def build_orchestration_assessment(repo_root: Path | str = ".") -> dict:
     return {
         "table_count": signals.table_count,
         "gold_ready_count": signals.gold_ready_count,
+        "unreadable_tables": list(signals.unreadable_tables),
         "decision_owner": "human",
         "recommendation": {
             "dbt": dbt.recommendation,
