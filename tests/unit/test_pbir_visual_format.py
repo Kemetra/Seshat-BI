@@ -191,3 +191,18 @@ def test_non_ascii_title_is_written_verbatim(tmp_path: Path) -> None:
     raw = vj.read_text(encoding="utf-8")
     assert arabic in raw
     assert "\\u0645" not in raw  # not ASCII-escaped
+
+
+def test_force_never_overwrites_a_nested_field_value_colour(tmp_path: Path) -> None:
+    """Field-value colours nest the binding: fill.solid.color.expr.Measure."""
+    vj = _copy(tmp_path)
+    doc = json.loads(vj.read_text(encoding="utf-8"))
+    fill = {"solid": {"color": _MEASURE_TITLE}}
+    doc["visual"].setdefault("objects", {})["dataPoint"] = [
+        {"properties": {"fill": fill}}
+    ]
+    vj.write_text(json.dumps(doc), encoding="utf-8")
+    before = vj.read_text(encoding="utf-8")
+    with pytest.raises(PbirFormatError, match="data binding"):
+        apply_visual_format(vj, {"objects": {"dataPoint": {"fill": "x"}}}, force=True)
+    assert vj.read_text(encoding="utf-8") == before

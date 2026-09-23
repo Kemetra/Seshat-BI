@@ -155,11 +155,19 @@ class _SetCtx(NamedTuple):
 
 
 def _is_data_binding(existing: object) -> bool:
-    """True when ``existing`` is an ``expr`` that is not a plain Literal."""
+    """True when ``existing`` holds, at ANY depth, an ``expr`` that is not a Literal.
+
+    Recursive because field-value colours nest the binding
+    (``fill.solid.color.expr.Measure``), not only a top-level ``expr``.
+    """
+    if isinstance(existing, list):
+        return any(_is_data_binding(item) for item in existing)
     if not isinstance(existing, dict):
         return False
     expr = existing.get("expr")
-    return isinstance(expr, dict) and set(expr) != {"Literal"}
+    if isinstance(expr, dict) and set(expr) != {"Literal"}:
+        return True
+    return any(_is_data_binding(value) for value in existing.values())
 
 
 def _set_property(props_bag: dict, prop: str, value: object, ctx: _SetCtx) -> None:
