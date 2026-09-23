@@ -101,8 +101,9 @@ class Pack:
 
 # Fixed worst-status severity ordering for the compact CI/PR summary
 # (data-model.md section 5). A mechanical, reversible convention -- NOT a
-# business-rule judgment. Higher rank = "worse". An unrecognized token ranks at
-# least as severe as "warning" so it is never silently hidden.
+# business-rule judgment. Higher rank = "worse". An unrecognized token (e.g. a
+# hand-typed "Blocked") fails CLOSED: it ranks with "blocked", so it is never
+# hidden behind a warning section with its blocking reasons dropped.
 _STATUS_SEVERITY_ORDER: dict[str, int] = {
     "blocked": 4,
     "warning": 3,
@@ -111,11 +112,11 @@ _STATUS_SEVERITY_ORDER: dict[str, int] = {
     "pass": 0,
     "not_applicable": 0,
 }
-_UNRECOGNIZED_RANK = 2  # between warning(3) and pending(1); data-model.md section 5
+_UNRECOGNIZED_RANK = 4  # fail closed, level with blocked (was 2: below warning)
 
 
 def _rank(status: str) -> int:
-    """Severity rank for the worst-status pick; unrecognized tokens get rank 2."""
+    """Severity rank for the worst-status pick; unrecognized tokens rank as blocked."""
     return _STATUS_SEVERITY_ORDER.get(status, _UNRECOGNIZED_RANK)
 
 
