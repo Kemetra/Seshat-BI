@@ -189,8 +189,9 @@ jobs:
         # core. Fails loud (exit 1) when a compass projection -- .seshat/compass.yaml
         # or the fenced SESHAT-KIT regions of AGENTS.md/CLAUDE.md -- drifts from the
         # canonical source (i.e. someone edited the source but forgot `retail init`).
-        # Read-only; reads no constitution. On an un-bootstrapped repo it exits 0.
-        run: retail kit-lint --repo .
+        # Read-only; reads no constitution. --require-bootstrapped: this repo IS
+        # bootstrapped, so a missing kit source fails instead of exiting 0.
+        run: retail kit-lint --repo . --require-bootstrapped
 
   contract-surfaces:
     # Default lane for every credential-free test that has no specialized marker.

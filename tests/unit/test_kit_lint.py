@@ -126,6 +126,33 @@ def test_lint_is_read_only(tmp_path) -> None:
     assert before == after  # no file created, deleted, or modified
 
 
+def test_deleted_projection_with_source_present_is_drift(tmp_path) -> None:
+    # Deleting the file under check is drift, not "not bootstrapped": only an
+    # absent SOURCE means there is nothing to lint.
+    repo = _bootstrap(tmp_path)
+    (repo / ".seshat/compass.yaml").unlink()
+    report = kit_lint.lint(repo)
+    assert report.bootstrapped is True
+    assert not report.ok
+    yaml_check = next(r for r in report.results if r.name == "yaml_projection")
+    assert not yaml_check.ok
+
+
+def test_require_bootstrapped_flag_fails_an_unbootstrapped_repo(
+    tmp_path, capsys
+) -> None:
+    from seshat.cli.commands.kit_lint import run_kit_lint
+    from seshat.cli.parser import _build_parser
+
+    lax = _build_parser().parse_args(["kit-lint", "--repo", str(tmp_path)])
+    assert run_kit_lint(lax) == 0
+    strict = _build_parser().parse_args(
+        ["kit-lint", "--repo", str(tmp_path), "--require-bootstrapped"]
+    )
+    assert run_kit_lint(strict) == 1
+    assert "not bootstrapped" in capsys.readouterr().out
+
+
 def test_dogfood_this_repo_substrate_lints_clean() -> None:
     # SC-004: the committed .seshat/ + fenced regions on this branch are consistent.
     report = kit_lint.lint(REPO_ROOT)
