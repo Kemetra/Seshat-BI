@@ -55,10 +55,10 @@ def looks_like_workspace(candidate: Path) -> bool:
     return any((candidate / marker).is_dir() for marker in _markers())
 
 
-def _describe(candidate: Path) -> str:
+def _describe(candidate: Path, markers: tuple[str, ...] | None = None) -> str:
     return (
         f"{candidate} is not a Seshat workspace: none of "
-        f"{', '.join(_markers())} is present. Run `seshat init-project` (or "
+        f"{', '.join(markers or _markers())} is present. Run `seshat init-project` (or "
         "`seshat init`) there, or pass `--repo <workspace>` explicitly. The governor "
         "does not fall back to the working directory, because reporting readiness "
         "for the wrong tree is worse than refusing."
@@ -99,7 +99,9 @@ def _discovered(start: Path | None) -> Path:
     for candidate in (origin, *origin.parents):
         if _is_identified_workspace(candidate):
             return candidate
-    raise WorkspaceRootError(_describe(origin))
+    # Name the markers discovery actually requires: a generic `reports/` may well
+    # be present, and listing it as missing would mislead.
+    raise WorkspaceRootError(_describe(origin, _identity_markers()))
 
 
 def resolve_workspace_root(

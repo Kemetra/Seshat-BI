@@ -290,7 +290,7 @@ def _render_file_result(
     finding = (
         f"**Ragged rows:** {ragged:,} of {result.row_count:,} data rows did not "
         "match the header width and were padded/truncated to it -- a delimiter "
-        "or quoting mismatch; this stage cannot pass until the source is fixed."
+        "or quoting mismatch; Source Ready should not be passed until it is fixed."
         if ragged
         else "**Ragged rows:** 0 (every data row matched the header width)."
     )

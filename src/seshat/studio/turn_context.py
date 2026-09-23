@@ -5,7 +5,7 @@ currently sends only the analyst's prompt in `turn/start` (no workspace context,
 business-approval reminder). Everything below describes the intended contract of the
 context once a caller is added -- it is not a guarantee the shipped bridge honours
 today. Wiring it (and an integration test asserting `BUSINESS_APPROVAL_REMINDER`
-reaches the provider frame) is tracked as audit F136 / issue #740.
+reaches the provider frame) is tracked as audit finding F136.
 
 What Studio tells the agent about the workspace before a turn. The Turn Context
 Contract fixes both halves of this: the facts every request carries, and the values

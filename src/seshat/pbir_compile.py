@@ -4,7 +4,7 @@
 module calls this compiler (only its tests do), so the gates below protect nothing
 a user can reach today: report creation is not an exposed capability. Wiring it
 behind an explicit verb with a capability-inventory entry -- or moving it out of
-the shipped package -- is an owner decision recorded against audit F226 / #740.
+the shipped package -- is an owner decision (audit finding F226).
 
 Orchestrates the FOUR shipped authoring adapters (theme/format/background/geometry
 -- ``pbir_theme_apply.py`` / ``pbir_visual_format.py`` / ``pbir_page_background.py``
