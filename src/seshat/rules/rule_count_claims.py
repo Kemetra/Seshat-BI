@@ -32,6 +32,7 @@ SC2 is:
 
 from __future__ import annotations
 
+import re
 from typing import Iterable
 
 from ..core import Finding, RuleContext, RuleTier, Severity, read_tracked_text
@@ -55,6 +56,32 @@ SC2_REPORTS_ABSENCE = ReportsItsOwnAbsence(
 _MANIFEST = "docs/quality/rule-count-claims.yaml"
 _COUNT_SOURCE = "docs/rules/rules-manifest.json"
 _REQUIRED_FIELDS = ("id", "doc", "anchor", "claimed-count")
+
+
+# The "<N> rules" count written inside an anchor sentence.
+_ANCHOR_COUNT_RE = re.compile(r"\b(\d+)\s+rules\b")
+
+
+def _anchor_count_finding(
+    cid: object, doc: object, anchor: str, claimed: int
+) -> Finding | None:
+    """An SC2 ERROR when the anchor's prose count is absent or != ``claimed``."""
+    loc = f"{_MANIFEST}:{cid}"
+    match = _ANCHOR_COUNT_RE.search(anchor)
+    if match is None:
+        return _finding(
+            f"claim {cid!r} anchor states no '<N> rules' count, so SC2 cannot "
+            f"verify the prose in {doc!r}",
+            loc,
+        )
+    stated = int(match.group(1))
+    if stated == claimed:
+        return None
+    return _finding(
+        f"claim {cid!r} anchor in {doc!r} states {stated} rules but its "
+        f"claimed-count is {claimed}; update the prose and the manifest together",
+        loc,
+    )
 
 
 def _finding(message: str, locator: str) -> Finding:
@@ -217,6 +244,13 @@ def check_rule_count_claims(ctx: RuleContext) -> Iterable[Finding]:
                     f"{_MANIFEST}:{cid}",
                 )
             )
+            continue
+
+        # 4e'. the number WRITTEN in the anchored prose must equal claimed-count,
+        #      so bumping only the manifest integer cannot hide a stale sentence.
+        prose_finding = _anchor_count_finding(cid, doc, anchor, claimed)
+        if prose_finding is not None:
+            findings.append(prose_finding)
             continue
 
         # 4f. the comparison: claimed count must equal the authoritative count.
