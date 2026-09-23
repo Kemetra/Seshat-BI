@@ -381,3 +381,78 @@ def test_a_malformed_tools_list_reply_raises_rather_than_reading_as_empty():
     sess.handshake()
     with pytest.raises(session.SessionError):
         sess.list_tools()
+
+
+# --------------------------------------------------------------------------
+# Teardown kills the whole process TREE, not just the direct child
+# --------------------------------------------------------------------------
+
+
+def _pid_alive(pid: int) -> bool:
+    """Liveness without signalling: ``os.kill(pid, 0)`` TERMINATES on win32."""
+    if sys.platform == "win32":
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel32.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE
+        if not handle:
+            return False
+        try:
+            return kernel32.WaitForSingleObject(handle, 0) == 0x00000102  # TIMEOUT
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def _force_kill(pid: int) -> None:
+    import signal
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except OSError:
+        pass
+
+
+def test_terminate_kills_the_grandchild_too(tmp_path: Path) -> None:
+    """``npx`` is a shim: on win32 the direct child is ``cmd.exe`` and the
+    vendor is its grandchild. Terminating only the direct child left the
+    vendor running -- and able to finish a flush -- after the run reported
+    itself aborted."""
+    pid_file = tmp_path / "grandchild.pid"
+    grandchild = "import os,time,pathlib;" + (
+        f"pathlib.Path({str(pid_file)!r}).write_text(str(os.getpid()));time.sleep(60)"
+    )
+    parent = tmp_path / "parent.py"
+    parent.write_text(
+        chr(10).join(
+            [
+                "import subprocess, sys, time",
+                f"subprocess.Popen([sys.executable, '-c', {grandchild!r}])",
+                "time.sleep(60)",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    transport = session.SubprocessTransport(
+        [sys.executable, "-u", str(parent)], tmp_path, _child_env()
+    )
+    pid = None
+    try:
+        deadline = time.monotonic() + 30
+        while not pid_file.is_file() or not pid_file.read_text().strip():
+            assert time.monotonic() < deadline, "grandchild never started"
+            time.sleep(0.1)
+        pid = int(pid_file.read_text())
+        transport.terminate()
+        deadline = time.monotonic() + 10
+        while _pid_alive(pid) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert not _pid_alive(pid), "the grandchild survived teardown"
+    finally:
+        transport.terminate()
+        if pid is not None and _pid_alive(pid):
+            _force_kill(pid)

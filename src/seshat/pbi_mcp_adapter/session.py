@@ -21,9 +21,12 @@ public registry; if something else answers, refuse rather than issue writes to i
 
 from __future__ import annotations
 
+import os
 import queue
 import shutil
+import signal
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -295,6 +298,7 @@ class SubprocessTransport:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             shell=False,
+            **_tree_spawn_options(),
         )
         self._readers = [
             threading.Thread(target=self._pump_stdout, daemon=True),
@@ -369,6 +373,10 @@ class SubprocessTransport:
                 self._proc.stdin.close()
         except (OSError, ValueError):  # pragma: no cover - best-effort teardown
             pass
+        # The TREE first, while the direct child still exists: `npx` is a
+        # shim (`npx.cmd` -> cmd.exe on win32), so the vendor is a grandchild,
+        # and once the direct child is gone there is nothing left to walk.
+        _kill_tree(self._proc.pid)
         try:
             self._proc.terminate()
             self._proc.wait(timeout=10)
@@ -382,3 +390,44 @@ class SubprocessTransport:
     def stderr_text(self) -> str:
         """The drained stderr so far. Safe to call while the child is live."""
         return b"".join(self._stderr_parts).decode("utf-8", errors="replace")
+
+
+#: Bound on the win32 tree kill. `taskkill` returns in milliseconds normally.
+_TREE_KILL_TIMEOUT_SECONDS = 15
+
+
+def _tree_spawn_options() -> dict[str, object]:
+    """Spawn the child as the root of its own group, so its tree can be killed.
+
+    POSIX: a new session makes the child's pid the process-group id, which
+    ``os.killpg`` then reaches. win32: a new process group keeps console
+    signals aimed at us from reaching the vendor, and ``taskkill /T`` walks the
+    tree from the child's pid.
+    """
+    if sys.platform == "win32":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def _kill_tree(pid: int) -> None:
+    """Kill ``pid`` AND its descendants. Best effort, never raises.
+
+    ``Popen.terminate`` reaches only the direct child. On a stall that left the
+    vendor grandchild running, it could still finish a flush into the model
+    folder after the run was recorded as aborted and the operator had rolled
+    back -- silently undoing the rollback.
+    """
+    try:
+        if sys.platform == "win32":
+            subprocess.run(  # noqa: S603, S607 - fixed argv, no shell
+                ["taskkill", "/T", "/F", "/PID", str(pid)],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                timeout=_TREE_KILL_TIMEOUT_SECONDS,
+                check=False,
+                shell=False,
+            )
+        else:
+            os.killpg(pid, signal.SIGKILL)
+    except (OSError, subprocess.SubprocessError):  # pragma: no cover
+        pass
