@@ -139,6 +139,13 @@ class PreflightResult:
     capabilities_verified: bool = False
 
 
+#: Readiness blocker ids, with the SAME meaning as the write gate's exported
+#: constants (``pbi_mcp_adapter.gate``). Literals rather than an import so this
+#: read-only module does not load the write adapter; a test pins the equality.
+BLOCKER_STAGE_NOT_PASS = "PBIMCP-GATE-01"
+BLOCKER_STAGE_UNREADABLE = "PBIMCP-GATE-02"
+
+
 def _config_blockers(repo_root: Path) -> list[PreflightBlocker]:
     state = classify_project_mcp_configs(Path(repo_root))
     if state == CONFIG_FORBIDDEN_FLAG:
@@ -186,7 +193,7 @@ def _target_readiness_blockers(repo_root: Path, target: str) -> list[PreflightBl
     if status == READINESS_MISSING:
         return [
             PreflightBlocker(
-                id="PBIMCP-GATE-03",
+                id=BLOCKER_STAGE_UNREADABLE,
                 detail=(
                     f"declared target '{target}' has no readiness record at "
                     f"mappings/{target}/readiness-status.yaml -- an "
@@ -197,7 +204,7 @@ def _target_readiness_blockers(repo_root: Path, target: str) -> list[PreflightBl
         ]
     return [
         PreflightBlocker(
-            id="PBIMCP-GATE-02",
+            id=BLOCKER_STAGE_NOT_PASS,
             detail=(
                 f"declared target '{target}' records semantic_model_ready "
                 f"'{status}' -- blocked fail-closed for THIS target (the gate, "
@@ -218,7 +225,7 @@ def _readiness_blockers(
         return []
     return [
         PreflightBlocker(
-            id="PBIMCP-GATE-01",
+            id=BLOCKER_STAGE_NOT_PASS,
             detail=(
                 f"semantic_model_ready gate is '{status}' -- no table "
                 "records a pass, so the preflight is blocked fail-closed "
