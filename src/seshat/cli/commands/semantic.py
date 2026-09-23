@@ -141,6 +141,10 @@ def run_semantic_check(args: argparse.Namespace) -> int:
                         dax=measure.expression,
                         locator=locator,
                         definition=contract.definition,
+                        binding={
+                            "gold_table": contract.gold_table,
+                            "columns": list(contract.columns),
+                        },
                     )
                 )
 

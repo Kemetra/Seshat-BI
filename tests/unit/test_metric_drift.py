@@ -471,6 +471,7 @@ def test_kind_ratio_without_additive_treated_nonadditive() -> None:
     """
     no_additive_def = {
         "kind": "ratio",
+        "numerator": DEF_DISCOUNTED["numerator"],
         "denominator": {
             "aggregation": "count_rows",
             "filter": [{"column": "discount_applied", "op": "is_not_null"}],
@@ -647,4 +648,112 @@ def test_calculate_measure_true_noop_denominator_still_escalates() -> None:
     }
     dax = "DIVIDE([TotalSales], CALCULATE([TransactionCount], TRUE()))"
     v = check_measure_drift(dax, defn)
+    assert v.status == "escalate", v
+
+
+# --- #734: base operand and ratio numerator are verified, never silently passed --
+
+DEF_BASE_NET_SALES = {
+    "kind": "base",
+    "aggregation": "sum",
+    "source": {"table": "gold.fct_sales", "column": "net_amount"},
+}
+
+
+def test_base_wrong_column_does_not_pass() -> None:
+    """SUM of a DIFFERENT column than the contract source computes another KPI."""
+    v = check_measure_drift(
+        "SUM('gold fct_sales'[discount_amount])", DEF_BASE_NET_SALES
+    )
+    assert v.status == "drift", v
+
+
+def test_base_wrong_table_does_not_pass() -> None:
+    v = check_measure_drift("SUM('gold fct_other'[net_amount])", DEF_BASE_NET_SALES)
+    assert v.status == "drift", v
+
+
+def test_base_wrong_column_inside_calculate_does_not_pass() -> None:
+    defn = {
+        **DEF_BASE_NET_SALES,
+        "filter": [{"column": "net_amount", "op": "is_not_null"}],
+    }
+    dax = (
+        "CALCULATE(SUM('gold fct_sales'[discount_amount]), "
+        "NOT(ISBLANK('gold fct_sales'[net_amount])))"
+    )
+    assert check_measure_drift(dax, defn).status == "drift"
+
+
+def test_base_without_any_operand_source_escalates() -> None:
+    """No `source` and no binding: the operand cannot be verified -> escalate."""
+    defn = {"kind": "base", "aggregation": "sum", "filter": []}
+    v = check_measure_drift("SUM('gold fct_sales'[net_amount])", defn)
+    assert v.status == "escalate", v
+
+
+def test_base_operand_falls_back_to_binds_to() -> None:
+    """Committed contracts carry the operand in `binds_to`, not `definition.source`."""
+    defn = {"kind": "base", "aggregation": "sum", "filter": []}
+    binding = {"gold_table": "gold.fct_sales", "columns": ["net_amount"]}
+    ok = check_measure_drift("SUM('gold fct_sales'[net_amount])", defn, binding)
+    bad = check_measure_drift("SUM('gold fct_sales'[discount_amount])", defn, binding)
+    assert ok.status == "pass", ok
+    assert bad.status == "drift", bad
+
+
+def test_base_count_rows_binds_to_is_table_only() -> None:
+    """count_rows aggregates the table: a listed identity column is not the operand."""
+    defn = {"kind": "base", "aggregation": "count_rows", "filter": []}
+    binding = {"gold_table": "gold.fct_sales_rss", "columns": ["transaction_id"]}
+    v = check_measure_drift("COUNTROWS('gold fct_sales_rss')", defn, binding)
+    assert v.status == "pass", v
+
+
+def test_base_binds_to_with_several_columns_escalates() -> None:
+    defn = {"kind": "base", "aggregation": "sum", "filter": []}
+    binding = {"gold_table": "gold.fct_sales", "columns": ["net_amount", "tax"]}
+    v = check_measure_drift("SUM('gold fct_sales'[net_amount])", defn, binding)
+    assert v.status == "escalate", v
+
+
+def test_ratio_numerator_missing_its_filter_does_not_pass() -> None:
+    """DIVIDE(COUNTROWS(t), COUNTROWS(t)) always returns 100% -- never a pass."""
+    defn = {
+        "kind": "ratio",
+        "additive": False,
+        "numerator": {
+            "aggregation": "count_rows",
+            "filter": [{"column": "discount_applied", "op": "is_true"}],
+        },
+        "denominator": {"aggregation": "count_rows", "filter": []},
+    }
+    dax = "DIVIDE(COUNTROWS('gold fct_sales'), COUNTROWS('gold fct_sales'))"
+    assert check_measure_drift(dax, defn).status != "pass"
+    with_source = {
+        **defn,
+        "numerator": {**defn["numerator"], "source": {"table": "gold.fct_sales"}},
+        "denominator": {**defn["denominator"], "source": {"table": "gold.fct_sales"}},
+    }
+    assert check_measure_drift(dax, with_source).status == "drift"
+
+
+def test_ratio_numerator_measure_ref_filter_drift() -> None:
+    """A measure-ref numerator whose filter-set differs from the contract is drift."""
+    dax = (
+        "DIVIDE([TransactionCount], CALCULATE([TransactionCount], "
+        "NOT(ISBLANK('gold fct_sales_rss'[discount_applied]))))"
+    )
+    assert check_measure_drift(dax, DEF_DISCOUNTED).status == "drift"
+
+
+def test_ratio_without_numerator_contract_escalates() -> None:
+    defn = {
+        "additive": False,
+        "denominator": {
+            "aggregation": "count_rows",
+            "filter": [{"column": "discount_applied", "op": "is_not_null"}],
+        },
+    }
+    v = check_measure_drift(DAX_DISCOUNTED, defn)
     assert v.status == "escalate", v
