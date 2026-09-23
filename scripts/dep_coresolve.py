@@ -859,6 +859,16 @@ def run_check(manifest_path: Path) -> int:
     co-occurring network blip).
     """
     manifest = load_manifest(manifest_path)
+    if not manifest.environments:
+        # An absent, renamed (`envs:`) or emptied `environments:` section would
+        # otherwise resolve ZERO targets and report "exit 0 (ok)" -- the gate
+        # silently off on every PR. Zero environments is a manifest error.
+        print(
+            f"[CONFIG] {manifest_path.name}: no `environments:` declared; "
+            "the co-resolution gate would check nothing"
+        )
+        print(f"\n0 target(s) resolved; exit {EXIT_CONFIG} (config)")
+        return EXIT_CONFIG
     results: list[ResolveResult] = []
     for env in manifest.environments:
         result = resolve_environment(manifest, env)
