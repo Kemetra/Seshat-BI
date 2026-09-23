@@ -70,16 +70,33 @@ class _CommittedReader:
             # The SHARED hardening tuple, never a local re-listing: naming
             # core.fsmonitor alone leaves hooksPath and protocol.ext live on a tree
             # this process did not author.
-            ["git", *gitutil.GIT_HARDENING, "show", f"HEAD:{relative}"],
+            # `HEAD:./` -- resolved from this root like every other probe, not from
+            # the repository toplevel.
+            [
+                "git",
+                *gitutil.GIT_HARDENING,
+                "show",
+                gitutil.committed_ref("HEAD", relative),
+            ],
             cwd=self._root,
             # run_subprocess sets stdin and timeout but NOT capture_output. Without
             # this, stdout is empty and EVERY committed decision looks absent.
             capture_output=True,
+            # UTF-8, never the locale codec: decision answers are stored as raw
+            # UTF-8 (`allow_unicode=True`). Under cp1252 an Arabic byte raised inside
+            # subprocess's reader thread, stdout came back None, and every committed
+            # decision silently read as absent (issue #663 class).
             text=True,
+            encoding="utf-8",
+            errors="strict",
         )
         if getattr(result, "returncode", 1) != 0:
             return None
-        return getattr(result, "stdout", "") or None
+        stdout = getattr(result, "stdout", "")
+        if stdout is None:
+            # rc 0 with no captured text is a decode/capture failure, not absence.
+            raise RuntimeError(f"committed {relative} could not be decoded as UTF-8")
+        return stdout or None
 
 
 def _working_tree_decisions(root: Path, relative: str) -> list[dict[str, Any]]:

@@ -48,7 +48,7 @@ from typing import Any, NamedTuple
 
 import yaml
 
-from .gitstate import run_git
+from .git_worktree import blob_id, blob_ids
 
 SCHEMA_LITERAL = "seshat.narrative-brief/v1"
 BINDING_MAP_SCHEMA_LITERAL = "seshat.binding-map/v1"
@@ -388,14 +388,24 @@ def _grounded_measure_ids(data: dict[str, Any]) -> set[str]:
 # --------------------------------------------------------------------------- #
 
 
-def _blob_sha(repo_root: Path, contract_path: Path) -> str | None:
-    """The git blob sha of the contract's CURRENT content, via the hardened
-    read-only probe. None when git is unavailable or the file is missing --
-    the caller treats an unverifiable revision as a finding, never a pass."""
-    if not contract_path.is_file():
-        return None
-    result = run_git(repo_root, "hash-object", str(contract_path))
-    return result.stdout.strip() if result.returncode == 0 else None
+def _blob_ids(repo_root: Path, contract_path: Path) -> frozenset[str]:
+    """The git blob ids the contract's CURRENT content may be recorded under.
+
+    Hashed in Python (``git_worktree.blob_ids``), never by ``git hash-object``,
+    which runs the tree's own attribute-selected content filters. Both the raw
+    and the CRLF->LF normalized id are returned, so a Windows autocrlf checkout
+    still matches the id ``git hash-object`` recorded; SHA-1 and SHA-256 ids are
+    both offered. Empty when the file is missing or unreadable -- the caller
+    treats an unverifiable revision as a finding, never a pass.
+    """
+    del repo_root  # the id is a pure function of the bytes
+    try:
+        data = contract_path.read_bytes() if contract_path.is_file() else None
+    except OSError:
+        data = None
+    if data is None:
+        return frozenset()
+    return blob_ids(data, "sha1") | blob_ids(data, "sha256")
 
 
 def _check_contract_revisions(
@@ -415,8 +425,8 @@ def _check_contract_revisions(
         # ships no `contracts/` dir, so resolving there fail-closed EVERY real
         # brief on `stale_contract_revision: cannot be located`.
         contract_path = repo_root / "mappings" / table / "metrics" / f"{cid}.yaml"
-        actual = _blob_sha(repo_root, contract_path)
-        if actual is None:
+        actual = _blob_ids(repo_root, contract_path)
+        if not actual:
             findings.append(
                 NarrativeFinding(
                     "stale_contract_revision",
@@ -425,13 +435,14 @@ def _check_contract_revisions(
                     f"{contract_path} to verify its revision (fail closed)",
                 )
             )
-        elif str(declared) != actual:
+        elif str(declared) not in actual:
             findings.append(
                 NarrativeFinding(
                     "stale_contract_revision",
                     str(cid),
                     f"contract {cid!r} revision in the brief ({declared}) does "
-                    f"not match the committed contract's current blob ({actual}) "
+                    f"not match the committed contract's current blob "
+                    f"({blob_id(contract_path.read_bytes())}) "
                     f"-- the citation is STALE",
                 )
             )

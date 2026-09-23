@@ -28,9 +28,17 @@ _GIT_NOT_A_REPO = 128
 # status/check-ignore/ls-files) or `core.hooksPath` executes in the analyst's
 # shell -- arbitrary code execution from merely assessing a project.
 # `safe.directory` does NOT help: the victim owns the extracted files, so the
-# dubious-ownership block never fires. These flags neutralize the config-driven
-# exec vectors at the shared git wrapper and are a harmless no-op on a trusted
-# repo (fsmonitor is only an optimization).
+# dubious-ownership block never fires. These flags neutralize the FIXED-KEY
+# config-driven exec vectors at the shared git wrapper and are a harmless no-op on
+# a trusted repo (fsmonitor is only an optimization).
+#
+# What they do NOT cover: attribute-selected content filters and diff drivers
+# (`filter.<name>.clean/process`, `diff.<name>.textconv`, `diff.external`). The
+# driver name is chosen by the tree's `.gitattributes`, so there is no fixed key
+# to override. Any git command that compares WORKTREE content -- `status`,
+# `diff [<rev>] -- <path>`, `add`, a plain `hash-object` -- can run them. Against
+# a possibly-externally-authored tree, use `seshat.git_worktree` (index, tree and
+# object reads only; the worktree is hashed in Python) instead of those commands.
 #
 # THE single definition: every module that shells out to git against a
 # possibly-externally-authored tree imports `GIT_HARDENING` from here. It was
@@ -106,6 +114,44 @@ def validate_commit_range(range_expr: str) -> str:
     if not isinstance(range_expr, str) or not _SAFE_RANGE_RE.match(range_expr):
         raise ValueError(f"unsafe git commit range: {range_expr!r}")
     return range_expr
+
+
+def committed_ref(rev: str, relative: str) -> str:
+    """``<rev>:./<relative>`` -- a committed path resolved from the git CWD.
+
+    A bare ``<rev>:<path>`` is resolved from the repository TOPLEVEL, while
+    pathspecs (``ls-files``, ``ls-tree``, ``diff -- <path>``) are resolved from the
+    cwd. When the governed root is a subdirectory of the toplevel the two forms
+    name different files, so a probe that verified one file would read another.
+    The ``./`` prefix puts both in the same frame.
+    """
+    return f"{rev}:./{relative.lstrip('/')}"
+
+
+def list_paths(repo_root: Path, *args: str) -> tuple[str, ...]:
+    """Run a path-listing git command with ``-z`` and return the paths.
+
+    Without ``-z`` git C-quotes any non-ASCII path (``"caf\\303\\251.sql"``), so a
+    caller splitting lines gets a string that neither matches a glob nor opens.
+    Decoded as UTF-8 with ``surrogateescape`` (lossless) rather than ``replace``.
+    """
+    # `-z` directly after the subcommand: appended last it would land after a
+    # caller's `--` and be read as a pathspec.
+    result = run_subprocess(
+        ["git", *_GIT_HARDENING, "-C", str(repo_root), *args[:1], "-z", *args[1:]],
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        stderr = (result.stderr or b"").decode("utf-8", errors="replace").strip()
+        raise RuntimeError(
+            f"git {' '.join(args)} failed ({result.returncode}): "
+            f"{stderr[:_STDERR_LIMIT]}"
+        )
+    return tuple(
+        raw.decode("utf-8", errors="surrogateescape")
+        for raw in result.stdout.split(b"\0")
+        if raw
+    )
 
 
 def git_output(repo_root: Path, *args: str) -> str:

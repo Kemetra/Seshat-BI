@@ -248,17 +248,14 @@ def _probe_tree_clean(repo_root: Path) -> bool | None:
     here rather than relying on ``.gitignore`` is deliberate -- a user's own
     project will not carry this repo's ignore rules.
     """
-    from seshat.gitstate import run_git
+    from seshat.git_worktree import worktree_status
     from seshat.pbi_mcp_adapter.evidence import ARTIFACT_RELPATH, HISTORY_RELPATH
 
-    try:
-        # `--untracked-files=all` is required: the default collapses untracked
-        # files into their directory (`?? .seshat/`), so an exact-path exclusion
-        # would never match and every run would read as dirty.
-        status = run_git(repo_root, "status", "--porcelain", "--untracked-files=all")
-    except (OSError, RuntimeError):
-        return None
-    if status.returncode != 0:
+    # Filter-free (`git_worktree`), not `git status`: the target project may be a
+    # tree this process did not author, and `status` runs its content filters.
+    # Untracked files are listed individually, so an exact-path exclusion works.
+    status = worktree_status(repo_root)
+    if status is None:
         return None
     # BOTH of the adapter's own artifacts (issue #657). Excluding only the
     # latest-run file made the append-only history read as a foreign untracked
@@ -269,11 +266,7 @@ def _probe_tree_clean(repo_root: Path) -> bool | None:
         ARTIFACT_RELPATH.replace("\\", "/"),
         HISTORY_RELPATH.replace("\\", "/"),
     }
-    for line in status.stdout.splitlines():
-        entry = line[3:].strip().strip('"').replace("\\", "/")
-        if entry and entry not in ours:
-            return False
-    return True
+    return all(entry in ours for entry in status.paths)
 
 
 def _write_leg_payload(report) -> dict[str, object]:
