@@ -909,7 +909,7 @@ def _approvals_dimension_finding(
     items = tuple(
         DimensionItem(
             class_=i["issue"],
-            subject_locator=i["stage"],
+            subject_locator=i["stage"] or i["source_path"],
             measured=i["detail"],
             owner=i["required_authority"],
             principle_v=False,

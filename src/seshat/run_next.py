@@ -23,30 +23,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-_STAGE_ORDER: tuple[str, ...] = (
-    "source_ready",
-    "mapping_ready",
-    "silver_ready",
-    "gold_ready",
-    "semantic_model_ready",
-    "dashboard_ready",
-    "publish_ready",
+from seshat.readiness_spine import (
+    STAGE_ORDER as _STAGE_ORDER,
 )
+from seshat.readiness_spine import (
+    approval_required,
+    required_authority,
+    stage_approval_valid,
+    status_path_candidates,
+)
+
 _STATUS_VALUES: frozenset[str] = frozenset(
     {"not_started", "blocked", "warning", "pass"}
 )
-_APPROVAL_REQUIRED: frozenset[str] = frozenset(
-    {"mapping_ready", "semantic_model_ready", "dashboard_ready", "publish_ready"}
-)
-_FILE_SOURCE_KINDS: frozenset[str] = frozenset({"csv", "tsv", "excel"})
-
-_AUTHORITY_BY_STAGE: dict[str, str] = {
-    "source_ready": "data_owner",
-    "mapping_ready": "analyst",
-    "semantic_model_ready": "metric_owner",
-    "dashboard_ready": "governance",
-    "publish_ready": "data_owner",
-}
 
 # The action shown when NO readiness file exists at all -- an unstarted journey.
 # Kept distinct from the source_ready action below: emitting "No readiness file
@@ -107,55 +96,18 @@ def _as_str_list(value: object) -> list[str]:
     return [item for item in value if isinstance(item, str)]
 
 
-def _valid_owner(owner: object) -> bool:
-    """Use RS1's named-human approval shape so run-next agrees with the gate."""
-    from seshat.rules.readiness_status import _owner_is_valid
-
-    return _owner_is_valid(owner)
-
-
-def _source_kind(stage_block: object) -> str | None:
-    from seshat.rules.readiness_status import _source_kind
-
-    return _source_kind(stage_block)
-
-
 def _approved_stages(approvals: object) -> set[str]:
-    """Stages satisfied by a shape-valid approval -- one shared definition.
-
-    Delegates to ``readiness_status.approval_is_shape_valid`` so this surface
-    cannot drift from the gate rule or from the approval inbox (issue #487).
+    """Stages satisfied by an eligible, shape-valid approval -- one shared
+    definition (``readiness_spine.stage_approval_valid``), so this surface cannot
+    drift from the gate rule or from the approval inbox (issue #487, audit F005).
     """
-    from seshat.rules.readiness_status import approval_is_shape_valid
-
     if not isinstance(approvals, list):
         return set()
-    return {item.get("stage") for item in approvals if approval_is_shape_valid(item)}
-
-
-def _table_candidate_names(table: str) -> list[str]:
-    normalized = table.strip().replace("\\", "/").strip("/")
-    names = [normalized, normalized.rsplit(".", 1)[-1]]
-    unique: list[str] = []
-    for name in names:
-        if _candidate_needs_append(name, unique):
-            unique.append(name)
-    return unique
-
-
-def _candidate_needs_append(name: str, existing: list[str]) -> bool:
-    if not name:
-        return False
-    if "/" in name:
-        return False
-    return name not in existing
-
-
-def _status_path_candidates(root: Path, table: str) -> list[Path]:
-    return [
-        root / "mappings" / name / "readiness-status.yaml"
-        for name in _table_candidate_names(table)
-    ]
+    return {
+        item.get("stage")
+        for item in approvals
+        if isinstance(item, dict) and stage_approval_valid(item.get("stage"), item)
+    }
 
 
 def _load_yaml_mapping(path: Path) -> tuple[dict[str, Any] | None, str | None]:
@@ -190,7 +142,7 @@ def _find_status_data(
 def _direct_status_data(
     root: Path, table: str
 ) -> tuple[Path | None, dict[str, Any] | None, str | None]:
-    for candidate in _status_path_candidates(root, table):
+    for candidate in status_path_candidates(root, table):
         if candidate.is_file():
             data, error = _load_yaml_mapping(candidate)
             return candidate, data, error
@@ -293,20 +245,6 @@ def _add_dual_blocked_caveat(
             }
         )
     return response
-
-
-def _stage_requires_source_approval(stage_name: str, block: dict[str, Any]) -> bool:
-    return stage_name == "source_ready" and _source_kind(block) in _FILE_SOURCE_KINDS
-
-
-def _approval_required_for_stage(stage_name: str, block: dict[str, Any]) -> bool:
-    return stage_name in _APPROVAL_REQUIRED or _stage_requires_source_approval(
-        stage_name, block
-    )
-
-
-def _authority_for(stage_name: str) -> str:
-    return _AUTHORITY_BY_STAGE.get(stage_name, "data_owner")
 
 
 def _response_table(table: str, data: dict[str, Any]) -> str:
@@ -547,9 +485,7 @@ def _next_action_response(
 def _approval_missing(
     stage_name: str, block: dict[str, Any], approved: set[str]
 ) -> bool:
-    return (
-        _approval_required_for_stage(stage_name, block) and stage_name not in approved
-    )
+    return approval_required(stage_name, block) and stage_name not in approved
 
 
 def _pass_stage_result(
@@ -571,7 +507,7 @@ def _pass_stage_result(
         return None
     from seshat.rules.readiness_status import APPROVAL_SHAPE_HINT
 
-    authority = _authority_for(stage_name)
+    authority = required_authority(stage_name)
     # Without action_text the default `next --table X` text surface printed no
     # guidance line at all -- the reporter's quoted advice only ever appeared
     # under --format agent (issue #487).

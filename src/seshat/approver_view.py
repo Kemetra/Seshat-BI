@@ -18,24 +18,19 @@ Scope wall:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
 from .readiness_classify import classify, rank_of
+from .readiness_spine import (
+    STAGE_ORDER,
+    approval_required,
+    load_status_mapping,
+    stage_approval_valid,
+    stage_has_valid_approval,
+)
 
-_STAGE_ORDER: tuple[str, ...] = (
-    "source_ready",
-    "mapping_ready",
-    "silver_ready",
-    "gold_ready",
-    "semantic_model_ready",
-    "dashboard_ready",
-    "publish_ready",
-)
-_APPROVAL_REQUIRED: frozenset[str] = frozenset(
-    {"mapping_ready", "semantic_model_ready", "dashboard_ready", "publish_ready"}
-)
-_FILE_SOURCE_KINDS: frozenset[str] = frozenset({"csv", "tsv", "excel"})
 # unresolved-questions "Who must answer" -> refutation category (Clarification Q2).
 # By the COMMITTED owner column, never by scanning free-text question prose.
 _GOVERNANCE_OWNERS: frozenset[str] = frozenset(
@@ -43,53 +38,10 @@ _GOVERNANCE_OWNERS: frozenset[str] = frozenset(
 )
 
 
-def _load_yaml_mapping(path: Path) -> dict[str, Any] | None:
-    """Load a YAML mapping; None on any read/parse failure (blocker_explainer idiom)."""
-    import yaml
-
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
-    except (OSError, UnicodeDecodeError, yaml.YAMLError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    return data
-
-
 def _as_str_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, str)]
-
-
-def _valid_owner(owner: object) -> bool:
-    from seshat.rules.readiness_status import _owner_is_valid
-
-    return _owner_is_valid(owner)
-
-
-def _source_kind(block: object) -> str | None:
-    from seshat.rules.readiness_status import _source_kind as _sk
-
-    return _sk(block)
-
-
-def _approval_required(stage: str, block: dict[str, Any]) -> bool:
-    if stage in _APPROVAL_REQUIRED:
-        return True
-    return stage == "source_ready" and _source_kind(block) in _FILE_SOURCE_KINDS
-
-
-def _has_valid_approval(data: dict[str, Any], stage: str) -> bool:
-    approvals = data.get("approvals")
-    if not isinstance(approvals, list):
-        return False
-    return any(
-        isinstance(item, dict)
-        and item.get("stage") == stage
-        and _valid_owner(item.get("owner"))
-        for item in approvals
-    )
 
 
 def _refutation_item(source: str, category: str, reason: str, **extra: str) -> dict:
@@ -123,8 +75,8 @@ def _unmet_approval_item(
     """A refusal item when an approval-requiring stage is pass but unapproved."""
     is_unmet = (
         block.get("status") == "pass"
-        and _approval_required(stage, block)
-        and not _has_valid_approval(data, stage)
+        and approval_required(stage, block)
+        and not stage_has_valid_approval(data.get("approvals"), stage)
     )
     if not is_unmet:
         return None
@@ -142,7 +94,7 @@ def _stage_refusals(data: dict[str, Any], source_path: str) -> list[dict[str, An
     if not isinstance(stages, dict):
         return []
     items: list[dict[str, Any]] = []
-    for stage in _STAGE_ORDER:
+    for stage in STAGE_ORDER:
         block = stages.get(stage)
         if not isinstance(block, dict):
             continue
@@ -161,20 +113,48 @@ def _question_category(owner: str) -> str:
     return classify(owner)[0]
 
 
+def _ruled_question_ids(data: dict[str, Any]) -> set[str]:
+    """Question ids a committed, eligible approvals[] note names as a whole token."""
+    notes = [
+        a["note"]
+        for a in data.get("approvals") or []
+        if isinstance(a, dict)
+        and isinstance(a.get("note"), str)
+        and stage_approval_valid(a.get("stage"), a)
+    ]
+    return {tok for note in notes for tok in re.findall(r"[A-Za-z0-9_.-]+", note)}
+
+
+def _question_reason(row: dict[str, str], ruled: set[str]) -> str | None:
+    """None when the row is settled; else the text a signer must weigh.
+
+    A Status cell saying ``answered`` is free markdown (the forgeable one-token
+    trust PR #516 was reverted over), so it hides the row only when a committed
+    approval names the question id; otherwise the row stays in the refusal case,
+    labelled unverified (audit F080)."""
+    question = row.get("question", "")
+    if row.get("status", "").strip().lower() != "answered":
+        return question
+    if row.get("id", "") in ruled:
+        return None
+    return f"self-reported answered (unverified -- no approval names it): {question}"
+
+
 def _open_question_refusals(
-    rows: list[dict[str, str]], source_path: str
+    rows: list[dict[str, str]], source_path: str, data: dict[str, Any]
 ) -> list[dict[str, Any]]:
+    ruled = _ruled_question_ids(data)
     items: list[dict[str, Any]] = []
     for row in rows:
-        if row.get("status", "").strip().lower() == "answered":
+        reason = _question_reason(row, ruled)
+        if reason is None:
             continue
         owner = row.get("owner", "")
-        question = row.get("question", "")
         items.append(
             _refutation_item(
                 f"{source_path} question {row.get('id', '?')}",
                 _question_category(owner),
-                question,
+                reason,
                 owner=owner,
             )
         )
@@ -189,7 +169,7 @@ def _pass_stage_reassurance(
         return []
     return [
         {"kind": "pass_stage", "detail": stage, "source": source_path}
-        for stage in _STAGE_ORDER
+        for stage in STAGE_ORDER
         if isinstance(stages.get(stage), dict) and stages[stage].get("status") == "pass"
     ]
 
@@ -207,7 +187,7 @@ def _approval_reassurance(
             "source": f"{source_path} approvals[]",
         }
         for a in approvals
-        if isinstance(a, dict) and _valid_owner(a.get("owner"))
+        if isinstance(a, dict) and stage_approval_valid(a.get("stage"), a)
     ]
 
 
@@ -259,7 +239,7 @@ def build_approver_view(repo_root: Path | str, table: str) -> dict[str, Any]:
     questions_rel = f"mappings/{table}/unresolved-questions.md"
 
     missing: list[str] = []
-    data = _load_yaml_mapping(tdir / "readiness-status.yaml")
+    data = load_status_mapping(tdir / "readiness-status.yaml")
     if data is None:
         missing.append(status_rel)
         data = {}
@@ -273,7 +253,9 @@ def build_approver_view(repo_root: Path | str, table: str) -> dict[str, Any]:
 
     refusal = _stage_refusals(data, status_rel)
     if q_text is not None:
-        refusal += _open_question_refusals(_parse_open_questions(q_text), questions_rel)
+        refusal += _open_question_refusals(
+            _parse_open_questions(q_text), questions_rel, data
+        )
     # stable, deterministic: fixed enum rank, then lexical tie-break (no computed value)
     refusal.sort(key=lambda i: (i["rank"], i["source"], i["reason"]))
 

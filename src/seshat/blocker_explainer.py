@@ -12,68 +12,23 @@ from typing import Any
 # byte-identical output.
 from .readiness_classify import classify as _classify
 from .readiness_classify import remediation_of as _remediation_of
-
-_STAGE_ORDER: tuple[str, ...] = (
-    "source_ready",
-    "mapping_ready",
-    "silver_ready",
-    "gold_ready",
-    "semantic_model_ready",
-    "dashboard_ready",
-    "publish_ready",
+from .readiness_spine import (
+    STAGE_ORDER,
+    approval_required,
+    load_status_mapping,
+    stage_has_valid_approval,
 )
-_APPROVAL_REQUIRED: frozenset[str] = frozenset(
-    {"mapping_ready", "semantic_model_ready", "dashboard_ready", "publish_ready"}
+
+UNREADABLE_REASON = (
+    "readiness-status.yaml is unreadable or not a mapping; its blockers cannot be "
+    "established (this is NOT the same as 'nothing blocking')"
 )
-_FILE_SOURCE_KINDS: frozenset[str] = frozenset({"csv", "tsv", "excel"})
-
-
-def _load_yaml_mapping(path: Path) -> dict[str, Any] | None:
-    import yaml
-
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
-    except (OSError, UnicodeDecodeError, yaml.YAMLError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    return data
 
 
 def _as_str_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, str)]
-
-
-def _valid_owner(owner: object) -> bool:
-    from seshat.rules.readiness_status import _owner_is_valid
-
-    return _owner_is_valid(owner)
-
-
-def _source_kind(stage_block: object) -> str | None:
-    from seshat.rules.readiness_status import _source_kind
-
-    return _source_kind(stage_block)
-
-
-def _approval_required(stage: str, block: dict[str, Any]) -> bool:
-    if stage in _APPROVAL_REQUIRED:
-        return True
-    return stage == "source_ready" and _source_kind(block) in _FILE_SOURCE_KINDS
-
-
-def _has_valid_approval(data: dict[str, Any], stage: str) -> bool:
-    approvals = data.get("approvals")
-    if not isinstance(approvals, list):
-        return False
-    return any(
-        isinstance(item, dict)
-        and item.get("stage") == stage
-        and _valid_owner(item.get("owner"))
-        for item in approvals
-    )
 
 
 def _item(table: str, source_path: str, stage: str, reason: str) -> dict[str, str]:
@@ -123,9 +78,9 @@ def _approval_item(
 ) -> dict[str, str] | None:
     if not isinstance(block, dict):
         return None
-    if block.get("status") != "pass" or not _approval_required(stage, block):
+    if block.get("status") != "pass" or not approval_required(stage, block):
         return None
-    if _has_valid_approval(context["data"], stage):
+    if stage_has_valid_approval(context["data"].get("approvals"), stage):
         return None
     return _item(
         context["table"],
@@ -166,7 +121,7 @@ def _items_for_status(
 
     context = {"data": data, "table": table, "source_path": source_path}
     items: list[dict[str, str]] = []
-    for stage in _STAGE_ORDER:
+    for stage in STAGE_ORDER:
         block = stages.get(stage)
         if isinstance(block, dict):
             items.extend(_stage_items(table, source_path, stage, block))
@@ -178,10 +133,13 @@ def _items_for_status(
 
 
 def _items_from_status_path(root: Path, status_path: Path) -> list[dict[str, str]]:
-    data = _load_yaml_mapping(status_path)
-    if data is None:
-        return []
     source_path = status_path.relative_to(root).as_posix()
+    data = load_status_mapping(status_path)
+    if data is None:
+        # A corrupt file used to vanish, reading as a table with nothing blocking
+        # (audit F074); report it as an explicit, unclassified blocker instead.
+        name = status_path.parent.name
+        return [_item(name, source_path, "unknown", UNREADABLE_REASON)]
     return _items_for_status(data, source_path, status_path.parent.name)
 
 

@@ -29,6 +29,7 @@ import pytest
 
 from seshat import db_provenance, db_provenance_reader, run_next
 from seshat.dialect import get_dialect
+from seshat.readiness_spine import APPROVAL_REQUIRED, required_authority
 
 # A worked identity: the writer connected here, so the reader must agree.
 _HOST = "db-postgresql-fra1-12345.b.db.example.com"
@@ -88,9 +89,9 @@ def _repo(
     )
     approvals = "\n".join(
         f'  - stage: "{name}"\n'
-        f'    owner: "Dana Owner (data_owner)"\n'
+        f'    owner: "Dana Owner ({required_authority(name)})"\n'
         f'    at: "2026-07-01"'
-        for name in sorted(run_next._APPROVAL_REQUIRED)
+        for name in sorted(APPROVAL_REQUIRED)
     )
     (mapping / "readiness-status.yaml").write_text(
         f'table: "{table}"\n'

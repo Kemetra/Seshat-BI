@@ -10,6 +10,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .readiness_spine import (
+    load_status_mapping,
+    stage_valid_approval,
+    status_path_candidates,
+)
+
 _SECTIONS: tuple[dict[str, Any], ...] = (
     {
         "id": "01",
@@ -35,6 +41,7 @@ _SECTIONS: tuple[dict[str, Any], ...] = (
         "id": "05",
         "name": "validation-summary",
         "sources": ("readiness-status.yaml", "reconciliation-report.md"),
+        "stage": "gold_ready",
     },
     {
         "id": "06",
@@ -65,47 +72,10 @@ _SECTIONS: tuple[dict[str, Any], ...] = (
 )
 
 
-def _load_yaml_mapping(path: Path) -> dict[str, Any] | None:
-    import yaml
-
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
-    except (OSError, UnicodeDecodeError, yaml.YAMLError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    return data
-
-
-def _table_candidate_names(table: str) -> list[str]:
-    normalized = table.strip().replace("\\", "/").strip("/")
-    names = [normalized, normalized.rsplit(".", 1)[-1]]
-    unique: list[str] = []
-    for name in names:
-        if _candidate_needs_append(name, unique):
-            unique.append(name)
-    return unique
-
-
-def _candidate_needs_append(name: str, existing: list[str]) -> bool:
-    if not name:
-        return False
-    if "/" in name:
-        return False
-    return name not in existing
-
-
-def _status_path_candidates(root: Path, table: str) -> list[Path]:
-    return [
-        root / "mappings" / name / "readiness-status.yaml"
-        for name in _table_candidate_names(table)
-    ]
-
-
 def _direct_status(root: Path, table: str) -> tuple[Path | None, dict[str, Any] | None]:
-    for candidate in _status_path_candidates(root, table):
+    for candidate in status_path_candidates(root, table):
         if candidate.is_file():
-            return candidate, _load_yaml_mapping(candidate)
+            return candidate, load_status_mapping(candidate)
     return None, None
 
 
@@ -129,7 +99,7 @@ def _matching_status_by_identity(
     mappings_dir: Path, table: str
 ) -> tuple[Path | None, dict[str, Any] | None]:
     for status_path in sorted(mappings_dir.glob("*/readiness-status.yaml")):
-        data = _load_yaml_mapping(status_path)
+        data = load_status_mapping(status_path)
         if _matches_status_identity(status_path, data, table):
             return status_path, data
     return None, None
@@ -181,13 +151,30 @@ def _source_status(root: Path, base: Path, pattern: str) -> tuple[list[str], lis
     return evidence, blockers
 
 
-def _build_section(root: Path, base: Path, spec: dict[str, Any]) -> dict[str, Any]:
+def _stage_gate_blockers(data: dict[str, Any], stage: str | None) -> list[str]:
+    """Blockers when a section's declared readiness stage has not passed.
+
+    File presence alone used to report 'semantic-model-summary: pass' for a table
+    whose semantic stage was not_started (audit F076)."""
+    if stage is None:
+        return []
+    block = _stage_block(data, stage)
+    if block["status"] == "pass":
+        return []
+    reasons = [str(r) for r in block["blocking_reasons"] if r]
+    return [f"stage {stage!r} is {block['status']!r}, not 'pass'", *reasons]
+
+
+def _build_section(
+    root: Path, base: Path, spec: dict[str, Any], data: dict[str, Any]
+) -> dict[str, Any]:
     evidence: list[str] = []
     blockers: list[str] = []
     for pattern in spec["sources"]:
         found, missing = _source_status(root, base, pattern)
         evidence.extend(found)
         blockers.extend(missing)
+    blockers.extend(_stage_gate_blockers(data, spec.get("stage")))
     return {
         "id": spec["id"],
         "name": spec["name"],
@@ -198,24 +185,15 @@ def _build_section(root: Path, base: Path, spec: dict[str, Any]) -> dict[str, An
     }
 
 
-def _valid_owner(owner: object) -> bool:
-    from seshat.rules.readiness_status import _owner_is_valid
-
-    return _owner_is_valid(owner)
-
-
 def _approval_for(data: dict[str, Any], stage: str) -> dict[str, str] | None:
-    approvals = data.get("approvals")
-    if not isinstance(approvals, list):
+    """The eligible, shape-valid approval of ``stage`` (the one shared predicate).
+
+    ``isinstance(at, str)`` used to reject a real YAML date literal and accept
+    ``at: TBD`` (audit F015); the shared predicate parses the ISO date."""
+    item = stage_valid_approval(data.get("approvals"), stage)
+    if item is None:
         return None
-    for item in approvals:
-        if not isinstance(item, dict) or item.get("stage") != stage:
-            continue
-        owner = item.get("owner")
-        at = item.get("at")
-        if _valid_owner(owner) and isinstance(at, str):
-            return {"owner": owner, "at": at}
-    return None
+    return {"owner": str(item["owner"]), "at": str(item["at"])}
 
 
 def _stage_block(data: dict[str, Any], stage: str) -> dict[str, Any]:
@@ -278,7 +256,9 @@ def _pack_response(
     data: dict[str, Any],
     table: str,
 ) -> dict[str, Any]:
-    sections = [_build_section(root, status_path.parent, spec) for spec in _SECTIONS]
+    sections = [
+        _build_section(root, status_path.parent, spec, data) for spec in _SECTIONS
+    ]
     publish_ready = _stage_block(data, "publish_ready")
     publish_ready["approval"] = _approval_for(data, "publish_ready")
 
