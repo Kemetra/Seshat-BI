@@ -78,6 +78,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
@@ -104,6 +106,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
@@ -118,19 +122,6 @@ jobs:
           path: |
             freshness-report.json
             freshness-report.md
-      - name: Advisory PR comment (opt-in, off by default)
-        # OFF BY DEFAULT (mirrors the ci.yml POST_FRIENDLY_PR_SUMMARY pattern):
-        # a repository that has not set the repo-level Actions variable
-        # POST_DEP_FRESHNESS_COMMENT to "true" sees NO comment posted. The
-        # comment is advisory only and NEVER merge-blocking (FR-011). It is
-        # posted only when a freshness run coincides with an open PR context;
-        # on the weekly schedule there is no PR to comment on, so this step is
-        # a no-op there.
-        if: >-
-          vars.POST_DEP_FRESHNESS_COMMENT == 'true' &&
-          github.event_name == 'workflow_dispatch'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "Freshness comment posting is opt-in and advisory only."
-          echo "See freshness-report.md (uploaded as an artifact) for the proposals."
+      # The report is delivered ONLY as the artifact above. There is no PR
+      # comment step: this job runs on schedule/workflow_dispatch, which have no
+      # PR context, and its token is contents: read (it could not comment).

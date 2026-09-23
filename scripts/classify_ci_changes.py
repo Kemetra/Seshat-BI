@@ -1,9 +1,10 @@
 """Classify changed paths into CI verification depths.
 
 Human-facing text can skip browser, OS and numerical smoke jobs, but it still
-drives repository contracts. Images and GitHub contribution templates need only
-the always-on governance checks. Everything unknown fails closed to the full
-suite.
+drives repository contracts -- including the unit tests that assert on docs,
+the README and the PR template, which ci.yml's contract lane runs in full for
+a non-code change. Images and markdown issue templates need only the always-on
+governance checks. Everything unknown fails closed to the full suite.
 """
 
 from __future__ import annotations
@@ -59,8 +60,10 @@ def _classify_path(raw_path: str) -> ChangeDepth:
     path = raw_path.replace("\\", "/").lstrip("/").lower()
     suffix = Path(path).suffix
 
+    # Unit tests read the PR template (test_contributor_surfaces), so editing it
+    # must run them: contract depth, not metadata-only.
     if path == ".github/pull_request_template.md":
-        return _METADATA_ONLY
+        return _CONTRACTS_ONLY
     if _is_issue_template(path, suffix):
         return _METADATA_ONLY
     if _is_doc_asset(path, suffix):
