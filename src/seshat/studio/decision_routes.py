@@ -15,6 +15,7 @@ durable record, and persisting them would create a second store the gate does no
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,12 @@ DECISION_STORE_REL = decision_store.STORE_PATHS[0]
 #: module -- absent means refuse, which is FR-140-009 expressed as a required argument
 #: rather than as a policy note.
 HUMAN_SUPPLIED_FIELDS: tuple[str, ...] = ("signer", "declared_authority", "answer")
+
+#: Non-critical: a critical type additionally requires the authority contract, and
+#: this route does not manufacture one.
+DECISION_TYPE = "assumption_note"
+
+_NON_SLUG = re.compile(r"[^a-z0-9]+")
 
 
 @dataclass(frozen=True)
@@ -147,6 +154,47 @@ def _require_consistent_authority(payload: dict[str, Any]) -> None:
         )
 
 
+def _slug(target_artifact: str) -> str:
+    """A DS1-valid id segment for an artifact path: lowercase, `_`-joined words."""
+    return _NON_SLUG.sub("_", target_artifact.lower()).strip("_") or "artifact"
+
+
+def next_decision_id(repo_root: Path | str, target_artifact: str) -> str:
+    """`<type>.<slug>.<n>`, with `n` one past the highest already in the store.
+
+    Derived from the STORE, never from a per-process counter: a counter restarts at
+    one on every launch, so a restart reused an id that might already be committed --
+    and a reused id hid the new, uncommitted decision as "already committed". The
+    write path refuses a duplicate as a backstop for two concurrent recordings.
+    """
+    prefix = f"{DECISION_TYPE}.{_slug(target_artifact)}."
+    store = Path(repo_root).joinpath(*DECISION_STORE_REL.split("/"))
+    try:
+        existing = decision_write.existing_decisions(store)
+    except decision_write.WriteRefused:
+        existing = []  # the append itself re-reads and refuses with the reason
+    taken = [
+        int(str(item.get("id"))[len(prefix) :])
+        for item in existing
+        if str(item.get("id", "")).startswith(prefix)
+        and str(item.get("id"))[len(prefix) :].isdigit()
+    ]
+    return f"{prefix}{max(taken, default=0) + 1}"
+
+
+def decision_scope(proposal: proposals.ChangeProposal) -> dict[str, list[str]]:
+    """DS1's plural `artifacts` key, naming the artifact AND the reviewed proposal.
+
+    Qualified by the proposal because each ruling decides one proposed change: two
+    proposals on the same file are two rulings, not the conflicting pair DS4 reports.
+    A second active ruling on the SAME proposal still shares the key, so the write
+    path refuses it as the conflict it genuinely is.
+    """
+    return {
+        "artifacts": [f"{proposal.target_artifact}#proposal:{proposal.proposal_hash}"]
+    }
+
+
 @dataclass(frozen=True)
 class WorkspaceContext:
     """The workspace facts a recording or apply needs, bundled as one seam.
@@ -178,7 +226,6 @@ def record(
     context: WorkspaceContext,
     payload: dict[str, Any],
     proposal: proposals.ChangeProposal,
-    decision_id: str,
     recorded_at: str,
 ) -> decision_write.DecisionWriteReceipt:
     """Record a named-human business decision into the working tree.
@@ -192,11 +239,9 @@ def record(
     _require_valid_answer(payload, proposal)
 
     entry = decision_write.build_entry(
-        decision_id=decision_id,
-        # Non-critical: a critical type additionally requires the authority contract,
-        # and this route does not manufacture one.
-        decision_type="assumption_note",
-        scope={"artifact": proposal.target_artifact},
+        decision_id=next_decision_id(context.repo_root, proposal.target_artifact),
+        decision_type=DECISION_TYPE,
+        scope=decision_scope(proposal),
         ruling=decision_write.HumanRuling(
             signer=payload["signer"], answer=payload["answer"]
         ),

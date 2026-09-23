@@ -545,7 +545,6 @@ def create_app(
     #: store the gate does not read. Initialised HERE rather than lazily so the routes
     #: never read an attribute nothing wrote.
     app.state.workbench_proposals = {}
-    app.state.workbench_decision_counter = 0
     app.state.expected_host = f"{launch.bind_host}:{launch.port}"
     #: FR-013a: the default and the only path SC-010 certifies. An
     #: operator-configured alternate bridge sets this to

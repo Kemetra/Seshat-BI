@@ -24,6 +24,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 
 from seshat import decision_write
+from seshat.studio import apply as apply_module
 from seshat.studio import decision_routes, exports, operations, review_scope
 
 #: Fields a client-facing decision entry may carry. An ALLOWLIST: anything added
@@ -114,7 +115,7 @@ async def operations_history(*, deps: Deps) -> Any:
                 committed_source=str(
                     entry.get("approval", {}).get("evidence_identity", "committed")
                 ),
-                decision_state="authoritative",
+                decision_state=_decision_state(entry),
                 decided_by=entry.get("approval", {}).get("approved_by"),
             )
         )
@@ -129,6 +130,19 @@ async def operations_history(*, deps: Deps) -> Any:
         )
 
     return deps.redact({"runs": [r.as_dict() for r in runs]})
+
+
+def _decision_state(entry: dict[str, Any]) -> str:
+    """The history label for a COMMITTED entry, from the same test apply uses.
+
+    Committed is not the same as authoritative: a committed decline is a settled
+    `rejected`, and an entry the shipped predicate refuses is `not_authoritative`.
+    """
+    if apply_module.authorizes(entry, None):
+        return "authoritative"
+    if entry.get("status") == "rejected":
+        return "rejected"
+    return "not_authoritative"
 
 
 def _committed_decisions(deps: Deps, root: Path) -> list[dict[str, Any]]:

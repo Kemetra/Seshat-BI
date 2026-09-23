@@ -208,9 +208,6 @@ async def record_decision(request: Request, *, deps: Deps) -> Any:
             "That proposal is not the current prepared proposal.",
             "Prepare the change again and re-review it before signing.",
         )
-    counter = deps.app.state.workbench_decision_counter = (
-        deps.app.state.workbench_decision_counter + 1
-    )
     try:
         receipt = decision_routes.record(
             context=decision_routes.WorkspaceContext(
@@ -223,7 +220,6 @@ async def record_decision(request: Request, *, deps: Deps) -> Any:
             ),
             payload=payload,
             proposal=proposal,
-            decision_id=f"studio-{counter:04d}",
             recorded_at=_now_iso(),
         )
     except decision_routes.RecordRefused as refused:
