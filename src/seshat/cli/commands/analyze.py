@@ -45,11 +45,14 @@ def _failure_summary(exc: BaseException, *, with_message: bool = True) -> str:
         return name
     from seshat.pbi_mcp_adapter.evidence import redact, scrub_secret_shaped
 
-    # Scrub the WHOLE message before truncating: cutting first could split a
-    # DSN into a fragment that DSN-derived redaction no longer recognises.
-    scrubbed, _ = scrub_secret_shaped(redact(" ".join(str(exc).split())))
-    scrubbed = scrubbed[:200]
-    return f"{name}: {scrubbed}" if scrubbed else name
+    # Fail closed: when EITHER layer found anything secret-shaped, the rest of
+    # the prose (hosts, users) is suspect too, so report the class name only.
+    message = " ".join(str(exc).split())
+    redacted = redact(message)
+    scrubbed, labels = scrub_secret_shaped(redacted)
+    if redacted != message or labels or not scrubbed:
+        return name
+    return f"{name}: {scrubbed[:200]}"
 
 
 @dataclass(frozen=True, slots=True)

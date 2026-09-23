@@ -57,9 +57,11 @@ def test_validate_failure_detail_is_scrubbed(
     assert "hunter2" not in text
 
 
-def test_long_message_is_scrubbed_before_truncation(
+def test_secret_shaped_message_drops_all_prose(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Once a secret-shaped span is found, no part of the message is echoed."""
+
     def _boom(root: Path, raw: str) -> None:
         raise RuntimeError("x" * 159 + f" could not open {_DSN}")
 
@@ -67,8 +69,10 @@ def test_long_message_is_scrubbed_before_truncation(
     payload = analyze._validate_command(tmp_path, argparse.Namespace(spec="a.yaml"))
 
     text = _blocker_text(payload)
-    assert "hunter2" not in text
+    assert "RuntimeError" in text
     assert "hunt" not in text
+    assert "db.internal" not in text
+    assert "analyst" not in text
 
 
 def test_execution_failure_reports_class_only(
