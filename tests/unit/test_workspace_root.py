@@ -132,4 +132,3 @@ def test_discovery_still_finds_a_mappings_only_workspace(tmp_path: Path) -> None
     root = tmp_path / "clone"
     (root / "mappings" / "orders").mkdir(parents=True)
     assert mod.resolve_workspace_root(start=root / "mappings" / "orders") == root
-

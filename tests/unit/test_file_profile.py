@@ -470,4 +470,3 @@ def test_excel_blank_last_column_is_not_ragged(tmp_path) -> None:
     assert result.ragged_row_count == 0
     notes = next(c for c in result.columns if c.name == "notes")
     assert notes.missing_count == 2
-

@@ -284,7 +284,9 @@ def test_profile_file_json_carries_ragged_row_count(
 def test_profile_file_markdown_names_ragged_rows_as_a_finding(
     tmp_path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    rc = main_under_test(["profile", "--file", _write_ragged_csv(tmp_path)] + ["--pk", "id"])
+    rc = main_under_test(
+        ["profile", "--file", _write_ragged_csv(tmp_path)] + ["--pk", "id"]
+    )
     out = capsys.readouterr().out
     assert rc == 0
     assert "**Ragged rows:** 2" in out
@@ -312,7 +314,9 @@ def test_ragged_finding_keeps_the_markdown_a_readable_baseline(
 
     main_under_test(["profile", "--file", _write_ragged_csv(tmp_path), "--pk", "id"])
     rendered = capsys.readouterr().out
-    header = "## Header" + "NL" + "| Field | Value |" + "NL" + "|-------|-------|" + "NL"
+    header = (
+        "## Header" + "NL" + "| Field | Value |" + "NL" + "|-------|-------|" + "NL"
+    )
     header += "| Table id | `T` |" + "NL" + "| Landed location | `r.csv` |" + "NL"
     doc = header.replace("NL", chr(10)) + chr(10) + rendered
     path = Path(tmp_path) / "source-profile.md"
@@ -320,4 +324,3 @@ def test_ragged_finding_keeps_the_markdown_a_readable_baseline(
     parsed = read_source_profile(path)
     assert parsed.uncomparable is None, parsed.uncomparable
     assert parsed.profile.row_count == 3
-

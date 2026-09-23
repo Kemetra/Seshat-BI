@@ -171,4 +171,3 @@ def test_compact_unrecognized_token_is_never_hidden_behind_warning():
     out = to_compact_ci_summary(pack)
     assert out.startswith("[Blocked (UNRECOGNIZED)] t")
     assert "grain unproven" in out
-

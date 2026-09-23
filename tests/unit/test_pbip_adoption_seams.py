@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from seshat.pbip_adoption._seams import (
-    _NextStepInputs,
     _next_step,
+    _NextStepInputs,
     _readiness,
     _readiness_response_step,
 )
