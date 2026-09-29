@@ -91,10 +91,18 @@ def table_candidate_names(table: str) -> list[str]:
     normalized = table.strip().replace("\\", "/").strip("/")
     names: list[str] = []
     for name in (normalized, normalized.rsplit(".", 1)[-1]):
-        if name in _UNSAFE_NAMES or "/" in name or name in names:
+        if not _valid_candidate_name(name, names):
             continue
         names.append(name)
     return names
+
+
+def _valid_candidate_name(name: str, existing: list[str]) -> bool:
+    if name in _UNSAFE_NAMES:
+        return False
+    if "/" in name:
+        return False
+    return name not in existing
 
 
 def status_path_candidates(root: Path, table: str) -> list[Path]:

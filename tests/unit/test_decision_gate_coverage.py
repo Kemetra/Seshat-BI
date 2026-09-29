@@ -9,6 +9,7 @@ check in both the gate and DS2.
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -38,9 +39,15 @@ def _repo(tmp_path: Path, store: str) -> tuple[Path, tuple[str, ...]]:
     return tmp_path, tuple(files)
 
 
-def _approved(
-    root: Path, dtype: str, did: str, owner: str, scope: str, evidence: str = ""
-) -> str:
+@dataclass(frozen=True)
+class ApprovalFixture:
+    dtype: str
+    did: str
+    owner: str
+    scope: str
+
+
+def _approved(root: Path, fixture: ApprovalFixture, evidence: str = "") -> str:
     ev = root / "ev.md"
     ev.write_text("evidence\n", encoding="utf-8")
     sha = hashlib.sha256(ev.read_bytes()).hexdigest()
@@ -49,30 +56,32 @@ def _approved(
         or f"      evidence: [ev.md]\n      evidence_identity: {{ev.md: {sha}}}\n"
     )
     return (
-        f"  - id: {did}\n"
-        f"    decision_type: {dtype}\n"
+        f"  - id: {fixture.did}\n"
+        f"    decision_type: {fixture.dtype}\n"
         "    statement: s\n"
-        f"    scope: {scope}\n"
+        f"    scope: {fixture.scope}\n"
         "    status: approved\n"
         "    evidence: [ev.md]\n"
         "    proposed_by: agent\n"
         '    proposed_at: "2026-01-01"\n'
         "    approval:\n"
-        f'      approved_by: "{owner}"\n'
+        f'      approved_by: "{fixture.owner}"\n'
         '      approved_at: "2026-01-02"\n'
         "      source: interview\n"
         f"{evidence}"
-        f"      reviewed_scope: {scope}\n"
+        f"      reviewed_scope: {fixture.scope}\n"
     )
 
 
 def _kpi_only(tmp_path: Path) -> tuple[Path, tuple[str, ...]]:
     body = _approved(
         tmp_path,
-        "kpi_definition",
-        "kpi_definition.net_sales",
-        "A. Owner (metric_owner)",
-        "{kpis: [net_sales]}",
+        ApprovalFixture(
+            "kpi_definition",
+            "kpi_definition.net_sales",
+            "A. Owner (metric_owner)",
+            "{kpis: [net_sales]}",
+        ),
     )
     return _repo(tmp_path, "decisions:\n" + body)
 
@@ -97,10 +106,12 @@ def test_kpi_definition_alone_still_passes_kpi_contracts(tmp_path: Path) -> None
 def test_pii_alone_does_not_pass_silver_gold(tmp_path: Path) -> None:
     body = _approved(
         tmp_path,
-        "pii_handling",
-        "pii_handling.email",
-        "A. Owner (data_owner)",
-        "{tables: [a]}",
+        ApprovalFixture(
+            "pii_handling",
+            "pii_handling.email",
+            "A. Owner (data_owner)",
+            "{tables: [a]}",
+        ),
     )
     root, tracked = _repo(tmp_path, "decisions:\n" + body)
     verdict = verdict_for(root, tracked, "silver_gold_model_planning")
@@ -111,10 +122,12 @@ def test_pii_alone_does_not_pass_silver_gold(tmp_path: Path) -> None:
 def _report_intent(tmp_path: Path, artifact: str) -> tuple[Path, tuple[str, ...]]:
     body = _approved(
         tmp_path,
-        "report_intent_approval",
-        f"report_intent_approval.{artifact}",
-        "R. Owner (report_owner)",
-        f"{{artifacts: [{artifact}]}}",
+        ApprovalFixture(
+            "report_intent_approval",
+            f"report_intent_approval.{artifact}",
+            "R. Owner (report_owner)",
+            f"{{artifacts: [{artifact}]}}",
+        ),
     )
     return _repo(tmp_path, "decisions:\n" + body)
 
@@ -161,10 +174,12 @@ def test_string_evidence_blocks_a_critical_decision(tmp_path: Path) -> None:
     string_ev = "      evidence: does/not/exist.md\n      evidence_identity: whatever\n"
     body = _approved(
         tmp_path,
-        "table_grain",
-        "table_grain.b",
-        "A. Owner (data_owner)",
-        "{tables: [b]}",
+        ApprovalFixture(
+            "table_grain",
+            "table_grain.b",
+            "A. Owner (data_owner)",
+            "{tables: [b]}",
+        ),
         evidence=string_ev,
     )
     root, tracked = _repo(tmp_path, "decisions:\n" + body)
