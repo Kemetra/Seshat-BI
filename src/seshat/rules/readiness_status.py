@@ -14,6 +14,9 @@ consistent. RS1 checks filled per-table readiness status files
   the mechanical numbers rest on is a ``[PROPOSED]`` inference (a wrong encoding
   silently corrupts every text column), so an owner must confirm it, exactly like the
   semantic-proposal gates. A DB source (no ``source_kind``) is unaffected;
+* an approval counts only when its owner carries a class eligible for that stage
+  (``STAGE_AUTHORITY`` -- e.g. only a metric_owner clears semantic_model_ready);
+* stages advance in order: no pass/warning after a not_started or blocked stage;
 * ``current_stage`` cannot point past an earlier blocked stage;
 * a blocked current stage mirrors blockers at the top level.
 
@@ -79,6 +82,21 @@ _AUTHORITY_CLASSES: frozenset[str] = frozenset(
         "report_owner",
     }
 )
+# The ONE per-stage authority table (audit F005/F051/F073). Only an approval whose
+# owner carries one of the stage's classes satisfies that stage; the FIRST class is
+# the one surfaces name as ``required_authority``. docs/readiness/readiness-model.md
+# names the signer per stage: the metric owner approves Semantic Model Ready, the
+# report owner signs off Dashboard Ready (data_owner/governance also accepted --
+# committed records sign it as data owner), data-owner/governance approve Publish
+# Ready. An analyst can never clear a metric-, report- or publish-owner gate.
+STAGE_AUTHORITY: dict[str, tuple[str, ...]] = {
+    "source_ready": ("data_owner", "analyst"),
+    "mapping_ready": ("analyst", "data_owner"),
+    "semantic_model_ready": ("metric_owner",),
+    "dashboard_ready": ("report_owner", "governance", "data_owner"),
+    "publish_ready": ("data_owner", "governance"),
+}
+
 # Tokens that cannot stand as the person NAME: the classes themselves plus the
 # generic "owner" (also NOT a valid class -- it proves no specific authority;
 # Codex PR#143 third round).
@@ -136,6 +154,12 @@ _SOURCE_KIND_ALIASES: dict[str, str] = {
     "xlsx": "excel",
     "xlsm": "excel",
 }
+
+# Public names for the readiness spine (seshat.readiness_spine re-exports them), so
+# no surface re-declares its own copy of the stage table (audit F015/F150).
+STAGE_ORDER = _STAGE_ORDER
+APPROVAL_REQUIRED = _APPROVAL_REQUIRED
+FILE_SOURCE_KINDS = _FILE_SOURCE_KINDS
 
 
 def _finding(message: str, locator: str) -> Finding:
@@ -226,13 +250,40 @@ def approval_is_shape_valid(approval: object) -> bool:
     return _parse_iso_date(approval.get("at")) is not None
 
 
+def required_authority(stage: str) -> str:
+    """The authority class a surface names for ``stage`` (first eligible class)."""
+    return STAGE_AUTHORITY.get(stage, ("data_owner",))[0]
+
+
+def stage_approval_valid(stage: str, approval: object) -> bool:
+    """True only for a shape-valid approval OF ``stage`` by an eligible class.
+
+    The single predicate every surface uses to decide whether a stage gate is
+    satisfied: RS1, ``seshat next``, the approval inbox, the approver view, the
+    blocker explainer, the evidence pack and the report gate. Shape alone is not
+    enough -- ``approval_is_shape_valid`` accepts any authority class, so an
+    analyst approval used to clear the metric_owner-gated semantic stage.
+    """
+    if not approval_is_shape_valid(approval):
+        return False
+    assert isinstance(approval, dict)
+    if approval.get("stage") != stage:
+        return False
+    eligible = STAGE_AUTHORITY.get(stage)
+    return eligible is not None and _owner_authority(approval.get("owner")) in eligible
+
+
 def _approved_stages(approvals: list) -> set:
     """Stage names satisfied by a shape-valid approval (named decider + authority
-    class + ISO ``at:`` date). An invalid entry is BOTH flagged by
-    ``_check_approval_owners``/``_check_audit_freshness`` AND excluded here, so a
-    legacy bare-role, name-only, or undated entry cannot keep an approval-required
-    stage green (C4; Codex PR#143 review; issue #487)."""
-    return {a.get("stage") for a in approvals if approval_is_shape_valid(a)}
+    class + ISO ``at:`` date) from a class eligible for that stage. An invalid
+    entry is BOTH flagged by ``_check_approval_owners``/``_check_audit_freshness``
+    AND excluded here, so a legacy bare-role, name-only, undated or wrong-class
+    entry cannot keep an approval-required stage green (C4; issue #487)."""
+    return {
+        a.get("stage")
+        for a in approvals
+        if isinstance(a, dict) and stage_approval_valid(a.get("stage"), a)
+    }
 
 
 def _check_approval_owners(approvals: list, rel: str) -> list[Finding]:
@@ -382,10 +433,11 @@ def _check_approval_required(
         status, stage_name, approved_stages
     ):
         return []
+    eligible = ", ".join(STAGE_AUTHORITY.get(stage_name, ()))
     return [
         _finding(
             f"stage {stage_name!r} is pass but no matching "
-            "approvals[] entry is recorded",
+            f"approvals[] entry is recorded by an eligible class ({eligible})",
             loc,
         )
     ]
@@ -507,6 +559,29 @@ def _check_skips_blocked(
     ]
 
 
+def _check_monotonic(statuses: list[tuple[str, str | None]], rel: str) -> list[Finding]:
+    """A stage may be pass/warning only when every earlier stage is pass/warning.
+
+    ``_check_skips_blocked`` guards ``current_stage`` against an earlier BLOCKED
+    stage only; a not_started predecessor let silver/gold/publish pass without a
+    mapping gate ever clearing (no_silver_before_mapping_cleared, audit F051)."""
+    findings: list[Finding] = []
+    gap: str | None = None
+    for stage_name, status in statuses:
+        if status in ("pass", "warning"):
+            if gap is not None:
+                findings.append(
+                    _finding(
+                        f"stage {stage_name!r} is {status!r} but earlier stage "
+                        f"{gap!r} has not passed; stages advance in order",
+                        f"{rel}:stages.{stage_name}",
+                    )
+                )
+        elif gap is None and status in ("not_started", "blocked"):
+            gap = stage_name
+    return findings
+
+
 def _check_blocked_current_mirror(
     current_stage: object, stages: dict, data: dict, rel: str
 ) -> list[Finding]:
@@ -566,14 +641,17 @@ def _check_one_status_file(ctx: RuleContext, rel: str) -> list[Finding]:
     findings += _check_audit_freshness(data, approvals, rel)
 
     earliest_blocked_index: int | None = None
+    statuses: list[tuple[str, str | None]] = []
     for index, stage_name in enumerate(_STAGE_ORDER):
         stage_findings, status = _check_stage(
             stage_name, stages.get(stage_name), approved_stages, rel
         )
         findings += stage_findings
+        statuses.append((stage_name, status))
         if status == "blocked" and earliest_blocked_index is None:
             earliest_blocked_index = index
 
+    findings += _check_monotonic(statuses, rel)
     findings += _check_skips_blocked(current_stage, earliest_blocked_index, rel)
     findings += _check_blocked_current_mirror(current_stage, stages, data, rel)
 

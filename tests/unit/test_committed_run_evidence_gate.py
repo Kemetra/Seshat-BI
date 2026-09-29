@@ -463,15 +463,15 @@ def test_next_downgrades_rather_than_silences_on_uncommitted_evidence(
         approvals=[
             {
                 "stage": stage,
-                "owner": "Ada Lovelace (data_owner)",
+                "owner": f"Ada Lovelace ({authority})",
                 "at": "2026-07-22",
                 "note": "approved",
             }
-            for stage in (
-                "mapping_ready",
-                "semantic_model_ready",
-                "dashboard_ready",
-                "publish_ready",
+            for stage, authority in (
+                ("mapping_ready", "analyst"),
+                ("semantic_model_ready", "metric_owner"),
+                ("dashboard_ready", "report_owner"),
+                ("publish_ready", "data_owner"),
             )
         ],
     )

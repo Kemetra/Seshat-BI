@@ -16,12 +16,16 @@ STATUS_PATH = "mappings/demo/readiness-status.yaml"
 
 # A valid owner: a person name + authority class (NOT a bare role token -- C4).
 OWNER = "A. Lovelace (data_owner)"
+# Each stage's approval must come from a class eligible for THAT stage
+# (STAGE_AUTHORITY): only a metric_owner clears semantic_model_ready.
+_STAGE_OWNER = {"semantic_model_ready": "A. Lovelace (metric_owner)"}
 
 
 def _appr(
-    stage: str, owner: str = OWNER, extra: str = "", at: str = "2026-01-01"
+    stage: str, owner: str | None = None, extra: str = "", at: str = "2026-01-01"
 ) -> str:
     """One approvals[] YAML line, kept short so no fixture line exceeds line-length."""
+    owner = owner or _STAGE_OWNER.get(stage, OWNER)
     return f"  - {{stage: {stage}, owner: '{owner}', at: '{at}'{extra}}}\n"
 
 
@@ -185,10 +189,10 @@ def test_named_owner_with_role_passes(tmp_path: Path) -> None:
 
 def test_owner_class_spelling_variants_pass(tmp_path: Path) -> None:
     # The class token is case-/space-/hyphen-insensitive: "Data Owner",
-    # "data-owner" and "DATA_OWNER" all normalize to data_owner.
+    # "metric-owner" and "DATA_OWNER" all normalize to their snake_case class.
     approvals = (
         _appr("mapping_ready", owner="Ada Lovelace (Data Owner)")
-        + _appr("semantic_model_ready", owner="Ada Lovelace (data-owner)")
+        + _appr("semantic_model_ready", owner="Ada Lovelace (metric-owner)")
         + _appr("dashboard_ready", owner="Ada Lovelace (DATA_OWNER)")
         + _appr("publish_ready")
     )

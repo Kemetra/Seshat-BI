@@ -97,7 +97,7 @@ def make_fixture_repo(
         approvals += APPROVAL_ROW.format(
             stage="semantic_model_ready",
             role="metric_owner",
-            note="approved metric contract AMetric",
+            note="approved metric contracts: AMetric",
         )
     (table_dir / "readiness-status.yaml").write_text(
         READINESS_TEMPLATE.format(

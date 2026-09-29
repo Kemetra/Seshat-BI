@@ -9,7 +9,12 @@ from pathlib import Path
 import pytest
 
 from seshat.cli import main
-from tests.unit._pbir_gate_fixture import gate_args, pbir_gate_repo
+from tests.unit._pbir_gate_fixture import (
+    bind_report,
+    gate_args,
+    pbir_gate_repo,
+    report_home,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -20,9 +25,10 @@ FIXTURE = (
 
 
 def _copy(tmp: Path) -> Path:
-    dst = tmp / "x.Report" / "v" / "visual.json"
+    dst = report_home(tmp) / "x.Report" / "v" / "visual.json"
     dst.parent.mkdir(parents=True)
     shutil.copy(FIXTURE, dst)
+    bind_report(dst.parent.parent)
     return dst
 
 

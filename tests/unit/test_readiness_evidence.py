@@ -139,3 +139,30 @@ def test_deterministic_output():
     b1 = build_gold_ready_block(*args, run_mode="live", timestamp="2026-07-01")
     b2 = build_gold_ready_block(*args, run_mode="live", timestamp="2026-07-01")
     assert b1 == b2
+
+
+def test_vrc2_clean_is_claimed_only_when_the_check_ran():
+    """Audit F181: no PK check ran -> no 'V-RC2 clean' observation."""
+    skipped = build_gold_ready_block([], "schema.tbl", run_mode="live")
+    ran = build_gold_ready_block(
+        [], "schema.tbl", run_mode="live", executed_rules=("V-RC2",)
+    )
+    assert not any("V-RC2" in e for e in skipped["evidence"])
+    assert any("V-RC2 clean" in e for e in ran["evidence"])
+
+
+def test_secret_shaped_span_is_scrubbed_without_a_dsn():
+    """Audit F181: layer two scrubs what DSN decomposition cannot see."""
+    guid = "12345678-1234-1234-1234-1234567890ab"
+    finding = Finding(
+        rule_id="V-X",
+        severity=Severity.ERROR,
+        message=f"failed: password=hunter2 tenant {guid}",
+        locator="t",
+    )
+    joined = " ".join(
+        build_gold_ready_block([finding], "schema.tbl", run_mode="live")[
+            "blocking_reasons"
+        ]
+    )
+    assert "hunter2" not in joined and guid not in joined

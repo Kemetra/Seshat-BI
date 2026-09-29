@@ -12,10 +12,15 @@ from __future__ import annotations
 import re
 from copy import deepcopy
 from dataclasses import dataclass, field
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping
 
-from .decision_store import approval_is_valid, owner_shape_ok
+from .decision_store import (
+    approval_is_valid,
+    owner_class,
+    owner_shape_ok,
+    scope_keys,
+)
 
 # Shared by draft (adds it as a required decision type when a binding is PII
 # sensitive) and finalize (blocks pass until it is an approved, referenced
@@ -92,22 +97,39 @@ def _is_approved(
     return approval_is_valid(dict(decision), dict(authority) if authority else None)[0]
 
 
+def kpi_scope_keys(name: str, generic_kpi_ref: str | None) -> frozenset[str]:
+    """Decision Store scope keys that identify ONE KPI: its name, the name in
+    snake_case, and its registry ref (``kpis:NetSales``/``kpis:net_sales``)."""
+    snake = re.sub(r"(?<!^)(?=[A-Z])", "_", name.strip()).lower().replace(" ", "_")
+    values = {name.strip(), snake, generic_kpi_ref or ""}
+    return frozenset(f"kpis:{value}" for value in values if value)
+
+
+def _scoped_to(decision: Mapping[str, Any], kpi_keys: frozenset[str]) -> bool:
+    return bool(kpi_keys.intersection(scope_keys(decision.get("scope"))))
+
+
 def _approved_ref(
     records: tuple[Mapping[str, Any], ...],
     decision_type: str,
     authority: Mapping[str, frozenset[str]] | None,
+    kpi_keys: frozenset[str],
 ) -> str:
-    """Return the id of one approved, valid decision of ``decision_type``."""
+    """Return the id of one approved, valid decision of ``decision_type`` scoped
+    to THIS KPI -- an approved kpi_definition for another KPI does not stand in
+    (audit F071)."""
 
     valid = [
         decision
         for decision in records
         if decision.get("decision_type") == decision_type
+        and _scoped_to(decision, kpi_keys)
         and _is_approved(decision, authority)
     ]
     if not valid:
         raise ContractDraftRefused(
-            f"missing approved {decision_type} decision required to draft this KPI"
+            f"missing approved {decision_type} decision scoped to this KPI "
+            "(scope.kpis) required to draft it"
         )
     decision_id = valid[0].get("id")
     if not isinstance(decision_id, str) or not decision_id:
@@ -121,10 +143,11 @@ def _approved_refs(
     decisions: Iterable[Mapping[str, Any]],
     required_types: Iterable[str],
     authority: Mapping[str, frozenset[str]] | None,
+    kpi_keys: frozenset[str],
 ) -> list[str]:
     records = tuple(decisions)
     return [
-        _approved_ref(records, decision_type, authority)
+        _approved_ref(records, decision_type, authority, kpi_keys)
         for decision_type in sorted(_string_set(required_types))
     ]
 
@@ -209,7 +232,12 @@ def _draft_decision_refs(request: ContractDraftRequest) -> list[str]:
     required = request.required_decision_types
     if request.pii_sensitive:
         required = (*required, PII_HANDLING_DECISION_TYPE)
-    return _approved_refs(request.decisions, required, request.authority)
+    return _approved_refs(
+        request.decisions,
+        required,
+        request.authority,
+        kpi_scope_keys(request.name, request.generic_kpi_ref),
+    )
 
 
 def _validate_draft_evidence(request: ContractDraftRequest) -> tuple[str, ...]:
@@ -322,6 +350,10 @@ class FinalizationContext:
     authority: Mapping[str, frozenset[str]] | None
     evidence_freshness: Mapping[str, bool]
     named_human_approval: str | None
+    #: Where each referenced decision's approval evidence is re-verified. The
+    #: decision evidence's freshness is COMPUTED here (decision_gate.evidence_stale),
+    #: never taken from the caller; None fails closed.
+    repo_root: Path | str | None = None
     by_id: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -374,6 +406,21 @@ def _resolved_decision_blocker(
     )
     if decision.get("status") != "approved" or not valid:
         return reason or f"decision {reference!r} is not approved"
+    return _stale_decision_blocker(reference, decision, ctx)
+
+
+def _stale_decision_blocker(
+    reference: object, decision: Mapping[str, Any], ctx: FinalizationContext
+) -> str | None:
+    """A referenced decision whose approval evidence changed since approval (or
+    cannot be re-verified) blocks finalization, as it blocks the gate."""
+    from seshat.decision_gate import evidence_stale
+
+    if ctx.repo_root is None:
+        return f"decision {reference!r} evidence freshness cannot be verified"
+    stale = evidence_stale(ctx.repo_root, dict(decision.get("approval") or {}))
+    if stale:
+        return f"decision {reference!r} approval evidence is stale/missing {stale}"
     return None
 
 
@@ -428,9 +475,27 @@ def _evidence_blockers(evidence: object, ctx: FinalizationContext) -> list[str]:
     ]
 
 
-def _approval_blockers(ctx: FinalizationContext) -> list[str]:
-    if not ctx.named_human_approval or not owner_shape_ok(ctx.named_human_approval):
+def _approval_blockers(refs: object, ctx: FinalizationContext) -> list[str]:
+    """The finalizing approver must be the named human who APPROVED a referenced
+    kpi_definition decision, of a class eligible for it. A caller-supplied string
+    alone is not authority (audit F071): 'Claude Agent (wizard)' is refused."""
+    approver = ctx.named_human_approval
+    if not approver or not owner_shape_ok(approver):
         return ["named-human approval is missing or malformed"]
+    eligible = (ctx.authority or {}).get("kpi_definition") or frozenset()
+    if owner_class(approver) not in eligible:
+        return [f"named-human approval class {owner_class(approver)!r} is ineligible"]
+    references = refs if isinstance(refs, list) else []
+    signers = {
+        (ctx.by_id.get(ref) or {}).get("approval", {}).get("approved_by")
+        for ref in references
+        if (ctx.by_id.get(ref) or {}).get("decision_type") == "kpi_definition"
+    }
+    if approver not in signers:
+        return [
+            "named-human approval does not match the approver of a referenced "
+            "kpi_definition decision"
+        ]
     return []
 
 
@@ -452,7 +517,7 @@ def _finalization_blockers(
         _pii_handling_blockers((binds_to, result.get("compares_to")), refs, ctx)
     )
     blockers.extend(_evidence_blockers(result.get("source_evidence"), ctx))
-    blockers.extend(_approval_blockers(ctx))
+    blockers.extend(_approval_blockers(refs, ctx))
     return blockers
 
 

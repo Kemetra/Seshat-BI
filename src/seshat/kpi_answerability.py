@@ -86,7 +86,9 @@ class AnswerabilityInputs:
             "lookalike_concepts",
         ):
             object.__setattr__(self, name, frozenset(_string_set(getattr(self, name))))
-        object.__setattr__(self, "evidence", tuple(_string_set(self.evidence)))
+        # Sorted: set iteration order varies with PYTHONHASHSEED, and the
+        # rendered artifact must be reproducible (audit F179).
+        object.__setattr__(self, "evidence", tuple(sorted(_string_set(self.evidence))))
 
 
 def _make_row(entry: Mapping[str, Any], inputs: AnswerabilityInputs) -> RowBuilder:

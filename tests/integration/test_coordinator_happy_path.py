@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from seshat import dashboard_coordinator as dc
+from tests.unit._gitfix import commit_tree
 
 pytestmark = pytest.mark.unit
 
@@ -32,6 +33,18 @@ _INTENT_REL = "mappings/demo_report_area/design/report-intent.yaml"
 _STORE_REL = ".seshat/kpi-contracts.yaml"
 _FLOW_REL = "contracts/knowledge/database-to-pbip-flow.yaml"
 _AUTHORITY_REL = "contracts/knowledge/approval-authority.yaml"
+
+
+def _next_action(root: Path, tracked: tuple[str, ...]) -> dc.CoordinatorResult:
+    """Commit the workspace (the coordinator reads COMMITTED state only), then
+    ask for the next action."""
+    commit_tree(root)
+    return dc.next_action(root, _SUBJECT, tracked)
+
+
+def _trace(root: Path) -> dc.DesignTrace:
+    commit_tree(root)
+    return dc.trace_design(root, _SUBJECT)
 
 
 def _materialize(tmp_path: Path) -> tuple[Path, tuple[str, ...]]:
@@ -57,7 +70,7 @@ def _materialize(tmp_path: Path) -> tuple[Path, tuple[str, ...]]:
 
 def test_happy_path_authorizes_design_and_stops_at_human_review(tmp_path: Path) -> None:
     root, tracked = _materialize(tmp_path)
-    result = dc.next_action(root, _SUBJECT, tracked)
+    result = _next_action(root, tracked)
 
     # With all preconditions met and the design authored, the one next allowed
     # action is the human blueprint review seam -- NOT a self-granted pass.
@@ -76,7 +89,7 @@ def test_happy_path_zero_orphan_visuals_all_trace_to_approved_contract(
     """SC-003: every visual in the approved blueprint traces to an approved contract
     and a mapped semantic field (binding-map coverage complete)."""
     root, tracked = _materialize(tmp_path)
-    trace = dc.trace_design(root, _SUBJECT)
+    trace = _trace(root)
 
     assert trace.orphan_visuals == ()
     assert trace.visuals  # non-empty
@@ -94,7 +107,7 @@ def test_happy_path_blueprint_questions_trace_to_intent(tmp_path: Path) -> None:
     """FR-002a: a blueprint business_question traces to a question declared in the
     committed Report Intent (no orphan question)."""
     root, tracked = _materialize(tmp_path)
-    trace = dc.trace_design(root, _SUBJECT)
+    trace = _trace(root)
 
     intent_qids = set(trace.intent_question_ids)
     assert intent_qids == {"q1", "q2"}
@@ -119,5 +132,5 @@ def test_trace_flags_orphan_question(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    trace = dc.trace_design(root, _SUBJECT)
+    trace = _trace(root)
     assert any("q7" in q for q in trace.orphan_questions)

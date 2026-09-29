@@ -8,9 +8,12 @@ one file.
 
 The security claim: **writing a decision is not granting one.** This module may append
 a named human's answer to a store file in the working tree. Authority arrives only when
-a human commits the file, after which the gate reads it at HEAD -- `store_files()`
-selects from TRACKED paths. Nothing here runs git; committing is a human act
-(FR-140-023).
+a human commits the file: approval-bearing callers load the store with
+`decision_store.load_store(..., committed=True)` / `decision_gate.verdict_for(...,
+committed=True)`, which read HEAD and fail closed on an untracked or dirty store file
+(the dashboard coordinator does). `store_files()` alone only selects TRACKED paths; it
+does not make a worktree read a HEAD read. Nothing here runs git; committing is a human
+act (FR-140-023).
 """
 
 from __future__ import annotations

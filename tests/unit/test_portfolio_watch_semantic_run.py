@@ -52,7 +52,7 @@ def _semantic_approval() -> list[dict[str, str]]:
             "stage": "semantic_model_ready",
             "owner": "Ada Lovelace (metric_owner)",
             "at": "2026-07-22",
-            "note": "approved metric contract TotalSales",
+            "note": "approved metric contracts: TotalSales",
         }
     ]
 

@@ -23,6 +23,8 @@ from seshat.cli.commands.report import (
     build_report_parser,
     report_main,
 )
+from tests.unit._gitfix import commit_tree
+from tests.unit._report_helpers import approved_contract
 from tests.unit._report_helpers import workspace as _workspace
 
 pytestmark = pytest.mark.unit
@@ -45,14 +47,10 @@ visuals:
 ```
 """
 
-_CONTRACT = {
-    "name": "TotalSales",
-    "binds_to": {"gold_table": "gold.fct_demo", "columns": ["total_spent"]},
-    "definition": {"kind": "base", "aggregation": "sum", "filter": []},
-    # Without this the contract is present but not approved, and every observation
-    # citing it refuses -- which is the point of the readiness check.
-    "readiness": {"status": "pass", "evidence": ["approved by data_owner"]},
-}
+_CONTRACT = approved_contract(
+    "TotalSales",
+    binds_to={"gold_table": "gold.fct_demo", "columns": ["total_spent"]},
+)
 
 _EXPECTED_SQL = 'SELECT sum("total_spent") FROM "gold"."fct_demo"'
 
@@ -81,6 +79,7 @@ def _gold_workspace(tmp_path: Path) -> tuple[str, Path]:
     )
     plan = tmp_path / "plan.yaml"
     plan.write_text(yaml.safe_dump(_PLAN, sort_keys=False), encoding="utf-8")
+    commit_tree(tmp_path)
     return table, plan
 
 
@@ -250,5 +249,6 @@ def test_the_gate_still_applies_to_a_live_render(tmp_path: Path, monkeypatch) ->
         ),
         encoding="utf-8",
     )
+    commit_tree(tmp_path)
     _wire(monkeypatch, [(Decimal("1"),)])
     assert report_main(_live_args(tmp_path, table, plan)) == EXIT_REFUSED

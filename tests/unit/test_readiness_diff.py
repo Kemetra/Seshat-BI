@@ -66,9 +66,26 @@ def test_unchanged_state_reports_nothing() -> None:
     assert result.has_regression is False
 
 
-def test_unknown_status_reports_change_without_claiming_direction() -> None:
-    """A malformed status is a CHANGE but not a regression -- never a guessed rank."""
+@pytest.mark.parametrize("head_status", ["banana", "Pass", None])
+def test_verified_stage_losing_its_status_is_a_regression(head_status) -> None:
+    """Audit F081: pass -> deleted / unknown loses verified state."""
     base = {"t1": _doc(gold_ready="pass")}
+    head_doc = _doc(gold_ready="pass")
+    if head_status is None:
+        del head_doc["stages"]["gold_ready"]
+    else:
+        head_doc["stages"]["gold_ready"]["status"] = head_status
+
+    result = diff_readiness(base, {"t1": head_doc})
+
+    assert result.stage_changes[0].is_regression is True
+    assert result.has_regression is True
+
+
+def test_unknown_status_reports_change_without_claiming_direction() -> None:
+    """A malformed status on an unverified stage is a CHANGE but not a regression
+    -- never a guessed rank."""
+    base = {"t1": _doc(gold_ready="not_started")}
     head = {"t1": _doc(gold_ready="banana")}
 
     result = diff_readiness(base, head)

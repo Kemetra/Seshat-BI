@@ -86,18 +86,24 @@ def _request(entry: dict, binding_map: BindingMap) -> FigureRequest:
 
 
 def contract_payloads(repo_root: Path, table: str) -> dict[str, dict]:
-    """Every approved contract for the table, parsed.
+    """Every APPROVED contract for the table, parsed (never a draft).
 
-    An unreadable contract refuses rather than being skipped: a skipped contract
-    would make its figure look unattributable, which reads as a design fault
-    rather than a broken file.
+    Only contracts the shared inventory approves at HEAD are returned, so a live
+    render never runs SQL for a draft. An unreadable or uncommitted contract
+    refuses rather than being skipped: a skipped contract would make its figure
+    look unattributable, which reads as a design fault rather than a broken file.
     """
+    from seshat.gitstate import committed_text
+    from seshat.metric_contract_inventory import approved_contracts_for_scope
+
+    approved, errors = approved_contracts_for_scope(repo_root, table, committed=True)
+    broken = [e for e in errors if "unreadable" in e or "not committed" in e]
+    if broken:
+        raise ReportError(f"cannot read contract {broken[0]}")
     payloads: dict[str, dict] = {}
-    for path in sorted((repo_root / "mappings" / table / "metrics").glob("*.yaml")):
-        try:
-            loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-        except (OSError, yaml.YAMLError) as exc:
-            raise ReportError(f"cannot read contract {path}: {exc}") from exc
+    for name, contract in approved.items():
+        rel = contract.path.resolve().relative_to(repo_root.resolve()).as_posix()
+        loaded = yaml.safe_load((committed_text(repo_root, rel) or "").lstrip("\ufeff"))
         if isinstance(loaded, dict):
-            payloads[path.stem] = loaded
+            payloads[name] = loaded
     return payloads

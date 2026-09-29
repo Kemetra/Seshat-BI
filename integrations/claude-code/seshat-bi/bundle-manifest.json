@@ -2217,10 +2217,10 @@
     {
       "classification": "public_knowledge",
       "destination": "skills/kpi-contract-builder/SKILL.md",
-      "output_sha256": "2773fa5b4ea3cc197382eb784e0e48d7c8b6a600c1545b059760a67e5051c26e",
+      "output_sha256": "36491c82e6501bf4d107a39925bb317f9a6bb16e59328e1e10f02349e57ddc08",
       "source": ".claude/skills/kpi-contract-builder/SKILL.md",
       "source_id": "kb-147",
-      "source_sha256": "2773fa5b4ea3cc197382eb784e0e48d7c8b6a600c1545b059760a67e5051c26e",
+      "source_sha256": "36491c82e6501bf4d107a39925bb317f9a6bb16e59328e1e10f02349e57ddc08",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2405,10 +2405,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "8a4299ca4e425ebdc7a4bd7605c85608b8f0eecbfba45ee14abce0c04c522888",
+  "manifest_digest": "31ff5a16a1016f20cf741e7204093bee03f7f616de5b599ba51c3eb6b7142978",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "8a6956f797e5d120b2dff7478d96d731926fc91c",
+  "source_revision": "531a1c3ca68c2bec4a63372180fb03acd2dd2fcb",
   "target": "claude",
   "version": "2.1.0"
 }

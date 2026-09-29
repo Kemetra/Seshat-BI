@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Iterable
@@ -11,6 +12,40 @@ from seshat.metric_contract_bindings import definition_binding_errors
 
 ContractKey = tuple[str, str]
 MeasureBinding = tuple[str, str]
+#: Reads one repo-relative file; ``None`` means absent/unreadable/not committed.
+TextReader = Callable[[str], "str | None"]
+
+# A prose note that records a refusal must never read as an approval (audit F014).
+_REFUSAL_RE = re.compile(
+    r"\b(reject(ed|s)?|revoked?|withdrawn|retracted|not\s+approved|do\s+not\s+use)\b",
+    re.IGNORECASE,
+)
+
+
+def worktree_reader(root: Path) -> TextReader:
+    """Read files from the working tree (the static, CI-committed default)."""
+
+    def read(relative: str) -> str | None:
+        try:
+            return (root / relative).read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError):
+            return None
+
+    return read
+
+
+def committed_reader(root: Path) -> TextReader:
+    """Read a file only as COMMITTED (tracked, clean, HEAD content).
+
+    Approval-bearing gates use this so an uncommitted, agent-authored approval
+    row or contract edit can never authorize anything (#334)."""
+    from seshat.gitstate import committed_text
+
+    def read(relative: str) -> str | None:
+        text = committed_text(root, relative)
+        return text.lstrip("\ufeff") if text is not None else None
+
+    return read
 
 
 def normalize_table_binding(value: str) -> str:
@@ -65,10 +100,15 @@ def _scope_from_path(relative: str) -> str | None:
     return None
 
 
-def _read_mapping(path: Path, relative: str, yaml) -> tuple[dict | None, str | None]:
+def _read_mapping(
+    relative: str, read: TextReader, yaml
+) -> tuple[dict | None, str | None]:
+    text = read(relative)
+    if text is None:
+        return None, f"{relative}: metric contract is unreadable or not committed"
     try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
-    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        raw = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
         return None, f"{relative}: unreadable metric contract: {exc}"
     if not isinstance(raw, dict):
         return None, f"{relative}: metric contract must be a mapping"
@@ -82,12 +122,14 @@ def _valid_evidence(value: object) -> bool:
 
 
 def _named_semantic_approval(
-    root: Path, scope: str, contract_name: object, yaml
+    read: TextReader, scope: str, contract_name: object, yaml
 ) -> bool:
-    path = root / "mappings" / scope / "readiness-status.yaml"
+    text = read(f"mappings/{scope}/readiness-status.yaml")
+    if text is None:
+        return False
     try:
-        document = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
-    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        document = yaml.safe_load(text)
+    except yaml.YAMLError:
         return False
     if not isinstance(document, dict):
         return False
@@ -100,20 +142,34 @@ def _named_semantic_approval(
 
 
 def _valid_semantic_approval(approval: object, contract_name: object) -> bool:
-    from seshat.rules.readiness_status import _owner_authority
+    """A semantic_model_ready approval by an eligible (metric_owner) named human
+    with an ISO ``at:`` date -- the ONE shared predicate -- that binds this
+    contract. Binding is the structured ``contracts: [Name]`` list when present;
+    the prose note is a narrowed legacy fallback (audit F014)."""
+    from seshat.rules.readiness_status import stage_approval_valid
 
-    if not isinstance(approval, dict):
+    if not isinstance(contract_name, str):
         return False
-    if approval.get("stage") != "semantic_model_ready":
+    if not stage_approval_valid("semantic_model_ready", approval):
         return False
-    if _owner_authority(approval.get("owner")) != "metric_owner":
+    assert isinstance(approval, dict)
+    contracts = approval.get("contracts")
+    if contracts is not None:
+        return isinstance(contracts, list) and contract_name in contracts
+    return _note_lists_contract(approval.get("note"), contract_name)
+
+
+def _note_lists_contract(note: object, contract_name: str) -> bool:
+    """Legacy binding: the note LISTS the contract as a delimited item.
+
+    The name must stand as a list item (after ``:``, ``,``, ``;`` or ``(``, and
+    before ``,``, ``;``, ``)``, ``.`` or the end), so "approved Net Sales only"
+    does not approve ``Sales``; a note carrying a refusal marker binds nothing.
+    Prefer the structured ``contracts:`` field for new approvals."""
+    if not isinstance(note, str) or _REFUSAL_RE.search(note):
         return False
-    if not approval.get("at") or not isinstance(contract_name, str):
-        return False
-    note = approval.get("note")
-    if not isinstance(note, str):
-        return False
-    pattern = rf"(?<![A-Za-z0-9_]){re.escape(contract_name)}(?![A-Za-z0-9_])"
+    name = re.escape(contract_name)
+    pattern = rf"(?:^|[:,;(])\s*{name}\s*(?=[,;).]|$)"
     return re.search(pattern, note) is not None
 
 
@@ -142,7 +198,8 @@ def _approval_error(raw: dict, relative: str, approved: bool) -> str | None:
     if not approved:
         return (
             f"{relative}: approved contract requires named-human approval with "
-            "metric_owner authority whose note names this contract"
+            "metric_owner authority whose note names this contract (or whose "
+            "contracts: list includes it)"
         )
     return None
 
@@ -236,7 +293,7 @@ def _metric_contract(raw: dict, path: Path, scope: str) -> MetricContract:
 
 
 def _resolve_contract(
-    path: Path, resolved_root: Path, yaml
+    path: Path, resolved_root: Path, read: TextReader, yaml
 ) -> tuple[MetricContract | None, str | None]:
     """Parse one path into a validated contract, or the reason it is refused."""
     resolved_path = path.resolve()
@@ -247,13 +304,11 @@ def _resolve_contract(
     scope = _scope_from_path(relative)
     if scope is None:
         return None, f"{relative}: metric contract is outside mappings/<scope>/metrics"
-    raw, read_error = _read_mapping(path, relative, yaml)
+    raw, read_error = _read_mapping(relative, read, yaml)
     if read_error is not None:
         return None, read_error
     assert raw is not None
-    semantic_approval = _named_semantic_approval(
-        resolved_root, scope, raw.get("name"), yaml
-    )
+    semantic_approval = _named_semantic_approval(read, scope, raw.get("name"), yaml)
     validation_error = _contract_error(raw, path, relative, semantic_approval)
     if validation_error is not None:
         return None, validation_error
@@ -283,16 +338,26 @@ def _duplicate_error(
     return None
 
 
-def load_contract_inventory(paths: Iterable[Path], root: Path) -> ContractInventory:
-    """Load complete contracts backed by a named approval in their own scope."""
+def load_contract_inventory(
+    paths: Iterable[Path], root: Path, *, committed: bool = False
+) -> ContractInventory:
+    """Load complete contracts backed by a named approval in their own scope.
+
+    The single answer to "is this contract approved?" -- every dashboard, report,
+    statistical and PBIP surface asks here (no second approval-trust path).
+    ``committed=True`` reads each contract and the readiness approvals at HEAD
+    and refuses anything untracked or dirty; approval-bearing gates use it."""
     import yaml
 
     approved: dict[ContractKey, MetricContract] = {}
     bindings: dict[MeasureBinding, MetricContract] = {}
     errors: list[str] = []
     resolved_root = Path(root).resolve()
+    read = (
+        committed_reader(resolved_root) if committed else worktree_reader(resolved_root)
+    )
     for path in sorted(Path(item) for item in paths):
-        contract, error = _resolve_contract(path, resolved_root, yaml)
+        contract, error = _resolve_contract(path, resolved_root, read, yaml)
         if error is not None:
             errors.append(error)
             continue
@@ -304,3 +369,19 @@ def load_contract_inventory(paths: Iterable[Path], root: Path) -> ContractInvent
         approved[(contract.scope, contract.name)] = contract
         bindings[contract.binding] = contract
     return ContractInventory(approved, tuple(errors))
+
+
+def metric_contract_paths(root: Path, scope: str | None = None) -> list[Path]:
+    """Contract files under ``mappings/<scope>/metrics/`` (every scope if None)."""
+    pattern = f"{scope}/metrics/*.yaml" if scope else "*/metrics/*.yaml"
+    return sorted((Path(root) / "mappings").glob(pattern))
+
+
+def approved_contracts_for_scope(
+    root: Path, scope: str, *, committed: bool = False
+) -> tuple[dict[str, MetricContract], tuple[str, ...]]:
+    """Approved contracts (by name) for one mapping scope, plus refusal reasons."""
+    inventory = load_contract_inventory(
+        metric_contract_paths(root, scope), root, committed=committed
+    )
+    return inventory.for_scope(scope), inventory.errors

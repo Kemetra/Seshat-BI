@@ -4,8 +4,9 @@ A committed Report Intent's ``outcome_metrics`` / ``driver_metrics`` /
 ``guardrail_metrics`` entries REFERENCE approved metric contracts by name --
 never define them (FR-003). This module is the small, honest reader that
 resolves each reference against the real metric-contract store and reports the
-result: every metric that resolves to an approved (``readiness.status: pass``)
-contract, and every metric that does NOT (a gap that routes upstream to
+result: every metric that resolves to a contract the shared contract inventory
+approves (``metric_contract_inventory`` -- never the file's own status field),
+and every metric that does NOT (a gap that routes upstream to
 metric-contract definition, per FR-004) -- it never invents a metric contract
 to make a reference resolve.
 
@@ -21,21 +22,9 @@ Read-only: no execution, no DB, no Power BI, no approval grant, no writes.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, NamedTuple
-
-
-def _load_yaml_mapping(path: Path) -> dict[str, Any] | None:
-    """Load a YAML mapping; None on any read/parse failure (shipped-surface idiom)."""
-    import yaml
-
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
-    except (OSError, UnicodeDecodeError, yaml.YAMLError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    return data
 
 
 class MetricReference(NamedTuple):
@@ -83,47 +72,74 @@ def metric_references(intent: dict[str, Any]) -> list[MetricReference]:
     return list(refs.values())
 
 
-def _contract_status(repo_root: Path, store_ref: str) -> str | None:
-    """The ``readiness.status`` of the contract at ``store_ref``, or None if the
-    file is absent/unreadable -- never fabricated."""
-    if not store_ref:
+_STORE_REF_RE = re.compile(r"^mappings/(?P<scope>[^/]+)/metrics/(?P<stem>[^/]+)\.yaml$")
+
+
+def _store_ref_scope(store_ref: str) -> tuple[str, str] | None:
+    """(scope, file stem) for a CONTAINED ``mappings/<scope>/metrics/<x>.yaml``.
+
+    An absolute path, a ``..`` segment or anything outside a mapping scope's
+    metrics/ directory is refused -- a reference may only name a governed
+    contract inside this repository (audit F145)."""
+    ref = store_ref.replace("\\", "/").strip()
+    if not ref or ref.startswith("/") or ":" in ref or ".." in ref.split("/"):
         return None
-    path = repo_root / store_ref
-    if not path.is_file():
+    match = _STORE_REF_RE.match(ref)
+    if match is None or match["scope"] in (".", ".."):
         return None
-    data = _load_yaml_mapping(path)
-    if data is None:
+    return match["scope"], match["stem"]
+
+
+def _resolve_one(
+    ref: MetricReference, repo_root: Path, committed: bool, cache: dict
+) -> str | None:
+    """None when ``ref`` resolves to an APPROVED contract of the SAME name, else
+    the gap reason. Approval comes only from the shared contract inventory."""
+    from seshat.metric_contract_inventory import approved_contracts_for_scope
+
+    located = _store_ref_scope(ref.store_ref)
+    if located is None:
+        return (
+            f"store_ref {ref.store_ref!r} is not a contained "
+            "mappings/<scope>/metrics/<name>.yaml path"
+        )
+    scope, stem = located
+    if scope not in cache:
+        cache[scope] = approved_contracts_for_scope(
+            repo_root, scope, committed=committed
+        )
+    approved, errors = cache[scope]
+    if stem != ref.name:
+        return f"store_ref {ref.store_ref!r} names contract {stem!r}, not {ref.name!r}"
+    if ref.name in approved:
         return None
-    readiness = data.get("readiness")
-    if not isinstance(readiness, dict):
-        return None
-    status = readiness.get("status")
-    return str(status).strip() if isinstance(status, str) else None
+    detail = next((e for e in errors if e.startswith(ref.store_ref)), None)
+    if detail is None:
+        return f"no approved metric contract found at {ref.store_ref!r}"
+    return f"metric contract at {ref.store_ref!r} is not approved: {detail}"
 
 
 def resolve_metric_references(
-    intent: dict[str, Any], repo_root: Path
+    intent: dict[str, Any], repo_root: Path, *, committed: bool = False
 ) -> ResolutionResult:
     """Resolve every metric reference in ``intent`` against the real contract
     store rooted at ``repo_root``.
 
-    A reference resolves only when its ``store_ref`` file exists, parses, and
-    declares ``readiness.status: pass`` (FR-003). Everything else -- a missing
-    file, an unreadable file, or a non-``pass`` status -- is a GAP: it is
-    reported, never invented (FR-004). The caller (the interview / the US2
-    coordinator) records the gap and routes it upstream to metric-contract
-    definition; this function performs no write and grants no approval.
+    A reference resolves only when its ``store_ref`` is a contained contract path,
+    the contract there carries the SAME name, and the shared contract inventory
+    approves it (FR-003). Everything else is a GAP: it is reported, never
+    invented (FR-004). ``committed=True`` reads at HEAD (approval-bearing
+    callers such as the dashboard coordinator). No write, no approval grant.
     """
     resolved: list[str] = []
     gaps: list[MetricGap] = []
+    cache: dict = {}
     for ref in metric_references(intent):
-        status = _contract_status(repo_root, ref.store_ref)
-        if status == "pass":
+        reason = _resolve_one(ref, Path(repo_root), committed, cache)
+        if reason is None:
             resolved.append(ref.name)
-            continue
-        if status is None:
-            reason = f"no approved metric contract found at {ref.store_ref!r}"
         else:
-            reason = f"metric contract at {ref.store_ref!r} is {status!r}, not 'pass'"
-        gaps.append(MetricGap(name=ref.name, store_ref=ref.store_ref, reason=reason))
+            gaps.append(
+                MetricGap(name=ref.name, store_ref=ref.store_ref, reason=reason)
+            )
     return ResolutionResult(resolved=tuple(resolved), gaps=tuple(gaps))

@@ -14,6 +14,7 @@ import yaml
 from seshat.report.binding import BindingMap, VisualBinding
 from seshat.report.model import ReportError
 from seshat.report.plan import contract_payloads, figure_requests, load_figure_plan
+from tests.unit._gitfix import commit_tree  # noqa: E402
 
 pytestmark = pytest.mark.unit
 
@@ -156,5 +157,6 @@ def test_an_unreadable_contract_refuses_rather_than_being_skipped(
     metrics = tmp_path / "mappings" / "t" / "metrics"
     metrics.mkdir(parents=True)
     (metrics / "Broken.yaml").write_text("name: [oops\n", encoding="utf-8")
+    commit_tree(tmp_path)
     with pytest.raises(ReportError, match="cannot read contract"):
         contract_payloads(tmp_path, "t")

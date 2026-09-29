@@ -68,13 +68,22 @@ def _evidence_identity(root: Path, reference: str, *, kind: str) -> dict[str, An
     return identity
 
 
-def _valid_receipt_shape(stage: object, owner: object) -> bool:
-    return (
-        isinstance(stage, str)
-        and stage in _STAGES
-        and isinstance(owner, str)
-        and bool(owner.strip())
+def _valid_receipt_shape(item: dict[str, Any]) -> bool:
+    """The ONE approval predicate RS1 uses (audit F075): a named human with an
+    authority class and an ISO date -- eligible for the stage where the stage is
+    approval-bearing. A bare role such as 'data_owner' is not a valid receipt."""
+    from seshat.rules.readiness_status import (
+        STAGE_AUTHORITY,
+        approval_is_shape_valid,
+        stage_approval_valid,
     )
+
+    stage = item.get("stage")
+    if not isinstance(stage, str) or stage not in _STAGES:
+        return False
+    if stage in STAGE_AUTHORITY:
+        return stage_approval_valid(stage, item)
+    return approval_is_shape_valid(item)
 
 
 def _receipt(item: dict[str, Any], source_path: str) -> dict[str, Any]:
@@ -86,7 +95,7 @@ def _receipt(item: dict[str, Any], source_path: str) -> dict[str, Any]:
         "owner": owner if isinstance(owner, str) else None,
         "at": str(at) if at is not None else None,
         "source_artifact": source_path,
-        "valid_shape": _valid_receipt_shape(stage, owner),
+        "valid_shape": _valid_receipt_shape(item),
     }
 
 
@@ -224,15 +233,32 @@ def build_passport(
         },
         "authority_disclaimer": AUTHORITY_DISCLAIMER,
     }
-    digest = hashlib.sha256(
-        json.dumps(body, sort_keys=True, ensure_ascii=True).encode("utf-8")
-    ).hexdigest()
     return {
         **body,
-        "passport_id": f"passport-{digest[:16]}",
+        "passport_id": _passport_id(body),
         "generated_at": generated_at
         or datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
+
+
+def _passport_id(body: dict[str, Any]) -> str:
+    """The content-derived id over everything but ``passport_id``/``generated_at``."""
+    digest = hashlib.sha256(
+        json.dumps(body, sort_keys=True, ensure_ascii=True).encode("utf-8")
+    ).hexdigest()
+    return f"passport-{digest[:16]}"
+
+
+def _id_matches(passport: dict[str, Any]) -> bool:
+    body = {
+        key: value
+        for key, value in passport.items()
+        if key not in ("passport_id", "generated_at")
+    }
+    try:
+        return _passport_id(body) == passport.get("passport_id")
+    except (TypeError, ValueError):
+        return False
 
 
 def _verify_artifact(root: Path, entry: object) -> dict[str, Any]:
@@ -309,19 +335,30 @@ def verify_passport(repo_root: Path | str, passport: object) -> dict[str, Any]:
     except ContractError as exc:
         return _incompatible_result(passport.get("passport_id"), str(exc))
     checked = _checked_artifacts(root, passport)
+    if not checked:
+        # Nothing re-derivable is not "verified" (audit F075).
+        return _incompatible_result(
+            passport.get("passport_id"), "passport records no artifacts to verify"
+        )
+    projection = build_readiness_projection(root)
+    revision = _revision_comparison(
+        passport.get("source_revision"),
+        projection["workspace"]["source_revision"],
+    )
+    id_match = _id_matches(passport)
     seen = {item["verification"] for item in checked}
+    if not id_match or revision["source_revision_match"] is False:
+        # An edited readiness/approval/scope body, or another revision, is a change.
+        seen.add("changed")
     outcome = next(
         (verdict for verdict in _VERDICT_ORDER if verdict in seen), "verified"
     )
-    projection = build_readiness_projection(root)
     return {
         "schema_version": SCHEMA_VERSION,
         "passport_id": passport.get("passport_id"),
         "outcome": outcome,
         "artifacts": checked,
-        **_revision_comparison(
-            passport.get("source_revision"),
-            projection["workspace"]["source_revision"],
-        ),
+        "passport_id_match": id_match,
+        **revision,
         "note": None,
     }

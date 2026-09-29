@@ -51,12 +51,14 @@ Blocker STAT_GRAIN_CONFLICT: The analysis observation grain conflicts with its a
 
 **A new contract is not trusted just because it exists.** Adding
 `RegionalValue.yaml` is not enough -- the readiness record must carry a
-named-human approval whose note names *that* contract:
+named-human metric_owner approval that binds *that* contract (preferably in its
+`contracts:` list):
 
 ```text
 Blocker STAT_CONTRACT_NOT_APPROVED: Metric-contract authority is incomplete:
 mappings/sample_orders/metrics/RegionalValue.yaml: approved contract requires
-named-human approval with metric_owner authority whose note names this contract
+named-human approval with metric_owner authority whose note names this contract (or whose
+contracts: list includes it)
 ```
 
 **A time index must be contiguous at the declared cadence.** Weekly dates that

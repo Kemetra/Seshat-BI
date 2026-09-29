@@ -13,6 +13,8 @@ from pathlib import Path
 
 import yaml
 
+from tests.unit._gitfix import commit_tree
+
 TABLE = "demo_table"
 
 LAYOUT = {
@@ -66,6 +68,40 @@ _TERMS = {
 }
 
 
+def approved_contract(name: str, **extra: object) -> dict:
+    """A contract the shared inventory approves (with the approval ``workspace``
+    records): owner, checkable definition, gold binding, evidence."""
+    return {
+        "name": name,
+        "owner": "metric_owner",
+        "binds_to": {"gold_table": f"gold.fct_{name.lower()}", "columns": ["x"]},
+        "definition": {"kind": "base", "aggregation": "sum", "filter": []},
+        "readiness": {
+            "status": "pass",
+            "evidence": ["approved by the named metric owner"],
+            "blocking_reasons": [],
+        },
+        **extra,
+    }
+
+
+def approvals(contracts: tuple[str, ...]) -> list[dict]:
+    """The named-human approvals a renderable table records."""
+    return [
+        {
+            "stage": "semantic_model_ready",
+            "owner": "Grace Hopper (metric_owner)",
+            "at": "2026-06-25",
+            "contracts": list(contracts),
+        },
+        {
+            "stage": "dashboard_ready",
+            "owner": "Dana Report (report_owner)",
+            "at": "2026-06-25",
+        },
+    ]
+
+
 def vocabulary(language: str = "en", **extra: str):
     """A Vocabulary covering the codes these tests use."""
     from seshat.report.vocabulary import Vocabulary
@@ -86,15 +122,16 @@ def workspace(
     can set up a table the gate must refuse. ``evidence`` likewise: passing ``()``
     builds the status-with-nothing-behind-it case the gate now refuses.
     ``contracts`` names the metric files to create; passing ``()`` builds a table
-    with no approved contracts at all.
+    with no approved contracts at all. The workspace is committed (the gate and
+    contract inventory read HEAD); a test that edits a file afterwards must
+    ``commit_tree`` again for the edit to count.
     """
     mappings = tmp_path / "mappings" / TABLE
     (mappings / "design").mkdir(parents=True)
     (mappings / "metrics").mkdir(parents=True)
     for name in contracts:
         (mappings / "metrics" / f"{name}.yaml").write_text(
-            yaml.safe_dump({"name": name, "readiness": {"status": "pass"}}),
-            encoding="utf-8",
+            yaml.safe_dump(approved_contract(name)), encoding="utf-8"
         )
     (mappings / "readiness-status.yaml").write_text(
         yaml.safe_dump(
@@ -103,6 +140,7 @@ def workspace(
                 "stages": {
                     "dashboard_ready": {"status": status, "evidence": list(evidence)}
                 },
+                "approvals": approvals(contracts),
             }
         ),
         encoding="utf-8",
@@ -126,4 +164,6 @@ def workspace(
     observations.write_text(
         yaml.safe_dump(_OBSERVATIONS, sort_keys=False), encoding="utf-8"
     )
+    # The readiness record and contracts approve a render only once COMMITTED.
+    commit_tree(tmp_path)
     return TABLE, observations
