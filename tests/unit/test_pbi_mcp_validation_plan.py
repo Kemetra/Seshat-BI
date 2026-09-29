@@ -78,6 +78,31 @@ def test_a_report_naming_the_model_is_paired(tmp_path) -> None:
     assert skipped == ()
 
 
+def test_a_report_below_the_repo_root_is_paired(tmp_path) -> None:
+    """The repo's own canonical layout is ``powerbi/X.Report`` bound by
+    ``../X.SemanticModel``. A root-only glob never found it and recorded the
+    false reason 'no report in this repository is bound to the mutated model'."""
+    nested = tmp_path / "powerbi"
+    model = _model(nested)
+    report = _report(nested, "Sales.Report", "../Sales.SemanticModel")
+
+    paired, skipped = validation_plan.paired_reports(tmp_path, model)
+
+    assert paired == (report,)
+    assert skipped == ()
+
+
+def test_report_discovery_skips_vendored_and_vcs_trees(tmp_path) -> None:
+    model = _model(tmp_path)
+    for ignored in (".git", "node_modules", ".venv"):
+        _report(tmp_path / ignored, "Sales.Report", "../../Sales.SemanticModel")
+
+    paired, skipped = validation_plan.paired_reports(tmp_path, model)
+
+    assert paired == ()
+    assert skipped == ()
+
+
 def test_a_report_naming_a_different_model_is_not_paired(tmp_path) -> None:
     """Scoping is the point: an unrelated report must not be validated."""
     model = _model(tmp_path)
