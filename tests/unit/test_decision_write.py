@@ -30,15 +30,17 @@ _STORE = ".seshat/semantic-decisions.yaml"
 def _entry(**overrides: object) -> dict:
     """A well-formed non-critical decision entry, so `authority=None` is legitimate."""
     payload: dict = {
-        "decision_id": "d-001",
+        "decision_id": "assumption_note.sales.1",
         # Non-critical on purpose: a critical type additionally needs the authority
         # contract, which is a separate concern from the write path.
         "decision_type": "assumption_note",
-        "scope": {"table": "sales"},
     }
     signer = str(overrides.pop("signer", _SIGNER))
     answer = str(overrides.pop("answer", "net_of_returns"))
     payload.update(overrides)  # type: ignore[arg-type]
+    # DS1's plural scope key, unique per id: a shared scope would make two approved
+    # fixtures the DS4 conflict the write path now refuses.
+    payload.setdefault("scope", {"artifacts": [str(payload["decision_id"])]})
     return decision_write.build_entry(
         **payload,  # type: ignore[arg-type]
         ruling=decision_write.HumanRuling(signer=signer, answer=answer),
@@ -119,7 +121,7 @@ def test_a_successful_write_returns_a_pending_commit_receipt(tmp_path: Path):
 
     assert receipt.state == "pending_commit"
     assert receipt.written_path == _STORE
-    assert receipt.decision_id == "d-001"
+    assert receipt.decision_id == "assumption_note.sales.1"
 
 
 def test_the_receipt_cannot_represent_an_approved_state():
@@ -145,7 +147,11 @@ def test_append_preserves_existing_entries_and_comments(tmp_path: Path):
 
     text = store.read_text(encoding="utf-8")
     assert "# provenance: hand-authored, do not reorder" in text
-    assert text.index("id: first") < text.index("id: second") < text.index("id: d-001")
+    assert (
+        text.index("id: first")
+        < text.index("id: second")
+        < text.index("id: assumption_note.sales.1")
+    )
 
 
 def test_the_appended_document_is_still_readable_by_the_shipped_loader(tmp_path: Path):
@@ -156,7 +162,7 @@ def test_the_appended_document_is_still_readable_by_the_shipped_loader(tmp_path:
 
     loaded = decision_store.load_store_file(tmp_path, _STORE)
     assert loaded.ok, loaded.problems
-    assert [d["id"] for d in loaded.decisions] == ["d-001"]
+    assert [d["id"] for d in loaded.decisions] == ["assumption_note.sales.1"]
 
 
 def test_two_appends_accumulate_rather_than_overwrite(tmp_path: Path):
@@ -164,11 +170,14 @@ def test_two_appends_accumulate_rather_than_overwrite(tmp_path: Path):
 
     decision_write.append_decision(tmp_path, _STORE, _entry(), authority=None)
     decision_write.append_decision(
-        tmp_path, _STORE, _entry(decision_id="d-002"), authority=None
+        tmp_path, _STORE, _entry(decision_id="assumption_note.sales.2"), authority=None
     )
 
     loaded = decision_store.load_store_file(tmp_path, _STORE)
-    assert [d["id"] for d in loaded.decisions] == ["d-001", "d-002"]
+    assert [d["id"] for d in loaded.decisions] == [
+        "assumption_note.sales.1",
+        "assumption_note.sales.2",
+    ]
 
 
 def test_an_existing_decision_is_never_mutated(tmp_path: Path):
@@ -178,7 +187,10 @@ def test_an_existing_decision_is_never_mutated(tmp_path: Path):
     first = decision_store.load_store_file(tmp_path, _STORE).decisions[0]
 
     decision_write.append_decision(
-        tmp_path, _STORE, _entry(decision_id="d-002", answer="gross"), authority=None
+        tmp_path,
+        _STORE,
+        _entry(decision_id="assumption_note.sales.2", answer="gross"),
+        authority=None,
     )
 
     after = decision_store.load_store_file(tmp_path, _STORE).decisions[0]
@@ -295,4 +307,81 @@ def test_a_committed_decision_becomes_visible_at_head(tmp_path: Path):
     workspace.commit_all("decision: net of returns")
 
     committed = decision_write.decisions_at_head(workspace, _STORE)
-    assert [d["id"] for d in committed] == ["d-001"]
+    assert [d["id"] for d in committed] == ["assumption_note.sales.1"]
+
+
+# --- Audit batch 9: the write path refuses what the gate would flag ------------------
+
+
+def test_a_decline_is_recorded_as_rejected_not_approved():
+    entry = _entry(answer="decline")
+
+    assert entry["status"] == "rejected"
+    assert decision_store.is_known_status(entry["status"])
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"decision_id": "studio-0001"},  # DS1: id needs <type>.<slug>
+        {"scope": {"artifact": "x.yaml"}},  # DS1: singular key names no scope
+    ],
+)
+def test_an_entry_ds1_would_flag_is_refused_unwritten(tmp_path: Path, overrides):
+    store = fixtures.store_file(tmp_path)
+    original = store.read_text(encoding="utf-8")
+
+    with pytest.raises(decision_write.WriteRefused):
+        decision_write.append_decision(
+            tmp_path, _STORE, _entry(**overrides), authority=None
+        )
+
+    assert store.read_text(encoding="utf-8") == original
+
+
+def test_a_duplicate_id_is_refused(tmp_path: Path):
+    fixtures.store_file(tmp_path)
+    decision_write.append_decision(tmp_path, _STORE, _entry(), authority=None)
+
+    with pytest.raises(decision_write.WriteRefused, match="already in the store"):
+        decision_write.append_decision(
+            tmp_path,
+            _STORE,
+            _entry(scope={"artifacts": ["elsewhere"]}),
+            authority=None,
+        )
+
+
+def test_an_active_scope_conflict_is_refused(tmp_path: Path):
+    fixtures.store_file(tmp_path)
+    shared = {"artifacts": ["same.yaml"]}
+    decision_write.append_decision(
+        tmp_path, _STORE, _entry(scope=shared), authority=None
+    )
+
+    with pytest.raises(decision_write.WriteRefused, match="supersede"):
+        decision_write.append_decision(
+            tmp_path,
+            _STORE,
+            _entry(decision_id="assumption_note.sales.2", scope=shared),
+            authority=None,
+        )
+
+
+def test_a_missing_store_file_is_created(tmp_path: Path):
+    store = tmp_path.joinpath(*_STORE.split("/"))
+    assert not store.exists()
+
+    decision_write.append_decision(tmp_path, _STORE, _entry(), authority=None)
+
+    loaded = decision_store.load_store_file(tmp_path, _STORE)
+    assert [d["id"] for d in loaded.decisions] == ["assumption_note.sales.1"]
+
+
+def test_a_path_outside_the_store_paths_is_refused(tmp_path: Path):
+    with pytest.raises(decision_write.WriteRefused):
+        decision_write.append_decision(
+            tmp_path, "../outside.yaml", _entry(), authority=None
+        )
+
+    assert not (tmp_path.parent / "outside.yaml").exists()

@@ -132,51 +132,83 @@ def build_narrative(
     return "\n".join(sections)
 
 
-def _manifest_for(root: Path, staged: list[Path]) -> dict[str, Any]:
-    """The manifest: what was included, and proof of what each file held."""
+#: Directories never walked for bundle candidates: tooling state, not workspace.
+_SKIPPED_DIRS = frozenset({".git", ".venv", "node_modules"})
+
+
+def _manifest_for(staged: dict[str, Path], scan_verdict: str) -> dict[str, Any]:
+    """The manifest: what was included, and proof of what each file held.
+
+    Keyed by workspace-RELATIVE path, so two tables' same-named files stay distinct.
+    `redaction_scan` is the scan's own verdict, never a literal.
+    """
     return {
         "allowlisted_fields": list(BUNDLE_ALLOWED_FIELDS),
         "allowlisted_files": list(BUNDLE_ALLOWED_FILES),
-        "included_files": [p.name for p in staged],
+        "included_files": list(staged),
         "file_hashes": {
-            p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in staged
+            arcname: hashlib.sha256(path.read_bytes()).hexdigest()
+            for arcname, path in staged.items()
         },
-        "redaction_scan": "passed",
+        "redaction_scan": scan_verdict,
     }
 
 
-def _scan_staged(root: Path, staged: list[Path]) -> None:
-    """Scan staged content with the shipped redaction corpus before finalizing.
+def _scan_staged(staged: dict[str, Path]) -> str:
+    """Scan staged content with detectors INDEPENDENT of the staging scrubber.
 
-    Raises `ScanFailed` rather than returning a verdict, so a caller cannot proceed by
-    ignoring a return value.
+    Re-running the scrubber staging already applied could never fail, so the verdict
+    was a tautology. This runs the shipped secret-shaped table plus the bare-token
+    table -- shapes staging does not remove -- over the staged text. Raises
+    `ScanFailed` rather than returning a failing verdict, so a caller cannot proceed
+    by ignoring a return value; names the PATTERN, never the value.
     """
-    for path in staged:
+    for arcname, path in staged.items():
         text = path.read_text(encoding="utf-8", errors="ignore")
-        scrubbed = redaction.redact_paths(
-            redaction.redact_credentials(text), workspace_root=root
-        )
-        if scrubbed != text:
-            raise ScanFailed(f"{path.name} still contained redactable content")
+        labels = [
+            label
+            for label, pattern in (
+                *redaction.SECRET_PATTERNS,
+                *redaction.BARE_TOKEN_PATTERNS,
+            )
+            if pattern.search(text)
+        ]
+        if labels:
+            raise ScanFailed(f"{arcname} still contained: {', '.join(labels)}")
+    return "passed"
 
 
-def _stage_allowlisted(root: Path, staging: Path) -> list[Path]:
-    """Copy allowlisted files into staging, scrubbed.
+def _candidates(root: Path, staging: Path) -> list[Path]:
+    """Allowlisted files under `root`, outside tooling directories and staging."""
+    return [
+        candidate
+        for candidate in sorted(root.rglob("*"))
+        if candidate.is_file()
+        and candidate.name in BUNDLE_ALLOWED_FILES
+        and staging not in candidate.parents
+        and not _SKIPPED_DIRS.intersection(candidate.relative_to(root).parts)
+    ]
+
+
+def _stage_allowlisted(root: Path, staging: Path) -> dict[str, Path]:
+    """Copy allowlisted files into staging, scrubbed, under their RELATIVE paths.
 
     Only names in `BUNDLE_ALLOWED_FILES` are considered. `.env` is never a candidate --
     it is not on the list, so its exclusion needs no filter and cannot be forgotten.
+    Staged by basename, every table's `readiness-status.yaml` overwrote the last, so
+    the bundle silently kept one table's files.
     """
-    staged: list[Path] = []
-    for candidate in sorted(root.rglob("*")):
-        if not candidate.is_file() or candidate.name not in BUNDLE_ALLOWED_FILES:
-            continue
+    staged: dict[str, Path] = {}
+    for candidate in _candidates(root, staging):
+        arcname = candidate.relative_to(root).as_posix()
         text = candidate.read_text(encoding="utf-8", errors="ignore")
         cleaned = redaction.redact_paths(
             redaction.redact_credentials(text), workspace_root=root
         )
-        target = staging / candidate.name
+        target = staging.joinpath(*arcname.split("/"))
+        target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(cleaned, encoding="utf-8")
-        staged.append(target)
+        staged[arcname] = target
     return staged
 
 
@@ -191,16 +223,14 @@ def build_support_bundle(root: Path, *, destination: Path) -> Path:
     with tempfile.TemporaryDirectory(dir=root) as staging_dir:
         staging = Path(staging_dir)
         staged = _stage_allowlisted(root, staging)
-        _scan_staged(root, staged)
-
-        manifest = _manifest_for(root, staged)
+        manifest = _manifest_for(staged, _scan_staged(staged))
         handle_fd, temporary = tempfile.mkstemp(dir=root, suffix=".tmp")
         os.close(handle_fd)
         try:
             with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive:
                 archive.writestr(_MANIFEST_NAME, json.dumps(manifest, indent=2))
-                for path in staged:
-                    archive.write(path, arcname=path.name)
+                for arcname, path in staged.items():
+                    archive.write(path, arcname=arcname)
             os.replace(temporary, destination)
         except BaseException:
             Path(temporary).unlink(missing_ok=True)

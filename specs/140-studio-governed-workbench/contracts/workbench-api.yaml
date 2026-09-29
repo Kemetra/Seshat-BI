@@ -293,6 +293,11 @@ components:
         verification:
           type: object
           properties:
+            apply:
+              type: string
+              description: >-
+                `not executed ...` while apply writes no files; applied_paths is
+                then empty rather than naming a target nothing touched.
             static:
               type: string
               description: Necessary, not semantic or live correctness (FR-140-016).

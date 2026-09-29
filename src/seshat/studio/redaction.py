@@ -42,6 +42,7 @@ import re
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 
+from seshat.pbi_mcp.scan import SECRET_PATTERNS
 from seshat.redaction_core import replace_fragments, uri_component_values
 
 #: Replacement for session material.
@@ -260,6 +261,77 @@ def redact_credentials(text: str) -> str:
 _DSN_SHAPED = re.compile(r"\b[a-z][a-z0-9+.\-]*://[^\s\"'<>|]*@[^\s\"'<>|]*")
 
 
+#: Credential shapes that appear STANDALONE, with no `key=value`, `Authorization:`
+#: or DSN framing for layer one to key on -- "Incorrect API key provided: sk-..." is
+#: the common one. ONE table shared by every boundary (events, projections, problems,
+#: provider stderr) so the stderr leg and the event leg cannot drift apart.
+BARE_TOKEN_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("provider API key", re.compile(r"\bsk-[A-Za-z0-9_-]{8,}")),
+    (
+        "GitHub token",
+        re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})"),
+    ),
+    ("AWS access key id", re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b")),
+    ("Slack token", re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}")),
+    (
+        "JSON web token",
+        re.compile(r"\bey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"),
+    ),
+)
+
+#: Contract fields that carry an IDENTIFIER the server or the relay correlates on.
+#: Layer one still applies to them; only the shape layer is skipped, because a
+#: provider item id that happens to be GUID-shaped would otherwise collapse every
+#: approval to the same `<redacted>` id and break the decision round trip.
+_IDENTIFIER_KEYS: frozenset[str] = frozenset(
+    {
+        "approval_id",
+        "decision_id",
+        "proposal_hash",
+        "proposal_id",
+        "provider_request_id",
+        "request_id",
+        "run_id",
+        "thread_id",
+        "turn_id",
+        "workspace_revision",
+    }
+)
+
+
+def scrub_secret_shapes(text: str) -> str:
+    """Layer two: every secret-SHAPED span, independent of any framing.
+
+    The shipped `SECRET_PATTERNS` table (tenant GUIDs, home paths, connection
+    literals, managed-DB endpoints) plus `BARE_TOKEN_PATTERNS`. Layer one alone is
+    documented as insufficient: a bare tenant GUID or API key passes straight through
+    it. Runs AFTER path relativization, or the home-path rule would blank every
+    workspace path under a user profile instead of relativizing it.
+    """
+    scrubbed = text
+    for _label, pattern in (*SECRET_PATTERNS, *BARE_TOKEN_PATTERNS):
+        scrubbed = pattern.sub(REDACTED, scrubbed)
+    return scrubbed
+
+
+def problem_content(
+    status: int, title: str, detail: str, recovery_action: str
+) -> dict[str, object]:
+    """The contract's `Problem` body, scrubbed on the way out.
+
+    ONE builder for `app` and `agent_routes`: a detail can embed exception text --
+    an absolute home path, a provider message -- and the two hand-kept copies of the
+    shape carried no redaction at all. No workspace root is needed for the parts
+    that matter here: home paths and bare tokens are removed by the shape layer.
+    """
+    fields = {"title": title, "detail": detail, "recovery_action": recovery_action}
+    return {
+        "type": "about:blank",
+        "status": status,
+        **{key: redact_for_boundary(value) for key, value in fields.items()},
+    }
+
+
 def scrub_payload(
     payload: object,
     *,
@@ -282,7 +354,7 @@ def scrub_payload(
         )
     if isinstance(payload, dict):
         return {
-            key: scrub_payload(value, secrets=secrets, workspace_root=workspace_root)
+            key: _scrub_field(key, value, secrets, workspace_root)
             for key, value in payload.items()
         }
     if isinstance(payload, (list, tuple)):
@@ -293,11 +365,26 @@ def scrub_payload(
     return payload
 
 
+def _scrub_field(
+    key: object,
+    value: object,
+    secrets: Sequence[str | None],
+    workspace_root: Path | None,
+) -> object:
+    """One dict value; an identifier field skips only the shape layer."""
+    if key in _IDENTIFIER_KEYS and isinstance(value, str):
+        return redact_for_boundary(
+            value, secrets=secrets, workspace_root=workspace_root, shapes=False
+        )
+    return scrub_payload(value, secrets=secrets, workspace_root=workspace_root)
+
+
 def redact_for_boundary(
     text: str,
     *,
     secrets: Sequence[str | None] = (),
     workspace_root: Path | None = None,
+    shapes: bool = True,
 ) -> str:
     """The single entry point for anything crossing the Studio boundary.
 
@@ -320,7 +407,7 @@ def redact_for_boundary(
     scrubbed = redact_credentials(scrubbed)
     if workspace_root is not None:
         scrubbed = redact_paths(scrubbed, workspace_root)
-    return scrubbed
+    return scrub_secret_shapes(scrubbed) if shapes else scrubbed
 
 
 def _redact_short_secrets(text: str, secrets: Iterable[str | None]) -> str:

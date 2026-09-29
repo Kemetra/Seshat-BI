@@ -17,14 +17,18 @@ security model:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from functools import partial
 from pathlib import Path
 from typing import Any
 
+import anyio.to_thread
 from fastapi import FastAPI, Request
 
 from seshat import decision_write
+from seshat.studio import apply as apply_module
 from seshat.studio import decision_routes, exports, operations, review_scope
+from seshat.studio.http_common import json_body as _json_body
+from seshat.studio.http_common import now_iso as _now_iso
 
 #: Fields a client-facing decision entry may carry. An ALLOWLIST: anything added
 #: upstream later is absent by default rather than disclosed (FR-141-012).
@@ -45,25 +49,8 @@ class Deps:
     api_prefix: str = "/api/v1"
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
 def _workspace_root(deps: Deps) -> Path:
     return Path(deps.app.state.launch.workspace_root)
-
-
-async def _json_body(request: Request) -> dict[str, Any]:
-    """The body as a mapping; a non-mapping becomes an empty one.
-
-    Returning {} rather than raising lets each handler's own field checks produce the
-    contracted 422 with a useful message instead of a framework-shaped error.
-    """
-    try:
-        body = await request.json()
-    except Exception:
-        return {}
-    return body if isinstance(body, dict) else {}
 
 
 async def operations_report(*, deps: Deps) -> Any:
@@ -72,7 +59,15 @@ async def operations_report(*, deps: Deps) -> Any:
     No aggregate is computed here or anywhere: `ComponentDiagnostic` has no numeric
     field, so the payload cannot carry a roll-up (FR-141-002).
     """
-    report = operations.report(_workspace_root(deps))
+    # Off the event loop: doctor spawns git, and the /events poll that drives a
+    # live turn shares this loop.
+    report = await anyio.to_thread.run_sync(
+        partial(
+            operations.report,
+            _workspace_root(deps),
+            agent_health=getattr(deps.app.state, "agent_health", None),
+        )
+    )
     return deps.redact({"components": [d.as_dict() for d in report]})
 
 
@@ -106,7 +101,7 @@ async def operations_history(*, deps: Deps) -> Any:
     root = _workspace_root(deps)
     runs: list[operations.GovernedRunSummary] = []
 
-    for entry in _committed_decisions(deps, root):
+    for entry in await _committed_decisions(root):
         runs.append(
             operations.summarize_run(
                 run_id=str(entry.get("id", "")),
@@ -114,7 +109,7 @@ async def operations_history(*, deps: Deps) -> Any:
                 committed_source=str(
                     entry.get("approval", {}).get("evidence_identity", "committed")
                 ),
-                decision_state="authoritative",
+                decision_state=_decision_state(entry),
                 decided_by=entry.get("approval", {}).get("approved_by"),
             )
         )
@@ -131,12 +126,31 @@ async def operations_history(*, deps: Deps) -> Any:
     return deps.redact({"runs": [r.as_dict() for r in runs]})
 
 
-def _committed_decisions(deps: Deps, root: Path) -> list[dict[str, Any]]:
-    """Decisions visible AT HEAD: the gate's view, and the only client-facing one."""
+def _decision_state(entry: dict[str, Any]) -> str:
+    """The history label for a COMMITTED entry, from the same test apply uses.
+
+    Committed is not the same as authoritative: a committed decline is a settled
+    `rejected`, and an entry the shipped predicate refuses is `not_authoritative`.
+    """
+    if apply_module.authorizes(entry, None):
+        return "authoritative"
+    if entry.get("status") == "rejected":
+        return "rejected"
+    return "not_authoritative"
+
+
+async def _committed_decisions(root: Path) -> list[dict[str, Any]]:
+    """Decisions visible AT HEAD: the gate's view, and the only client-facing one.
+
+    Read in a worker thread -- `git show` is a blocking subprocess, and on the event
+    loop it stalled the /events poll that pumps a live turn and the Stop button.
+    """
     from seshat.studio import workbench_routes
 
-    reader = workbench_routes._CommittedReader(root)
-    return decision_write.decisions_at_head(reader, decision_routes.DECISION_STORE_REL)
+    reader = workbench_routes.CommittedReader(root)
+    return await anyio.to_thread.run_sync(
+        decision_write.decisions_at_head, reader, decision_routes.DECISION_STORE_REL
+    )
 
 
 async def client_review(scope: str | None = None, *, deps: Deps) -> Any:
@@ -146,10 +160,9 @@ async def client_review(scope: str | None = None, *, deps: Deps) -> Any:
     `pending_items` -- visible as pending, never counted as a decision (FR-141-021).
     """
     root = _workspace_root(deps)
+    at_head = await _committed_decisions(root)  # read ONCE per request
     try:
-        committed = review_scope.review_for(
-            scope=scope, decisions=_committed_decisions(deps, root)
-        )
+        committed = review_scope.review_for(scope=scope, decisions=at_head)
     except review_scope.ScopeRefused as refused:
         return deps.problem(
             refused.status,
@@ -158,7 +171,7 @@ async def client_review(scope: str | None = None, *, deps: Deps) -> Any:
             "Select the exact scope to review.",
         )
 
-    pending = _pending_items(root, scope or "")
+    pending = _pending_items(root, scope or "", at_head)
     decisions = [
         exports.scrub_for_export(
             entry, allowed=_CLIENT_DECISION_FIELDS, workspace_root=root
@@ -179,7 +192,7 @@ async def client_review(scope: str | None = None, *, deps: Deps) -> Any:
     )
 
 
-def _pending_items(root: Path, scope: str) -> list[str]:
+def _pending_items(root: Path, scope: str, at_head: list[dict[str, Any]]) -> list[str]:
     """Working-tree decisions not yet committed, as pending descriptions.
 
     A separate list rather than a filtered view of the decisions, so a renderer cannot
@@ -194,7 +207,7 @@ def _pending_items(root: Path, scope: str) -> list[str]:
         return []
     if not isinstance(document, dict):
         return []
-    committed_ids = {str(entry.get("id", "")) for entry in _committed_at_path(root)}
+    committed_ids = {str(entry.get("id", "")) for entry in at_head}
     return [
         f"{entry.get('answer', 'a decision')} -- awaiting commit"
         for entry in document.get("decisions") or []
@@ -218,13 +231,6 @@ def is_pending_for_scope(entry: object, scope: str, committed_ids: set[str]) -> 
         return False  # already committed: it is a decision, not a pending item
     reviewed = entry.get("approval", {}).get("reviewed_scope")
     return not scope or reviewed == scope
-
-
-def _committed_at_path(root: Path) -> list[dict[str, Any]]:
-    from seshat.studio import workbench_routes
-
-    reader = workbench_routes._CommittedReader(root)
-    return decision_write.decisions_at_head(reader, decision_routes.DECISION_STORE_REL)
 
 
 def names_a_person_and_scope(scope: object, who: object) -> bool:

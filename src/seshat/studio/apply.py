@@ -14,15 +14,29 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from seshat import decision_write
+from seshat import decision_store, decision_write
 from seshat.studio import decision_routes, proposals
 
-#: Said on every receipt. A static gate proves the artifact is well-formed; it cannot
-#: prove the numbers are right or that a live source agrees (FR-140-016).
+#: Said on every receipt. Apply writes nothing yet and runs no rule, so the only true
+#: static statement is that no check ran. Claiming "static checks passed" here was a
+#: verdict nothing computed. Even a real pass would be necessary, not sufficient: a
+#: static gate cannot prove the numbers are right or that a live source agrees
+#: (FR-140-016).
 STATIC_LABEL = (
-    "static checks passed -- necessary, not sufficient: this is not semantic or live "
-    "correctness"
+    "not run: no static check was executed for this apply (a static pass would be "
+    "necessary, not sufficient -- never semantic or live correctness)"
 )
+
+#: Said on every receipt until apply really writes. `applied_paths` stays empty
+#: rather than naming a target nothing touched.
+NOT_EXECUTED = (
+    "not executed: the authorized, in-scope proposal was verified, but apply writes "
+    "no files yet"
+)
+
+#: The one answer that authorizes an apply. A decline also carries the proposal's
+#: evidence string, so evidence alone can never be the test.
+_AUTHORIZING_ANSWER = "approve"
 
 #: The repository's existing marker for "no live evidence yet" (FR-140-017). Never a
 #: fabricated pass.
@@ -63,28 +77,48 @@ class ApplyReceipt:
         }
 
 
+def authorizes(
+    entry: dict[str, Any], authority: dict[str, frozenset[str]] | None
+) -> bool:
+    """True only for an approving, approved entry the shipped predicate accepts.
+
+    Public so Operations history labels a committed entry by the SAME test rather
+    than calling everything committed "authoritative".
+    """
+    return (
+        entry.get("answer") == _AUTHORIZING_ANSWER
+        and entry.get("status") == "approved"
+        and decision_store.approval_is_valid(entry, authority)[0]
+    )
+
+
 def _require_authoritative_decision(
-    committed: Any, proposal: proposals.ChangeProposal, store_rel: str
+    committed: Any,
+    proposal: proposals.ChangeProposal,
+    context: "decision_routes.WorkspaceContext",
 ) -> None:
-    """The governing decision must be visible AT HEAD, not just written.
+    """The governing decision must be visible AT HEAD, valid, and an approval.
 
     A `pending commit` decision is exactly the state this refuses: the file on disk
-    holds it, but nothing a human ratified does.
+    holds it, but nothing a human ratified does. So is a committed DECLINE, and so is
+    a hand-written stub that merely repeats the evidence string. More than one bound
+    entry is refused too: an approve followed by a decline is not an authorization.
     """
-    at_head = decision_write.decisions_at_head(committed, store_rel)
+    at_head = decision_write.decisions_at_head(committed, context.store_rel)
     bound = [
         entry
         for entry in at_head
         if entry.get("approval", {}).get("evidence")
         == f"proposal:{proposal.proposal_hash}"
     ]
-    if not bound:
-        raise ApplyRefused(
-            422,
-            "no committed decision authorizes this proposal; a recorded decision is "
-            "pending commit until a human commits it, and pending commit is not "
-            "authority",
-        )
+    if len(bound) == 1 and authorizes(bound[0], context.authority):
+        return
+    raise ApplyRefused(
+        422,
+        "no committed decision authorizes this proposal; a recorded decision is "
+        "pending commit until a human commits it, pending commit is not authority, "
+        "and only exactly one committed, valid 'approve' ruling authorizes an apply",
+    )
 
 
 def _require_reviewed_scope(
@@ -118,17 +152,17 @@ def apply_proposal(
         raise ApplyRefused(
             409, "the workspace moved since this proposal was reviewed; re-review it"
         )
-    _require_authoritative_decision(committed, proposal, context.store_rel)
-    applied = _require_reviewed_scope(payload, proposal)
+    _require_authoritative_decision(committed, proposal, context)
+    _require_reviewed_scope(payload, proposal)
 
-    verification = {"static": STATIC_LABEL}
+    verification = {"apply": NOT_EXECUTED, "static": STATIC_LABEL}
     # No DSN => say so. Synthesising a live result would be the fabricated pass
     # FR-140-017 forbids.
     verification["live"] = "live checks passed" if live_available else PENDING_LIVE
 
     return ApplyReceipt(
         proposal_hash=proposal.proposal_hash,
-        applied_paths=applied,
+        applied_paths=(),
         verification=verification,
         remaining_blockers=() if live_available else ("live verification pending",),
     )
