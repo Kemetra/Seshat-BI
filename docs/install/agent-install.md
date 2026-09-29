@@ -33,7 +33,7 @@ That form is for a **first** install. To add an extra to a Seshat you have
 **already** installed, inject the extra's dependencies instead of reinstalling:
 
 ```text
-pipx inject seshat-bi --force "dbt-core==1.12.0" "dbt-postgres==1.10.2"
+pipx inject seshat-bi --force "dbt-core==1.12.5" "dbt-postgres==1.10.2"
 ```
 
 `pipx install --force "seshat-bi[dbt]"` would also add the extra, but it

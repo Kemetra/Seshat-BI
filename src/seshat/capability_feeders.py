@@ -193,7 +193,7 @@ def read_dispatch_keys(repo_root: Path) -> set[str]:
     }
 
 
-_DBT_EXACT_EXTRA = ["dbt-core==1.12.0", "dbt-postgres==1.10.2"]
+_DBT_EXACT_EXTRA = ["dbt-core==1.12.5", "dbt-postgres==1.10.2"]
 _DBT_PUBLIC_COMMANDS = {"dbt-doctor", "dbt-plan", "dbt-build", "dbt-review"}
 _DBT_REQUIRED_TESTS = (
     "tests/contract/test_dbt_project.py",

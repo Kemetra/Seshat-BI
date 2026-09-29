@@ -146,7 +146,7 @@ def test_dbt_runtime_probe_reads_windows_metadata_without_execution(
         / ".venv"
         / "Lib"
         / "site-packages"
-        / "dbt_core-1.12.0.dist-info"
+        / "dbt_core-1.12.5.dist-info"
         / "METADATA"
     )
     metadata.parent.mkdir(parents=True)
@@ -174,7 +174,7 @@ def test_dbt_runtime_probe_reads_posix_metadata_without_an_interpreter(
         / "lib"
         / "python3.13"
         / "site-packages"
-        / "dbt_core-1.12.0.dist-info"
+        / "dbt_core-1.12.5.dist-info"
         / "METADATA"
     )
     metadata.parent.mkdir(parents=True)

@@ -22,7 +22,7 @@ pytestmark = pytest.mark.unit
 
 def _freshness_manifest(tmp_path, pin_spec: str, extra: str = "dbt", dist="dbt-core"):
     """A one-env manifest whose root pyproject declares one governed pin under
-    ``extra`` with the given specifier (e.g. ``dbt-core==1.12.0``)."""
+    ``extra`` with the given specifier (e.g. ``dbt-core==1.12.5``)."""
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "seshat-bi"\ndependencies = []\n'
         f'[project.optional-dependencies]\n{extra} = ["{pin_spec}"]\n',
@@ -54,14 +54,14 @@ def test_latest_stable_excludes_yanked_and_prereleases():
         {
             "1.10.0": [{"yanked": False}],
             "1.11.0": [{"yanked": True}, {"yanked": True}],  # fully yanked -> skip
-            "1.12.0": [{"yanked": True}, {"yanked": False}],  # half-yanked -> KEEP
+            "1.12.5": [{"yanked": True}, {"yanked": False}],  # half-yanked -> KEEP
             "1.13.0rc1": [{"yanked": False}],  # pre-release -> skip
             "1.13.0.dev1": [{"yanked": False}],  # dev -> skip
         },
         {},
     )
     latest = dc.latest_stable(json.loads(body))
-    assert latest == "1.12.0"
+    assert latest == "1.12.5"
 
 
 def test_prerelease_pin_reported_but_not_proposed_as_stable():
@@ -95,12 +95,12 @@ def test_proposal_behind_latest_carries_solve_proof(stub_resolve, stub_pypi, tmp
     solve-proof result for the PROPOSED-version substitution."""
     import scripts.dep_coresolve as dc
 
-    manifest_path = _freshness_manifest(tmp_path, "dbt-core==1.12.0")
+    manifest_path = _freshness_manifest(tmp_path, "dbt-core==1.12.5")
     stub_pypi(
         "dbt-core",
         _pypi_json(
             "dbt-core",
-            {"1.12.0": [{"yanked": False}], "1.13.0": [{"yanked": False}]},
+            {"1.12.5": [{"yanked": False}], "1.13.0": [{"yanked": False}]},
             {},
         ),
     )
@@ -112,11 +112,11 @@ def test_proposal_behind_latest_carries_solve_proof(stub_resolve, stub_pypi, tmp
     assert len(proposals) == 1
     p = proposals[0]
     assert p.dist == "dbt-core"
-    assert p.current == "1.12.0"
+    assert p.current == "1.12.5"
     assert p.latest_stable == "1.13.0"
     assert p.solve_outcome is dc.ResolveOutcome.PASS
     # REPLACE semantics: the resolve saw dbt-core==1.13.0, NOT the local
-    # path (which would re-impose ==1.12.0 and trivially conflict).
+    # path (which would re-impose ==1.12.5 and trivially conflict).
     reqs = stub_resolve.state["calls"][0]
     assert any("dbt-core==1.13.0" in r for r in reqs)
     assert not any(r.endswith("[dbt]") for r in reqs)
@@ -127,12 +127,12 @@ def test_proposal_with_failing_solve_still_renders(stub_resolve, stub_pypi, tmp_
     non-resolving; it is not crashed or omitted."""
     import scripts.dep_coresolve as dc
 
-    manifest_path = _freshness_manifest(tmp_path, "dbt-core==1.12.0")
+    manifest_path = _freshness_manifest(tmp_path, "dbt-core==1.12.5")
     stub_pypi(
         "dbt-core",
         _pypi_json(
             "dbt-core",
-            {"1.12.0": [{"yanked": False}], "1.13.0": [{"yanked": False}]},
+            {"1.12.5": [{"yanked": False}], "1.13.0": [{"yanked": False}]},
             {},
         ),
     )
@@ -184,14 +184,14 @@ def test_freshness_run_mutates_no_pin_and_opens_no_pr(
     PR. The reporter is read-only over pyproject files."""
     import scripts.dep_coresolve as dc
 
-    manifest_path = _freshness_manifest(tmp_path, "dbt-core==1.12.0")
+    manifest_path = _freshness_manifest(tmp_path, "dbt-core==1.12.5")
     pyproject = tmp_path / "pyproject.toml"
     before = pyproject.read_text(encoding="utf-8")
     stub_pypi(
         "dbt-core",
         _pypi_json(
             "dbt-core",
-            {"1.12.0": [{"yanked": False}], "1.13.0": [{"yanked": False}]},
+            {"1.12.5": [{"yanked": False}], "1.13.0": [{"yanked": False}]},
             {},
         ),
     )
@@ -215,7 +215,7 @@ def test_no_newer_stable_yields_no_proposal(stub_pypi, tmp_path):
         "dbt-core",
         _pypi_json(
             "dbt-core",
-            {"1.12.0": [{"yanked": False}], "1.13.0": [{"yanked": False}]},
+            {"1.12.5": [{"yanked": False}], "1.13.0": [{"yanked": False}]},
             {},
         ),
     )
@@ -236,14 +236,14 @@ def test_run_freshness_writes_report_and_is_read_only(
     and mutates no tracked pin."""
     import scripts.dep_coresolve as dc
 
-    manifest_path = _freshness_manifest(tmp_path, "dbt-core==1.12.0")
+    manifest_path = _freshness_manifest(tmp_path, "dbt-core==1.12.5")
     pyproject = tmp_path / "pyproject.toml"
     before = pyproject.read_text(encoding="utf-8")
     stub_pypi(
         "dbt-core",
         _pypi_json(
             "dbt-core",
-            {"1.12.0": [{"yanked": False}], "1.13.0": [{"yanked": False}]},
+            {"1.12.5": [{"yanked": False}], "1.13.0": [{"yanked": False}]},
             {},
         ),
     )
@@ -327,7 +327,7 @@ def test_extra_pin_solve_proof_includes_base_dependencies(
             'version = "0"',
             'dependencies = ["pyyaml>=6"]',
             "[project.optional-dependencies]",
-            'dbt = ["dbt-core==1.12.0"]',
+            'dbt = ["dbt-core==1.12.5"]',
         ]
     )
     (tmp_path / "pyproject.toml").write_text(pyproject + "\n", encoding="utf-8")
@@ -349,7 +349,7 @@ def test_extra_pin_solve_proof_includes_base_dependencies(
         "dbt-core",
         _pypi_json(
             "dbt-core",
-            {"1.12.0": [{"yanked": False}], "1.13.0": [{"yanked": False}]},
+            {"1.12.5": [{"yanked": False}], "1.13.0": [{"yanked": False}]},
             {"version": "1.13.0"},
         ),
     )

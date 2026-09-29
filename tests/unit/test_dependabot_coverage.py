@@ -26,7 +26,7 @@ def test_dependabot_build_subject_passes_p2():
     (``build: bump X from A to B``) matches the P2 SUBJECT_RE -- so the bot PR
     passes P2 with no human edit. Guards against P2 drift by importing the rule's
     OWN regex, not a copy."""
-    subject = "build: bump dbt-core from 1.12.0 to 1.13.0"
+    subject = "build: bump dbt-core from 1.12.5 to 1.13.0"
     assert SUBJECT_RE.match(subject)
     assert _subject_ok(subject)
 
@@ -34,7 +34,7 @@ def test_dependabot_build_subject_passes_p2():
 def test_dependabot_scoped_subject_would_fail_p2():
     """The old default (``chore(deps): ...``) carries a parenthesized scope and
     is REJECTED by P2 -- which is exactly the friction FR-014 removes."""
-    assert not SUBJECT_RE.match("chore(deps): bump dbt-core from 1.12.0 to 1.13.0")
+    assert not SUBJECT_RE.match("chore(deps): bump dbt-core from 1.12.5 to 1.13.0")
 
 
 def _load_dependabot() -> dict:
