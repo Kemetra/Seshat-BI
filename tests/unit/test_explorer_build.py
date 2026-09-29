@@ -88,6 +88,15 @@ def test_malformed_readiness_file_is_an_input_defect_entry(tmp_path: Path) -> No
     assert "Input defect" in html
 
 
+def test_footer_does_not_claim_committed_provenance(tmp_path: Path) -> None:
+    """F236: the projection reads the WORKING TREE, so the shareable footer must
+    not assert committed-evidence provenance an uncommitted edit would falsify."""
+    _write_table(tmp_path, "orders")
+    html = render_explorer_html(build_explorer_projection(tmp_path), repo=tmp_path)
+    assert "committed evidence only" not in html
+    assert "uncommitted" in html
+
+
 def test_no_inferred_pass_and_invariant_violations_block_disclosure(
     tmp_path: Path,
 ) -> None:
