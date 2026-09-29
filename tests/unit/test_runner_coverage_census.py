@@ -200,7 +200,9 @@ def test_empty_corpus_is_unevaluable(tmp_path: Path) -> None:
     ctx = RuleContext(repo_root=tmp_path, tracked_files=("docs/readme.md",))
     (record,) = coverage_census(rules, ctx)
     assert record.state is CoverageState.UNEVALUABLE
-    assert record.requirement == "warehouse/*.sql"
+    # Case-insensitive suffix, matched with fnmatchcase: the census selects the
+    # same `.sql`/`.SQL` corpus the SQL rules iterate, on every OS.
+    assert record.requirement == "warehouse/*.[sS][qQ][lL]"
 
 
 def test_non_empty_corpus_is_evaluated(tmp_path: Path) -> None:

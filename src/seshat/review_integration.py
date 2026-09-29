@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from seshat.gitutil import GIT_HARDENING as _GIT_HARDENING
-from seshat.gitutil import run_subprocess
+from seshat.gitutil import run_subprocess, validate_commit_range
 
 from .core import Finding, Severity
 
@@ -29,26 +29,41 @@ _STAGE_HINTS = {
 
 # `repo_root` is the caller-supplied `--repo` path and may be an
 # EXTERNALLY-AUTHORED tree; git reads its `.git/config` when we shell out inside
-# it, so harden against config-driven execution (core.fsmonitor/hooksPath).
-# `commit_range` is separately validated by gitutil._SAFE_RANGE_RE upstream
-# (option-injection guard). The flags come from the single
-# `gitutil.GIT_HARDENING` definition, imported above.
+# it, so harden against config-driven execution (core.fsmonitor/hooksPath). The
+# flags come from the single `gitutil.GIT_HARDENING` definition, imported above.
 
 
 def _changed_files(repo_root: Path, commit_range: str | None) -> list[str]:
+    """Paths changed in ``commit_range`` (``[]`` when no range was given).
+
+    The range is validated HERE, before git sees it: the CLI value reaches this
+    function directly, and only rule P2 validated it before -- P2 merely reports
+    a finding, so an option-shaped value (leading ``-``) was still handed to
+    ``git diff`` as an option. ``--end-of-options`` is a second layer, and ``-z``
+    keeps non-ASCII paths unquoted.
+    """
     if not commit_range:
         return []
+    commit_range = validate_commit_range(commit_range)
     result = run_subprocess(
-        ["git", *_GIT_HARDENING, "diff", "--name-only", commit_range],
+        [
+            "git",
+            *_GIT_HARDENING,
+            "diff",
+            "--name-only",
+            "-z",
+            "--end-of-options",
+            commit_range,
+        ],
         cwd=repo_root,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
     )
     if result.returncode:
         raise ValueError("commit range could not be inspected")
-    return sorted(
-        {line.replace("\\", "/") for line in result.stdout.splitlines() if line}
-    )
+    return sorted({path for path in (result.stdout or "").split("\0") if path})
 
 
 def _affected_stages(paths: Iterable[str], findings: Iterable[Finding]) -> list[str]:

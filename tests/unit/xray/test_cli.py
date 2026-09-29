@@ -75,6 +75,29 @@ def test_model_diff_bad_ref_blocked(tmp_path, capsys):
     assert '"code":"XR002"' in out
 
 
+@pytest.mark.parametrize("base", ["--format=%(objectname)", "-n1"])
+def test_model_diff_option_shaped_base_is_blocked(tmp_path, capsys, base):
+    repo = _model_repo(tmp_path)
+    assert model_diff_main(_args(repo, base=base)) == 3
+    assert '"code":"XR002"' in capsys.readouterr().out
+
+
+def test_model_diff_reads_a_non_ascii_table_file(tmp_path, capsys):
+    repo = make_git_repo(tmp_path)
+    tables = repo / "M.SemanticModel" / "definition" / "tables"
+    tables.mkdir(parents=True)
+    (tables / "مبيعات.tmdl").write_text(TABLE, encoding="utf-8")
+    commit_all(repo, "model v1")
+    (tables / "مبيعات.tmdl").write_text(
+        "table Sales\n\tmeasure Revenue = SUM(Sales[amount]) + 1\n\tcolumn amount\n",
+        encoding="utf-8",
+    )
+    commit_all(repo, "model v2")
+
+    assert model_diff_main(_args(repo, base="HEAD~1")) == 0
+    assert '"semantic":1' in capsys.readouterr().out
+
+
 def test_json_payload_is_ascii_and_compact(tmp_path, capsys):
     repo = _model_repo(tmp_path)
     xray_main(_args(repo))

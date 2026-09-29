@@ -15,7 +15,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from seshat.gitutil import GIT_HARDENING, run_subprocess
+from seshat.git_worktree import worktree_matches_revision
+from seshat.gitutil import GIT_HARDENING, committed_ref, run_subprocess
 
 
 def run_git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -55,21 +56,32 @@ def run_git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 
 def is_tracked_and_clean(repo_root: Path, relative: str) -> bool:
-    """True only when ``relative`` is tracked AND identical to its HEAD state."""
+    """True only when ``relative`` is tracked AND identical to its HEAD state.
+
+    The content comparison is filter-free (``git_worktree``): ``git diff HEAD``
+    would run the tree's own attribute-selected content filters, and a governed
+    root may be a tree this process did not author.
+    """
     root = Path(repo_root).resolve()
     tracked = run_git(root, "ls-files", "--error-unmatch", "--", relative)
     if tracked.returncode != 0:
         return False
-    clean = run_git(root, "diff", "--quiet", "HEAD", "--", relative)
-    return clean.returncode == 0
+    return worktree_matches_revision(root, "HEAD", relative)
 
 
 def committed_text(repo_root: Path, relative: str) -> str | None:
-    """The committed (HEAD) content of a tracked, clean file; None otherwise."""
+    """The committed (HEAD) content of a tracked, clean file; None otherwise.
+
+    ``HEAD:./<relative>`` (not ``HEAD:<relative>``): git resolves a bare
+    ``REV:path`` from the repository TOPLEVEL, while the tracked/clean probe
+    above is relative to ``repo_root``. When ``repo_root`` is a subdirectory of
+    the toplevel, the bare form would read a different file than the one just
+    verified.
+    """
     root = Path(repo_root).resolve()
     if not is_tracked_and_clean(root, relative):
         return None
-    shown = run_git(root, "show", f"HEAD:{relative}")
+    shown = run_git(root, "show", committed_ref("HEAD", relative))
     if shown.returncode != 0:
         return None
     return shown.stdout

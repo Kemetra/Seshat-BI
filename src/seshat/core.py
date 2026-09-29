@@ -89,12 +89,40 @@ def is_test_path(path: str) -> bool:
 # None: continue` instead of nesting a try/except per open site. This is a content
 # scan, not a presence check -- presence-requiring rules (AL1/AL2/HR11) read
 # `ctx.tracked_files` directly and still flag a deleted required artifact.
+class UnreadableTrackedFile(UnicodeDecodeError):
+    """A tracked file that does not decode as the rule's encoding.
+
+    Subclasses ``UnicodeDecodeError`` so every existing ``except
+    UnicodeDecodeError`` keeps working; adds ``path`` so the runner can name the
+    file in the ERROR finding it turns an uncaught one into (a UTF-16 SQL file
+    saved by SSMS used to abort the whole check with a traceback).
+    """
+
+    def __init__(self, path: Path, cause: UnicodeDecodeError) -> None:
+        super().__init__(
+            cause.encoding, cause.object, cause.start, cause.end, cause.reason
+        )
+        self.path = path
+
+
 def read_tracked_text(path: Path, *, encoding: str = "utf-8") -> str | None:
-    """Return ``path``'s text, or ``None`` if the file is absent on disk (#430)."""
+    """Return ``path``'s text, or ``None`` if the file is absent on disk (#430).
+
+    A tracked DIRECTORY (a submodule gitlink) also reads as ``None``: it has no
+    text for a content scan. A file that does not decode raises
+    :class:`UnreadableTrackedFile`; any other ``OSError`` propagates. Neither is
+    swallowed -- skipping them would be a silent pass over unread content.
+    """
     try:
         return path.read_text(encoding=encoding)
     except FileNotFoundError:
         return None
+    except UnicodeDecodeError as exc:
+        raise UnreadableTrackedFile(path, exc) from exc
+    except OSError:
+        if path.is_dir():
+            return None
+        raise
 
 
 # A rule is a pure function: context in, findings out. No side effects.

@@ -72,8 +72,9 @@ G4_REPORTS_ABSENCE = ReportsItsOwnAbsence(
 # exists: declaring one suffix would report a repo holding only the other three as
 # unevaluable, and declaring four separate requirements would AND them, so a repo
 # without (say) a .pbism would look unchecked. Committed fixtures are exempt, as
-# in G3's own scan. G3 lowercases before matching where fnmatch does not, so an
-# upper-case suffix resolves to unevaluable -- the safe direction (under-credit).
+# in G3's own scan. G3 lowercases before matching where the census's
+# `fnmatchcase` does not (on any OS -- plain `fnmatch` would normcase on Windows),
+# so an upper-case suffix resolves to unevaluable -- the safe direction.
 G3_BOM_CORPUS = any_tracked_file(
     "*.tmdl",
     "*.pbir",
@@ -186,7 +187,7 @@ def _pbip_placement_finding(path: str) -> Finding | None:
 
 
 def _sql_placement_finding(path: str) -> Finding | None:
-    if path.endswith(".sql") and not path.startswith(SQL_ROOTS):
+    if path.lower().endswith(".sql") and not path.startswith(SQL_ROOTS):
         return Finding(
             rule_id="P1",
             severity=Severity.ERROR,

@@ -6,6 +6,8 @@ from seshat.cli.parser import _build_parser
 from seshat.core import Finding, Severity
 from seshat.review_integration import build_review_result, markdown_summary
 
+pytestmark = pytest.mark.unit
+
 
 def test_review_digest_ignores_finding_order(tmp_path: Path) -> None:
     findings = [
@@ -53,7 +55,8 @@ def test_review_changed_state_from_commit_range(
 ) -> None:
     class Result:
         returncode = 0
-        stdout = "mappings/orders/readiness-status.yaml\nwarehouse/gold/orders.sql\n"
+        # `git diff --name-only -z`: NUL-separated, so non-ASCII paths stay intact.
+        stdout = "mappings/orders/readiness-status.yaml\0warehouse/gold/orders.sql\0"
 
     monkeypatch.setattr(
         "seshat.review_integration.run_subprocess", lambda *a, **k: Result()
@@ -84,3 +87,32 @@ def test_only_check_receives_review_formats() -> None:
     assert parser.parse_args(["check", "--format", "review"]).output_format == "review"
     with pytest.raises(SystemExit):
         parser.parse_args(["status", "--format", "review"])
+
+
+@pytest.mark.parametrize("value", ["-n1", "--stat", "a..b\n"])
+def test_option_shaped_commit_range_never_reaches_git(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    def must_not_run(*args, **kwargs):
+        raise AssertionError(f"git ran with an unvalidated range: {args}")
+
+    monkeypatch.setattr("seshat.review_integration.run_subprocess", must_not_run)
+    with pytest.raises(ValueError, match="unsafe git commit range"):
+        build_review_result([], repo_root=tmp_path, commit_range=value)
+
+
+def test_review_format_refuses_option_shaped_range_end_to_end(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    import json
+
+    from seshat import cli
+
+    monkeypatch.chdir(tmp_path)
+    code = cli.main(
+        ["check", "--repo", str(tmp_path), "--format", "review", "--commit-range=-n1"]
+    )
+    doc = json.loads(capsys.readouterr().out)
+    assert code == 2
+    assert doc["outcome"] == "input_defect"
+    assert "unsafe git commit range" in doc["error"]

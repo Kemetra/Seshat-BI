@@ -247,6 +247,7 @@ def run_doctor(
     as the foreign-repo skip -- is not drift, so a not-kit-bootstrapped repo never
     fails strict for its (correctly skipped) kit manifests (#377).
     """
+    import subprocess
     import sys
 
     from .core import Severity
@@ -254,7 +255,7 @@ def run_doctor(
 
     try:
         ctx = build_context(repo_root)
-    except (OSError, RuntimeError) as exc:
+    except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
         # build_context -> _git_ls_files exercises git before anything else. A git
         # that cannot launch (OSError) or fails non-zero/non-128 (RuntimeError) must
         # surface as a clean error, not a raw traceback (the #371 crash class) --

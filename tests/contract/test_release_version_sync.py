@@ -81,7 +81,11 @@ def _repository(
         root / "integrations/codex/seshat-bi/.codex-plugin/plugin.json",
         {"version": version},
     )
-    _json(root / ".agents/plugins/marketplace.json", {"plugins": [{}]})
+    # The seshat-bi entry exists (as in the shipped catalog) but carries no
+    # version key -- the schema-optional case.
+    _json(
+        root / ".agents/plugins/marketplace.json", {"plugins": [{"name": "seshat-bi"}]}
+    )
     _json(
         root / "integrations/codex/seshat-bi/bundle-manifest.json",
         {"version": version, "source_revision": revision},
@@ -111,6 +115,30 @@ def test_missing_governed_location_is_a_concrete_blocker(tmp_path: Path) -> None
         "required governed version location" in item
         for item in report["blocking_reasons"]
     )
+
+
+def test_codex_catalog_is_audited_by_plugin_name_not_position(
+    tmp_path: Path,
+) -> None:
+    revision = _repository(tmp_path)
+    catalog = tmp_path / ".agents/plugins/marketplace.json"
+    _json(
+        catalog,
+        {
+            "plugins": [
+                {"name": "other-plugin", "version": "0.0.1"},
+                {"name": "seshat-bi"},
+            ]
+        },
+    )
+    report = audit_versions(tmp_path, source_revision=revision, tags={})
+    statuses = {item["surface"]: item["status"] for item in report["projections"]}
+    assert statuses["codex_catalog"] == "not_schema_supported"
+
+    _json(catalog, {"plugins": [{"name": "other-plugin", "version": "0.0.1"}]})
+    report = audit_versions(tmp_path, source_revision=revision, tags={})
+    assert report["status"] == "blocked"
+    assert any("'seshat-bi' is missing" in r for r in report["blocking_reasons"])
 
 
 def test_version_mismatch_and_missing_release_note_block(tmp_path: Path) -> None:
