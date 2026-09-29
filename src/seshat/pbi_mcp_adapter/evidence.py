@@ -33,7 +33,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from seshat.dagster_adapter import OUTCOMES
-from seshat.pbi_mcp.scan import refuse_if_secret_shaped
+from seshat.pbi_mcp.scan import SECRET_PATTERNS, refuse_if_secret_shaped
 from seshat.redaction_core import (
     conninfo_component_values,
     replace_fragments,
