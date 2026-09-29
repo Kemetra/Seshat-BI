@@ -19,7 +19,7 @@ from seshat import star_discovery as _stars
 from seshat.dbt.contracts import GovernanceError
 from seshat.dbt.fact_semantics import load_fact_semantics
 from seshat.dbt.gate import evaluate_mapping_gate, resolve_working_set
-from seshat.gitutil import GIT_HARDENING
+from seshat.gitutil import GIT_HARDENING, committed_ref
 
 from . import model_plan, sql_render, writer, yaml_render
 
@@ -102,7 +102,7 @@ def _committed_blob(root: Path, rel: str) -> str | None:
     an owner source-map) must not be driven by an uncommitted edit that could
     suppress dimension models from unreviewed content (#419/#418 review)."""
     try:
-        result = _git(root, "show", f"HEAD:{rel}")
+        result = _git(root, "show", committed_ref("HEAD", rel))
     except (OSError, UnicodeDecodeError):
         return None
     return result.stdout if result.returncode == 0 else None
@@ -137,10 +137,14 @@ def _committed_tracked_files(root: Path) -> list[str]:
     ``git show HEAD:`` cannot read, and would drop a file ``git rm --cached``'d yet
     still present at HEAD -- both a false owner-absent verdict."""
     try:
-        result = _git(root, "ls-tree", "-r", "--name-only", "HEAD")
+        # `-z`: without it git C-quotes a non-ASCII path, which then names no
+        # committed file when read back through `git show`.
+        result = _git(root, "ls-tree", "-r", "-z", "--name-only", "HEAD")
     except (OSError, UnicodeDecodeError):
         return []
-    return (result.stdout or "").splitlines() if result.returncode == 0 else []
+    if result.returncode != 0:
+        return []
+    return [path for path in (result.stdout or "").split("\0") if path]
 
 
 def _committed_source_map(root: Path):

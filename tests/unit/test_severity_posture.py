@@ -155,6 +155,35 @@ def test_no_silent_no_finding_omission() -> None:
         assert all(c in ("error", "warning", "info") for c in entry), entry
 
 
+def test_every_rule_has_a_fixture_or_a_documented_unforceable_reason() -> None:
+    """A rule is either FORCED by a fixture or on the explicit unforceable
+    allowlist with a reason -- never silently recorded as <no-finding> because
+    nobody wrote a fixture (FR-011). A new rule without either fails here."""
+    from seshat.severity_posture import _RULE_FIXTURES, UNFORCEABLE_RULES
+
+    live = {r.id for r in _live_rules()}
+    unaccounted = live - set(_RULE_FIXTURES) - set(UNFORCEABLE_RULES)
+    assert not unaccounted, f"rules with no fixture and no reason: {unaccounted}"
+    assert not set(_RULE_FIXTURES) & set(UNFORCEABLE_RULES)
+    assert set(UNFORCEABLE_RULES) <= live, "allowlist names an unknown rule"
+    assert all(reason.strip() for reason in UNFORCEABLE_RULES.values())
+
+
+def test_no_finding_marker_only_for_allowlisted_rules() -> None:
+    """A fixtured rule must actually fire: <no-finding> is reserved for the
+    allowlisted, genuinely unforceable rules."""
+    from seshat.severity_posture import UNFORCEABLE_RULES
+
+    silent = {
+        rule_id
+        for rule_id, entry in build()["registered"].items()
+        if entry == [NO_FINDING_MARKER]
+    }
+    assert silent <= set(UNFORCEABLE_RULES), (
+        f"fixture does not force these rules to fire: {silent - set(UNFORCEABLE_RULES)}"
+    )
+
+
 def test_planted_fixtures_are_generic() -> None:
     """Planted fixture files carry NO example-domain identifier (SC-005/SC-007, T007).
 

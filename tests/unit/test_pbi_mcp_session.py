@@ -330,3 +330,183 @@ def test_the_pump_threads_are_daemons(tmp_path: Path) -> None:
             assert reader.daemon is True
     finally:
         transport.terminate()
+
+
+# --------------------------------------------------------------------------
+# tools/list -- what the runtime actually exposes, not what it says its name is
+# --------------------------------------------------------------------------
+
+
+def _tools_reply(request_id: int, names: list[str], cursor: str | None = None) -> dict:
+    result: dict = {"tools": [{"name": name} for name in names]}
+    if cursor is not None:
+        result["nextCursor"] = cursor
+    return {"jsonrpc": "2.0", "id": request_id, "result": result}
+
+
+def test_list_tools_sends_tools_list_and_returns_the_names():
+    transport = FakeTransport([_init_reply(), _tools_reply(2, ["b_ops", "a_ops"])])
+    sess = session.McpSession(transport)
+    sess.handshake()
+
+    assert sess.list_tools() == ("a_ops", "b_ops")
+    assert transport.written[-1]["method"] == "tools/list"
+
+
+def test_list_tools_follows_the_pagination_cursor():
+    transport = FakeTransport(
+        [
+            _init_reply(),
+            _tools_reply(2, ["a_ops"], cursor="page2"),
+            _tools_reply(3, ["b_ops"]),
+        ]
+    )
+    sess = session.McpSession(transport)
+    sess.handshake()
+
+    assert sess.list_tools() == ("a_ops", "b_ops")
+    assert transport.written[-1]["params"] == {"cursor": "page2"}
+
+
+def test_list_tools_before_handshake_is_refused():
+    with pytest.raises(session.SessionError):
+        session.McpSession(FakeTransport()).list_tools()
+
+
+def test_a_malformed_tools_list_reply_raises_rather_than_reading_as_empty():
+    """An unreadable listing is not an empty one -- empty would read as drift
+    at best and, in a looser comparison, as 'nothing unexpected'."""
+    bad = {"jsonrpc": "2.0", "id": 2, "result": {"tools": "nope"}}
+    sess = session.McpSession(FakeTransport([_init_reply(), bad]))
+    sess.handshake()
+    with pytest.raises(session.SessionError):
+        sess.list_tools()
+
+
+# --------------------------------------------------------------------------
+# Teardown kills the whole process TREE, not just the direct child
+# --------------------------------------------------------------------------
+
+
+def test_an_oversized_reply_fails_fast_instead_of_stalling():
+    """A >1MB line was skipped like a log line, so the call waited out the
+    900s deadline and was recorded as a stall for a call that had completed."""
+
+    class _Oversize(FakeTransport):
+        def read_line(self) -> bytes:
+            if self.reads == 1:  # after the handshake frame
+                self.reads += 1
+                return b"x" * (protocol.MAX_FRAME_BYTES + 1)
+            return super().read_line()
+
+    # The valid reply queued AFTER the oversized line is what makes this
+    # non-vacuous: skipping the oversized frame would return it successfully.
+    transport = _Oversize([_init_reply(), _ok_reply(2, "done")])
+    sess = session.McpSession(transport)
+    sess.handshake()
+    with pytest.raises(session.SessionError) as raised:
+        sess.call("measure_operations", {"operation": "List"})
+    assert not isinstance(raised.value, session.SessionStalled)
+
+
+def test_the_pump_bounds_a_newline_less_line(tmp_path: Path) -> None:
+    """The cap must bind BEFORE the whole line is in memory, and the rest of
+    the long line must be drained so the next frame still arrives intact."""
+    child = tmp_path / "long.py"
+    size = protocol.MAX_FRAME_BYTES * 2
+    child.write_text(
+        chr(10).join(
+            [
+                "import sys",
+                f"sys.stdout.buffer.write(b'x' * {size} + b'\\n')",
+                "sys.stdout.buffer.write(b'next\\n')",
+                "sys.stdout.flush()",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    transport = session.SubprocessTransport(
+        [sys.executable, "-u", str(child)], tmp_path, _child_env(), read_timeout=20
+    )
+    try:
+        first = transport.read_line()
+        assert len(first) == protocol.MAX_FRAME_BYTES + 1
+        assert transport.read_line() == b"next\n"
+    finally:
+        transport.terminate()
+
+
+def _pid_alive(pid: int) -> bool:
+    """Liveness without signalling: ``os.kill(pid, 0)`` TERMINATES on win32."""
+    if sys.platform == "win32":
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel32.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE
+        if not handle:
+            return False
+        try:
+            return kernel32.WaitForSingleObject(handle, 0) == 0x00000102  # TIMEOUT
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    # A zombie still answers signal 0 until its new parent reaps it; it is not
+    # running, so it must not flake this check on Linux.
+    stat = Path(f"/proc/{pid}/stat")
+    try:
+        return stat.read_text().rsplit(")", 1)[1].split()[0] != "Z"
+    except (OSError, IndexError):
+        return True
+
+
+def _force_kill(pid: int) -> None:
+    import signal
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except OSError:
+        pass
+
+
+def test_terminate_kills_the_grandchild_too(tmp_path: Path) -> None:
+    """``npx`` is a shim: on win32 the direct child is ``cmd.exe`` and the
+    vendor is its grandchild. Terminating only the direct child left the
+    vendor running -- and able to finish a flush -- after the run reported
+    itself aborted."""
+    pid_file = tmp_path / "grandchild.pid"
+    grandchild = "import os,time,pathlib;" + (
+        f"pathlib.Path({str(pid_file)!r}).write_text(str(os.getpid()));time.sleep(60)"
+    )
+    parent = tmp_path / "parent.py"
+    parent.write_text(
+        chr(10).join(
+            [
+                "import subprocess, sys, time",
+                f"subprocess.Popen([sys.executable, '-c', {grandchild!r}])",
+                "time.sleep(60)",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    transport = session.SubprocessTransport(
+        [sys.executable, "-u", str(parent)], tmp_path, _child_env()
+    )
+    pid = None
+    try:
+        deadline = time.monotonic() + 30
+        while not pid_file.is_file() or not pid_file.read_text().strip():
+            assert time.monotonic() < deadline, "grandchild never started"
+            time.sleep(0.1)
+        pid = int(pid_file.read_text())
+        transport.terminate()
+        deadline = time.monotonic() + 10
+        while _pid_alive(pid) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert not _pid_alive(pid), "the grandchild survived teardown"
+    finally:
+        transport.terminate()
+        if pid is not None and _pid_alive(pid):
+            _force_kill(pid)

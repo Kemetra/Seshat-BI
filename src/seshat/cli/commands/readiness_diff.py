@@ -44,16 +44,18 @@ def _load_at_revision(repo: Path, revision: str) -> dict[str, object]:
     """
     import yaml  # lazy: keeps the stdlib-only check core free of a YAML dependency
 
-    from seshat.gitutil import git_output
+    from seshat.gitutil import committed_ref, git_output, list_paths
 
-    listing = git_output(
+    # `-z` (list_paths) so a non-ASCII table directory is not C-quoted, and
+    # `REV:./path` so the read names the same cwd-relative path ls-tree listed.
+    listing = list_paths(
         repo, "ls-tree", "-r", "--name-only", revision, "--", "mappings"
     )
     documents: dict[str, object] = {}
-    for path in listing.splitlines():
+    for path in listing:
         if not path.endswith(f"/{_STATUS_FILE}"):
             continue
-        raw = git_output(repo, "show", f"{revision}:{path}")
+        raw = git_output(repo, "show", committed_ref(revision, path))
         try:
             documents[_table_of(path)] = yaml.safe_load(raw)
         except yaml.YAMLError:
@@ -86,7 +88,15 @@ def _resolve_revisions(args: argparse.Namespace) -> tuple[str, str] | None:
             file=sys.stderr,
         )
         return None
-    return base, head
+    from seshat.gitutil import validate_revision
+
+    # Each side reaches `git ls-tree` / `git show` as a positional revision, so
+    # an option-shaped value (`--base=--format=...`) is refused before git runs.
+    try:
+        return validate_revision(base), validate_revision(head)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return None
 
 
 def _split_range(raw_range: str) -> tuple[str, str] | None:
@@ -101,6 +111,14 @@ def _split_range(raw_range: str) -> tuple[str, str] | None:
         validate_commit_range(raw_range)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
+        return None
+    if "..." in raw_range:
+        # The validator accepts the symmetric form, but this verb diffs two
+        # snapshots: partitioning 'a...b' on '..' would yield the ref '.b'.
+        print(
+            f"error: {raw_range!r} is a symmetric range; expected BASE..HEAD.",
+            file=sys.stderr,
+        )
         return None
     if ".." not in raw_range:
         print(

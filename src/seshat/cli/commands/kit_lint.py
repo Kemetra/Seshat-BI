@@ -21,7 +21,10 @@ def run_kit_lint(args: argparse.Namespace) -> int:
 
     if not report.bootstrapped:
         print("kit-lint: not bootstrapped -- run `retail init` (nothing to lint).")
-        return 0
+        # --require-bootstrapped (CI on the kit's own repo): an absent kit source
+        # is a failure, not a clean no-op, mirroring semantic-check's
+        # --require-inputs.
+        return 1 if getattr(args, "require_bootstrapped", False) else 0
 
     for r in report.results:
         status = "ok" if r.ok else "DRIFT"
