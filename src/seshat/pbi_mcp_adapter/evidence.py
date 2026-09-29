@@ -357,14 +357,16 @@ def _scrub_identifier_fields(payload: dict[str, object]) -> None:
     applied: set[str] = set()
     for key in _IDENTIFIER_FIELDS:
         value = payload.get(key)
-        if isinstance(value, str) and pattern.search(value):
-            payload[key] = pattern.sub(REDACTED, value)
-            applied.add(_IDENTIFIER_CLASS)
+        if not isinstance(value, str) or not pattern.search(value):
+            continue
+        payload[key] = pattern.sub(REDACTED, value)
+        applied.add(_IDENTIFIER_CLASS)
     for key in _VENDOR_TEXT_FIELDS:
         value = payload.get(key)
-        if isinstance(value, str):
-            payload[key], labels = scrub_secret_shaped(value)
-            applied.update(labels)
+        if not isinstance(value, str):
+            continue
+        payload[key], labels = scrub_secret_shaped(value)
+        applied.update(labels)
     if applied:
         payload["redactions_applied"] = sorted(applied)
 

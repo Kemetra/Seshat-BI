@@ -589,11 +589,13 @@ def _table_ids(folder: Path) -> set[str]:
     a ``*.SemanticModel`` folder and for its ``definition/`` folder.
     """
     ids: set[str] = set()
-    for tables in (folder / "definition" / "tables", folder / "tables"):
-        for path in tables.glob("*.tmdl"):
-            for candidate in {path.stem, path.stem.rsplit(" ", 1)[-1]}:
-                if _TABLE_ID.match(candidate):
-                    ids.add(candidate)
+    paths = (
+        *(folder / "definition" / "tables").glob("*.tmdl"),
+        *(folder / "tables").glob("*.tmdl"),
+    )
+    for path in paths:
+        candidates = {path.stem, path.stem.rsplit(" ", 1)[-1]}
+        ids.update(candidate for candidate in candidates if _TABLE_ID.match(candidate))
     return ids
 
 

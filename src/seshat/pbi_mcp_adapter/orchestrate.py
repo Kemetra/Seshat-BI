@@ -418,10 +418,19 @@ def _execute_and_confirm(root: Path, plan: _Execution) -> WriteReport:
             rollback_guidance=guidance,
         )
 
+    return _confirm_validation(root, plan, result, semantic_before)
+
+
+def _confirm_validation(
+    root: Path, plan: _Execution, result, semantic_before
+) -> WriteReport:
+    """Validate the changed model before recording a materialized outcome."""
+    terminal = plan.terminal
+    guidance = plan.guidance
     # A zero exit from the runtime is not confirmation.
     outcome = validation.validate_semantic_model(
         root,
-        target_path=authorized_path,
+        target_path=plan.authorized_path,
         backup_ref=plan.backup_ref,
         context=validation.ValidationContext(
             runner=plan.validator, baseline=semantic_before

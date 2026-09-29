@@ -198,7 +198,11 @@ class _StagedBatch:
         self.report_dir = report_dir
         self._tmp = Path(tempfile.mkdtemp(prefix="pbir_compile_"))
         self.staging_root = self._tmp / "staged"
-        shutil.copytree(report_dir, self.staging_root)
+        try:
+            shutil.copytree(report_dir, self.staging_root)
+        except (OSError, shutil.Error) as exc:
+            self.cleanup()
+            raise PbirCompileError(f"could not stage the report: {exc}") from exc
 
     def write(self, rel_path: Path, text: str) -> None:
         target = self.staging_root / rel_path

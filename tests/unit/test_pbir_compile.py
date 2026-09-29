@@ -464,15 +464,41 @@ def test_a_copy_failure_mid_commit_leaves_the_report_untouched(
     calls = {"n": 0}
 
     def flaky(src, dst, *args, **kwargs):
-        calls["n"] += 1
-        if calls["n"] == 2:
-            raise PermissionError("injected copy failure")
+        if str(dst).endswith(".pbir_compile.tmp"):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise PermissionError("injected copy failure")
         return real_copy(src, dst, *args, **kwargs)
 
     monkeypatch.setattr(compile_mod.shutil, "copyfile", flaky)
 
     with pytest.raises(PbirCompileError, match="injected copy failure"):
         compile_page_shell(_ctx(report), _PAGE_REQUEST)
+    assert calls["n"] == 2
+    assert _tree_snapshot(report) == before
+
+
+def test_a_staging_copy_failure_is_a_compile_error_and_cleans_up(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    report = _report(tmp_path, _PAGE_SHELL_SAMPLE, "r.Report")
+    before = _tree_snapshot(report)
+
+    import seshat.pbir_compile as compile_mod
+
+    staging_dir = tmp_path / "staging"
+    staging_dir.mkdir()
+    monkeypatch.setattr(
+        compile_mod.tempfile, "mkdtemp", lambda **_kwargs: str(staging_dir)
+    )
+
+    def fail_copy(_src, _dst):
+        raise compile_mod.shutil.Error("injected staging failure")
+
+    monkeypatch.setattr(compile_mod.shutil, "copytree", fail_copy)
+    with pytest.raises(PbirCompileError, match="injected staging failure"):
+        compile_page_shell(_ctx(report), _PAGE_REQUEST)
+    assert not staging_dir.exists()
     assert _tree_snapshot(report) == before
 
 
