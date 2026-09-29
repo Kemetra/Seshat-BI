@@ -528,6 +528,54 @@ def test_c1_exempts_tests_prefix(tmp_path: Path) -> None:
     assert list(c1_parameterized_connection(ctx)) == []
 
 
+def _c1_source(call: str) -> str:
+    """A one-table model TMDL whose M source is ``call``."""
+    lines = [
+        "table T",
+        "\tpartition T = m",
+        "\t\tsource =",
+        "\t\t\tlet",
+        f"\t\t\t\tSrc = {call}",
+        "\t\t\tin",
+        "\t\t\t\tSrc",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        'Sql.Databases("prod-sql.acme.com")',
+        'Snowflake.Databases("acme.snowflakecomputing.com", "WH")',
+        'Odbc.DataSource("dsn=prod")',
+        'AmazonRedshift.Database("rs.acme.com", "db")',
+        'Databricks.Catalogs("adb-1.azuredatabricks.net", "/sql/1.0/x")',
+        'Oracle.Database("orahost")',
+    ],
+)
+def test_c1_flags_literal_in_other_connectors(tmp_path: Path, call: str) -> None:
+    ctx = _stage(tmp_path, _TABLE_REL, _c1_source(call))
+    findings = list(c1_parameterized_connection(ctx))
+    assert [f.rule_id for f in findings] == ["C1"]
+    # The literal value is never echoed into the message.
+    assert "acme" not in findings[0].message
+    assert "prod" not in findings[0].message
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        "Sql.Databases(ServerParam)",
+        "Snowflake.Databases(AccountParam, WarehouseParam)",
+        'Web.Contents("https://example.com/data.csv")',
+    ],
+)
+def test_c1_passes_parameterized_other_connectors(tmp_path: Path, call: str) -> None:
+    ctx = _stage(tmp_path, _TABLE_REL, _c1_source(call))
+    assert list(c1_parameterized_connection(ctx)) == []
+
+
 # ---------------------------------------------------------------------------
 # D7 broadening (#4): table-level `dataCategory: Time` + a column `isKey` is the
 # REAL "Mark as Date Table" marker and must satisfy D7 (in addition to the

@@ -41,9 +41,12 @@ def _classify(tmp_path: Path, *paths: str) -> dict[str, str]:
             "docs/architecture/pipeline.png",
             {"code_changed": "false", "contracts_required": "false"},
         ),
+        # Contract depth, not metadata-only: unit tests read the PR template
+        # (test_contributor_surfaces), and ci.yml's contract lane runs the full
+        # unit suite for a non-code change -- so editing it cannot skip them.
         (
             ".github/pull_request_template.md",
-            {"code_changed": "false", "contracts_required": "false"},
+            {"code_changed": "false", "contracts_required": "true"},
         ),
         (
             "src/seshat/runner.py",

@@ -197,12 +197,12 @@ def test_p2_emits_no_error_in_git_initd_but_no_commit_workspace(tmp_path: Path) 
     assert findings == [], [f.message for f in findings]
 
 
-def test_p2_still_errors_on_a_single_commit_repo_bare_fallback(tmp_path: Path) -> None:
-    # The refactor to _repo_root_has_commit must NOT swallow the defended
-    # single-commit behavior: a real repo with exactly one commit still cannot form
-    # HEAD~1..HEAD, so bare `check` still surfaces the P2 range ERROR (git_meta
-    # lines ~280-286). _repo_root_has_commit returns True here (own root + HEAD), so
-    # it falls through to DEFAULT_RANGE -- unchanged from before #384.
+def test_p2_judges_the_only_commit_on_a_single_commit_repo(tmp_path: Path) -> None:
+    # A real repo with exactly one commit cannot form HEAD~1..HEAD. The bare
+    # fallback used to surface that as a P2 range ERROR, turning `init, commit,
+    # check` red even for a conforming subject. It now judges HEAD itself: the
+    # conforming subject passes, and a non-conforming one is still an ERROR
+    # (the subject error, not a range error), so nothing is silently dropped.
     import subprocess
 
     repo = tmp_path / "repo"
@@ -221,12 +221,19 @@ def test_p2_still_errors_on_a_single_commit_repo_bare_fallback(tmp_path: Path) -
         commit_range=None,
         commit_message=None,
     )
+    assert list(rule_p2_commit_subjects(ctx)) == []
+    subprocess.run(
+        ["git", "commit", "-q", "--amend", "--allow-empty", "-m", "only commit"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
     errors = [
         f
         for f in rule_p2_commit_subjects(ctx)
         if f.rule_id == "P2" and f.severity is Severity.ERROR
     ]
-    assert errors, "single-commit bare fallback must still surface the P2 range error"
+    assert [f.locator for f in errors] == ["only commit"]
 
 
 # ---------------------------------------------------------------------------

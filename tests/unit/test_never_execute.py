@@ -204,3 +204,49 @@ def test_real_core_modules_have_no_module_scope_execution_imports():
         if violations:
             offenders[str(path.relative_to(repo_root))] = violations
     assert offenders == {}, f"module-scope DB/network imports found: {offenders}"
+
+
+# The check core's REAL import graph: B1 governs files by location (rules/, cli/,
+# runner/core/registry), but importing the core also eagerly loads helper modules
+# outside that set (sql, tmdl, gitutil, integrations, ...). This fresh-interpreter
+# probe pins the capability itself -- no forbidden DB/network module may be in
+# sys.modules after importing the core -- whatever file the import lives in.
+_CORE_IMPORT_PROBE = """
+import sys
+{prelude}
+import seshat.rules, seshat.runner, seshat.cli
+from seshat.rules.never_execute import _FORBIDDEN_DOTTED, _FORBIDDEN_ROOTS
+loaded = sorted(
+    name for name in sys.modules
+    if name.split(".", 1)[0] in _FORBIDDEN_ROOTS or name in _FORBIDDEN_DOTTED
+)
+print(",".join(loaded))
+"""
+
+
+def _forbidden_modules_after_core_import(prelude: str = "") -> list[str]:
+    import os
+    import subprocess
+    import sys
+
+    src = Path(__file__).resolve().parents[2] / "src"
+    env = {**os.environ, "PYTHONPATH": str(src)}
+    result = subprocess.run(
+        [sys.executable, "-c", _CORE_IMPORT_PROBE.format(prelude=prelude)],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=True,
+    )
+    out = result.stdout.strip()
+    return out.split(",") if out else []
+
+
+def test_importing_the_check_core_loads_no_db_or_network_module() -> None:
+    assert _forbidden_modules_after_core_import() == []
+
+
+def test_core_import_probe_detects_a_forbidden_module() -> None:
+    # Proves the probe is not vacuous: a forbidden module loaded before the
+    # core import is reported.
+    assert "socket" in _forbidden_modules_after_core_import("import socket")

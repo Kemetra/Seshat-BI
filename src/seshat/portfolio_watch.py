@@ -80,7 +80,7 @@ from typing import Any
 from .approval_inbox import build_approval_inbox
 from .contract_binding import CONTRACT_BINDING_STATES, contract_binding_state
 from .disclosure import scan_disclosure
-from .gitutil import run_subprocess
+from .gitutil import committed_ref, run_subprocess
 from .portfolio_watch_artifacts import (
     artifact_stale_reason,
     normalize_artifact,
@@ -482,7 +482,9 @@ def _committed_evidence_agrees(
         run_id = validate_run_id(summary["run_id"])
     except (KeyError, ValueError):
         return False
-    recorded = _git_try(root, "show", f"HEAD:{_EVIDENCE_DIR_POSIX}{run_id}.md")
+    recorded = _git_try(
+        root, "show", committed_ref("HEAD", f"{_EVIDENCE_DIR_POSIX}{run_id}.md")
+    )
     if recorded is None:
         return False
     try:

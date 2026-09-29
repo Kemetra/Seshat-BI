@@ -1,3 +1,7 @@
+import json
+
+import pytest
+
 from seshat.core import Finding, Severity
 from seshat.sarif import finding_fingerprint, sarif_document
 
@@ -42,3 +46,18 @@ def test_non_file_locator_has_no_location() -> None:
         [Finding("A1", Severity.INFO, "skipped", "(foreign repo)")]
     )["runs"][0]["results"][0]
     assert "locations" not in result
+
+
+@pytest.mark.unit
+def test_secret_shaped_message_and_locator_are_scrubbed() -> None:
+    leaked = Finding(
+        "X9",
+        Severity.ERROR,
+        "value postgresql://admin:S3cretPw@10.1.2.3:5432/prod leaked",
+        "cfg.txt:3 password=hunter2",
+    )
+    text = json.dumps(sarif_document([leaked]))
+    assert "S3cretPw" not in text
+    assert "10.1.2.3" not in text
+    assert "hunter2" not in text
+    assert "cfg.txt" in text

@@ -236,26 +236,40 @@ was skipped, not that nothing was checked.**
 
 ### Which vendor build ran
 
-`npx` resolves a floating tag, so the argv carries a version **floor** --
-`@microsoft/powerbi-modeling-mcp@^0.5.0-beta` -- rather than a pin. Measured
-2026-09-17: the package publishes only prereleases (`0.5.0-beta.2` through
-`0.5.0-beta.13`), so there is nothing stable to pin to, and pinning a beta would
-freeze the adapter onto a build the publisher may unpublish. The floor still refuses
-a surprise jump to an incompatible future major.
+The argv pins the vendor **exactly** -- `@microsoft/powerbi-modeling-mcp@0.5.0-beta.12`,
+the build the committed capability capture (`tests/fixtures/pbi_mcp/vendor_tools_0.5.0-beta.12.json`)
+was probed from. `npx --yes` installs whatever a range resolves to on the day and runs it in
+write mode, so a floor handed write access to later betas nobody had characterized. The package
+publishes only prereleases (measured 2026-09-17: `0.5.0-beta.2` through `0.5.0-beta.13`);
+beta.13 has not been captured or live-smoke-tested here and carries no compatibility claim. If
+the pinned build is ever unpublished the launch fails and the run is refused
+(`PBIMCP-RUN-03`) -- the fail-closed direction. Moving the pin means re-capturing the tool set.
 
-The committed capability capture remains beta.12. Beta.13 has not been live-smoke-tested
-or attested in this repository, so it carries no compatibility claim.
+After the handshake, and before anything is bound, the runner calls `tools/list` and compares
+the exposed tool names with `vendor_ops.VENDOR_TOOLS`. A missing or an extra tool refuses the
+run with `PBIMCP-DRIFT-01` and nothing is connected: the server's self-reported name is not
+identity, what it exposes is.
 
-The range lives in the argv only. `VENDOR_PACKAGE` stays the bare identity because
+The version lives in the argv only. `VENDOR_PACKAGE` stays the bare identity because
 `pbi_mcp.detect` matches it as a **substring** to gate the bypass prohibition, and it
 is the `tool=` label on every evidence record -- a version suffix there would change
 what a refusal recognises.
 
-Because the resolved build can differ between runs, every record names it:
+The handshake still reports what answered, so every record names it:
 `runtime_version` carries the handshake's `serverInfo.version`, and the CLI `--json`
 verdict reports the same value. It is `null`, never a placeholder, when no handshake
 completed -- a run that never reached the runtime measured nothing, and a string
 there would read as a measurement.
+
+When the runtime fails, the record and the `--json` verdict also carry `vendor_detail`:
+a bounded tail of the vendor's own transcript, already redacted through both layers and
+scrubbed again by the evidence writer, so a refusal like `PBIMCP-RUN-05` arrives with the
+vendor's reason. It is `null` on every other ending.
+
+The before/after scope snapshot must list every file a run could touch. If git cannot
+(it skips a directory it cannot open, or fails outright), the run is refused **before**
+the runtime launches with `PBIMCP-EFF-03`; the same blocker after the write means the
+effect could not be verified.
 
 The supported-version *range* stays `unknown` in `drift.py`, and `PBIMCP-DRIFT-03`
 still refuses to treat `unknown` as compatible. Capability **drift**, not version

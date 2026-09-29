@@ -17,6 +17,7 @@ from seshat.fence import (
     END,
     START,
     FenceResult,
+    read_fence_body,
     write_fence,
 )
 
@@ -115,8 +116,38 @@ def test_malformed_only_start_marker_stops_no_write(tmp_path) -> None:
 
 def test_writes_utf8_no_bom_lf(tmp_path) -> None:
     f = tmp_path / "AGENTS.md"
-    f.write_text("# a\n", encoding="utf-8")
+    # Bytes, not write_text: text mode writes CRLF on Windows, and a CRLF file
+    # now keeps its own line endings (F1/F2 byte invariance outside the fence).
+    f.write_bytes(b"# a\n")
     write_fence(f, "BODY")
     raw = f.read_bytes()
     assert not raw.startswith(b"\xef\xbb\xbf")  # no BOM
     assert b"\r\n" not in raw  # LF only
+
+
+def test_crlf_and_bom_outside_the_fence_are_byte_identical(tmp_path) -> None:
+    """F1/F2 for a CRLF, BOM-prefixed file (a Windows autocrlf checkout)."""
+    f = tmp_path / "CLAUDE.md"
+    before = "\ufeff# Title\r\nuser line A\r\n"
+    after = "\r\nuser line B\r\n"
+    f.write_bytes((before + f"{START}\r\nold body\r\n{END}" + after).encode("utf-8"))
+
+    result = write_fence(f, "new body\nsecond line")
+
+    raw = f.read_bytes().decode("utf-8")
+    assert result.changed and not result.inserted
+    assert raw == before + f"{START}\r\nnew body\r\nsecond line\r\n{END}" + after
+    assert read_fence_body(f) == "new body\nsecond line"
+    # Idempotent in the file's own line-ending convention.
+    assert write_fence(f, "new body\nsecond line").changed is False
+
+
+def test_append_into_a_crlf_file_uses_crlf(tmp_path) -> None:
+    f = tmp_path / "AGENTS.md"
+    f.write_bytes(b"# a\r\nkeep\r\n")
+
+    write_fence(f, "BODY")
+
+    raw = f.read_bytes()
+    assert raw.startswith(b"# a\r\nkeep\r\n")
+    assert b"\n" not in raw.replace(b"\r\n", b"")

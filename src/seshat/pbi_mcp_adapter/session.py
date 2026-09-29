@@ -21,9 +21,12 @@ public registry; if something else answers, refuse rather than issue writes to i
 
 from __future__ import annotations
 
+import os
 import queue
 import shutil
+import signal
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -51,6 +54,9 @@ DEFAULT_DEADLINE_SECONDS = 900
 #: Ceiling on undrained stdout lines. Bounds memory against a chatty server
 #: without truncating anything: a full queue back-pressures the reader.
 MAX_QUEUED_LINES = 4096
+
+#: Ceiling on ``tools/list`` pages. The vendor exposes 21 tools on one page.
+MAX_TOOL_PAGES = 20
 
 
 class SessionError(RuntimeError):
@@ -134,6 +140,14 @@ class McpSession:
                 )
             try:
                 frame = proto.decode_frame(line)
+            except proto.McpFrameTooLarge as exc:
+                # Fail FAST. This may be the reply we are waiting for; skipping
+                # it would wait out the deadline and report a stall for a call
+                # that completed.
+                raise SessionError(
+                    f"a vendor frame exceeded the limit while awaiting "
+                    f"{request_id}: {exc}"
+                ) from exc
             except proto.McpFrameError:
                 continue
             if frame.get("id") == request_id:
@@ -171,6 +185,30 @@ class McpSession:
         request_id = self._take_id()
         self._send(proto.tool_call_request(request_id, tool, request))
         return proto.parse_tool_result(self._await_id(request_id))
+
+    def list_tools(self) -> tuple[str, ...]:
+        """Every tool the server EXPOSES, sorted, across all listing pages.
+
+        The handshake's ``serverInfo.name`` is a string the peer asserts about
+        itself; this is what it actually offers, which the runner compares with
+        the characterized set before binding anything. Bounded to
+        :data:`MAX_TOOL_PAGES` so a cursor that never ends cannot loop forever.
+        """
+        if not self._ready:
+            raise SessionError("list_tools() before a completed handshake")
+        names: list[str] = []
+        cursor: str | None = None
+        for _page in range(MAX_TOOL_PAGES):
+            request_id = self._take_id()
+            self._send(proto.tools_list_request(request_id, cursor))
+            try:
+                page, cursor = proto.parse_tool_names(self._await_id(request_id))
+            except proto.McpFrameError as exc:
+                raise SessionError(f"unreadable tools/list reply: {exc}") from exc
+            names.extend(page)
+            if cursor is None:
+                return tuple(sorted(names))
+        raise SessionError(f"tools/list did not end within {MAX_TOOL_PAGES} pages")
 
     def close(self) -> None:
         self._transport.terminate()
@@ -268,6 +306,7 @@ class SubprocessTransport:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             shell=False,
+            **_tree_spawn_options(),
         )
         self._readers = [
             threading.Thread(target=self._pump_stdout, daemon=True),
@@ -281,7 +320,7 @@ class SubprocessTransport:
         stream = self._proc.stdout
         try:
             if stream is not None:
-                for raw in stream:
+                while raw := _bounded_line(stream):
                     self._stdout_q.put(raw)
         except (OSError, ValueError):  # pragma: no cover - stream torn down
             pass
@@ -342,6 +381,10 @@ class SubprocessTransport:
                 self._proc.stdin.close()
         except (OSError, ValueError):  # pragma: no cover - best-effort teardown
             pass
+        # The TREE first, while the direct child still exists: `npx` is a
+        # shim (`npx.cmd` -> cmd.exe on win32), so the vendor is a grandchild,
+        # and once the direct child is gone there is nothing left to walk.
+        _kill_tree(self._proc.pid)
         try:
             self._proc.terminate()
             self._proc.wait(timeout=10)
@@ -351,7 +394,76 @@ class SubprocessTransport:
                 self._proc.wait(timeout=5)
             except (OSError, subprocess.TimeoutExpired):
                 pass
+        # POSIX: anything in the group that ignored SIGTERM is killed now.
+        _kill_tree(self._proc.pid, final=True)
 
     def stderr_text(self) -> str:
         """The drained stderr so far. Safe to call while the child is live."""
         return b"".join(self._stderr_parts).decode("utf-8", errors="replace")
+
+
+#: Bound on the win32 tree kill. `taskkill` returns in milliseconds normally.
+_TREE_KILL_TIMEOUT_SECONDS = 15
+
+
+def _tree_spawn_options() -> dict[str, object]:
+    """Spawn the child as the root of its own group, so its tree can be killed.
+
+    POSIX: a new session makes the child's pid the process-group id, which
+    ``os.killpg`` then reaches. win32: a new process group keeps console
+    signals aimed at us from reaching the vendor, and ``taskkill /T`` walks the
+    tree from the child's pid.
+    """
+    if sys.platform == "win32":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def _kill_tree(pid: int, *, final: bool = False) -> None:
+    """Kill ``pid`` AND its descendants. Best effort, never raises.
+
+    Two passes on POSIX: SIGTERM to the group first (a graceful exit for the
+    common, healthy close), then -- after the direct child has been waited on
+    -- SIGKILL to whatever in the group is left. win32 has one forced pass,
+    ``taskkill /T /F``, which must run while the direct child still exists;
+    the ``final`` pass is a no-op there.
+
+    ``Popen.terminate`` reaches only the direct child. On a stall that left the
+    vendor grandchild running, it could still finish a flush into the model
+    folder after the run was recorded as aborted and the operator had rolled
+    back -- silently undoing the rollback.
+    """
+    try:
+        if sys.platform == "win32":
+            if final:
+                return
+            subprocess.run(  # noqa: S603, S607 - fixed argv, no shell
+                ["taskkill", "/T", "/F", "/PID", str(pid)],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                timeout=_TREE_KILL_TIMEOUT_SECONDS,
+                check=False,
+                shell=False,
+            )
+        else:
+            os.killpg(pid, signal.SIGKILL if final else signal.SIGTERM)
+    except (OSError, subprocess.SubprocessError):  # pragma: no cover
+        pass
+
+
+def _bounded_line(stream: Any) -> bytes:
+    """One line, capped at ``MAX_FRAME_BYTES + 1`` bytes; ``b""`` at EOF.
+
+    ``for raw in stream`` buffered a whole line before the frame-size check
+    ever ran, so the cap bounded nothing. Here an over-long line is returned
+    TRUNCATED -- one byte past the cap, so :func:`protocol.decode_frame` still
+    classifies it as oversized -- and the rest of that line is drained and
+    discarded, so the next frame starts on a clean boundary.
+    """
+    limit = proto.MAX_FRAME_BYTES + 1
+    line = stream.readline(limit)
+    if len(line) < limit or line.endswith(b"\n"):
+        return line
+    while (rest := stream.readline(limit)) and not rest.endswith(b"\n"):
+        pass
+    return line

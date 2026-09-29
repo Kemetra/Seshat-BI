@@ -15,7 +15,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import NamedTuple
 
+from .git_worktree import blob_id, blob_ids
 from .gitstate import run_git
+from .gitutil import committed_ref
 
 __all__ = ["BlobState", "contained_brief_path", "contained_contract_path", "blob_state"]
 
@@ -72,14 +74,31 @@ def _git_sha(repo_root: Path, *args: str) -> str | None:
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+def _in_governed_repo(repo_root: Path) -> bool:
+    if (repo_root / ".git").exists():
+        return True
+    # A parent repository may contain a temporary workspace without tracking
+    # any of its files. Treat that workspace as standalone.
+    result = run_git(repo_root, "ls-files", "-z")
+    return result.returncode == 0 and bool(result.stdout)
+
+
 def blob_state(repo_root: Path, path: Path) -> BlobState:
     """Worktree and committed blob shas of ``path`` (None when unavailable)."""
-    worktree = _git_sha(repo_root, "hash-object", str(path)) if path.is_file() else None
-    in_repository = any(
-        (parent / ".git").exists() for parent in (repo_root, *repo_root.parents)
-    )
+    try:
+        data = path.read_bytes() if path.is_file() else None
+    except OSError:
+        data = None
+    in_repository = _in_governed_repo(repo_root)
     committed = None
     if in_repository:
         rel = path.resolve().relative_to(repo_root.resolve()).as_posix()
-        committed = _git_sha(repo_root, "rev-parse", f"HEAD:./{rel}")
+        committed = _git_sha(repo_root, "rev-parse", committed_ref("HEAD", rel))
+    algorithm = "sha256" if committed is not None and len(committed) == 64 else "sha1"
+    # Git's ordinary text checkout hashes the LF form under core.autocrlf.
+    worktree = (
+        blob_id(data.replace(b"\r\n", b"\n"), algorithm) if data is not None else None
+    )
+    if data is not None and committed in blob_ids(data, algorithm):
+        worktree = committed
     return BlobState(worktree, committed, in_repository)

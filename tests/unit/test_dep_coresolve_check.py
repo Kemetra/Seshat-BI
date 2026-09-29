@@ -214,6 +214,37 @@ def test_check_config_error_exits_nonzero(tmp_path, capsys):
     assert "nope.toml" in out
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        # the section renamed by a refactor
+        "version: 1\nenvs:\n  - id: root\n    pyproject: pyproject.toml\n",
+        # the section dropped by a merge
+        "version: 1\ncross_products: []\n",
+        # the section present but emptied
+        "version: 1\nenvironments: []\n",
+    ],
+    ids=["renamed", "absent", "empty"],
+)
+def test_check_with_no_environments_is_a_config_error(
+    body, stub_resolve, tmp_path, capsys
+):
+    """A manifest that declares no environments must NOT report '0 target(s)
+    resolved; exit 0 (ok)' -- that is the gate switched off with nobody told."""
+    import scripts.dep_coresolve as dc
+
+    stub_resolve(returncode=0, stdout=REPORT_PASS_JSON, stderr="")
+    manifest = tmp_path / "dependency-environments.yaml"
+    manifest.write_text(body, encoding="utf-8")
+
+    code = dc.run_check(manifest)
+    out = capsys.readouterr().out
+
+    assert code == dc.EXIT_CONFIG
+    assert "environments" in out
+    assert stub_resolve.state["calls"] == []
+
+
 def test_check_resolution_wins_over_infra(monkeypatch, tmp_path):
     """A real RESOLUTION anywhere fails closed even if an INFRA also occurred
     (a conflict is never excused by a co-occurring network blip)."""
