@@ -234,7 +234,14 @@ def test_a_forbidden_reason_carrying_a_path_is_redacted_on_the_wire(
         approvals_module, "build_table_next_document", _raise_with_a_path
     )
 
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from unit import _studio_workspace_fixtures as workspace_fixtures
+
     client, _ = _client(tmp_path)
+    # Thread creation only binds a table the workspace contains.
+    workspace_fixtures.write_ready_table(tmp_path, table="t1")
     created = client.post(f"{API}/agent/threads", json={"selected_table_id": "t1"})
     thread_id = created.json()["thread_id"]
     accepted = client.post(

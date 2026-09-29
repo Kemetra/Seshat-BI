@@ -48,12 +48,15 @@ def _safe_boundary_error(
 
 
 def _redact_error(error: Exception, *, dialect: Dialect, config: object | None) -> str:
+    """The shared live-DB boundary chain (``seshat.db_boundary``), so this helper
+    cannot drift from what validate/profile/value-check/drift/report redact."""
+    from .db_boundary import boundary_error_text
+
     if config is None:
-        return str(error) or error.__class__.__name__
-    try:
-        return dialect.redact(error, config)
-    except Exception:
-        return "database metadata boundary failed (details redacted)"
+        from .pbi_mcp_adapter.evidence import scrub_secret_shaped
+
+        return scrub_secret_shaped(str(error) or error.__class__.__name__)[0]
+    return boundary_error_text(dialect, error, config)
 
 
 def _scrub_environment_secrets(redacted: str, env: Mapping[str, str]) -> str:
@@ -93,6 +96,14 @@ def enumerate_tables(
     safe_schema = validate_identifier(schema, context="portfolio schema")
     resolved_env = dict(os.environ if env is None else env)
     engine = resolved_env.get("ANALYTICS_DB_ENGINE") or "postgres"
+    if engine != cli._current_engine():
+        # The driver gate and the runner read the PROCESS engine; resolving the
+        # config for a different one would pair one engine's config with
+        # another's driver.
+        return PortfolioEnumeration(
+            error="ANALYTICS_DB_ENGINE in the supplied environment differs from "
+            "the process environment; enumerate with one engine"
+        )
     dialect = get_dialect(engine)
     config: object | None = None
 

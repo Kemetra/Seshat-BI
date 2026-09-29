@@ -46,3 +46,32 @@ def test_messages_do_not_echo_sensitive_values() -> None:
     assert secret not in str(result)
     assert "super-secret" not in str(result)
     assert "private-host" not in str(result)
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        {"database_url": "postgresql+psycopg2://u:p" + "@h/d"},
+        {"note": "failed reading C:\\Users\\bob\\x.csv"},
+        {"conn": "host=h password=p"},
+        {"DB_PASSWORD": "hunter2"},
+        {"x": "mssql+pyodbc://sa:pw" + "@h/db"},
+        {"p": "/root/.pgpass"},
+        {"p": "copied from \\\\fileserver\\share\\x.csv"},
+    ],
+)
+def test_common_dsn_credential_and_path_shapes_block(document: object) -> None:
+    assert scan_disclosure(document)["status"] == "blocked"
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        {"token_count": "12"},
+        {"connection_status": "ok"},
+        {"link": "https://example.com/home/page"},
+        {"path": "mappings/orders/source-profile.md"},
+    ],
+)
+def test_benign_keys_urls_and_relative_paths_pass(document: object) -> None:
+    assert scan_disclosure(document)["status"] == "pass"

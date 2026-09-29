@@ -148,6 +148,8 @@ paths:
                 $ref: "#/components/schemas/AgentThreadRef"
         "409":
           $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
         "503":
           $ref: "#/components/responses/AgentUnavailable"
   /agent/threads/{thread_id}/turns:

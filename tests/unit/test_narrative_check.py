@@ -708,8 +708,21 @@ def test_taught_binding_map_example_parses_and_passes(tmp_path: Path):
     callout: taught callout {qid}"""
         for qid in qids
     )
+    # A green map now requires a VALID brief (the map is grounded only against
+    # a brief check_narrative passes), so each cited contract really exists and
+    # the brief cites its current blob.
+    metrics_dir = tmp_path / "mappings" / "orders" / "metrics"
+    metrics_dir.mkdir(parents=True)
+    (metrics_dir.parent / "source-profile.md").write_text(
+        _PROFILE_TEXT, encoding="utf-8"
+    )
+    revisions = {}
+    for cid in contracts:
+        path = metrics_dir / f"{cid}.yaml"
+        path.write_text(_CONTRACT_TEXT.replace("NetSales", cid), encoding="utf-8")
+        revisions[cid] = _blob_sha(path)
     contract_blocks = "\n".join(
-        f"  - id: {cid}\n    revision: deadbeef" for cid in contracts
+        f"  - id: {cid}\n    revision: {revisions[cid]}" for cid in contracts
     )
     overview_ids = ", ".join(q for q in qids if q == "Q1")
     other_ids = ", ".join(q for q in qids if q != "Q1")
@@ -914,3 +927,74 @@ def test_malformed_page_entry_blocks_instead_of_being_discarded(
     result = _run_map(mapped_workspace)
     assert result.status == "blocked"
     assert any(f.dimension == "malformed_page_entry" for f in result.findings)
+
+
+# --------------------------------------------------------------------------- #
+# Path containment and committed-blob revisions
+# --------------------------------------------------------------------------- #
+
+
+def test_contract_id_escaping_the_metrics_store_is_refused(workspace: Path):
+    """A cited id like ``../../x`` is never resolved outside mappings/<t>/metrics."""
+    outside = workspace / "x.yaml"
+    outside.write_text("name: x\n", encoding="utf-8")
+    _mutate_brief(workspace, "id: NetSales", "id: ../../../x")
+    result = _run(workspace)
+    assert result.status == "blocked"
+    stale = [f for f in result.findings if f.dimension == "stale_contract_revision"]
+    assert stale and all("outside" in f.message for f in stale)
+
+
+def test_uncommitted_contract_edit_is_reported(workspace: Path):
+    """In a git repo the citation is checked against HEAD, and a worktree edit
+    of the contract is its own finding."""
+    import subprocess
+
+    for argv in (
+        ["init", "-q"],
+        ["add", "-A"],
+        [
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "user.name=T",
+            "commit",
+            "-q",
+            "--no-gpg-sign",
+            "-m",
+            "fixture",
+        ],
+    ):
+        subprocess.run(["git", *argv], cwd=workspace, check=True, capture_output=True)
+    assert _run(workspace).status == "pass"
+
+    contract = workspace / "mappings" / "orders" / "metrics" / "NetSales.yaml"
+    contract.write_text(
+        contract.read_text(encoding="utf-8") + "# edit\n", encoding="utf-8"
+    )
+    result = _run(workspace)
+    assert result.status == "blocked"
+    assert "uncommitted_contract_change" in {f.dimension for f in result.findings}
+
+
+@pytest.mark.parametrize(
+    "ref",
+    ("mappings/other/narrative-brief.md", "../scratch/brief.md"),
+)
+def test_binding_map_brief_outside_the_table_is_refused(
+    mapped_workspace: Path, ref: str
+):
+    _mutate_map(
+        mapped_workspace, "brief: mappings/orders/narrative-brief.md", f"brief: {ref}"
+    )
+    result = _run_map(mapped_workspace)
+    assert result.status == "blocked"
+    assert "brief_outside_table" in {f.dimension for f in result.findings}
+
+
+def test_binding_map_fails_closed_when_its_brief_is_blocked(mapped_workspace: Path):
+    """A green map must imply a valid brief: a blocked brief blocks the map."""
+    _mutate_brief(mapped_workspace, "    stage: change", "    stage: middlebit")
+    result = _run_map(mapped_workspace)
+    assert result.status == "blocked"
+    assert "invalid_stage" in {f.dimension for f in result.findings}

@@ -24,6 +24,7 @@ from typing import Any, Protocol
 import yaml
 
 from seshat import decision_store
+from seshat.rules.decision_store import decision_shape_findings
 
 #: The only state a successful write can report. A single-member tuple by design: the
 #: type cannot express "approved" for an uncommitted decision (FR-140-021), so the
@@ -37,9 +38,14 @@ _GATE_AUTHORITY = (
     "the static gate reads committed decisions at HEAD; this write is not authority"
 )
 
-#: Recorded on the entry rather than invented per call site. `approved` is a member of
-#: the shipped STATUS_VALUES and is terminal (not in _OPEN_STATUSES).
+#: Recorded on the entry rather than invented per call site. Both are members of the
+#: shipped STATUS_VALUES and both are terminal (not in _OPEN_STATUSES). A decline is
+#: `rejected`: recording it as `approved` let a declined ruling read as authorization.
 _RECORDED_STATUS = "approved"
+_DECLINED_STATUS = "rejected"
+
+#: The answers that decline what was asked. Every other answer is the ruling itself.
+DECLINE_ANSWERS: frozenset[str] = frozenset({"decline"})
 
 _SOURCE = "seshat-studio"
 
@@ -117,7 +123,7 @@ def build_entry(
     return {
         "id": decision_id,
         "decision_type": decision_type,
-        "status": _RECORDED_STATUS,
+        "status": status_for_answer(ruling.answer),
         "scope": scope,
         "answer": ruling.answer,
         "approval": {
@@ -131,6 +137,11 @@ def build_entry(
     }
 
 
+def status_for_answer(answer: str) -> str:
+    """`rejected` for a decline, `approved` for any other recorded ruling."""
+    return _DECLINED_STATUS if answer in DECLINE_ANSWERS else _RECORDED_STATUS
+
+
 def append_decision(
     repo_root: Path | str,
     rel_path: str,
@@ -141,16 +152,69 @@ def append_decision(
 
     Order matters and is part of the contract: validate first, so a refusal leaves the
     file byte-identical. Raises `WriteRefused` carrying the predicate's own reason.
+
+    Beyond approval validity, the entry must pass DS1's shape checks, must not reuse
+    an id already in the store, and must not open a DS4 active-scope conflict -- each
+    is a finding the gate would raise the moment a human committed this write. Only
+    the NEW entry is judged: a pre-existing defect in the store is the gate's to
+    report, and refusing every future write over it would wedge the write path.
+
+    A store file that does not exist yet is created (only for a shipped store path);
+    the gate still reads nothing from it until a human commits it.
     """
+    if rel_path not in decision_store.STORE_PATHS:
+        raise WriteRefused(f"{rel_path!r} is not a decision store path")
     valid, reason = decision_store.approval_is_valid(entry, authority)
     if not valid:
         raise WriteRefused(reason or "approval invalid")
 
     target = Path(repo_root).joinpath(*rel_path.split("/"))
+    existing = existing_decisions(target)
+    _refuse_gate_findings(entry, existing, rel_path)
     _atomic_append(target, entry)
     return DecisionWriteReceipt(
         written_path=rel_path, decision_id=str(entry.get("id", ""))
     )
+
+
+def existing_decisions(path: Path) -> list[dict[str, Any]]:
+    """The decisions in the working-tree store file; [] when it is absent or empty.
+
+    A present-but-malformed file is a refusal, not []: appending to a store that does
+    not parse would bury the defect rather than surface it.
+    """
+    if not path.exists():
+        return []
+    try:
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as error:
+        raise WriteRefused(
+            f"the decision store could not be read ({type(error).__name__})"
+        ) from error
+    if document is None:
+        return []
+    if not isinstance(document, dict):
+        raise WriteRefused("the decision store is not a mapping")
+    decisions = document.get("decisions") or []
+    return [item for item in decisions if isinstance(item, dict)]
+
+
+def _refuse_gate_findings(
+    entry: dict[str, Any], existing: list[dict[str, Any]], rel_path: str
+) -> None:
+    """Refuse the entry if committing it would raise a DS1 or DS4 ERROR."""
+    shape = decision_shape_findings(entry, rel_path)
+    if shape:
+        raise WriteRefused("; ".join(finding.message for finding in shape))
+    if any(item.get("id") == entry.get("id") for item in existing):
+        raise WriteRefused(f"decision id {entry.get('id')!r} is already in the store")
+    new_id = entry.get("id")
+    for _dtype, key, ids in decision_store.active_scope_conflicts([*existing, entry]):
+        if new_id in ids:
+            raise WriteRefused(
+                f"an active decision already covers {key} ({', '.join(ids)}); a "
+                "second ruling must supersede it"
+            )
 
 
 def decisions_at_head(committed: _Committed, rel_path: str) -> list[dict[str, Any]]:
@@ -182,8 +246,10 @@ def _atomic_append(path: Path, entry: dict[str, Any]) -> None:
     without it a malformed fragment could corrupt the store and only surface later, in
     the gate.
     """
-    merged = _merge_text(path.read_text(encoding="utf-8"), _render_fragment(entry))
+    current = path.read_text(encoding="utf-8") if path.exists() else ""
+    merged = _merge_text(current, _render_fragment(entry))
     _verify_merged(merged, entry)
+    path.parent.mkdir(parents=True, exist_ok=True)
     _replace_atomically(path, merged)
 
 

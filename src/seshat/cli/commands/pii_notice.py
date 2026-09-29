@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 
@@ -23,9 +24,21 @@ def pii_notice_main(args: argparse.Namespace) -> int:
 
     body = render_markdown(notice)
     if getattr(args, "write", False):
-        out = Path(args.repo) / "mappings" / args.table / "pii-touch-notice.md"
-        out.write_text(body, encoding="utf-8")
-        print(f"wrote {out.as_posix()}")
+        from seshat.pii_notice import _table_mapping_dir
+
+        table_dir = _table_mapping_dir(Path(args.repo), args.table)
+        if table_dir is None:
+            # An invalid argument, not a gate verdict: nothing is written
+            # outside mappings/<table>/.
+            print(
+                "error: --table must name one directory under mappings/; "
+                "nothing written",
+                file=sys.stderr,
+            )
+            return 1
+        (table_dir / "pii-touch-notice.md").write_text(body, encoding="utf-8")
+        shown = Path(args.repo) / "mappings" / args.table / "pii-touch-notice.md"
+        print(f"wrote {shown.as_posix()}")
     else:
         print(body, end="")
     return 0

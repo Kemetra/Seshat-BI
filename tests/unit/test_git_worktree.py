@@ -127,25 +127,24 @@ def test_dbt_clean_source_map_does_not_run_a_repo_local_filter(filtered) -> None
 
 
 def test_narrative_blob_ids_do_not_run_a_repo_local_filter(filtered) -> None:
-    from seshat.narrative_check import _blob_ids
+    from seshat.narrative_paths import blob_state
 
     probe, sentinel = filtered
-    ids = _blob_ids(probe, probe / "a.txt")
-    assert ids and git_worktree.blob_id(b"alpha\n") in ids
+    state = blob_state(probe, probe / "a.txt")
+    assert state.worktree == git_worktree.blob_id(b"alpha\n")
     assert not sentinel.exists()
 
 
 def test_portfolio_semantic_dirty_probe_does_not_run_a_repo_local_filter(
     tmp_path: Path,
 ) -> None:
-    from seshat.portfolio_watch import _semantic_inputs
+    from seshat.contract_binding import _semantic_inputs
 
     control, probe, sentinel = _filtered_copies(
         tmp_path, {"mappings/s/readiness-status.yaml": "x: 1\n"}
     )
     _assert_control_fires(control, sentinel)
-    _inputs, dirty = _semantic_inputs(probe, "s")
-    assert dirty is False
+    assert _semantic_inputs(probe, "s") is not None
     assert not sentinel.exists()
 
 

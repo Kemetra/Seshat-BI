@@ -47,8 +47,12 @@ def test_parser_value_check_has_metrics_dir_and_dsn() -> None:
 
 
 def test_value_check_no_dsn_errors_clearly(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
+    # An empty cwd: a developer's own workspace .env must not supply creds.
+    monkeypatch.chdir(tmp_path)
     for var in ("DATABASE_URL", "ANALYTICS_DB_HOST"):
         monkeypatch.delenv(var, raising=False)
 

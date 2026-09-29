@@ -3,11 +3,12 @@
 Offline (no DSN): reports the skip reason and exits 0 -- loading needs a database,
 and its absence is the honest, expected offline state, not an error.
 
-Live (a DSN resolves): writes the demo sample into DEMO-SCOPED Postgres objects
-only (a safety guard, FR-011), idempotently. The DB driver is imported lazily; the
-DSN is resolved via the same precedence as ``retail validate`` (reused, not
-reimplemented). The real-DB write is exercised in tests via a fixture writer /
-``QueryRunner`` so CI needs no live database.
+Live (a DSN resolves): creates the demo table shape in DEMO-SCOPED Postgres
+objects only (a safety guard, FR-011), idempotently. It inserts no sample rows.
+The DB driver is imported lazily; the DSN is resolved via the same precedence
+as ``retail validate`` (reused, not reimplemented). The real-DB write is
+exercised in tests via a fixture writer / ``QueryRunner`` so CI needs no live
+database.
 """
 
 from __future__ import annotations
@@ -85,7 +86,7 @@ def run_load(args) -> int:
     from .live import load_demo_scoped
 
     try:
-        load_demo_scoped(dsn, schema=schema, marker=DEMO_MARKER)
+        load_demo_scoped(dsn, schema=schema, table=fact_table)
     except Exception as exc:
         # The live leg's psycopg2.connect had no local handler, so an unreachable
         # DSN surfaced as a raw traceback -- and psycopg2 reformats the DSN into
@@ -99,5 +100,8 @@ def run_load(args) -> int:
 
         print(f"demo load: live leg failed -- {_redact_dsn(exc, dsn)}", file=sys.stderr)
         return 1
-    print(f"demo load: wrote demo-scoped sample into {schema} (idempotent)")
+    print(
+        f"demo load: created the demo-scoped table {schema}.{fact_table} "
+        "(idempotent; table shape only -- no sample rows are inserted)"
+    )
     return 0

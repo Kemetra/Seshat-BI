@@ -122,3 +122,40 @@ def test_written_files_are_utf8_no_bom_lf(repo) -> None:
     raw = (repo / ".seshat/compass.yaml").read_bytes()
     assert not raw.startswith(b"\xef\xbb\xbf")
     assert b"\r\n" not in raw
+
+
+def _with_integrations(repo: Path, names: list[object]) -> None:
+    path = repo / SOURCE_REL
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["integrations"] = names
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "harness", ["mcp", "lock", "../../escaped", "a/b", "", "Claude", 7, "-x"]
+)
+def test_unsafe_harness_names_are_refused_before_anything_is_written(
+    repo: Path, harness: object
+) -> None:
+    """A harness name becomes a file name under .seshat/integrations/.
+
+    `mcp`/`lock` would clobber the installer's own mcp.json/lock.json, and a
+    path-shaped name would write outside the repository.
+    """
+    operator_mcp = repo / ".seshat/integrations/mcp.json"
+    operator_mcp.parent.mkdir(parents=True, exist_ok=True)
+    operator_mcp.write_text('{"mcpServers": {"mine": {}}}\n', encoding="utf-8")
+    _with_integrations(repo, ["claude", harness])
+
+    with pytest.raises(ValueError, match="harness"):
+        project_all(repo)
+
+    assert operator_mcp.read_text(encoding="utf-8") == '{"mcpServers": {"mine": {}}}\n'
+    assert not (repo / ".seshat/compass.yaml").exists()
+    assert not (repo.parent / "escaped.json").exists()
+
+
+def test_ordinary_harness_names_still_project(repo: Path) -> None:
+    _with_integrations(repo, ["claude", "codex", "claude-code"])
+    written = project_all(repo)
+    assert ".seshat/integrations/claude-code.json" in written

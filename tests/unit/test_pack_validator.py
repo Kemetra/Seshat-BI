@@ -145,3 +145,26 @@ def test_escaping_artifact_path_is_reported(tmp_path: Path) -> None:
     )
     _, findings = validate_pack(tmp_path, manifest_path)
     assert "pack_artifact_escape" in _rules(findings)
+
+
+def test_an_artifact_inside_the_workspace_but_outside_the_pack_is_an_escape(
+    tmp_path: Path,
+) -> None:
+    """Containment is the PACK directory, not the workspace.
+
+    Otherwise a pack could claim a governed repository file (an approval
+    record, a source map) as its own declarative content.
+    """
+    governed = tmp_path / "contracts" / "provisioning-approvals.yaml"
+    governed.parent.mkdir(parents=True)
+    governed.write_text("approvals: []\n", encoding="utf-8")
+    manifest_path = _write_pack(
+        tmp_path,
+        _MANIFEST.replace(
+            "artifacts/net-sales.yaml", "../../../contracts/provisioning-approvals.yaml"
+        ),
+    )
+
+    _, findings = validate_pack(tmp_path, manifest_path)
+
+    assert "pack_artifact_escape" in _rules(findings)

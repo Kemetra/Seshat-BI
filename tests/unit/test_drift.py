@@ -108,6 +108,29 @@ def test_cardinality_shift_reported():
     assert cs[0].after == "42 distinct"
 
 
+def test_row_unique_identifier_growth_is_not_a_cardinality_shift():
+    """#738: an identifier distinct on every row before AND after only grew with
+    the table; that is append growth, not a shift in the column."""
+    from seshat.drift import classify_drift
+
+    base = _profile([_col("txn_id", card=100), _col("region", card=5)], rows=100)
+    obs = _profile([_col("txn_id", card=120), _col("region", card=6)], rows=120)
+    shifted = {
+        f.column
+        for f in classify_drift(base, obs)
+        if f.drift_class == "cardinality_shift"
+    }
+    assert shifted == {"region"}
+
+
+def test_identifier_losing_row_uniqueness_is_still_a_shift():
+    from seshat.drift import classify_drift
+
+    base = _profile([_col("txn_id", card=100)], rows=100)
+    obs = _profile([_col("txn_id", card=110)], rows=120)
+    assert any(f.drift_class == "cardinality_shift" for f in classify_drift(base, obs))
+
+
 def test_no_shift_when_equal():
     from seshat.drift import classify_drift
 

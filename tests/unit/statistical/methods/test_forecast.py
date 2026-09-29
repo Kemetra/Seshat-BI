@@ -93,6 +93,36 @@ def test_metrics_and_baselines_match_hand_calculation() -> None:
     ]
 
 
+def test_seasonal_naive_interval_widens_per_seasonal_step() -> None:
+    """#735: seasonal-naive variance grows with k = floor((h-1)/m)+1, not h.
+
+    Hand calculation: period m=4, horizon 6 -> k = 1,1,1,1,2,2, so the
+    half-width is z * s * sqrt(k) where s is the seasonal-residual std.
+    """
+    from statistics import NormalDist
+
+    values = np.array(
+        [10.0, 20.0, 30.0, 40.0, 11.0, 22.0, 29.0, 43.0, 12.0, 21.0, 33.0, 41.0]
+    )
+    candidate = candidate_from_id("seasonal_naive", 4)
+    output = fit_candidate(values, candidate, 6, 0.95)
+    residuals = values[4:] - values[:-4]
+    scale = np.std(residuals, ddof=1) * NormalDist().inv_cdf(0.975)
+    expected = scale * np.sqrt([1, 1, 1, 1, 2, 2])
+    half_width = (np.asarray(output.high) - np.asarray(output.low)) / 2
+    assert half_width == pytest.approx(expected)
+
+
+def test_naive_interval_keeps_random_walk_widening() -> None:
+    from statistics import NormalDist
+
+    values = np.array([1.0, 3.0, 2.0, 5.0, 4.0, 6.0])
+    output = fit_candidate(values, candidate_from_id("naive", 1), 3, 0.95)
+    scale = np.std(np.diff(values), ddof=1) * NormalDist().inv_cdf(0.975)
+    half_width = (np.asarray(output.high) - np.asarray(output.low)) / 2
+    assert half_width == pytest.approx(scale * np.sqrt([1, 2, 3]))
+
+
 def test_evaluation_never_passes_future_values_to_fit(monkeypatch) -> None:
     import seshat.statistical.methods.forecast as forecast
 
@@ -158,6 +188,18 @@ def test_run_forecast_records_candidates_folds_intervals_and_selection() -> None
     assert any(item.name.startswith("fold_cutoff:") for item in result.estimates)
     assert any(item.name.startswith("fold_actual:") for item in result.estimates)
     assert any(item.name.startswith("fold_predicted:") for item in result.estimates)
+
+
+def test_run_forecast_accepts_gold_provider_date_rows() -> None:
+    """#735: rows holding datetime.date (what psycopg2 returns) run a forecast."""
+    values = [10 + (index % 4) * 3 + index * 0.2 for index in range(28)]
+    context = _context(np.array(values, dtype=float))
+    dated_rows = tuple(
+        (date.fromisoformat(stamp), value) for stamp, value in context.data.rows
+    )
+    context = replace(context, data=replace(context.data, rows=dated_rows))
+    result = run_forecast(context)
+    assert any(item.code == "STAT_FORECAST_SELECTED" for item in result.diagnostics)
 
 
 def test_mandatory_baseline_and_two_fold_floor_are_enforced() -> None:

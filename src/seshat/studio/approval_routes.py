@@ -291,7 +291,9 @@ def _delivery_failed(failure: Exception) -> tuple[int, str, str, str]:
     return (
         502,
         "The decision was recorded but not delivered",
-        str(failure),
+        # The exception TYPE, never its text: a broken-pipe or OS error message can
+        # carry a path, and this becomes the 502 detail.
+        f"the provider session could not be written to ({type(failure).__name__})",
         "The agent session may have ended. Re-open the thread; the decision itself "
         "cannot be re-sent, because its approval id is already spent.",
     )

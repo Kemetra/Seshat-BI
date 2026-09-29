@@ -193,3 +193,137 @@ def test_locked_marketplace_entry_resolves_declared_plugin(tmp_path: Path) -> No
 
     assert observed.version == "1.2.3"
     assert observed.skills == frozenset({"approved"})
+
+
+# --------------------------------------------------------------------------- #
+# plugin.json component fields are enumeration roots too (closed world).
+# --------------------------------------------------------------------------- #
+
+
+def _with_manifest(root: Path, manifest: dict[str, object]):
+    _write(root / "skills" / "approved" / "SKILL.md")
+    _write_json(root / ".claude-plugin" / "plugin.json", manifest)
+    return observe_plugin(root, {"id": "x@y", "version": "1.2.3"})
+
+
+def _kinds(tmp_path: Path, manifest: dict[str, object], **policy: object) -> set:
+    locked = _plugin(tmp_path / "locked")
+    observed = _with_manifest(tmp_path / "observed", manifest)
+    return {
+        blocker.kind for blocker in compare_plugin(_policy(**policy), locked, observed)
+    }
+
+
+def test_inline_plugin_json_hook_blocks(tmp_path: Path) -> None:
+    hook = {"matcher": "*", "hooks": [{"type": "command", "command": "true"}]}
+    kinds = _kinds(tmp_path, {"name": "x", "hooks": {"PreToolUse": [hook]}})
+    assert "undeclared-hook" in kinds
+
+
+def test_inline_plugin_json_hook_in_hooks_json_shape_blocks(tmp_path: Path) -> None:
+    kinds = _kinds(tmp_path, {"name": "x", "hooks": {"hooks": {"Stop": []}}})
+    assert "undeclared-hook" in kinds
+
+
+def test_default_commands_directory_blocks(tmp_path: Path) -> None:
+    _write(tmp_path / "observed" / "commands" / "wipe.md")
+    kinds = _kinds(tmp_path, {"name": "x"})
+    assert "undeclared-command" in kinds
+
+
+def test_declared_command_path_blocks_and_can_be_allowed(tmp_path: Path) -> None:
+    _write(tmp_path / "a" / "observed" / "cmds" / "wipe.md")
+    manifest = {"name": "x", "commands": "./cmds/"}
+    assert "undeclared-command" in _kinds(tmp_path / "a", manifest)
+    _write(tmp_path / "b" / "locked" / "commands" / "wipe.md")
+    _write(tmp_path / "b" / "observed" / "cmds" / "wipe.md")
+    assert not _kinds(tmp_path / "b", manifest, allowed_commands=("wipe",))
+
+
+def test_custom_skill_paths_are_enumerated(tmp_path: Path) -> None:
+    _write(tmp_path / "observed" / "extra" / "rogue" / "SKILL.md")
+    kinds = _kinds(tmp_path, {"name": "x", "skills": ["./skills/", "./extra/"]})
+    assert "undeclared-skill" in kinds
+
+
+def test_custom_agent_file_is_enumerated(tmp_path: Path) -> None:
+    _write(tmp_path / "observed" / "elsewhere" / "rogue.md")
+    kinds = _kinds(tmp_path, {"name": "x", "agents": ["./elsewhere/rogue.md"]})
+    assert "undeclared-agent" in kinds
+
+
+def test_plugin_json_mcp_servers_merge_with_standalone_mcp_json(
+    tmp_path: Path,
+) -> None:
+    _write_json(tmp_path / "observed" / ".mcp.json", {"mcpServers": {}})
+    manifest = {"name": "x", "mcpServers": {"rogue": {"command": "rogue"}}}
+    assert "undeclared-mcp" in _kinds(tmp_path, manifest)
+
+
+def test_plugin_json_mcp_servers_path_is_read(tmp_path: Path) -> None:
+    _write_json(
+        tmp_path / "observed" / "servers.json",
+        {"mcpServers": {"rogue": {"command": "rogue"}}},
+    )
+    assert "undeclared-mcp" in _kinds(
+        tmp_path, {"name": "x", "mcpServers": "./servers.json"}
+    )
+
+
+@pytest.mark.parametrize("key", ["outputStyles", "lspServers", "frobnicate"])
+def test_unrecognised_plugin_json_key_fails_closed(tmp_path: Path, key: str) -> None:
+    assert "unknown-component" in _kinds(tmp_path, {"name": "x", key: "./x"})
+
+
+def test_a_declared_path_outside_the_plugin_is_unenumerable(tmp_path: Path) -> None:
+    _write(tmp_path / "outside" / "rogue" / "SKILL.md")
+    kinds = _kinds(tmp_path, {"name": "x", "skills": "../outside"})
+    assert "unknown-skill" in kinds
+
+
+def test_an_unreadable_plugin_json_fails_closed(tmp_path: Path) -> None:
+    locked = _plugin(tmp_path / "locked")
+    root = tmp_path / "observed"
+    _write(root / "skills" / "approved" / "SKILL.md")
+    _write(root / ".claude-plugin" / "plugin.json", "{not json")
+    observed = observe_plugin(root, {"id": "x@y", "version": "1.2.3"})
+    kinds = {b.kind for b in compare_plugin(_policy(), locked, observed)}
+    assert "unknown-component" in kinds
+
+
+def test_metadata_only_plugin_json_adds_no_blocker(tmp_path: Path) -> None:
+    manifest = {
+        "name": "x",
+        "version": "1.2.3",
+        "description": "d",
+        "author": {"name": "a"},
+        "homepage": "https://example.com",
+        "repository": "https://example.com/r",
+        "license": "MIT",
+        "keywords": ["k"],
+        "skills": "./skills/",
+    }
+    assert _kinds(tmp_path, manifest) == set()
+
+
+def test_marketplace_entry_component_fields_are_enumerated(tmp_path: Path) -> None:
+    plugin_root = tmp_path / "plugins" / "x"
+    _write(plugin_root / "skills" / "approved" / "SKILL.md")
+    _write(plugin_root / "tools" / "wipe.md")
+    _write_json(
+        tmp_path / ".claude-plugin" / "marketplace.json",
+        {
+            "plugins": [
+                {
+                    "name": "x",
+                    "version": "1.2.3",
+                    "source": "./plugins/x",
+                    "commands": ["./tools/wipe.md"],
+                }
+            ]
+        },
+    )
+
+    observed = locked_plugin_policy(tmp_path, _policy())
+
+    assert observed.commands == frozenset({"wipe"})

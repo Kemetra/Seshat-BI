@@ -82,9 +82,14 @@ def _decimal(raw: object, *, field: str) -> Decimal:
     """Decimal-parse from the STRING form (avoids binary-float fragility). Raises
     ValueError with the field name on a non-numeric value."""
     try:
-        return Decimal(str(raw))
+        parsed = Decimal(str(raw))
     except (InvalidOperation, ValueError) as exc:
         raise ValueError(f"expected_value.{field} is not numeric: {raw!r}") from exc
+    # Infinity makes a tolerance that can never fail; NaN makes the comparison
+    # raise InvalidOperation, which surfaced as a false DB-boundary failure.
+    if not parsed.is_finite():
+        raise ValueError(f"expected_value.{field} is not a finite number: {raw!r}")
+    return parsed
 
 
 def _expected_value_block(definition: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -156,6 +161,8 @@ def parse_expected_value(
     aggregation = _validated_aggregation(block)
     value = _decimal(block.get("value"), field="value")
     tolerance_abs = _decimal(block.get("tolerance_abs", "0"), field="tolerance_abs")
+    if tolerance_abs < 0:
+        raise ValueError("expected_value.tolerance_abs must not be negative")
     gold_table = _required_gold_table(binds_to)
     column = _resolved_column(aggregation, block)
 

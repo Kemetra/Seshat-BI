@@ -4,9 +4,10 @@ Isolated here so the offline path (load.py) never imports a driver, and so a tes
 can exercise the write logic against a fixture ``Writer`` without a real database.
 The real driver is imported LAZILY inside ``load_demo_scoped`` only.
 
-Safety: writes ONLY into demo-scoped objects (the caller has already verified the
-schema/table names carry the demo marker, FR-011). Idempotent: DROP+CREATE so a
-re-run converges to the same rows (FR-004).
+Safety: writes ONLY into demo-scoped objects -- the DDL is built from the SAME
+schema/table names the caller verified carry the demo marker (FR-011), so the
+guard keys on the identity written. Idempotent: DROP+CREATE so a re-run
+converges (FR-004). The leg creates the table shape only; it inserts no rows.
 """
 
 from __future__ import annotations
@@ -20,17 +21,21 @@ class Writer(Protocol):
     def execute(self, sql: str) -> None: ...
 
 
-def demo_scoped_ddl(schema: str) -> list[str]:
+_DEFAULT_TABLE = "fct_order_line_seshat_demo"
+
+
+def demo_scoped_ddl(schema: str, table: str = _DEFAULT_TABLE) -> list[str]:
     """The idempotent DDL statements for the demo-scoped gold objects.
 
     Pure -- returns the SQL as a list so a test can assert on it without a DB. The
-    schema name is caller-supplied and already demo-scoped (FR-011 verified upstream).
+    schema and table names are caller-supplied and already demo-scoped (FR-011
+    verified upstream on exactly these names).
     """
     return [
         f"CREATE SCHEMA IF NOT EXISTS {schema}",
-        f"DROP TABLE IF EXISTS {schema}.fct_order_line",
+        f"DROP TABLE IF EXISTS {schema}.{table}",
         (
-            f"CREATE TABLE {schema}.fct_order_line ("
+            f"CREATE TABLE {schema}.{table} ("
             "order_line_id TEXT NOT NULL, order_date DATE NOT NULL, "
             "product_key TEXT NOT NULL, quantity INTEGER NOT NULL, "
             "unit_price NUMERIC(12,2) NOT NULL, line_total NUMERIC(12,2) NOT NULL)"
@@ -38,13 +43,13 @@ def demo_scoped_ddl(schema: str) -> list[str]:
     ]
 
 
-def apply_ddl(writer: Writer, schema: str) -> None:
+def apply_ddl(writer: Writer, schema: str, table: str = _DEFAULT_TABLE) -> None:
     """Apply the demo-scoped DDL via any ``Writer`` (fixture or real cursor)."""
-    for stmt in demo_scoped_ddl(schema):
+    for stmt in demo_scoped_ddl(schema, table):
         writer.execute(stmt)
 
 
-def load_demo_scoped(dsn: str, *, schema: str, marker: str) -> None:
+def load_demo_scoped(dsn: str, *, schema: str, table: str = _DEFAULT_TABLE) -> None:
     """Open a real (lazy) psycopg2 connection and apply the demo-scoped DDL.
 
     Only reached on the live leg after load.py verified the DSN resolved and the
@@ -57,6 +62,6 @@ def load_demo_scoped(dsn: str, *, schema: str, marker: str) -> None:
     try:
         conn.autocommit = True
         with conn.cursor() as cur:
-            apply_ddl(cur, schema)
+            apply_ddl(cur, schema, table)
     finally:
         conn.close()

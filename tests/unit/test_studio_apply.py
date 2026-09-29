@@ -142,7 +142,10 @@ def test_the_applied_paths_are_exactly_the_reviewed_target(tmp_path: Path):
 
     receipt = client.post(f"{API}/proposals/{proposal['proposal_id']}/apply").json()
 
-    assert receipt["applied_paths"] == [proposal["target_artifact"]]
+    # Apply writes no files yet, so naming the reviewed target here would be a false
+    # receipt. The scope binding itself is pinned by the extra_paths refusal above.
+    assert receipt["applied_paths"] == []
+    assert "not executed" in receipt["verification"]["apply"]
 
 
 # --- Task 4.3: static success is not live correctness -------------------------------

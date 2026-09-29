@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.unit._git_fixtures import commit_file
+
 pytestmark = pytest.mark.unit
 
 DECLINES = "contracts/capability-declines.yaml"
@@ -32,8 +34,8 @@ def _project(root: Path, *, pbip: bool = False, declines: str | None = None) -> 
         (root / "powerbi").mkdir()
         (root / "powerbi" / "Sales.pbip").write_text("{}", encoding="utf-8")
     if declines is not None:
-        (root / "contracts").mkdir(exist_ok=True)
-        (root / DECLINES).write_text(declines, encoding="utf-8")
+        # A decline is read from HEAD, so the fixture commits it.
+        commit_file(root, DECLINES, declines)
     return root
 
 
@@ -184,3 +186,50 @@ def test_no_declines_file_means_nothing_is_declined(tmp_path: Path) -> None:
 
     for row in derive(_project(tmp_path, pbip=True)).rows:
         assert row.declined is False
+
+
+# --------------------------------------------------------------------------
+# A decline is a committed human decision, not a worktree edit
+# --------------------------------------------------------------------------
+
+_DECLINE_POWERBI = "declines:\n  - capability: powerbi-integration\n"
+
+
+def test_an_uncommitted_decline_applies_nothing_and_says_so(tmp_path: Path) -> None:
+    """An agent-written, uncommitted decline must not suppress or block anything."""
+    from seshat.integrations.derivation import derive, render_json, render_text
+
+    root = _project(tmp_path, pbip=True)
+    (root / "contracts").mkdir()
+    (root / DECLINES).write_text(_DECLINE_POWERBI, encoding="utf-8")
+
+    plan = derive(root)
+
+    assert not _row(plan, "powerbi-integration").declined
+    assert not plan.blocked
+    assert plan.warnings and DECLINES in plan.warnings[0]
+    assert DECLINES in render_text(plan)
+    assert plan.warnings[0] in render_json(plan)
+
+
+def test_a_dirty_edit_to_a_committed_decline_file_is_not_applied(
+    tmp_path: Path,
+) -> None:
+    from seshat.integrations.derivation import derive
+
+    root = _project(tmp_path, pbip=True, declines="declines: []\n")
+    (root / DECLINES).write_text(_DECLINE_POWERBI, encoding="utf-8")
+
+    plan = derive(root)
+
+    assert not _row(plan, "powerbi-integration").declined
+    assert plan.warnings
+
+
+def test_a_committed_decline_is_applied_without_a_warning(tmp_path: Path) -> None:
+    from seshat.integrations.derivation import derive
+
+    plan = derive(_project(tmp_path, pbip=True, declines=_DECLINE_POWERBI))
+
+    assert _row(plan, "powerbi-integration").declined
+    assert plan.warnings == ()

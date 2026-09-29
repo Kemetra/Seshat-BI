@@ -342,12 +342,76 @@ def _base_dax_filters(expr: str, want_func: str) -> frozenset[Filter] | Verdict:
     return _recognize_filters(parts[1:], detail_noun="predicate")
 
 
-def _check_base_drift(dax_expr: str, definition: dict[str, Any]) -> Verdict:
-    """Verify a kind:base measure's aggregation + filter-set vs its contract.
+def _agg_call_of(expr: str) -> str:
+    """The aggregation call of a bare `AGG(x)` or `CALCULATE(AGG(x), ...)` expr."""
+    expr = expr.strip()
+    calc = _outer_call(expr, "CALCULATE")
+    if calc is None:
+        return expr
+    parts = _split_balanced(calc)
+    return parts[0].strip() if parts else expr
+
+
+def _binding_operand(aggregation: object, binding: dict[str, Any] | None) -> str | None:
+    """The operand a contract's `binds_to` implies for a base aggregation, or None.
+
+    count_rows aggregates the TABLE (a listed identity column is not its operand);
+    every other aggregation needs exactly one bound column -- several columns leave
+    the operand ambiguous, so the caller escalates rather than guessing.
+    """
+    if not isinstance(binding, dict):
+        return None
+    table = binding.get("gold_table")
+    if not isinstance(table, str) or not table.strip():
+        return None
+    if aggregation == "count_rows":
+        return _expected_inline_operand({"source": {"table": table.strip()}})
+    columns = binding.get("columns")
+    if not isinstance(columns, list) or len(columns) != 1:
+        return None
+    column = columns[0]
+    if not isinstance(column, str) or not column.strip():
+        return None
+    source = {"table": table.strip(), "column": column.strip()}
+    return _expected_inline_operand({"source": source})
+
+
+def _base_operand_verdict(
+    dax_expr: str, definition: dict[str, Any], binding: dict[str, Any] | None
+) -> Verdict | None:
+    """Compare the aggregated operand to the contract source (#734), or None if equal.
+
+    `definition.source` is authoritative; the contract's `binds_to` is the fallback
+    committed contracts use. An operand that cannot be resolved ESCALATES: a base
+    measure aggregating an unverified column must never read as `pass`.
+    """
+    expected = _expected_inline_operand(definition)
+    if expected is None:
+        expected = _binding_operand(definition.get("aggregation"), binding)
+    if expected is None:
+        return Verdict(
+            "escalate",
+            "contract declares no single source operand (definition.source or a "
+            "one-column binds_to); the aggregated column cannot be verified",
+        )
+    agg_call = _agg_call_of(dax_expr)
+    func = _recognized_agg_func(agg_call)
+    inner = _outer_call(agg_call, func) if func else None
+    actual = inner.strip() if inner is not None else None
+    if actual == expected:
+        return None
+    return Verdict("drift", f"aggregated operand {actual!r} != contract {expected!r}")
+
+
+def _check_base_drift(
+    dax_expr: str, definition: dict[str, Any], binding: dict[str, Any] | None = None
+) -> Verdict:
+    """Verify a kind:base measure's aggregation, operand and filter-set vs its contract.
 
     Resolves the contract's declared aggregation + filter-set, then compares them to
-    the DAX filter-set (recognized by `_base_dax_filters`). ESCALATE is the default for
-    anything not confidently recognized.
+    the DAX filter-set (recognized by `_base_dax_filters`) and the aggregated operand
+    to the contract source. ESCALATE is the default for anything not confidently
+    recognized.
     """
     agg = definition.get("aggregation")
     want_func = _BASE_AGG_FUNC.get(agg) if agg else None
@@ -362,6 +426,9 @@ def _check_base_drift(dax_expr: str, definition: dict[str, Any]) -> Verdict:
     dax_filters = _base_dax_filters(dax_expr.strip(), want_func)
     if isinstance(dax_filters, Verdict):
         return dax_filters
+    operand_verdict = _base_operand_verdict(dax_expr, definition, binding)
+    if operand_verdict is not None:
+        return operand_verdict
 
     if dax_filters == contract_filters:
         return Verdict("pass", "base aggregation + filter-set matches the contract")
@@ -428,10 +495,10 @@ def _inline_operand_matches(dax_agg_expr: str, contract_side: dict[str, Any]) ->
     return inner.strip() == expected
 
 
-def _ratio_denominator_filters(
-    dax_denominator: str, contract_side: dict[str, Any]
+def _ratio_side_filters(
+    dax_side: str, contract_side: dict[str, Any], label: str
 ) -> frozenset[Filter] | Verdict:
-    """Resolve a DIVIDE denominator's filter-set, dispatching on its base shape.
+    """Resolve one DIVIDE side's (`label` = numerator | denominator) filter-set.
 
     Two recognized families (audit #432 widened the second):
       * measure-ref base ([Measure] / CALCULATE([Measure], ...)) -- OPAQUE: the
@@ -447,10 +514,10 @@ def _ratio_denominator_filters(
     Anything genuinely unrecognized (VAR/RETURN, nested CALCULATE, a non-AGG
     call), or an operand that does not match the contract source, escalates.
     """
-    den = _normalize_denominator(dax_denominator)
-    if den is not None and _is_measure_ref(den[0]):
-        _base_ref, pred_texts = den
-        return _recognize_filters(pred_texts, detail_noun="denominator predicate")
+    side = _normalize_denominator(dax_side)
+    if side is not None and _is_measure_ref(side[0]):
+        _base_ref, pred_texts = side
+        return _recognize_filters(pred_texts, detail_noun=f"{label} predicate")
 
     # Not a measure-ref shape (either _normalize_denominator returned None -- a
     # bare AGG(col) -- or it returned a CALCULATE(...) whose base is an inline
@@ -461,42 +528,59 @@ def _ratio_denominator_filters(
     want_func = _BASE_AGG_FUNC.get(agg) if agg else None
     if want_func is None:
         return Verdict(
-            "escalate", f"contract denominator aggregation {agg!r} not recognized"
+            "escalate", f"contract {label} aggregation {agg!r} not recognized"
         )
     # Verify the aggregated operand matches the contract source before trusting the
-    # inline call: the CALCULATE arm's base is parts[0], the bare arm is the whole
-    # expr. Escalate (never silently pass) when the operand cannot be confirmed.
-    inner_agg = dax_denominator.strip()
-    calc = _outer_call(inner_agg, "CALCULATE")
-    if calc is not None:
-        parts = _split_balanced(calc)
-        inner_agg = parts[0].strip() if parts else inner_agg
-    if not _inline_operand_matches(inner_agg, contract_side):
+    # inline call. Escalate (never silently pass) when it cannot be confirmed.
+    if not _inline_operand_matches(_agg_call_of(dax_side), contract_side):
         return Verdict(
             "escalate",
-            "denominator aggregates an operand that does not match the contract "
+            f"{label} aggregates an operand that does not match the contract "
             "source (or the operand could not be verified)",
         )
-    return _base_dax_filters(dax_denominator.strip(), want_func)
+    return _base_dax_filters(dax_side.strip(), want_func)
+
+
+def _ratio_side_verdict(
+    dax_side: str, contract_side: object, label: str
+) -> Verdict | None:
+    """Compare one DIVIDE side to its contract side; None when they match."""
+    if not isinstance(contract_side, dict):
+        return Verdict(
+            "escalate",
+            f"contract has no structured `definition.{label}`; the {label} "
+            "cannot be verified",
+        )
+    contract_filters = _contract_filters(contract_side)
+    if contract_filters is None:
+        return Verdict(
+            "escalate", f"contract {label} filter is malformed or uses an unknown op"
+        )
+    filters = _ratio_side_filters(dax_side, contract_side, label)
+    if isinstance(filters, Verdict):
+        return filters
+    if filters == contract_filters:
+        return None
+    return Verdict(
+        "drift",
+        f"{label} filter-set {sorted((f.column, f.op) for f in filters)} "
+        f"!= contract {sorted((f.column, f.op) for f in contract_filters)}",
+    )
 
 
 def _check_ratio_drift(dax_expr: str, definition: dict[str, Any]) -> Verdict:
-    """Verify a ratio (DIVIDE) measure's denominator filter-set vs its contract.
+    """Verify a ratio (DIVIDE) measure's numerator AND denominator vs its contract.
 
-    Mirrors `_check_base_drift`: build the contract filter-set, recognize the DIVIDE
-    denominator shape, map its predicates to Filters, and compare. ESCALATE is the
-    default for anything not confidently recognized.
+    Mirrors `_check_base_drift` per side: build the contract filter-set, recognize
+    the side's shape, map its predicates to Filters, and compare. The numerator is
+    checked too (#734): a DIVIDE whose numerator drops its filter (always 100%)
+    must not pass on a matching denominator alone. ESCALATE is the default for
+    anything not confidently recognized.
     """
-    contract_filters = _contract_filters(definition["denominator"])
-    if contract_filters is None:
-        return Verdict(
-            "escalate", "contract denominator filter is malformed or uses an unknown op"
-        )
-
     # The measure must be a single top-level DIVIDE. DAX DIVIDE takes 2 or 3 args:
     # DIVIDE(num, den) or DIVIDE(num, den, alternate_result). The denominator is
     # always args[1]; the optional 3rd arg is the alternate result and does not
-    # affect the denominator filter-set (audit 2026-06-26: 3-arg form was wrongly
+    # affect either filter-set (audit 2026-06-26: 3-arg form was wrongly
     # escalated, skipping the drift check on a common divide-by-zero pattern).
     inner = _outer_call(dax_expr.strip(), "DIVIDE")
     if inner is None:
@@ -505,31 +589,29 @@ def _check_ratio_drift(dax_expr: str, definition: dict[str, Any]) -> Verdict:
     if args is None or len(args) not in (2, 3):
         return Verdict("escalate", "DIVIDE does not have 2 or 3 balanced arguments")
 
-    # denominator shape: bare/CALCULATE-wrapped measure ref (opaque) OR an inline
-    # aggregation call (#432 widening) -- see _ratio_denominator_filters.
-    filters = _ratio_denominator_filters(args[1], definition["denominator"])
-    if isinstance(filters, Verdict):
-        return filters
-
-    if filters == contract_filters:
-        return Verdict("pass", "denominator filter-set matches the contract")
-    return Verdict(
-        "drift",
-        f"denominator filter-set {sorted((f.column, f.op) for f in filters)} "
-        f"!= contract {sorted((f.column, f.op) for f in contract_filters)}",
-    )
+    for dax_side, label in ((args[1], "denominator"), (args[0], "numerator")):
+        verdict = _ratio_side_verdict(dax_side, definition.get(label), label)
+        if verdict is not None:
+            return verdict
+    return Verdict("pass", "numerator and denominator filter-sets match the contract")
 
 
-def check_measure_drift(dax_expr: str, definition: dict[str, Any] | None) -> Verdict:
+def check_measure_drift(
+    dax_expr: str,
+    definition: dict[str, Any] | None,
+    binding: dict[str, Any] | None = None,
+) -> Verdict:
     """Compare a DIVIDE measure's denominator filter-set to its contract definition.
 
     Returns a Verdict (pass | drift | escalate | skip). ESCALATE is the default for any
     expression not confidently recognized. Never raises on bad DAX -- escalates instead.
-    If definition.kind == "base", verify the base measure's aggregation + filter-set
-    against its own contract.
+    If definition.kind == "base", verify the base measure's aggregation, operand and
+    filter-set against its own contract. `binding` is the contract's `binds_to`
+    block ({gold_table, columns}); it supplies the base operand when the
+    definition declares no `source`.
     """
     if definition and definition.get("kind") == "base":
-        return _check_base_drift(dax_expr, definition)
+        return _check_base_drift(dax_expr, definition, binding)
     # kind:ratio implies non-additive; shallow-copy only when the key is truly absent.
     if _is_ratio_needing_additive_default(definition):
         definition = {**definition, "additive": False}

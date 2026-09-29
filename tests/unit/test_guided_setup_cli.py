@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.unit._git_fixtures import commit_file
+
 pytestmark = pytest.mark.unit
 
 
@@ -47,12 +49,10 @@ def _args(root: Path, **overrides) -> Namespace:
 
 
 def _mark_installed(root: Path, *component_ids: str) -> None:
-    from seshat.integrations.catalog import SKILLS_DIR
+    """Write each component's real install evidence (see the shared helper)."""
+    from tests.unit._curated_stack_fixtures import _mark_installed as mark
 
-    for component_id in component_ids:
-        target = root / SKILLS_DIR / component_id
-        target.mkdir(parents=True, exist_ok=True)
-        (target / ".seshat-installed").write_text("v1\n", encoding="utf-8")
+    mark(root, *component_ids)
 
 
 def _catalog_coordinates() -> set[str]:
@@ -86,6 +86,28 @@ def test_the_derived_plan_is_reachable_through_the_verb(
 
     assert "Database Connectivity" in out
     assert "Power BI Integration" in out
+
+
+def test_the_attended_prompt_shows_the_derived_plan_before_asking(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    """A human is never asked to confirm an install they have not been shown."""
+    from seshat import integrations_setup
+    from seshat.cli.commands import integrations as command
+
+    shown_before_prompt: list[str] = []
+
+    def _confirm(question: str) -> bool:
+        shown_before_prompt.append(capsys.readouterr().out)
+        return False
+
+    monkeypatch.setattr(command, "_attended", lambda: True)
+    monkeypatch.setattr(integrations_setup, "confirm", _confirm)
+
+    command.integrations_main(_args(_project(tmp_path), apply=True))
+
+    assert shown_before_prompt, "the attended run never prompted"
+    assert "Power BI Integration" in shown_before_prompt[0]
 
 
 def test_the_derived_plan_reports_the_proposed_change_count(
@@ -158,9 +180,10 @@ def test_a_blocked_plan_exits_nonzero_and_names_the_blocker(
     from seshat.cli.commands.integrations import integrations_main
 
     root = _project(tmp_path)
-    (root / "contracts").mkdir()
-    (root / "contracts" / "capability-declines.yaml").write_text(
-        "declines:\n  - capability: powerbi-integration\n", encoding="utf-8"
+    commit_file(
+        root,
+        "contracts/capability-declines.yaml",
+        "declines:\n  - capability: powerbi-integration\n",
     )
 
     code = integrations_main(_args(root))

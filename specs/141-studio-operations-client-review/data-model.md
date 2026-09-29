@@ -68,7 +68,7 @@ which is stronger than a convention against computing one.
 | `requested` | `str` | business-language description |
 | `proposed_tools` | `tuple[str, ...]` | from normalized events, never a raw transcript |
 | `decided_by` | `str \| None` | signer, when a named human ruled |
-| `decision_state` | `str` | `pending_commit` \| `authoritative` -- mirrors spec 140 |
+| `decision_state` | `str` | `pending_commit` \| `authoritative` \| `rejected` \| `not_authoritative` -- mirrors spec 140; a committed entry is `authoritative` only when it is a valid approve ruling |
 | `gates_run` | `tuple[str, ...]` | |
 | `outcome` | `str` | categorical, never a score |
 | `durability` | `str` | `ephemeral` \| `durable` |

@@ -56,16 +56,20 @@ def test_safe_target_label_sqlserver_odbc_string_never_echoes_credentials() -> N
     assert label == "sqlserver"
 
 
-def test_safe_target_label_postgres_dsn_is_host_only() -> None:
-    # The Postgres URL label is the credential-free host[:port]/dbname, parsed
-    # structurally (urlsplit) so userinfo and query never reach the status line.
-    assert _safe_target_label("postgres", "postgresql://u:p@h:5432/db") == "h:5432/db"
-    assert _safe_target_label("postgres", "postgresql://h:5432/db") == "h:5432/db"
-    # A query-param credential with a raw "@" must NOT leak (#409): host only.
-    assert (
-        _safe_target_label("postgres", "postgresql://h/db?password=secret@tail")
-        == "h/db"
-    )
+def test_safe_target_label_postgres_dsn_names_no_component() -> None:
+    # Host and database name are secret-classified everywhere else (the error
+    # path redacts them), so the banner prints the engine plus a short target
+    # digest -- never host[:port]/dbname, userinfo, or the query.
+    with_creds = _safe_target_label("postgres", "postgresql://u:p@db-a.example/db1")
+    assert with_creds.startswith("postgres (target ")
+    assert "db-a.example" not in with_creds and "db1" not in with_creds
+    # Credentials do not change WHICH target it is, so the label is stable.
+    assert with_creds == _safe_target_label("postgres", "postgresql://db-a.example/db1")
+    # A different target reads differently, so operators can still tell them apart.
+    assert with_creds != _safe_target_label("postgres", "postgresql://db-b.example/db1")
+    # A query-param credential with a raw "@" must NOT leak (#409).
+    label = _safe_target_label("postgres", "postgresql://h/db?password=secret@tail")
+    assert "secret" not in label and "tail" not in label
 
 
 def test_validate_sqlserver_engine_emits_sqlserver_sql_not_postgres(

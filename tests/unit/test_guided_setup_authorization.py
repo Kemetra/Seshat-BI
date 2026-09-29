@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.unit._git_fixtures import commit_file
+
 pytestmark = pytest.mark.unit
 
 APPROVALS = "contracts/provisioning-approvals.yaml"
@@ -256,8 +258,10 @@ def test_a_blocked_plan_refuses_before_authority_is_consulted(
         raise AssertionError("authority was consulted for a blocked plan")
 
     monkeypatch.setattr(approval, "evaluate", _landmine)
-    (repo / "contracts" / "capability-declines.yaml").write_text(
-        "declines:\n  - capability: powerbi-integration\n", encoding="utf-8"
+    commit_file(
+        repo,
+        "contracts/capability-declines.yaml",
+        "declines:\n  - capability: powerbi-integration\n",
     )
     _commit_approval(repo, list(_SCOPE))
 

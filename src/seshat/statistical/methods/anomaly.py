@@ -26,6 +26,12 @@ _MAD_SCALE = 1.4826
 # usable signal, so the point is reported as degenerate instead of flagged.
 _DISPERSION_RELATIVE_FLOOR = 1e-9
 
+# seasonal_mad refits a robust STL over the growing prior-only history at EVERY
+# evaluated point, so its cost is quadratic in series length. Local compute is
+# not covered by the provider row ceiling or the DB timeout, so the number of
+# seasonal evaluations is capped and an over-long series is WITHHELD.
+_MAX_SEASONAL_EVALUATIONS = 1_000
+
 
 def _is_noise_level(dispersion: float, scale: float) -> bool:
     """Report whether a robust dispersion is indistinguishable from round-off."""
@@ -159,6 +165,17 @@ def _degenerate(key: str) -> Diagnostic:
     )
 
 
+def _require_governed_period(period: int) -> None:
+    """A one-point trailing window has no dispersion and STL needs period >= 2."""
+    require(
+        period >= 2,
+        "STAT_PARAMETER_INVALID",
+        f"The anomaly period {period} is below 2: a one-point trailing window is "
+        "always degenerate and a seasonal decomposition needs at least two.",
+        "Declare method.parameters.period of at least 2.",
+    )
+
+
 def run_detect_anomalies(context: MethodContext) -> MethodResult:
     """Evaluate points only against strictly earlier robust baselines."""
 
@@ -174,12 +191,21 @@ def run_detect_anomalies(context: MethodContext) -> MethodResult:
         "Use a positive governed MAD multiplier.",
     )
     period = series.seasonal_period
+    _require_governed_period(period)
     initial = _required_history(context, model, period)
     require(
         initial < len(series.values),
         "STAT_ANOMALY_HISTORY",
         "No observation remains after the required historical baseline.",
         "Provide history plus at least one later evaluation point.",
+    )
+    require(
+        model != "seasonal_mad"
+        or len(series.values) - initial <= _MAX_SEASONAL_EVALUATIONS,
+        "STAT_ANOMALY_COMPUTE_LIMIT",
+        f"seasonal_mad would refit robust STL at more than "
+        f"{_MAX_SEASONAL_EVALUATIONS} points.",
+        "Approve a shorter series window, or use trailing_mad for long series.",
     )
 
     estimates: list[Estimate] = []
