@@ -43,9 +43,11 @@ renamed: extracting every `@register(...)` id under `src/seshat/rules/` gives th
   stage's approval must come from that stage's authority, and a later stage cannot
   pass while an earlier one does not. `dashboard_ready` currently also accepts
   `governance` and `data_owner` sign-off.
-- **Prose-only contract approvals no longer bind** (#763). A note such as "approved
-  contract X" is not read as an approval; name contracts as `contracts: [X]` or a
-  delimited `contracts: X, Y` list.
+- **An approval note binds a contract only when it lists the name** (#763). With no
+  structured `contracts:` field, the note must carry the name as a delimited item
+  (after `:`, `,`, `;` or `(`), so "approved contracts: X, Y" still binds but "approved
+  contract X" no longer does. Prefer the structured field, which must be a YAML list:
+  `contracts: [X, Y]` (a bare `contracts: X, Y` is a string and binds nothing).
 - **Approval-bearing surfaces read committed state and fail closed for a project nested
   inside another git root** (#763, #756). Report render, analyze, the coordinator and
   measure-sync read `HEAD:<rel>` from the git top level. Approvals no longer advance a
@@ -88,9 +90,10 @@ renamed: extracting every `@register(...)` id under `src/seshat/rules/` gives th
 
 ### Fixed
 
-- **Git hardening** (#753): every git call spreads the shared `GIT_HARDENING` flags
-  against repo-local config, paths are listed NUL-safely, and `check --format review`
-  validates `--commit-range`.
+- **Git hardening** (#753): git calls that read a workspace spread the shared
+  `GIT_HARDENING` flags against repo-local config, paths are listed NUL-safely, and
+  `check --format review` validates `--commit-range`. The integration installer's
+  clone, checkout and rev-parse run in a tree it just cloned and do not spread them.
 - **Secrets and provenance** (#757, #758): one redaction chain on live-DB surfaces,
   committed provenance reads, and C2/SQL-tokenizer quoted-identifier fixes.
 - **Studio** (#755, #776): DS1-valid decision records, per-turn Codex session state,
