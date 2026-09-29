@@ -86,6 +86,20 @@ def _semantic_finding_clean(semantic_finding: Any) -> bool:
     return not semantic_finding.items
 
 
+def _approved_bindings_match(
+    contract_paths: tuple[Path, ...],
+    root: Path,
+    scope_dir: str,
+    inputs: tuple[Path, ...],
+) -> bool:
+    from .metric_contract_inventory import load_contract_inventory
+
+    inventory = load_contract_inventory(contract_paths, root)
+    if inventory.errors or not inventory.approved:
+        return False
+    return _scope_bindings_match(inventory.for_scope(scope_dir), inputs)
+
+
 def contract_binding_state(
     repo_root: Path | str,
     scope_dir: str,
@@ -97,8 +111,6 @@ def contract_binding_state(
     approved names bind the model measures.  A supplied semantic finding must
     be a clean, current covered record before the portfolio calls it verified.
     """
-    from .metric_contract_inventory import load_contract_inventory
-
     root = Path(repo_root).resolve()
     metrics_dir = root / "mappings" / scope_dir / "metrics"
     if not metrics_dir.is_dir():
@@ -113,10 +125,7 @@ def contract_binding_state(
     )
     if not contract_paths:
         return "missing"
-    inventory = load_contract_inventory(contract_paths, root)
-    if inventory.errors or not inventory.approved:
-        return "blocked"
-    if not _scope_bindings_match(inventory.for_scope(scope_dir), inputs):
+    if not _approved_bindings_match(contract_paths, root, scope_dir, inputs):
         return "blocked"
     if not _semantic_finding_clean(semantic_finding):
         return "blocked"
