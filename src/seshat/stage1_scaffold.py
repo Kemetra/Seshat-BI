@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
 
+from .safe_write import is_link_like
+
 _SOURCE_ROOT = Path(__file__).resolve().parents[2]
 _PACKAGED_ROOT = "stage1_templates"
 
@@ -186,7 +188,7 @@ def _guard_destination_within_root(root: Path, dest_dir: Path) -> None:
     """
     # Refuse a symlinked directory component (in-repo alias OR outside-root).
     for component in (dest_dir.parent, dest_dir):
-        if component.is_symlink():
+        if is_link_like(component):
             raise Stage1ScaffoldError(
                 f"refusing to scaffold through a symlinked path component: "
                 f"{component} is a symlink (it would write to the wrong table "
@@ -260,7 +262,7 @@ def _refuse_unwritable_target(target: Path) -> None:
     absent, which would otherwise read as a misleading "kept" success. Only a
     regular file (handled by the caller) or a truly absent path is writable.
     """
-    if target.is_symlink():
+    if is_link_like(target):
         raise Stage1ScaffoldError(
             f"refusing to write through a symlinked output path: {target} "
             "(a symlink here could escape --repo); remove it and retry"
