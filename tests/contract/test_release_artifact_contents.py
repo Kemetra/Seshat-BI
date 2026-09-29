@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import tomllib
+from pathlib import Path
+
 import pytest
 
 from scripts.inspect_release_artifacts import (
@@ -47,18 +50,35 @@ def test_public_metadata_requires_urls_license_readme_and_safe_dependencies() ->
         _validate_metadata(bad)
 
 
-# A complete, valid wheel member list -- packages, both force-included pack
-# schemas, all three force-included Stage-1 templates (#339), plus the
-# entry-point and license metadata. Single-sourced so a new required asset is
-# added in ONE place; every wheel-inventory test derives its fixture from this.
+_ROOT = Path(__file__).resolve().parents[2]
+_FORCE_INCLUDE = tomllib.loads((_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
+    "tool"
+]["hatch"]["build"]["targets"]["wheel"]["force-include"]
+
+
+def _as_members(source: str, destination: str) -> list[str]:
+    """A force-include destination as wheel members: the file itself, or -- for
+    a directory source -- one representative file under it."""
+    if (_ROOT / source).is_dir():
+        return [f"{destination}/placeholder.txt"]
+    return [destination]
+
+
+# A complete, valid wheel member list -- packages, every force-include
+# destination read INDEPENDENTLY from pyproject here (not via the inspector's
+# own helper), the Studio UI entry page and one bundled asset, plus the
+# entry-point and license metadata. Every wheel-inventory test derives its
+# fixture from this.
 _VALID_WHEEL_INVENTORY = (
     "seshat/__init__.py",
     "retail/__init__.py",
-    "seshat/packs/schemas/seshat-extension-pack.schema.json",
-    "seshat/packs/schemas/seshat-pack-registry.schema.json",
-    "seshat/stage1_templates/source-profile.md",
-    "seshat/stage1_templates/readiness-status.yaml",
-    "seshat/stage1_templates/source-map.yaml",
+    *(
+        member
+        for source, destination in _FORCE_INCLUDE.items()
+        for member in _as_members(source, destination)
+    ),
+    "seshat/studio/static/index.html",
+    "seshat/studio/static/assets/index-abc123.js",
     "seshat_bi-0.2.0.dist-info/entry_points.txt",
     "seshat_bi-0.2.0.dist-info/licenses/LICENSE",
 )
@@ -99,6 +119,33 @@ def test_wheel_inventory_requires_stage1_templates() -> None:
     without_profile = _wheel_inventory_without("stage1_templates/source-profile.md")
     with pytest.raises(ArtifactInspectionError, match="required package data"):
         validate_wheel_inventory(without_profile)
+
+
+def test_wheel_inventory_requires_the_studio_ui() -> None:
+    """The v1.0.0 incident (#623): a wheel with the `seshat-studio` launcher and no
+    frontend passed every gate. The inspector itself must now refuse it."""
+    for fragment in ("studio/static/index.html", "studio/static/assets/"):
+        with pytest.raises(ArtifactInspectionError, match="required package data"):
+            validate_wheel_inventory(_wheel_inventory_without(fragment))
+
+
+@pytest.mark.parametrize(
+    "destination",
+    sorted(_FORCE_INCLUDE.values()),
+)
+def test_wheel_inventory_requires_every_force_include_destination(
+    destination: str,
+) -> None:
+    """Tripwire: EVERY force-include destination (rule-fixes.yaml, kit-source.yaml,
+    design templates, governed projects, statistical schemas, ...) is required,
+    so dropping any one of them from the build fails the artifact gate."""
+    stripped = [
+        name
+        for name in _VALID_WHEEL_INVENTORY
+        if name != destination and not name.startswith(destination + "/")
+    ]
+    with pytest.raises(ArtifactInspectionError, match="required package data"):
+        validate_wheel_inventory(stripped)
 
 
 def test_sdist_inventory_is_rebuildable_without_repo_integrations() -> None:
