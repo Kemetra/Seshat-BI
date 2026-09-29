@@ -199,3 +199,70 @@ def test_a_blocking_semantic_result_short_circuits_the_other_legs(
 
     assert outcome.blocking is True
     assert outcome.checks_skipped == (), "later legs ran despite a blocking result"
+
+
+# The child reconfigures its stdout to UTF-8 on win32. Two bytes make this fail
+# without the fix on EVERY platform: U+0641 (0xD9 0x81) is undecodable under
+# cp1252, and a lone 0xFF is undecodable under strict UTF-8.
+_NON_LOCALE_FINDING = (
+    "import sys; sys.stdout.buffer.write("
+    "b'[error] L3 measure \\xd9\\x81 \\xff (m.tmdl:1)\\n'); sys.stdout.flush()"
+)
+
+
+def test_the_validator_decodes_utf8_child_output(tmp_path: Path) -> None:
+    """A finding outside the locale codec must still come back as text.
+
+    Decoding with the locale codec killed subprocess's reader thread and left
+    ``stdout`` as None, so the baseline collapsed to an empty set.
+    """
+    import sys
+
+    completed = validation._run_validator(
+        tmp_path, (sys.executable, "-c", _NON_LOCALE_FINDING)
+    )
+
+    assert completed.stdout is not None
+    assert completed.stdout.startswith("[error] L3 measure")
+
+
+def test_the_baseline_is_captured_from_non_locale_output(tmp_path: Path) -> None:
+    import sys
+
+    def invoke(root, _args):
+        return validation._run_validator(
+            root, (sys.executable, "-c", _NON_LOCALE_FINDING)
+        )
+
+    baseline = validation.semantic_baseline(tmp_path, runner=invoke)
+
+    assert baseline is not None and len(baseline) == 1
+
+
+def test_a_baseline_with_no_captured_stdout_is_unavailable_not_empty(
+    repo_with_target: Path,
+) -> None:
+    """stdout=None means nothing was captured -- never an empty finding set."""
+    assert (
+        validation.semantic_baseline(repo_with_target, runner=_runner_printing(None, 0))
+        is None
+    )
+
+
+def test_a_post_write_run_with_no_captured_stdout_blocks(
+    repo_with_target: Path,
+) -> None:
+    """The post-write leg reads None the same way: the validator did not report."""
+    outcome = validation.validate_semantic_model(
+        repo_with_target,
+        target_path=TARGET_PATH,
+        context=validation.ValidationContext(
+            runner=_runner_printing(None, 0),
+            baseline=frozenset(),
+            examined=lambda _root, _artifact: True,
+            env={},
+        ),
+    )
+
+    assert outcome.blocking is True
+    assert validation.BLOCKER_VALIDATOR_ERROR in outcome.blockers

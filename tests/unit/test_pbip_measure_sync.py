@@ -359,6 +359,25 @@ def test_duplicate_measure_declarations_refuse_before_planning(
     assert _table_path(model_dir).read_bytes() == before
 
 
+def test_a_quoted_measure_name_with_an_apostrophe_is_recognized(
+    tmp_path: Path,
+) -> None:
+    """The header regex could not match ``'Customer''s Sales'``, so the scan
+    never saw such a measure: a duplicate declaration went undetected and a
+    matching contract would be inserted again on every sync."""
+    repo = _make_repo(tmp_path, {"TotalSales": _contract_yaml("TotalSales", "amount")})
+    blocks = [
+        _measure_block("'Customer''s Sales'", lineage=_LINEAGE[:-1] + str(index))
+        for index in range(2)
+    ]
+    model_dir = _project_with(tmp_path, *blocks)
+    before = _table_path(model_dir).read_bytes()
+    result = _sync(repo, model_dir)
+    assert result["outcome"] == "refused"
+    assert any("more than once" in reason for reason in result["blocking_reasons"])
+    assert _table_path(model_dir).read_bytes() == before
+
+
 def test_dry_run_case_only_collision_refuses_and_plans_nothing(tmp_path: Path) -> None:
     repo = _make_repo(tmp_path, {"TotalSales": _contract_yaml("TotalSales", "amount")})
     model_dir = _project_with(tmp_path, _measure_block("totalsales"))

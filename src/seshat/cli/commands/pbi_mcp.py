@@ -248,32 +248,28 @@ def _probe_tree_clean(repo_root: Path) -> bool | None:
     here rather than relying on ``.gitignore`` is deliberate -- a user's own
     project will not carry this repo's ignore rules.
     """
-    from seshat.gitstate import run_git
+    from seshat.git_worktree import repository_status
     from seshat.pbi_mcp_adapter.evidence import ARTIFACT_RELPATH, HISTORY_RELPATH
 
-    try:
-        # `--untracked-files=all` is required: the default collapses untracked
-        # files into their directory (`?? .seshat/`), so an exact-path exclusion
-        # would never match and every run would read as dirty.
-        status = run_git(repo_root, "status", "--porcelain", "--untracked-files=all")
-    except (OSError, RuntimeError):
+    # Filter-free (`git_worktree`), not `git status`: the target project may be a
+    # tree this process did not author, and `status` runs its content filters.
+    # Whole-repository scope like `git status`, so a `--repo` below the toplevel
+    # still sees a dirty file elsewhere. Untracked files are listed one by one,
+    # so an exact-path exclusion works.
+    probed = repository_status(repo_root)
+    if probed is None:
         return None
-    if status.returncode != 0:
-        return None
+    status, prefix = probed
     # BOTH of the adapter's own artifacts (issue #657). Excluding only the
     # latest-run file made the append-only history read as a foreign untracked
     # file, so a second `plan-write` was refused for git-safety on a dirty state
     # this adapter created itself -- caught by
     # `test_plan_write_twice_still_sees_a_clean_tree`.
     ours = {
-        ARTIFACT_RELPATH.replace("\\", "/"),
-        HISTORY_RELPATH.replace("\\", "/"),
+        prefix + ARTIFACT_RELPATH.replace("\\", "/"),
+        prefix + HISTORY_RELPATH.replace("\\", "/"),
     }
-    for line in status.stdout.splitlines():
-        entry = line[3:].strip().strip('"').replace("\\", "/")
-        if entry and entry not in ours:
-            return False
-    return True
+    return all(entry in ours for entry in status.paths)
 
 
 def _write_leg_payload(report) -> dict[str, object]:
@@ -326,6 +322,12 @@ def _write_leg_payload(report) -> dict[str, object]:
             if getattr(report, "runtime_version", None)
             else None
         ),
+        # The vendor's own diagnosis on a runtime failure; null otherwise.
+        "vendor_detail": (
+            clean(report.vendor_detail)
+            if getattr(report, "vendor_detail", None)
+            else None
+        ),
     }
 
 
@@ -358,6 +360,8 @@ def _report_write_leg(args, report) -> int:
     )
     for blocker in report.blockers:
         print(f"{prog}:   blocker {clean(blocker)}", file=sys.stderr)
+    if getattr(report, "vendor_detail", None):
+        print(f"{prog}: vendor said: {clean(report.vendor_detail)}", file=sys.stderr)
     if report.rollback_guidance:
         print(f"{prog}: rollback:", file=sys.stderr)
         for line in report.rollback_guidance:
@@ -373,7 +377,10 @@ def _run_write_leg(args, *, dry_run: bool) -> int:
 
     One implementation, so the dry run cannot drift from the real thing.
     """
-    from seshat.pbi_mcp.detect import BypassFlagRefused, classify_mcp_config
+    from seshat.pbi_mcp.detect import (
+        BypassFlagRefused,
+        classify_project_mcp_configs,
+    )
     from seshat.pbi_mcp.scan import GeneratedSecretError
     from seshat.pbi_mcp_adapter import orchestrate
 
@@ -383,7 +390,9 @@ def _run_write_leg(args, *, dry_run: bool) -> int:
     # carrying --skipconfirmation was never detected on a write. The verdict is
     # already computed for the read-only legs; wire it in rather than trust argv
     # alone (FR-002 covers BOTH arrival routes).
-    config_state = classify_mcp_config(repo_root / ".mcp.json")
+    # Every project-scoped config (.mcp.json and .vscode/mcp.json), the same
+    # helper doctor and preflight use, so the three cannot disagree.
+    config_state = classify_project_mcp_configs(repo_root)
     try:
         report = orchestrate.apply_write(
             repo_root,

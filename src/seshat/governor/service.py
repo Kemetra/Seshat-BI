@@ -196,6 +196,7 @@ class GovernorService:
         )
 
     def _static_check(self, request: dict[str, Any]) -> dict[str, Any]:
+        from seshat.finding_scrub import scrub_finding
         from seshat.kit_lint import is_kit_self_repo
         from seshat.registry import all_rules
         from seshat.runner import build_context, collect_findings
@@ -205,7 +206,9 @@ class GovernorService:
         findings = collect_findings(
             all_rules(), ctx, bootstrapped=is_kit_self_repo(self.root)
         )
-        body = [finding.to_dict() for finding in findings]
+        # Finding text goes to the MCP client (a third-party model), so it is
+        # scrubbed of secret-shaped spans as a second layer behind the rules.
+        body = [scrub_finding(finding).to_dict() for finding in findings]
         blocking = [item for item in body if item["severity"] == "error"]
         return self._response(
             "seshat_run_static_check",

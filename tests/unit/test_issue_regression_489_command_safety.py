@@ -178,7 +178,7 @@ def test_no_executable_adapter_step_is_rendered_below_a_stop(tmp_path: Path) -> 
 def test_no_post_gold_stop_renders_an_executable_step(
     tmp_path: Path, stage: str
 ) -> None:
-    """Every post-Gold stage says STOP (unverified live validation) and must defer.
+    """Every post-Gold stage says STOP and must defer its executable steps.
 
     Covers all three regardless of WHICH signal fires -- `semantic_model_ready`
     reaches the stop only through the action string, while the later two also carry
@@ -193,7 +193,16 @@ def test_no_post_gold_stop_renders_an_executable_step(
     guidance = "\n".join(guidance_lines(document))
     leaked = [marker for marker in _EXECUTABLE_MARKERS if marker in guidance]
     assert not leaked, f"{stage}: executable step(s) below a STOP: {leaked}"
-    assert document["orchestration_checkpoint"]["steps_deferred_by_block"] is True
+    if stage == "semantic_model_ready":
+        # Reached only through the live-validation STOP phrasing.
+        assert document["orchestration_checkpoint"]["steps_deferred_by_block"] is True
+        return
+    # dashboard/publish: the table's OWN approval STOP now outranks the
+    # live-validation override (audit F042), which rides as a caveat instead.
+    assert document["outcome"] == "approval_required"
+    assert "validate --source-map" not in document["next_allowed_action"]
+    assert document["orchestration_checkpoint"] is None
+    assert "live_validation" in {c["kind"] for c in document["caveats"]}
 
 
 @pytest.mark.parametrize("stage", ["semantic_model_ready"])

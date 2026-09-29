@@ -7,6 +7,7 @@ record and the approval; these cover what may be written and how safely.
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -347,3 +348,109 @@ def test_containment_survives_the_folder_widening(tmp_path: Path) -> None:
     cleared, blockers = _clears("Nope.SemanticModel")
     assert cleared is False
     assert gate.BLOCKER_TARGET_ABSENT in blockers
+
+
+# --------------------------------------------------------------------------
+# The authorized path is the gate's CANONICAL spelling, not the allowlist's
+# --------------------------------------------------------------------------
+
+
+def _repo_with_path(tmp_path: Path, path_value: str) -> Path:
+    allowlist = (
+        f"targets:\n  - target_id: {TARGET}\n    path: {path_value}\n"
+        f"    operations:\n      - {OPERATION}\n"
+    )
+    return _build_repo(tmp_path, readiness=_readiness_yaml(), allowlist=allowlist)
+
+
+def test_a_dot_prefixed_allowlist_path_is_authorized_canonically(
+    tmp_path: Path,
+) -> None:
+    """Downstream checks compare against git's repo-relative spelling. A
+    ``./`` spelling the gate accepted matched nothing there, so a correct
+    in-scope write read as a no-op plus scope creep."""
+    repo = _repo_with_path(tmp_path, f"./models/{TARGET}.tmdl")
+    verdict = _evaluate(repo)
+    assert verdict.cleared, verdict.blockers
+    assert verdict.authorized_path == f"models/{TARGET}.tmdl"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="case-insensitive filesystem")
+def test_a_differently_cased_allowlist_path_is_authorized_canonically(
+    tmp_path: Path,
+) -> None:
+    repo = _repo_with_path(tmp_path, f"Models/{TARGET.upper()}.tmdl")
+    verdict = _evaluate(repo)
+    assert verdict.cleared, verdict.blockers
+    assert verdict.authorized_path == f"models/{TARGET}.tmdl"
+
+
+# --------------------------------------------------------------------------
+# A folder target is rewritten WHOLE -- other governed tables must be ready
+# --------------------------------------------------------------------------
+
+MODEL = "Sales.SemanticModel"
+
+
+def _folder_repo(tmp_path: Path, sibling_status: str | None) -> Path:
+    """A folder target whose model also holds a second table, ``returns_model``.
+
+    ``sibling_status`` None means the sibling has no readiness record of its
+    own, so it is not independently governed.
+    """
+    repo = _init_repo(tmp_path)
+    _write(repo, f"mappings/{TARGET}/readiness-status.yaml", _readiness_yaml())
+    if sibling_status is not None:
+        _write(
+            repo,
+            "mappings/returns_model/readiness-status.yaml",
+            _readiness_yaml(target="returns_model", semantic_status=sibling_status),
+        )
+    _write(
+        repo,
+        gate.TARGET_ALLOWLIST_RELPATH,
+        f"targets:\n  - target_id: {TARGET}\n    path: {MODEL}\n"
+        f"    operations:\n      - {OPERATION}\n",
+    )
+    tables = f"{MODEL}/definition/tables"
+    _write(repo, f"{tables}/gold {TARGET}.tmdl", f"table 'gold {TARGET}'\n")
+    _write(repo, f"{tables}/gold returns_model.tmdl", "table 'gold returns_model'\n")
+    _commit_all(repo)
+    return repo
+
+
+def test_a_folder_write_refuses_when_another_governed_table_is_not_ready(
+    tmp_path: Path,
+) -> None:
+    """The flush rewrites every table file in the model (research R8), so a
+    target-only authorization would silently cover a table whose own
+    ``semantic_model_ready`` is blocked."""
+    verdict = _evaluate(_folder_repo(tmp_path, "blocked"))
+    assert not verdict.cleared
+    assert gate.BLOCKER_SIBLING_NOT_READY in verdict.blockers
+
+
+def test_a_folder_write_clears_when_every_governed_table_is_ready(
+    tmp_path: Path,
+) -> None:
+    verdict = _evaluate(_folder_repo(tmp_path, "pass"))
+    assert verdict.cleared, verdict.blockers
+
+
+def test_an_ungoverned_sibling_table_does_not_block_a_folder_write(
+    tmp_path: Path,
+) -> None:
+    verdict = _evaluate(_folder_repo(tmp_path, None))
+    assert verdict.cleared, verdict.blockers
+
+
+def test_an_uncommitted_sibling_pass_does_not_count(tmp_path: Path) -> None:
+    """The sibling's clearance must come from HEAD, like the target's own."""
+    repo = _folder_repo(tmp_path, "blocked")
+    _write(
+        repo,
+        "mappings/returns_model/readiness-status.yaml",
+        _readiness_yaml(target="returns_model", semantic_status="pass"),
+    )
+    verdict = _evaluate(repo, tree_clean=True)
+    assert gate.BLOCKER_SIBLING_NOT_READY in verdict.blockers

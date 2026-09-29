@@ -107,3 +107,31 @@ def test_every_ecosystem_emits_a_scope_free_subject():
         assert commit_message.get("include") != "scope", (
             f"{label} sets include: scope, which re-adds the rejected scope"
         )
+
+
+def test_every_npm_lockfile_is_watched():
+    """The Studio bundle's npm dependencies ship inside every wheel; each committed
+    package-lock.json directory must have an npm update block, or an advisory in a
+    bundled dependency never produces a PR."""
+    doc = _load_dependabot()
+    watched = {
+        u.get("directory")
+        for u in doc.get("updates", [])
+        if u.get("package-ecosystem") == "npm"
+    }
+    # Top level and one directory down (never descends into node_modules).
+    lockfiles = [
+        *_REPO_ROOT.glob("package-lock.json"),
+        *_REPO_ROOT.glob("*/package-lock.json"),
+    ]
+    assert lockfiles, "expected at least one committed npm lockfile"
+    for lockfile in lockfiles:
+        relative = lockfile.parent.relative_to(_REPO_ROOT).as_posix()
+        directory = "/" if relative == "." else f"/{relative}"
+        assert directory in watched, directory
+
+
+def test_hash_locked_release_tooling_is_watched():
+    doc = _load_dependabot()
+    directories = {u.get("directory") for u in _pip_blocks(doc)}
+    assert "/.github/release-tooling" in directories

@@ -9,6 +9,7 @@ import pytest
 
 from seshat.cli import main
 from seshat.run_next import build_run_next_response
+from tests.unit._gitfix import commit_readiness_status
 
 pytestmark = pytest.mark.unit
 
@@ -17,6 +18,7 @@ def _write_status(tmp_path: Path, table_dir: str, body: str) -> Path:
     path = tmp_path / "mappings" / table_dir / "readiness-status.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(body, encoding="utf-8")
+    commit_readiness_status(path)  # approvals count only once committed (F045)
     return path
 
 

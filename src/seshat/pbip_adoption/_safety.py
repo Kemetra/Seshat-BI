@@ -13,18 +13,16 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from seshat.gitutil import GIT_HARDENING as GIT_UNTRUSTED_TREE_HARDENING
-from seshat.gitutil import run_subprocess
+from seshat.git_worktree import repository_status
 
 SCHEMA_VERSION = "1.0"
 MANIFEST_PATH = ".seshat/adoption/pbip-adoption.yaml"
 
-# `GIT_UNTRUSTED_TREE_HARDENING` is re-exported from `gitutil.GIT_HARDENING` (the
-# single definition) and kept under this name for the adoption call sites. Every
-# `git` invocation here runs with cwd = an EXTERNALLY-AUTHORED tree (an adopted
-# PBIP project the user downloaded), so the flags are load-bearing: git reads that
-# tree's own `.git/config`, and `safe.directory` does NOT help because the victim
-# owns the extracted files.
+# Every `git` read here runs against an EXTERNALLY-AUTHORED tree (an adopted PBIP
+# project the user downloaded): git reads that tree's own `.git/config`, and
+# `safe.directory` does NOT help because the victim owns the extracted files. The
+# state probe therefore goes through `git_worktree`, which carries the shared
+# `gitutil.GIT_HARDENING` flags AND never asks git to compare worktree content.
 
 # Detection patterns: a boolean "does this text look like a credential or a
 # literal connection detail" used to raise a governance fact.  They match only
@@ -178,31 +176,19 @@ def _read_text(path: Path) -> str | None:
 
 
 def _git_state(root: Path) -> str:
-    revision = run_subprocess(
-        ["git", *GIT_UNTRUSTED_TREE_HARDENING, "rev-parse", "--is-inside-work-tree"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if revision.returncode != 0 or revision.stdout.strip() != "true":
+    """Version-control state of an adopted tree, without running its config.
+
+    ``git status`` would push every file through the tree's own
+    attribute-selected content filters -- commands the tree's author chose -- so
+    the comparison is made filter-free by
+    :func:`seshat.git_worktree.repository_status`. Whole-repository scope, like
+    ``git status``: scaffolding requires a clean repository, and a PBIP project
+    is often a subdirectory of it.
+    """
+    probed = repository_status(root)
+    if probed is None:
         return "absent"
-    status = run_subprocess(
-        [
-            "git",
-            *GIT_UNTRUSTED_TREE_HARDENING,
-            "status",
-            "--porcelain",
-            "--untracked-files=all",
-        ],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if status.returncode != 0:
-        return "absent"
-    entries = [line for line in status.stdout.splitlines() if line]
-    if any(entry.startswith("??") for entry in entries):
+    status, _prefix = probed
+    if status.untracked:
         return "untracked"
-    return "dirty" if entries else "clean"
+    return "dirty" if status.modified else "clean"
