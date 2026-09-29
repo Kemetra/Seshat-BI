@@ -43,8 +43,8 @@ split:
    overwrite different existing content without `--force`).
 3. Set `report.json` `themeCollection.baseTheme.name = <name>` and ensure the
    matching `resourcePackages` item (allow-list-only edit).
-4. Validate the staged report (valid JSON + `$schema` preserved + round-trip stable),
-   then write both files (all-or-nothing).
+4. Validate the staged report (valid JSON + `$schema` preserved; the canonical sorted
+   dump is round-trip stable by construction), then write both files (all-or-nothing).
 
 Deterministic: re-running produces a byte-identical result. Works on an empty report
 page (no visuals required).
