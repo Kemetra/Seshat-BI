@@ -34,6 +34,14 @@ def test_already_redacted_assignment_is_left_readable() -> None:
     assert scrubbed == "password=[REDACTED] failed"
 
 
+def test_redacted_odbc_value_does_not_consume_following_field() -> None:
+    from seshat.redaction_core import scrub_secret_shaped
+
+    text = "PWD=[REDACTED];Database=gold;access_token=anothersecret"
+    scrubbed, _ = scrub_secret_shaped(text, keep_redacted=True)
+    assert scrubbed == "PWD=[REDACTED];Database=gold;[REDACTED]"
+
+
 def test_pbi_mcp_scan_reuses_the_shared_pattern_table() -> None:
     from seshat import redaction_core
     from seshat.pbi_mcp import scan

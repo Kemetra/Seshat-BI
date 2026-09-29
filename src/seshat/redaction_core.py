@@ -361,7 +361,11 @@ SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         "credential assignment",
         re.compile(
             r"(?i)\b(?:password|passwd|pwd|api[_ -]?key|access[_ -]?token"
-            r"|client[_ -]?secret|accountkey)\s*[=:]\s*[^\s<>{}$]+"
+            r"|client[_ -]?secret|accountkey)\s*[=:]\s*"
+            # A value already replaced by layer one ends at its marker. Keep
+            # following ODBC fields; raw libpq values may still contain ';'.
+            r"(?:\[(?:REDACTED|REDACTED-ENV|REDACTED-DSN)\](?=$|[;\s])"
+            r"|[^\s<>{}$]+)"
         ),
     ),
     (
