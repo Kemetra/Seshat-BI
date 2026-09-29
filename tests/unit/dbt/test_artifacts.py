@@ -48,7 +48,7 @@ def _sample_plan():
         ),
         project=ProjectBinding(path="dbt", sha256="f" * 64),
         runtime=RuntimeBinding(
-            dbt_core="1.12.0",
+            dbt_core="1.12.5",
             dbt_adapter="dbt-postgres",
             dbt_adapter_version="1.10.2",
             profile="seshat_bi_warehouse",
@@ -83,7 +83,7 @@ def test_load_manifest_retains_only_allowlisted_fields() -> None:
     manifest = load_manifest(FIXTURES / "manifest-v12.json")
 
     assert manifest.schema_uri.endswith("manifest/v12.json")
-    assert manifest.dbt_version == "1.12.0"
+    assert manifest.dbt_version == "1.12.5"
     assert len(manifest.sha256) == 64
     node = manifest.nodes["model.seshat_bi.fact_retail_store_sales"]
     assert node.depends_on_nodes == ("model.seshat_bi.stg_retail_store_sales",)

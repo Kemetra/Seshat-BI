@@ -55,7 +55,7 @@
       "additionalProperties": false,
       "required": ["dbt_core", "dbt_adapter", "dbt_adapter_version"],
       "properties": {
-        "dbt_core": {"const": "1.12.0"},
+        "dbt_core": {"const": "1.12.5"},
         "dbt_adapter": {"const": "dbt-postgres"},
         "dbt_adapter_version": {"const": "1.10.2"}
       }

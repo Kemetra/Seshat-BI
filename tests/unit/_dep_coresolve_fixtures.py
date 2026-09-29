@@ -23,7 +23,7 @@ REPORT_PASS_JSON = json.dumps(
         "version": "1",
         "pip_version": "26.0.1",
         "install": [
-            {"metadata": {"name": "dbt-core", "version": "1.12.0"}},
+            {"metadata": {"name": "dbt-core", "version": "1.12.5"}},
             {"metadata": {"name": "sqlparse", "version": "0.5.5"}},
         ],
         "environment": {},
@@ -31,12 +31,12 @@ REPORT_PASS_JSON = json.dumps(
 )
 
 # A real pip ResolutionImpossible stderr (captured from the spec-133/spec-134
-# dbt-core==1.12.0 + dagster-dbt==0.29.14 conflict).
+# dbt-core==1.12.5 + dagster-dbt==0.29.14 conflict).
 RESOLUTION_STDERR = (
-    "ERROR: Cannot install dagster-dbt==0.29.14 and dbt-core==1.12.0 because "
+    "ERROR: Cannot install dagster-dbt==0.29.14 and dbt-core==1.12.5 because "
     "these package versions have conflicting dependencies.\n\n"
     "The conflict is caused by:\n"
-    "    The user requested dbt-core==1.12.0\n"
+    "    The user requested dbt-core==1.12.5\n"
     "    dagster-dbt 0.29.14 depends on dbt-core<1.12 and >=1.7\n\n"
     "ERROR: ResolutionImpossible: for help visit "
     "https://pip.pypa.io/en/latest/topics/dependency-resolution/\n"

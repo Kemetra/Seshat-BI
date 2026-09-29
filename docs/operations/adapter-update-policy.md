@@ -66,7 +66,7 @@ credential dependency), the PR is reclassified UP to Lane C. The highest blast r
 wins.
 
 The activated feature-133 compatibility boundary is the exact pair
-`dbt-core==1.12.0` + `dbt-postgres==1.10.2`. Change the pair together, regenerate the
+`dbt-core==1.12.5` + `dbt-postgres==1.10.2`. Change the pair together, regenerate the
 sanitized manifest fixture, rerun `seshat dbt doctor`, `seshat dbt validate`,
 `seshat dbt plan`, the accepted-plan build/test path, and
 `seshat dbt inspect-run`, then update the compatibility matrix. Static parse/list

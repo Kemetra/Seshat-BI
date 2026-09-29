@@ -1,7 +1,7 @@
 name: seshat_bi
 version: 1.0.0
 config-version: 2
-require-dbt-version: ["=1.12.0"]
+require-dbt-version: ["=1.12.5"]
 profile: seshat_bi_warehouse
 
 model-paths: [models]

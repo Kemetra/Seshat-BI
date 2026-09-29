@@ -48,7 +48,7 @@ def _fixture_execution_plan(manifest, selected: tuple[str, ...]):
         ),
         project=ProjectBinding(path="dbt", sha256="e" * 64),
         runtime=RuntimeBinding(
-            dbt_core="1.12.0",
+            dbt_core="1.12.5",
             dbt_adapter="dbt-postgres",
             dbt_adapter_version="1.10.2",
             profile="seshat_bi_warehouse",
@@ -90,7 +90,7 @@ def test_pinned_parse_fixture_has_complete_governed_selection() -> None:
     models = [node for node in manifest.nodes.values() if node.resource_type == "model"]
     tests = [node for node in manifest.nodes.values() if node.resource_type == "test"]
     assert manifest.schema_uri.endswith("/manifest/v12.json")
-    assert manifest.dbt_version == "1.12.0"
+    assert manifest.dbt_version == "1.12.5"
     assert len(models) == 8
     assert len(tests) == 24
     assert len(selected) == 32
@@ -128,4 +128,4 @@ def test_pinned_artifacts_round_trip_through_strict_readers() -> None:
 
     assert manifest.schema_uri.endswith("/manifest/v12.json")
     assert results.schema_uri.endswith("/run-results/v6.json")
-    assert results.dbt_version == "1.12.0"
+    assert results.dbt_version == "1.12.5"
