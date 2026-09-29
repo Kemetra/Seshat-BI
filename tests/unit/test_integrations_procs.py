@@ -171,6 +171,8 @@ def test_a_leftover_staging_tree_does_not_block_the_next_clone(tmp_path, monkeyp
     def _clone(command: list[str], cwd: Path):
         if command[:2] == ["git", "clone"]:
             Path(command[-1]).mkdir(parents=True)
+        if command[:3] == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(command, 0, "9" * 40 + "\n", "")
         return subprocess.CompletedProcess(command, 0, "", "")
 
     outcome = installer.apply(

@@ -247,6 +247,8 @@ def test_a_skill_bundle_at_an_older_ref_is_staged_and_swapped(tmp_path: Path) ->
                 target = Path(command[-1]) / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text("# v2\n", encoding="utf-8")
+        if command[:3] == ["git", "rev-parse", "HEAD"]:
+            return subprocess.CompletedProcess(command, 0, "b" * 40 + "\n", "")
         return subprocess.CompletedProcess(command, 0, "", "")
 
     outcome = installer.apply(
