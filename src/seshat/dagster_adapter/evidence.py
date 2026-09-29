@@ -337,14 +337,18 @@ def _backfill_skipped(writer: EvidenceWriter, tables: list[str]) -> list[str]:
         rows = by_table.get(table, {})
         if not rows:
             unrun.append(table)
-        halted_upstream: dict | None = None
-        for asset in ASSET_ORDER:
-            row = rows.get(asset)
-            if row is None:
-                writer.record(_skip_outcome(asset, table, halted_upstream, not rows))
-            elif row["outcome"] in {"failed", "blocked"}:
-                halted_upstream = halted_upstream or row
+        _backfill_table(writer, table, rows)
     return unrun
+
+
+def _backfill_table(writer: EvidenceWriter, table: str, rows: dict[str, dict]) -> None:
+    halted_upstream: dict | None = None
+    for asset in ASSET_ORDER:
+        row = rows.get(asset)
+        if row is None:
+            writer.record(_skip_outcome(asset, table, halted_upstream, not rows))
+        elif row["outcome"] in {"failed", "blocked"}:
+            halted_upstream = halted_upstream or row
 
 
 def finalize_run(root: Path, run_id: str, tables: list[str], meta: RunMeta) -> dict:
