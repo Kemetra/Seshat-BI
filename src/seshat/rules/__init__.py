@@ -69,6 +69,7 @@ __all__ = [
     "answerability_reconciler",
     "assumption_coherence",
     "assumptions",
+    "c2_scan",
     "comparison_baseline",
     "conformed_dimension",
     "currency_unit",

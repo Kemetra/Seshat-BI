@@ -86,7 +86,7 @@ def _load_yaml(path: Path) -> tuple[Any, str | None]:
     try:
         with path.open(encoding="utf-8-sig") as fh:
             return yaml.safe_load(fh), None
-    except (OSError, yaml.YAMLError) as exc:
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
         return None, exc.__class__.__name__
 
 
@@ -94,7 +94,7 @@ def _load_json(path: Path) -> tuple[Any, str | None]:
     try:
         with path.open(encoding="utf-8-sig") as fh:
             return json.load(fh), None
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         return None, exc.__class__.__name__
 
 

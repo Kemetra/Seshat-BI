@@ -162,12 +162,15 @@ def check_prose_projection(repo: Path, source: dict) -> CheckResult:
 def lint(repo: Path | str) -> LintReport:
     """Run the projection-drift checks over ``repo``. Read-only.
 
-    Not-bootstrapped -> a clean report (exit 0). A broken/unparseable source ->
+    Not-bootstrapped (no kit SOURCE) -> a clean report (exit 0). A present source
+    whose compass projection was deleted is DRIFT, not "not bootstrapped":
+    deleting the file under check must not turn the lint into a no-op pass, so
+    the checks run and ``yaml_projection`` fails. A broken/unparseable source ->
     a named ``source_parse`` failing check, never a raw traceback (FR-008).
     """
     repo = Path(repo)
 
-    if not _is_bootstrapped(repo):
+    if not (repo / compass_project.SOURCE_REL).exists():
         return LintReport(results=(), bootstrapped=False)
 
     # Load the source once; a parse/shape error is a named failing check, not a crash.

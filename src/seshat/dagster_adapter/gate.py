@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from seshat.gitstate import is_tracked_and_clean
+from seshat.gitstate import committed_text, is_tracked_and_clean
 
 # Both committed phrasings are real: the retail_store_sales instance writes a
 # bold bullet (`- **Gate status:** \`CLEARED\``); the demo_sample_orders
@@ -54,7 +54,9 @@ class GateState:
     gate_status: str
     open_rows: int
     approvals: tuple[Approval, ...]
-    publish_ready: str  # verbatim stage status, or "missing"
+    # Verbatim COMMITTED stage status, or "missing" / "uncommitted" /
+    # "unreadable" (never "pass" unless HEAD records it).
+    publish_ready: str
 
     @property
     def silver_permitted(self) -> bool:
@@ -93,13 +95,34 @@ def _read_unresolved(table_dir: Path) -> tuple[str, int]:
     return gate_status, open_rows
 
 
-def _read_readiness(table_dir: Path) -> tuple[tuple[Approval, ...], str]:
-    readiness = table_dir / "readiness-status.yaml"
-    if not readiness.is_file():
-        return (), "missing"
+def _committed_readiness(repo_root: Path, table: str) -> dict | str:
+    """The COMMITTED readiness mapping, or the verbatim reason there is none.
+
+    Read through ``committed_text`` (tracked AND clean against HEAD), never the
+    worktree: ``approval_for`` is documented as the COMMITTED approval, and a
+    worktree read would let an uncommitted, agent-added ``approvals[]`` row
+    look committed -- a second approval-trust path. A malformed record is a
+    reason, not an exception out of the reader.
+    """
+    relative = f"mappings/{table}/readiness-status.yaml"
+    if not (Path(repo_root) / relative).is_file():
+        return "missing"
+    text = committed_text(Path(repo_root), relative)
+    if text is None:
+        return "uncommitted"
     import yaml  # lazy: keeps module import driver- and dependency-light
 
-    data = yaml.safe_load(readiness.read_text(encoding="utf-8")) or {}
+    try:
+        data = yaml.safe_load(text) or {}
+    except yaml.YAMLError:
+        return "unreadable"
+    return data if isinstance(data, dict) else "unreadable"
+
+
+def _read_readiness(repo_root: Path, table: str) -> tuple[tuple[Approval, ...], str]:
+    data = _committed_readiness(repo_root, table)
+    if isinstance(data, str):
+        return (), data
     approvals = tuple(
         Approval(
             stage=str(entry.get("stage", "")),
@@ -135,7 +158,7 @@ def read_gate_state(repo_root: Path, table: str) -> GateState:
         Path(repo_root), f"mappings/{table}/unresolved-questions.md"
     ):
         gate_status = "UNCOMMITTED"
-    approvals, publish_ready = _read_readiness(table_dir)
+    approvals, publish_ready = _read_readiness(Path(repo_root), table)
     return GateState(
         table=table,
         gate_status=gate_status,

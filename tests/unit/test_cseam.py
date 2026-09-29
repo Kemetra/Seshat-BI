@@ -95,6 +95,32 @@ def test_ci_runs_every_unmarked_non_live_test_in_a_contract_surface() -> None:
         "Unmarked credential-free contract tests"
     )
 
+
+@pytest.mark.unit
+def test_non_code_change_still_runs_every_unit_test() -> None:
+    """A docs/README/PR-template-only change skips `check`'s unit step
+    (code_changed=false), but many unit tests assert on exactly those files. The
+    contract lane -- which a non-code prose change DOES trigger -- must then run the
+    whole unit suite, or such a change lands green and breaks the next PR."""
+
+    workflow = yaml.safe_load(CI_WORKFLOW.read_text(encoding="utf-8"))
+    job = workflow["jobs"]["contract-surfaces"]
+    steps = {str(step.get("name", "")): step for step in job["steps"]}
+
+    full = steps["Full unit suite for a non-code change"]
+    assert full["run"].strip() == "pytest -m unit"
+    assert "needs.changes.outputs.code_changed != 'true'" in full["if"]
+    # the job itself runs whenever contracts are required, which every non-code
+    # prose change sets (scripts/classify_ci_changes.py)
+    assert "needs.changes.outputs.contracts_required == 'true'" in job["if"]
+
+    names = list(steps)
+    assert names.index("Build the Studio frontend") < names.index(
+        "Full unit suite for a non-code change"
+    )
+    optional = steps["Optional surface unit tests"]
+    assert "needs.changes.outputs.code_changed == 'true'" in optional["if"]
+
     report_commands = "\n".join(
         str(step.get("run", ""))
         for step in workflow["jobs"]["report-surfaces"]["steps"]

@@ -139,9 +139,26 @@ def _clone_at_ref(req: _Install, staging: Path, ref: str) -> str | None:
     full = req.run(["git", "clone", url, str(staging)])
     if full.returncode:
         return _detail(full, "git clone failed")
-    checkout = req.run(["git", "checkout", "--detach", ref], staging)
+    checkout = req.run(
+        ["git", "checkout", "--detach", "--end-of-options", ref], staging
+    )
     if checkout.returncode:
         return _detail(checkout, f"could not check out {ref}")
+    return None
+
+
+def _commit_mismatch(req: _Install, staging: Path) -> str | None:
+    """Reject a clone whose HEAD differs from the resolved commit."""
+    expected = req.resolved.commit
+    if not expected:
+        return None
+    head = req.run(["git", "rev-parse", "HEAD"], staging)
+    actual = (head.stdout or "").strip()
+    if head.returncode or actual.lower() != expected.lower():
+        return (
+            f"cloned HEAD {actual or '(unknown)'} is not the resolved commit "
+            f"{expected}; the ref moved since it was resolved"
+        )
     return None
 
 
@@ -167,7 +184,7 @@ def _activate(staging: Path, target: Path, ref: str) -> str | None:
 
 def _stage_and_activate(req: _Install, scratch: Path, ref: str) -> tuple[str, str]:
     staging = scratch / "tree"
-    failure = _clone_at_ref(req, staging, ref)
+    failure = _clone_at_ref(req, staging, ref) or _commit_mismatch(req, staging)
     if failure is not None:
         return FAILED, failure
     missing = _missing_required_payload(staging, req.item)

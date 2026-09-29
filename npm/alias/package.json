@@ -1,6 +1,6 @@
 {
   "name": "seshat-bi",
-  "version": "0.8.1",
+  "version": "0.0.0-staged",
   "description": "Alias for @kemetra/seshat-bi — the Seshat BI agent skills bundle for Claude Code. Re-exports the scoped package; prefer installing @kemetra/seshat-bi directly.",
   "keywords": [
     "claude-code",
@@ -31,7 +31,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@kemetra/seshat-bi": "0.8.1"
+    "@kemetra/seshat-bi": "0.0.0-staged"
   },
   "engines": {
     "node": ">=18"

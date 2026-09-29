@@ -92,9 +92,11 @@ def _scrub_connection_values(message: str) -> str:
     #
     # The BARE alternative admits `;` and `,` (#528): libpq separates keyword/value
     # pairs by WHITESPACE, so punctuation is ordinary value content. Excluding it
-    # cut `password=sec;ret` short and leaked the `;ret` tail. It stops only at
+    # cut a password value containing `;` short and leaked the tail after the
+    # `;`. (Examples here use `<...>` placeholders so C2 does not flag this
+    # comment as a committed credential.) It stops only at
     # whitespace, or at punctuation that is immediately followed by another
-    # `key=` pair -- so a `;`-separated conninfo (`host=h;password=p`, a real
+    # `key=` pair -- so a `;`-separated conninfo (`host=<h>;password=<p>`, a real
     # spelling this must keep splitting) still yields two pairs instead of being
     # swallowed into one. Over-consuming a nonstandard punctuation-separated run
     # into a single redaction would be fail-SAFE, but keeping the split preserves

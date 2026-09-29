@@ -16,16 +16,20 @@ on:
     branches: [main]
     paths:
       - "orchestration/dagster/**"
-      - "src/seshat/dagster_adapter/**"
-      - "src/seshat/dbt/**"
+      # Any seshat module: the project imports seshat.cli.commands.dbt at module
+      # scope (and other seshat modules lazily), so a narrower filter let a
+      # rename outside dagster_adapter/dbt break `definitions validate` unseen.
+      - "src/seshat/**"
       - "pyproject.toml"
       - "schemas/dagster-run-evidence.schema.json"
       - ".github/workflows/dagster-smoke.yml"
   pull_request:
     paths:
       - "orchestration/dagster/**"
-      - "src/seshat/dagster_adapter/**"
-      - "src/seshat/dbt/**"
+      # Any seshat module: the project imports seshat.cli.commands.dbt at module
+      # scope (and other seshat modules lazily), so a narrower filter let a
+      # rename outside dagster_adapter/dbt break `definitions validate` unseen.
+      - "src/seshat/**"
       - "pyproject.toml"
       - "schemas/dagster-run-evidence.schema.json"
       - ".github/workflows/dagster-smoke.yml"
@@ -38,6 +42,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
