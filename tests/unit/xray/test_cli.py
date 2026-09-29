@@ -104,3 +104,33 @@ def test_diff_working_tree_change_visible_before_commit(tmp_path, capsys):
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True)
     assert model_diff_main(_args(repo, base="HEAD")) == 0
     assert '"semantic":1' in capsys.readouterr().out
+
+
+# --- F140: base-side listing must survive non-ASCII names + subdir projects --
+
+
+def test_base_listing_keeps_non_ascii_table(tmp_path):
+    from seshat.cli.commands.xray import _base_model_files
+
+    repo = _model_repo(tmp_path)
+    tables = repo / "M.SemanticModel" / "definition" / "tables"
+    arabic = "مبيعات"
+    (tables / f"{arabic}.tmdl").write_text(
+        f"table {arabic}\n\tmeasure Total = 1\n", encoding="utf-8"
+    )
+    commit_all(repo, "arabic table")
+    rels = [rel for rel, _ in _base_model_files(repo, "HEAD")]
+    assert f"M.SemanticModel/definition/tables/{arabic}.tmdl" in rels
+    assert len(rels) == 2
+
+
+def test_base_listing_reads_project_below_git_toplevel(tmp_path):
+    from seshat.cli.commands.xray import _base_model_files
+
+    repo = make_git_repo(tmp_path)
+    tables = repo / "proj" / "M.SemanticModel" / "definition" / "tables"
+    tables.mkdir(parents=True)
+    (tables / "Sales.tmdl").write_text(TABLE, encoding="utf-8")
+    commit_all(repo, "subdir model")
+    files = _base_model_files(repo / "proj", "HEAD")
+    assert files == [("M.SemanticModel/definition/tables/Sales.tmdl", TABLE)]

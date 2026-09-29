@@ -120,9 +120,12 @@ def build_badge(tables: list[dict[str, Any]]) -> dict[str, Any]:
     an advancement a real table has not reached. When no table has passed
     any stage (including an empty workspace), it states the truthful
     onboarding status rather than an empty or celebratory claim (FR-015).
+
+    An input-defect table (malformed readiness file) takes part in the
+    minimum as zero passed stages: its state is unknown, so it must pull the
+    portfolio claim down rather than be dropped from it.
     """
-    real_tables = [t for t in tables if "input_defect" not in t]
-    if not real_tables:
+    if not tables:
         label = _label(0, STAGE_ORDER[0], "not_started")
         return {
             "highest_contiguous_pass": None,
@@ -132,7 +135,7 @@ def build_badge(tables: list[dict[str, Any]]) -> dict[str, Any]:
             "label": label,
             "svg": render_badge_svg(label),
         }
-    per_table = [table_badge(table) for table in real_tables]
+    per_table = [table_badge(table) for table in tables]
     worst = min(per_table, key=lambda entry: entry["passed_stage_count"])
     label = _label(
         worst["passed_stage_count"],
