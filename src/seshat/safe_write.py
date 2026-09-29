@@ -71,6 +71,19 @@ def _resolve_within_root(root: Path, relative: str) -> Path:
     return root / Path(*relative.split("/"))
 
 
+def is_link_like(path: Path) -> bool:
+    """True for a symlink OR an NTFS directory junction.
+
+    ``Path.is_symlink()`` is False for a junction on Python 3.12+, and a
+    junction needs no elevation on Windows, so a symlink-only check lets an
+    in-workspace junction alias through.
+    """
+    if path.is_symlink():
+        return True
+    is_junction = getattr(path, "is_junction", None)
+    return bool(is_junction and is_junction())
+
+
 def _refuse_symlinked_components(root: Path, target: Path) -> None:
     """Refuse any symlinked directory component between ``root`` and ``target``.
 
@@ -81,7 +94,7 @@ def _refuse_symlinked_components(root: Path, target: Path) -> None:
     root = root.resolve()
     component = target.parent
     while True:
-        if component.is_symlink():
+        if is_link_like(component):
             raise SafeWriteError(
                 f"refusing to write through a symlinked path component: "
                 f"{component} is a symlink (it would write to the wrong place or "
@@ -99,7 +112,7 @@ def _refuse_unwritable_target(target: Path) -> None:
     write escape the workspace; a directory / FIFO / socket where a file belongs
     makes ``exists()`` true while the file is absent (a misleading "kept").
     """
-    if target.is_symlink():
+    if is_link_like(target):
         raise SafeWriteError(
             f"refusing to write through a symlinked output path: {target} "
             "(a symlink here could escape the workspace); remove it and retry"
