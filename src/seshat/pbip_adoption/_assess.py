@@ -236,8 +236,9 @@ def _project_assessment(root: Path) -> dict[str, Any]:
     baseline, baseline_status = _load_baseline(root)
     if baseline_status == "unusable":
         fact_objs.append(_unusable_baseline_fact())
+    readiness, blockers, readiness_facts = _readiness(root)
+    fact_objs.extend(readiness_facts)
     facts = [fact.as_dict() for fact in fact_objs]
-    readiness, blockers = _readiness(root)
     state = _git_state(root)
     return {
         "schema_version": SCHEMA_VERSION,
