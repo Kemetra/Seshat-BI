@@ -24,6 +24,7 @@ from seshat.rules.readiness_status import (
     stage_approval_valid,
 )
 from seshat.run_next import build_run_next_response
+from tests.unit._gitfix import commit_readiness_status
 
 pytestmark = pytest.mark.unit
 
@@ -66,6 +67,7 @@ def _write(root: Path, text: str) -> None:
     path = root / _REL
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+    commit_readiness_status(path)
 
 
 def _rs1(root: Path) -> list[str]:
