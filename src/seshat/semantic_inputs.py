@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .git_worktree import worktree_status
 from .gitutil import GIT_HARDENING, run_subprocess
 
 __all__ = [
@@ -126,6 +127,7 @@ def semantic_files(repo: Path, include_untracked: bool) -> tuple[Path, ...]:
 
 def git_worktree_dirty(repo: Path, *pathspecs: str) -> bool:
     """True when any pathspec has uncommitted or untracked changes; raises on error."""
-    return bool(
-        _git(repo, "status", "--porcelain", "--untracked-files=all", "--", *pathspecs)
-    )
+    status = worktree_status(repo, *pathspecs)
+    if status is None:
+        raise SemanticInputsUnavailable("git worktree status could not be established")
+    return not status.clean
