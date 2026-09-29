@@ -26,16 +26,19 @@ from typing import Any
 
 from fastapi import FastAPI, Response
 
+from seshat.studio import turn_wiring
 from seshat.studio.approval_delivery import (
     DeliveryFailed,
     DeliveryRefused,
     deliver_decision,
 )
 from seshat.studio.approvals import (
+    TECHNICAL,
     StaleApproval,
     forbidden_scope_for,
     normalize_approval,
 )
+from seshat.studio.codex_protocol import CWD_IN_WORKSPACE
 
 __all__ = [
     "ApprovalRequest",
@@ -49,6 +52,18 @@ __all__ = [
 #: worth guessing would be the one that grants permission.
 ALLOW_DECISION = "allow_once"
 DENY_DECISION = "deny"
+
+# These exact commands inspect the workspace without accepting paths, shell operators,
+# scripts, or extra flags, and read no configuration FROM the workspace. They are
+# workspace-scoped, not table-scoped: `rg --files` lists the whole workspace. An
+# arbitrary command cannot be safely scoped by looking for a table name in a shell
+# string: it may construct a path or invoke a script.
+#
+# `git status` is deliberately absent. It honours the workspace's own git config, so a
+# committed filesystem-monitor setting runs an arbitrary program, and it rewrites the
+# index (firing `post-index-change`). `gitutil` treats that config as attacker-supplied;
+# a provider-run command gets none of that hardening, so it is not a read.
+_SCOPED_READ_COMMANDS = frozenset({"pwd", "rg --files"})
 
 #: The provider's JSON-RPC correlation id. Kept for the ledger, which must answer the
 #: request the provider blocks on, and stripped from the STREAMED payload: the analyst
@@ -101,10 +116,8 @@ def register_approval(
     the event log. Deriving the wire payload here fixes both at the single point that
     already knows the verdict, with no second readiness lookup.
     """
-    forbidden = forbidden_scope_for(
-        app.state.launch.workspace_root, selected_table(thread)
-    )
     payload = dict(produced.payload)
+    forbidden = _forbidden_for_request(app, selected_table(thread), payload)
     envelope = normalize_approval(
         payload,
         forbidden,
@@ -118,15 +131,88 @@ def register_approval(
     return _wire_payload(payload, envelope)
 
 
+def _forbidden_for_request(
+    app: FastAPI, table: str | None, payload: dict[str, Any]
+) -> tuple[str, ...]:
+    """Judge the requested command, not the browser's table label alone.
+
+    `forbidden_scope` contains standing prohibitions even for a fully ready table,
+    so treating every sentence as a ban on every technical command made Allow
+    unreachable. We exempt only exact, workspace-scoped reads (`_is_scoped_read`):
+    a bound table, present when the approval is REGISTERED, is required for them, but
+    its readiness is not consulted, because they write nothing. That is also why the
+    table is not re-checked at decision time: its removal changes nothing these reads
+    touch, and every other command was already refused here. Everything else keeps the
+    readiness reasons and is refused because shell text cannot prove its target.
+    """
+    root = app.state.launch.workspace_root
+    if table is None:
+        return forbidden_scope_for(root, None)
+    missing = _table_missing_reason(app, table)
+    if missing is not None:
+        return (missing,)
+    if _is_scoped_read(payload):
+        return ()
+    reasons = forbidden_scope_for(root, table)
+    if payload.get("required_authority") == TECHNICAL:
+        return (
+            "Studio cannot verify that this command only reads the workspace; "
+            "a technical allow is refused.",
+            *reasons,
+        )
+    return reasons
+
+
+def _table_missing_reason(app: FastAPI, table: str) -> str | None:
+    """Why the bound table cannot be trusted now, or `None` when it is present.
+
+    A snapshot that fails to build refuses rather than raises: raising here escaped
+    into the turn pump and ended the whole turn as a provider error, where
+    `forbidden_scope_for` reports its own failures and keeps the turn alive.
+    """
+    try:
+        known = turn_wiring.known_table_ids(app)
+    except Exception as failure:  # noqa: BLE001 -- any failure must refuse, not permit
+        return (
+            f"The workspace tables could not be read ({type(failure).__name__}); "
+            "a technical allow is refused until they can be."
+        )
+    if table not in known:
+        return "The selected table is no longer in this workspace; reopen the thread."
+    return None
+
+
+def _is_scoped_read(payload: dict[str, Any]) -> bool:
+    """An exact allowlisted read, run from inside the workspace.
+
+    `CWD_IN_WORKSPACE` must be literally `True`: normalization sets it only for a
+    `cwd` it resolved inside the pinned root, so an absent or malformed flag -- the
+    fake bridge, a hand-built payload -- refuses rather than trusts the command text.
+    """
+    target = payload.get("target")
+    return (
+        payload.get("required_authority") == TECHNICAL
+        and payload.get("action") == "run_command"
+        and isinstance(target, str)
+        and target in _SCOPED_READ_COMMANDS
+        and payload.get(CWD_IN_WORKSPACE) is True
+    )
+
+
 def _wire_payload(payload: dict[str, Any], envelope: Any) -> dict[str, Any]:
     """The approval as the browser receives it: verdict added, transport removed.
 
     A new dict rather than an edit: `produced.payload` belongs to the bridge, and
     mutating it would leak the verdict backwards into the object the provider owns.
 
-    `forbidden_reasons` becomes a list because a tuple is not JSON.
+    `forbidden_reasons` becomes a list because a tuple is not JSON. The cwd verdict is
+    an input to `forbidden_reasons`, already folded in, so it is not streamed.
     """
-    wire = {key: value for key, value in payload.items() if key != PROVIDER_REQUEST_ID}
+    wire = {
+        key: value
+        for key, value in payload.items()
+        if key not in (PROVIDER_REQUEST_ID, CWD_IN_WORKSPACE)
+    }
     wire["allow_permitted"] = envelope.allow_permitted
     wire["forbidden_reasons"] = list(envelope.forbidden_reasons)
     return wire

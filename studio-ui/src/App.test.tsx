@@ -10,10 +10,18 @@
  */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
+import { installFakeEventSource } from "./api/fakeEventSource";
 import type { WorkspaceSnapshot } from "./api/types";
+
+let uninstallEventSource: (() => void) | null = null;
+
+afterEach(() => {
+  uninstallEventSource?.();
+  uninstallEventSource = null;
+});
 
 function snapshot(overrides: Partial<WorkspaceSnapshot> = {}): WorkspaceSnapshot {
   return {
@@ -287,6 +295,43 @@ describe("the Studio shell", () => {
       "/api/v1/agent/threads",
       expect.anything(),
     );
+  });
+
+  it("opens a conversation bound to the table the analyst selected", async () => {
+    const { registry, uninstall } = installFakeEventSource();
+    uninstallEventSource = uninstall;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) =>
+        Promise.resolve({
+          ok: true,
+          status: url === "/api/v1/agent/threads" ? 201 : 200,
+          json: async () =>
+            url === "/api/v1/agent/threads"
+              ? { thread_id: "thread-1", state: "ready" }
+              : snapshot({
+                  tables: [journey("ready_sales", "pass"), journey("blocked_sales", "blocked")],
+                }),
+        }),
+      ),
+    );
+    render(<App />);
+    await screen.findByRole("heading", { name: "retail_workspace" });
+
+    fireEvent.change(screen.getByRole("combobox", { name: /conversation scope/i }), {
+      target: { value: "ready_sales" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /ask about this workspace/i }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/v1/agent/threads",
+        expect.objectContaining({
+          body: JSON.stringify({ selected_table_id: "ready_sales" }),
+        }),
+      );
+    });
+    await waitFor(() => expect(registry.current?.url).toContain("thread-1"));
   });
 
   it("keeps the deterministic views when a thread cannot be created", async () => {

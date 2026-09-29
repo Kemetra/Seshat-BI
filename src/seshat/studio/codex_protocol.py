@@ -27,6 +27,7 @@ fail-open dressed as resilience.
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
@@ -36,6 +37,7 @@ from typing import Any
 from seshat.studio.redaction import scrub_payload
 
 __all__ = [
+    "CWD_IN_WORKSPACE",
     "CodexFrameError",
     "CodexProtocolReader",
     "NormalizationContext",
@@ -50,6 +52,13 @@ __all__ = [
 
 class CodexFrameError(ValueError):
     """A provider frame violated the JSON-RPC envelope, or correlation failed."""
+
+
+#: Studio's own verdict on a command approval's working directory: `True` only when
+#: the provider named a `cwd` inside the pinned workspace. A computed fact, not the
+#: path itself -- the path is scrubbed, and the relay must not re-derive it from the
+#: redacted text.
+CWD_IN_WORKSPACE = "cwd_in_workspace"
 
 
 #: JSON-RPC version every frame must declare.
@@ -458,16 +467,63 @@ def normalize_approval_request(
         "target": str(params.get("command") or params.get("grantRoot") or "unknown"),
         "reason": str(params.get("reason") or "unknown"),
         "provider_request_id": frame.get("id"),
+        **_derived_labels(
+            params,
+            escalates=escalates,
+            technical=technical,
+            workspace_root=context.workspace_root,
+        ),
     }
-    # Scope and risk are stated only when the PROVIDER stated something that implies
-    # them. A hardcoded `read_only` / `low` beside an Allow button was a governance
-    # claim nobody made -- `git push --force` read as low-risk read-only. Absent keys
-    # render as "unknown" downstream, which is the honest label.
-    if escalates:
-        payload["risk"] = "high"
     return "approval_required", _scrubbed(
         payload, context.workspace_root, context.secrets
     )
+
+
+def _derived_labels(
+    params: dict[str, Any],
+    *,
+    escalates: bool,
+    technical: bool,
+    workspace_root: Path | None,
+) -> dict[str, Any]:
+    """The labels an approval carries only when the provider's frame implies them.
+
+    Scope and risk are stated only when the PROVIDER stated something that implies
+    them. A hardcoded `read_only` / `low` beside an Allow button was a governance
+    claim nobody made -- `git push --force` read as low-risk read-only. Absent keys
+    render as "unknown" downstream, which is the honest label.
+
+    The cwd verdict is computed HERE because normalization is the only point that
+    holds both the raw `cwd` and the pinned root; scrubbing rewrites paths after it.
+    An exact read command run from outside the workspace is still a read beyond it.
+    """
+    labels: dict[str, Any] = {}
+    if escalates:
+        labels["risk"] = "high"
+    if technical:
+        labels[CWD_IN_WORKSPACE] = _cwd_in_workspace(params.get("cwd"), workspace_root)
+    return labels
+
+
+def _cwd_in_workspace(cwd: object, workspace_root: Path | None) -> bool:
+    """Whether a command's working directory is the pinned root or inside it.
+
+    Fails closed: a missing root, a non-string or empty `cwd`, or one that cannot be
+    resolved is `False`, never an assumption that the provider stayed at home.
+    """
+    if workspace_root is None or not isinstance(cwd, str):
+        return False
+    # Relative, empty, drive-relative (`C:foo`) and rooted-without-drive (`\foo` on
+    # Windows) paths would resolve against STUDIO's process cwd, which is not what the
+    # provider resolves them against.
+    if not Path(cwd).is_absolute():
+        return False
+    try:
+        resolved = Path(cwd).resolve()
+        root = Path(workspace_root).resolve()
+    except (OSError, RuntimeError, ValueError):
+        return False
+    return Path(os.path.normcase(resolved)).is_relative_to(Path(os.path.normcase(root)))
 
 
 def _text_scrubber(context: NormalizationContext) -> Callable[[str], str]:

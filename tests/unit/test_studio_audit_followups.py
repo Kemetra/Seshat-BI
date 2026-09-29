@@ -136,6 +136,231 @@ def test_a_known_table_or_no_table_is_accepted(tmp_path: Path, selected):
     assert response.status_code == 201, response.text
 
 
+def _bound_thread(client, table: str | None = "ready_sales") -> str:
+    created = client.post(f"{API}/agent/threads", json={"selected_table_id": table})
+    assert created.status_code == 201, created.text
+    return created.json()["thread_id"]
+
+
+def _register(client, thread_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    from types import SimpleNamespace
+
+    from seshat.studio.approval_routes import register_approval
+
+    return register_approval(
+        client.app,
+        thread_id,
+        client.app.state.threads.thread(thread_id),
+        SimpleNamespace(payload=payload),
+    )
+
+
+def _produced(client, command: object, **params: object) -> dict[str, Any]:
+    """An approval as the REAL producer emits it, from a fixture-shaped frame.
+
+    Hand-built payloads cannot prove the allow path: they would pass even if
+    normalization never computed the cwd verdict the relay depends on.
+    """
+    from seshat.studio.codex_protocol import (
+        NormalizationContext,
+        normalize_approval_request,
+    )
+
+    frame = {
+        "jsonrpc": "2.0",
+        "id": 20,
+        "method": "item/commandExecution/requestApproval",
+        "params": {"itemId": "item_cmd", "command": command, **params},
+    }
+    root = Path(client.app.state.launch.workspace_root)
+    produced = normalize_approval_request(
+        frame, context=NormalizationContext(workspace_root=root)
+    )
+    assert produced is not None
+    return produced[1]
+
+
+def test_ready_table_cannot_allow_a_command_while_another_table_is_blocked(
+    tmp_path: Path,
+):
+    """A thread label must not clear a different table's mapping gate."""
+    from unit import _studio_workspace_fixtures as workspace_fixtures
+
+    client = _client(tmp_path)
+    workspace_fixtures.write_blocked_table(tmp_path, table="blocked_sales")
+    thread_id = _bound_thread(client)
+    payload = _register(
+        client,
+        thread_id,
+        _produced(client, "write silver SQL for blocked_sales", cwd=str(tmp_path)),
+    )
+
+    assert payload["allow_permitted"] is False
+    assert any("cannot verify" in reason for reason in payload["forbidden_reasons"])
+    denied = client.post(
+        f"{API}/agent/threads/{thread_id}/approvals/item_cmd",
+        json={"decision": "allow_once"},
+    )
+    assert denied.status_code == 403, denied.text
+
+
+def test_bound_thread_can_allow_an_exact_read_run_inside_the_workspace(
+    tmp_path: Path,
+):
+    """The technical Allow path is reachable, end to end from the provider frame."""
+    client = _client(tmp_path)
+    thread_id = _bound_thread(client)
+    produced = _produced(client, "rg --files", cwd=str(tmp_path))
+    # No live Codex child is blocked on this request here, so drop its transport id
+    # as the fake bridge does: this pins the readiness gate, not delivery.
+    produced.pop("provider_request_id")
+    payload = _register(client, thread_id, produced)
+
+    assert payload["allow_permitted"] is True
+    assert "cwd_in_workspace" not in payload  # a relay input, not a streamed field
+    allowed = client.post(
+        f"{API}/agent/threads/{thread_id}/approvals/item_cmd",
+        json={"decision": "allow_once"},
+    )
+    assert allowed.status_code == 204, allowed.text
+
+
+@pytest.mark.parametrize("where", ["outside", "absent", "malformed"])
+def test_an_exact_read_outside_the_workspace_is_refused(tmp_path: Path, where: str):
+    """`rg --files` from another directory is still a read beyond the workspace."""
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    client = _client(workspace)
+    cwd = {"outside": {"cwd": str(tmp_path)}, "absent": {}, "malformed": {"cwd": 7}}
+    thread_id = _bound_thread(client)
+    payload = _register(
+        client, thread_id, _produced(client, "rg --files", **cwd[where])
+    )
+
+    assert payload["allow_permitted"] is False
+
+
+def _relative_spellings(workspace: Path) -> list[str]:
+    spellings = ["", ".", "./"]
+    if os.name == "nt":
+        spellings.append(str(workspace)[2:])  # rooted without its drive: `\...\ws`
+        spellings.append(workspace.drive + ".")  # drive-relative: `C:.`
+    return spellings
+
+
+def test_a_relative_cwd_is_refused_even_when_studio_runs_in_the_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Studio's own cwd is not the provider's: a relative spelling proves nothing.
+
+    Studio runs FROM the workspace here, so each spelling would resolve inside it
+    if the resolver ever trusted a non-absolute path.
+    """
+    client = _client(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    thread_id = _bound_thread(client)
+    for cwd in _relative_spellings(tmp_path):
+        payload = _register(client, thread_id, _produced(client, "rg --files", cwd=cwd))
+        assert payload["allow_permitted"] is False, cwd
+
+
+def test_git_status_is_not_an_allowlisted_read(tmp_path: Path):
+    """`git status` runs the workspace's `core.fsmonitor`, so it is not read-only."""
+    client = _client(tmp_path)
+    thread_id = _bound_thread(client)
+    payload = _register(
+        client,
+        thread_id,
+        _produced(client, "git status --short", cwd=str(tmp_path)),
+    )
+
+    assert payload["allow_permitted"] is False
+
+
+def test_a_table_removed_after_binding_refuses_even_an_exact_read(tmp_path: Path):
+    import shutil
+
+    client = _client(tmp_path)
+    thread_id = _bound_thread(client)
+    shutil.rmtree(tmp_path / "mappings" / "ready_sales")
+    payload = _register(
+        client, thread_id, _produced(client, "rg --files", cwd=str(tmp_path))
+    )
+
+    assert payload["allow_permitted"] is False
+    assert any("no longer" in reason for reason in payload["forbidden_reasons"])
+
+
+def test_an_unreadable_workspace_refuses_instead_of_ending_the_turn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """A snapshot failure is a refusal reason, not an exception into the turn pump."""
+    from seshat.studio import turn_wiring
+
+    client = _client(tmp_path)
+    thread_id = _bound_thread(client)
+
+    def explode(_app: Any) -> frozenset[str]:
+        raise OSError("disk went away")
+
+    monkeypatch.setattr(turn_wiring, "known_table_ids", explode)
+    payload = _register(
+        client, thread_id, _produced(client, "rg --files", cwd=str(tmp_path))
+    )
+
+    assert payload["allow_permitted"] is False
+    assert any("OSError" in reason for reason in payload["forbidden_reasons"])
+
+
+def test_an_unbound_thread_cannot_allow_even_an_exact_read(tmp_path: Path):
+    client = _client(tmp_path)
+    thread_id = _bound_thread(client, None)
+    payload = _register(client, thread_id, _produced(client, "pwd", cwd=str(tmp_path)))
+
+    assert payload["allow_permitted"] is False
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "rg --files; echo bypass",
+        "rg --files && echo bypass",
+        "python -c 'print(1)'",
+        ["rg", "--files"],
+    ],
+)
+def test_opaque_compound_or_malformed_commands_are_not_unlocked(
+    tmp_path: Path, command: object
+):
+    """A ready label cannot bless a shell program Studio cannot inspect."""
+    client = _client(tmp_path)
+    thread_id = _bound_thread(client)
+    payload = _register(
+        client, thread_id, _produced(client, command, cwd=str(tmp_path))
+    )
+
+    assert payload["allow_permitted"] is False
+    assert payload["forbidden_reasons"]
+
+
+def test_a_hand_built_payload_without_the_cwd_verdict_fails_closed(tmp_path: Path):
+    """A bridge that never ran normalization (the fake one) cannot reach Allow."""
+    client = _client(tmp_path)
+    thread_id = _bound_thread(client)
+    payload = _register(
+        client,
+        thread_id,
+        {
+            "approval_id": "hand-built",
+            "required_authority": "technical",
+            "action": "run_command",
+            "target": "rg --files",
+        },
+    )
+
+    assert payload["allow_permitted"] is False
+
+
 # --- the turn context reaches the provider ---
 
 
@@ -357,3 +582,47 @@ def test_an_active_session_is_renewed_on_use():
 
     now[0] += 101
     assert not store.is_valid_session(cookie)
+
+
+# --- the Codex child cannot inherit a ripgrep config ---
+
+
+def test_the_codex_child_is_spawned_without_a_ripgrep_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """An inherited `--follow` config would let an allowed `rg --files` leave the root.
+
+    Pinned at the spawn call itself, the chokepoint, not only at the helper.
+    """
+    from seshat.studio.codex_bridge import CodexSession
+    from seshat.studio.codex_process import CodexLaunchPlan
+
+    monkeypatch.setenv("RIPGREP_CONFIG_PATH", str(tmp_path / "rgrc"))
+    captured: dict[str, Any] = {}
+
+    class _Captured(Exception):
+        pass
+
+    def spawn(argv: list[str], **kwargs: Any) -> Any:
+        captured.update(kwargs)
+        raise _Captured
+
+    session = CodexSession(
+        CodexLaunchPlan(argv=(sys.executable, "-c", "pass"), cwd=tmp_path),
+        spawn=spawn,
+    )
+    with pytest.raises(_Captured):
+        session.start()
+
+    env = captured["env"]
+    assert all(name.upper() != "RIPGREP_CONFIG_PATH" for name in env)
+    assert env.get("PATH") == os.environ.get("PATH")  # everything else still flows
+
+
+@pytest.mark.parametrize(
+    "name", ["RIPGREP_CONFIG_PATH", "ripgrep_config_path", "Ripgrep_Config_Path"]
+)
+def test_the_withheld_variable_is_matched_case_insensitively(name: str):
+    from seshat.studio.codex_bridge import child_environment
+
+    assert child_environment({name: "x", "KEEP": "y"}) == {"KEEP": "y"}

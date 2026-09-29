@@ -22,12 +22,13 @@ parser and into any diagnostic that kept the stream.
 
 from __future__ import annotations
 
+import os
 import queue
 import shutil
 import subprocess
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -122,6 +123,25 @@ def _remaining(deadline: float) -> float:
     return max(0.0, deadline - time.monotonic())
 
 
+#: Environment variables withheld from the Codex child. `RIPGREP_CONFIG_PATH` is the
+#: ONLY place ripgrep reads configuration from, and a config enabling `--follow` would
+#: let an approval-relay-allowed `rg --files` traverse a workspace-committed symlink out
+#: of the pinned root. Withholding it keeps that allowlisted read workspace-scoped.
+WITHHELD_CHILD_ENV = frozenset({"RIPGREP_CONFIG_PATH"})
+
+
+def child_environment(parent: Mapping[str, str]) -> dict[str, str]:
+    """The Codex child's environment: the parent's, minus `WITHHELD_CHILD_ENV`.
+
+    Compared case-insensitively, because Windows environment names are.
+    """
+    return {
+        name: value
+        for name, value in parent.items()
+        if name.upper() not in WITHHELD_CHILD_ENV
+    }
+
+
 class CodexSession:
     """Owns one Codex app-server child process and its two reader threads."""
 
@@ -154,6 +174,7 @@ class CodexSession:
         self._process = self._spawn(
             list(self.plan.argv),
             cwd=str(self.plan.cwd),
+            env=child_environment(os.environ),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
