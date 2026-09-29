@@ -353,22 +353,32 @@ def _scrub_identifier_fields(payload: dict[str, object]) -> None:
     GUIDs only in :data:`_IDENTIFIER_FIELDS`; every class in
     :data:`_VENDOR_TEXT_FIELDS`. Everything else still meets the refusing scan.
     """
-    pattern = dict(SECRET_PATTERNS)[_IDENTIFIER_CLASS]
     applied: set[str] = set()
+    _scrub_guid_identifiers(payload, applied)
+    _scrub_vendor_text(payload, applied)
+    if applied:
+        payload["redactions_applied"] = sorted(applied)
+
+
+def _scrub_guid_identifiers(payload: dict[str, object], applied: set[str]) -> None:
+    """Redact GUIDs in operator-chosen identifiers while retaining the record."""
+    pattern = dict(SECRET_PATTERNS)[_IDENTIFIER_CLASS]
     for key in _IDENTIFIER_FIELDS:
         value = payload.get(key)
         if not isinstance(value, str) or not pattern.search(value):
             continue
         payload[key] = pattern.sub(REDACTED, value)
         applied.add(_IDENTIFIER_CLASS)
+
+
+def _scrub_vendor_text(payload: dict[str, object], applied: set[str]) -> None:
+    """Redact every recognized secret class in untrusted vendor output."""
     for key in _VENDOR_TEXT_FIELDS:
         value = payload.get(key)
         if not isinstance(value, str):
             continue
         payload[key], labels = scrub_secret_shaped(value)
         applied.update(labels)
-    if applied:
-        payload["redactions_applied"] = sorted(applied)
 
 
 def _write_atomically(path: Path, text: str) -> None:
