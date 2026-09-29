@@ -131,8 +131,6 @@ def _trusted_approved_stages(
     return trusted, caveats
 
 
-
-
 def _load_yaml_mapping(path: Path) -> tuple[dict[str, Any] | None, str | None]:
     import yaml
 
