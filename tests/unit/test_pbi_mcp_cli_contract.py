@@ -226,6 +226,23 @@ def test_plan_write_without_runtime_profile_reports_a_blocked_verdict(
     assert payload["blockers"] == [drift.BLOCKER_NO_RECORDED_BASELINE]
 
 
+def test_apply_without_runtime_profile_refuses_on_the_drift_gate(
+    ready_repo: Path,
+) -> None:
+    """The NON-dry leg too: the shipped CLI supplies no capability profile, so
+    a real apply must refuse on the missing baseline, never run unchecked."""
+    before = (ready_repo / TARGET_PATH).read_text(encoding="utf-8")
+    result = _run_cli(
+        ready_repo, "apply", "--target", TARGET, "--operation", OPERATION, "--json"
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["outcome"] == "blocked"
+    assert payload["mutation_attempted"] is False
+    assert payload["blockers"] == [drift.BLOCKER_NO_RECORDED_BASELINE]
+    assert (ready_repo / TARGET_PATH).read_text(encoding="utf-8") == before
+
+
 def test_plan_write_mutates_nothing(ready_repo: Path) -> None:
     before = (ready_repo / TARGET_PATH).read_text(encoding="utf-8")
     _run_cli(ready_repo, "plan-write", "--target", TARGET, "--operation", OPERATION)
@@ -497,6 +514,23 @@ def test_json_verdict_names_its_target_and_mode() -> None:
 
     assert payload["target"] == "sales_model"
     assert payload["mode"] == "readonly"
+
+
+def test_json_verdict_carries_the_scrubbed_vendor_detail() -> None:
+    from seshat.cli.commands import pbi_mcp as command
+
+    guid = "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
+    payload = command._write_leg_payload(
+        _write_report(
+            outcome="blocked",
+            exit_code=1,
+            vendor_detail=f"vendor error: folder {guid} is not a TMDL model",
+        )
+    )
+
+    assert payload["vendor_detail"].startswith("vendor error: folder")
+    assert guid not in payload["vendor_detail"]
+    assert command._write_leg_payload(_write_report())["vendor_detail"] is None
 
 
 def test_json_verdict_reports_which_checks_ran_and_failed() -> None:

@@ -63,7 +63,9 @@ refusal names the specific missing authority:
 | 9 | the tree is clean, or a **resolvable** backup ref was named | `PBIMCP-GATE-09` |
 
 Plus: an uncommitted allowlist (`-10`), an unprobed git state (`-11`), and an unresolvable
-backup ref (`-12`) each refuse on their own.
+backup ref (`-12`) each refuse on their own. A model-folder target also refuses (`-16`) when
+another table in that folder has its own readiness record without a committed
+`semantic_model_ready: pass` -- the flush rewrites every table file in the folder.
 
 Two of these deserve emphasis because they are the ones most likely to be argued away:
 
