@@ -82,3 +82,38 @@ def test_release_workflows_install_build_tooling_only_from_the_lock(
             continue
         tokens = set(line.split())
         assert not tokens & {"build", "twine", "hatchling"}, (workflow.name, line)
+
+
+def _steps_before_the_build(workflow: Path) -> list[dict]:
+    """Every step that runs before the one invoking ``python -m build``, per job."""
+    import yaml
+
+    document = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+    for job in document["jobs"].values():
+        steps = job.get("steps", [])
+        for index, step in enumerate(steps):
+            if "python -m build" in str(step.get("run", "")):
+                return steps[:index] + [step]
+    raise AssertionError(f"{workflow.name} never runs `python -m build`")
+
+
+@pytest.mark.parametrize("workflow", RELEASE_WORKFLOWS, ids=lambda p: p.name)
+def test_every_wheel_build_builds_the_studio_frontend_first(workflow: Path) -> None:
+    """The inspector requires `seshat/studio/static/` in the wheel (f71776e9).
+
+    That directory is gitignored build output, so ANY workflow that builds a wheel and
+    then runs `inspect_release_artifacts.py` must build the frontend before it, with
+    Node available. release.yml did; prepare-coordinated-release.yml did not, so the
+    v3.0.0 dispatch (run 36621668968) blocked on "wheel is missing required package
+    data" -- a latent break since the inspector began deriving its required files.
+    """
+    prior = _steps_before_the_build(workflow)
+    runs = [str(step.get("run", "")) for step in prior]
+    uses = [str(step.get("uses", "")) for step in prior]
+
+    assert any("scripts/build_studio_frontend.py" in run for run in runs), (
+        f"{workflow.name} builds a wheel without building the Studio frontend first"
+    )
+    assert any(use.startswith("actions/setup-node@") for use in uses), (
+        f"{workflow.name} builds the Studio frontend without setting up Node"
+    )
