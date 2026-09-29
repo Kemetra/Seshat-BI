@@ -1,5 +1,8 @@
 [build-system]
-requires = ["hatchling"]
+# Exact pin: the published wheel's contents depend on hatchling's handling of VCS
+# ignore rules vs `artifacts` (the Studio bundle below), so the pre-tag inspection
+# build and the tag build must use the SAME backend release. Bump deliberately.
+requires = ["hatchling==1.32.4"]
 build-backend = "hatchling.build"
 
 [project]

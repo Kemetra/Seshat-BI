@@ -60,7 +60,9 @@ jobs:
         # in-tree egg-info, and dist/, build/ and *.egg-info/ are gitignored,
         # so the editable install leaves no untracked, un-ignored path behind.
         run: |
-          python -m pip install build twine
+          # Hash-locked build tooling (the exact build/twine that produce and check
+          # the published artifacts); regenerate per the header of requirements.in.
+          python -m pip install --require-hashes -r .github/release-tooling/requirements.txt
           python -m pip install -e .
       - name: Verify source identity
         shell: bash

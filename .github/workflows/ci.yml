@@ -94,6 +94,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
           # Full history: `retail check` runs git-metadata rules (P2 scans the
           # commit-message BASE..HEAD range; C2/G1/G2 read git ls-files /
           # check-ignore). A shallow clone would make those mis-scan or error.
@@ -222,11 +223,21 @@ jobs:
       - name: Unmarked credential-free contract tests
         run: pytest -m "not unit and not integration and not live_db and not statistics"
       - name: Optional surface unit tests
+        # A code change runs the full unit suite in `check`; here only the
+        # tests that need the optional extras.
+        if: ${{ needs.changes.outputs.code_changed == 'true' }}
         run: >-
           pytest -m unit
           tests/unit/test_studio_*.py
           tests/unit/test_report_*.py
           tests/unit/test_cli_profile_file.py
+      - name: Full unit suite for a non-code change
+        # A docs/README/PR-template-only change skips `check`'s unit step
+        # (code_changed=false), yet many unit tests assert on exactly those
+        # files. Run them all here so such a change cannot land green while
+        # breaking a test the next unrelated PR would then trip over.
+        if: ${{ needs.changes.outputs.code_changed != 'true' }}
+        run: pytest -m unit
       - name: MCP stdio integration
         run: pytest tests/integration/test_governor_stdio_no_deadlock.py
 
@@ -239,6 +250,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
@@ -265,6 +278,8 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
@@ -401,6 +416,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
@@ -425,6 +442,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
@@ -458,6 +477,8 @@ jobs:
             transcript: tests/fixtures/public_distribution/codex/acceptance.ide.pass.json
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
@@ -499,6 +520,16 @@ jobs:
           cache-dependency-path: pyproject.toml
       - name: Install credential-free integration environment
         run: pip install build twine -e ".[dev]"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: studio-ui/package-lock.json
+      - name: Build the Studio frontend
+        # test_python_release_artifacts builds a REAL wheel and runs the release
+        # inspector on it, which refuses a wheel without the Studio UI (the v1.0.0
+        # launcher-without-UI incident). Build it the way release.yml does.
+        run: python scripts/build_studio_frontend.py
       - name: Credential-free integration tests
         run: >-
           pytest -m "integration and not live_db and not statistics"
