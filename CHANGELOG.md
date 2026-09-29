@@ -27,6 +27,103 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Changed -- BREAKING
+
+This release is classified **MAJOR** under `docs/operations/versioning-policy.md`.
+The 2026-09 expert-board audit remediation (#752--#763, #776) changed how several
+EXISTING rule ids and CLI contracts judge an unchanged repository. The policy's MAJOR
+rows name both cases ("a rule's behavior changes such that it can newly fail a
+previously-passing repo" and "an exit-code meaning changes"). Every change below is a
+deliberate fail-closed correction, not a regression, but each can turn a repo that was
+green on v2.1.0 red, so they are listed first. No rule id was added, removed, or
+renamed: extracting every `@register(...)` id under `src/seshat/rules/` gives the same
+51 ids at `v2.1.0` and at the release commit.
+
+- **RS1 rejects wrong-class stage approvals and out-of-order passes** (#763). A
+  stage's approval must come from that stage's authority, and a later stage cannot
+  pass while an earlier one does not. `dashboard_ready` currently also accepts
+  `governance` and `data_owner` sign-off.
+- **An approval note binds a contract only when it lists the name** (#763). With no
+  structured `contracts:` field, the note must carry the name as a delimited item
+  (after `:`, `,`, `;` or `(`), so "approved contracts: X, Y" still binds but "approved
+  contract X" no longer does. Prefer the structured field, which must be a YAML list:
+  `contracts: [X, Y]` (a bare `contracts: X, Y` is a string and binds nothing).
+- **Approval-bearing surfaces read committed state and fail closed for a project nested
+  inside another git root** (#763, #756). Report render, analyze, the coordinator and
+  measure-sync read `HEAD:<rel>` from the git top level. Approvals no longer advance a
+  stage outside a git repository, or when the readiness file is not committed at `HEAD`.
+- **C2 scans more secret shapes** (#758). A tracked `.env.local`-style file, a filled
+  `*_TOKEN`/`*_SECRET` key in `.env.example`, or a UTF-16 file holding a DSN is now
+  flagged. The `.env.example` that `seshat init` writes still scans clean.
+- **P2 on a single-commit repository judges `HEAD` itself** (#758) instead of passing
+  vacuously when HEAD has no parent.
+- **A rule that raises is an ERROR finding** (#753), not an exception reported as
+  `input_defect`.
+- **`seshat reset` refuses a dirty tree** (#756) with the existing refusal class
+  (`dirty_tree`, exit 2) unless `--discard-uncommitted` is passed.
+- **`pbi-mcp` preflight blocker ids changed meaning** (#761): a missing record is now
+  `GATE-02` and a not-pass record `GATE-01`. New blockers `PBIMCP-GATE-16`,
+  `PBIMCP-EFF-03` and runtime `PBIMCP-DRIFT-01`; the vendor is pinned exactly
+  (`0.5.0-beta.12`) and a commented `.vscode/mcp.json` refuses writes.
+- **dbt and Dagster gates read committed state** (#760). `DBT_MAPPING_UNCOMMITTED` is a
+  new dbt gate blocker, only `answered` clears a mapping question, plan digests hash
+  committed blobs (a previously accepted plan needs one re-plan), and a zero-asset run
+  is not success.
+- **Statistical evidence renames `epsilon_squared` to `eta_squared_h`** (#759), and a
+  committed portfolio artifact counts only when its `captured_at_revision` equals HEAD.
+- **Git reads refuse reflog revisions** (#753): `--base`/`--head` values such as
+  `HEAD@{1}` are refused, and a content-filtered (LFS), `working-tree-encoding` or
+  skip-worktree file reads as modified.
+- **Workspace discovery needs `--repo`** (#752) when a directory carries only generic
+  scaffold folders (no `.seshat/`, no `mappings/`).
+
+### Added
+
+- **`seshat next --exit-code`** (#756); the default exit code is unchanged.
+- **`seshat doctor --format json` keys `advisory`, `gate_authority`,
+  `next_allowed_action`** (#756); existing keys are unchanged.
+- **Studio conversation scope** (#776). The agent panel binds a thread to a table, and
+  a technical Allow is reachable for an exact workspace read (`pwd`, `rg --files`) run
+  from an absolute cwd inside the workspace. Every other command stays refused.
+- **Finance model-integrity rulings A1/B1/C1 recorded and gold SQL applied** (#723),
+  with the `finance_gl_actuals` gold_ready live validation pass recorded (#724).
+
+### Fixed
+
+- **Git hardening** (#753, #762): git calls spread the shared `GIT_HARDENING` flags
+  against repo-local config, including the integration installer's clone, checkout
+  and rev-parse (through the shared `integrations.procs` runner). Paths are listed
+  NUL-safely, and `check --format review` validates `--commit-range`.
+- **Secrets and provenance** (#757, #758): one redaction chain on live-DB surfaces,
+  committed provenance reads, and C2/SQL-tokenizer quoted-identifier fixes.
+- **Studio** (#755, #776): DS1-valid decision records, per-turn Codex session state,
+  boundary redaction, nested-workspace committed reads, the production turn context
+  sent to Codex, honest approval labels, real Operations probes, and abandoned-turn
+  reaping. The Codex child no longer inherits `RIPGREP_CONFIG_PATH`.
+- **Governance gates** (#763): per-category coverage, stage authority, and committed
+  approvals.
+- **Analytics** (#759): metric drift, portfolio watch fails closed, and statistical
+  correctness (textbook omega², floors that withhold small cells).
+- **Power BI** (#728, #761): MCP write preflight fails closed without a capability
+  profile; PBIR/TMDL correctness fixes.
+- **Integrations** (#762): the firewall sits at the mutation site, `apply()` requires a
+  committed approval, and presence and lock reflect the actual install.
+- **Finance gold** (#754): `UNIQUE` natural keys on the finance dimensions, so a code
+  with two attribute values fails the load instead of doubling budget rows; ordered
+  follow-up migrations 0009/0010.
+- **Routing** (#727): ambiguous routing terminates instead of looping.
+- **Cross-cutting** (#752): architecture, test-suite quality and gap findings.
+
+### Dependencies
+
+- scipy 1.18.1 (#717), statsmodels 0.15.0 (#719), numpy 2.5.3 (#765), dbt-core 1.12.5
+  (#766), dagster 1.13.23 (#764); Studio UI `@testing-library/user-event` 14.6.7 (#768)
+  and `@types/node` 26.6.3 (#773).
+
+### Docs
+
+- Finance mapping-gate answers transcribed into the unresolved-questions record (#722).
+
 ## [2.1.0] -- 2026-08-25
 
 ### Added
