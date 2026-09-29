@@ -54,9 +54,16 @@ ALLOW_DECISION = "allow_once"
 DENY_DECISION = "deny"
 
 # These exact commands inspect the workspace without accepting paths, shell operators,
-# scripts, or extra flags. An arbitrary command cannot be safely scoped to a table by
-# looking for its name in a shell string: it may construct a path or invoke a script.
-_SCOPED_READ_COMMANDS = frozenset({"pwd", "rg --files", "git status --short"})
+# scripts, or extra flags, and read no configuration FROM the workspace. They are
+# workspace-scoped, not table-scoped: `rg --files` lists the whole workspace. An
+# arbitrary command cannot be safely scoped by looking for a table name in a shell
+# string: it may construct a path or invoke a script.
+#
+# `git status` is deliberately absent. It honours the workspace's own git config, so a
+# committed `core.fsmonitor` runs an arbitrary program, and it rewrites the index
+# (firing `post-index-change`). `gitutil` treats that config as attacker-supplied; a
+# provider-run command gets none of that hardening, so it is not a read.
+_SCOPED_READ_COMMANDS = frozenset({"pwd", "rg --files"})
 
 #: The provider's JSON-RPC correlation id. Kept for the ledger, which must answer the
 #: request the provider blocks on, and stripped from the STREAMED payload: the analyst
@@ -131,26 +138,46 @@ def _forbidden_for_request(
 
     `forbidden_scope` contains standing prohibitions even for a fully ready table,
     so treating every sentence as a ban on every technical command made Allow
-    unreachable. We exempt only exact, read-only inspections. Everything else keeps
-    the readiness reasons and is refused because shell text cannot prove its target.
+    unreachable. We exempt only exact, workspace-scoped reads (`_is_scoped_read`):
+    a bound, still-present table is REQUIRED for them, but its readiness is not
+    consulted, because they write nothing. Everything else keeps the readiness
+    reasons and is refused because shell text cannot prove its target.
     """
     root = app.state.launch.workspace_root
     if table is None:
         return forbidden_scope_for(root, None)
-    if table not in turn_wiring.known_table_ids(app):
-        return (
-            "The selected table is no longer in this workspace; reopen the thread.",
-        )
+    missing = _table_missing_reason(app, table)
+    if missing is not None:
+        return (missing,)
     if _is_scoped_read(payload):
         return ()
     reasons = forbidden_scope_for(root, table)
     if payload.get("required_authority") == TECHNICAL:
         return (
-            "Studio cannot verify that this command is read-only or limited to the "
-            "selected table; a technical allow is refused.",
+            "Studio cannot verify that this command only reads the workspace; "
+            "a technical allow is refused.",
             *reasons,
         )
     return reasons
+
+
+def _table_missing_reason(app: FastAPI, table: str) -> str | None:
+    """Why the bound table cannot be trusted now, or `None` when it is present.
+
+    A snapshot that fails to build refuses rather than raises: raising here escaped
+    into the turn pump and ended the whole turn as a provider error, where
+    `forbidden_scope_for` reports its own failures and keeps the turn alive.
+    """
+    try:
+        known = turn_wiring.known_table_ids(app)
+    except Exception as failure:  # noqa: BLE001 -- any failure must refuse, not permit
+        return (
+            f"The workspace tables could not be read ({type(failure).__name__}); "
+            "a technical allow is refused until they can be."
+        )
+    if table not in known:
+        return "The selected table is no longer in this workspace; reopen the thread."
+    return None
 
 
 def _is_scoped_read(payload: dict[str, Any]) -> bool:

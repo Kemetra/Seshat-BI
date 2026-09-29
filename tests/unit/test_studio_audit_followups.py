@@ -240,6 +240,78 @@ def test_an_exact_read_outside_the_workspace_is_refused(tmp_path: Path, where: s
     assert payload["allow_permitted"] is False
 
 
+def _relative_spellings(workspace: Path) -> list[str]:
+    spellings = ["", ".", "./"]
+    if os.name == "nt":
+        spellings.append(str(workspace)[2:])  # rooted without its drive: `\...\ws`
+        spellings.append(workspace.drive + ".")  # drive-relative: `C:.`
+    return spellings
+
+
+def test_a_relative_cwd_is_refused_even_when_studio_runs_in_the_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Studio's own cwd is not the provider's: a relative spelling proves nothing.
+
+    Studio runs FROM the workspace here, so each spelling would resolve inside it
+    if the resolver ever trusted a non-absolute path.
+    """
+    client = _client(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    thread_id = _bound_thread(client)
+    for cwd in _relative_spellings(tmp_path):
+        payload = _register(client, thread_id, _produced(client, "rg --files", cwd=cwd))
+        assert payload["allow_permitted"] is False, cwd
+
+
+def test_git_status_is_not_an_allowlisted_read(tmp_path: Path):
+    """`git status` runs the workspace's `core.fsmonitor`, so it is not read-only."""
+    client = _client(tmp_path)
+    thread_id = _bound_thread(client)
+    payload = _register(
+        client,
+        thread_id,
+        _produced(client, "git status --short", cwd=str(tmp_path)),
+    )
+
+    assert payload["allow_permitted"] is False
+
+
+def test_a_table_removed_after_binding_refuses_even_an_exact_read(tmp_path: Path):
+    import shutil
+
+    client = _client(tmp_path)
+    thread_id = _bound_thread(client)
+    shutil.rmtree(tmp_path / "mappings" / "ready_sales")
+    payload = _register(
+        client, thread_id, _produced(client, "rg --files", cwd=str(tmp_path))
+    )
+
+    assert payload["allow_permitted"] is False
+    assert any("no longer" in reason for reason in payload["forbidden_reasons"])
+
+
+def test_an_unreadable_workspace_refuses_instead_of_ending_the_turn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """A snapshot failure is a refusal reason, not an exception into the turn pump."""
+    from seshat.studio import turn_wiring
+
+    client = _client(tmp_path)
+    thread_id = _bound_thread(client)
+
+    def explode(_app: Any) -> frozenset[str]:
+        raise OSError("disk went away")
+
+    monkeypatch.setattr(turn_wiring, "known_table_ids", explode)
+    payload = _register(
+        client, thread_id, _produced(client, "rg --files", cwd=str(tmp_path))
+    )
+
+    assert payload["allow_permitted"] is False
+    assert any("OSError" in reason for reason in payload["forbidden_reasons"])
+
+
 def test_an_unbound_thread_cannot_allow_even_an_exact_read(tmp_path: Path):
     client = _client(tmp_path)
     thread_id = _bound_thread(client, None)

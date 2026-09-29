@@ -150,11 +150,16 @@ function AgentPanel({
   const [threadId, setThreadId] = useState<string | null>(null);
   const [selectedTableId, setSelectedTableId] = useState("");
   const [failure, setFailure] = useState<string | null>(null);
+  // Derived, not stored: a table that vanished on a snapshot reload must not keep
+  // being sent while the selector shows "Whole workspace".
+  const boundTableId = tables.some((table) => table.table_id === selectedTableId)
+    ? selectedTableId
+    : "";
 
   const open = async () => {
     setFailure(null);
     try {
-      const thread = await createThread(selectedTableId || null);
+      const thread = await createThread(boundTableId || null);
       setThreadId(thread.thread_id);
     } catch (error) {
       setFailure(describeFailure(error).message);
@@ -168,7 +173,7 @@ function AgentPanel({
           <label>
             Conversation scope
             <select
-              value={selectedTableId}
+              value={boundTableId}
               onChange={(event) => setSelectedTableId(event.target.value)}
             >
               <option value="">Whole workspace</option>

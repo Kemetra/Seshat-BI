@@ -513,7 +513,10 @@ def _cwd_in_workspace(cwd: object, workspace_root: Path | None) -> bool:
     """
     if workspace_root is None or not isinstance(cwd, str):
         return False
-    if not cwd:  # `Path("")` resolves to the process cwd, not to "no directory"
+    # Relative, empty, drive-relative (`C:foo`) and rooted-without-drive (`\foo` on
+    # Windows) paths would resolve against STUDIO's process cwd, which is not what the
+    # provider resolves them against.
+    if not Path(cwd).is_absolute():
         return False
     try:
         resolved = Path(cwd).resolve()
