@@ -136,12 +136,16 @@ def _distribution_present(env: Path, dist: str) -> bool:
 def _distribution_version(env: Path, dist: str) -> str | None:
     """The version in `dist`'s `name-version.dist-info` directory, if installed."""
     canonical = _canonical_dist(dist)
-    for pattern in _SITE_PACKAGES:
-        for site in env.glob(pattern):
-            for info in site.glob("*.dist-info"):
-                name, _, version = info.name[: -len(".dist-info")].partition("-")
-                if _canonical_dist(name) == canonical:
-                    return version or None
+    infos = (
+        info
+        for pattern in _SITE_PACKAGES
+        for site in env.glob(pattern)
+        for info in site.glob("*.dist-info")
+    )
+    for info in infos:
+        name, _, version = info.name[: -len(".dist-info")].partition("-")
+        if _canonical_dist(name) == canonical:
+            return version or None
     return None
 
 

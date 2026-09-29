@@ -54,9 +54,9 @@ def _upgrade_from(
         return None
     on_disk = installed_coordinate(root, item, profile)
     wanted = _wanted_coordinates(item, resolved)
-    if on_disk and wanted and not _matches(item, on_disk, wanted):
-        return on_disk
-    return None
+    if not on_disk or not wanted:
+        return None
+    return None if _matches(item, on_disk, wanted) else on_disk
 
 
 def _on_disk_resolution(

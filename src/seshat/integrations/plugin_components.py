@@ -74,13 +74,18 @@ def declarations(
         return {}, frozenset({UNREADABLE})
     unknown = {key for key in manifest if key not in METADATA_KEYS | COMPONENT_KEYS}
     declared = {key: manifest[key] for key in COMPONENT_KEYS if key in manifest}
-    for key, value in (extra or {}).items():
-        if key not in COMPONENT_KEYS:
-            continue
-        if key in declared and declared[key] != value:
-            unknown.add(key)
-            continue
-        declared[key] = value
+    additions = {
+        key: value for key, value in (extra or {}).items() if key in COMPONENT_KEYS
+    }
+    conflicts = {
+        key
+        for key, value in additions.items()
+        if key in declared and declared[key] != value
+    }
+    unknown.update(conflicts)
+    declared.update(
+        {key: value for key, value in additions.items() if key not in conflicts}
+    )
     return declared, frozenset(unknown)
 
 
@@ -94,15 +99,16 @@ def declared_paths(root: Path, value: object) -> tuple[Path, ...]:
     if not isinstance(entries, list):
         raise InvalidDeclaration
     base = root.resolve()
-    paths: list[Path] = []
-    for entry in entries:
-        if not isinstance(entry, str) or not entry.strip():
-            raise InvalidDeclaration
-        candidate = (root / entry).resolve()
-        if not candidate.is_relative_to(base) or not candidate.exists():
-            raise InvalidDeclaration
-        paths.append(candidate)
-    return tuple(paths)
+    return tuple(_declared_path(root, base, entry) for entry in entries)
+
+
+def _declared_path(root: Path, base: Path, entry: object) -> Path:
+    if not isinstance(entry, str) or not entry.strip():
+        raise InvalidDeclaration
+    candidate = (root / entry).resolve()
+    if not candidate.is_relative_to(base) or not candidate.exists():
+        raise InvalidDeclaration
+    return candidate
 
 
 def markdown_names(path: Path) -> frozenset[str]:
@@ -115,18 +121,19 @@ def markdown_names(path: Path) -> frozenset[str]:
         if path.suffix.lower() != ".md":
             raise InvalidDeclaration
         return frozenset({path.stem})
-    names: set[str] = set()
     try:
         children = sorted(path.rglob("*"))
     except OSError as exc:
         raise InvalidDeclaration from exc
-    for child in children:
-        if child.is_dir():
-            continue
-        if child.suffix.lower() != ".md":
-            raise InvalidDeclaration
-        names.add(child.relative_to(path).with_suffix("").as_posix())
-    return frozenset(names)
+    return frozenset(
+        _markdown_name(path, child) for child in children if not child.is_dir()
+    )
+
+
+def _markdown_name(root: Path, child: Path) -> str:
+    if child.suffix.lower() != ".md":
+        raise InvalidDeclaration
+    return child.relative_to(root).with_suffix("").as_posix()
 
 
 def skill_names(path: Path) -> frozenset[str]:

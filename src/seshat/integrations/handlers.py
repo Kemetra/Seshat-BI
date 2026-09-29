@@ -242,6 +242,13 @@ def _own_older_entry(req: _Install, config: dict) -> bool:
     return existing == _MCP_ENTRIES[req.item.id](previous)
 
 
+def _mcp_verdict(req: _Install, config: dict, entry: dict) -> str | None:
+    verdict = mcp_config.classify(config, req.item.id, entry)
+    if verdict == mcp_config.CONFLICT and _own_older_entry(req, config):
+        return None  # our own registration at the previous version: upgrade it
+    return verdict
+
+
 def _install_mcp_server(req: _Install) -> tuple[str, str]:
     """Register an MCP server at an exact version, refusing a name conflict.
 
@@ -259,9 +266,7 @@ def _install_mcp_server(req: _Install) -> tuple[str, str]:
         config = mcp_config.load_config(path)
     except mcp_config.McpConfigError as exc:
         return FAILED, str(exc)
-    verdict = mcp_config.classify(config, item.id, entry)
-    if verdict == mcp_config.CONFLICT and _own_older_entry(req, config):
-        verdict = None  # our own registration at the previous version: upgrade it
+    verdict = _mcp_verdict(req, config, entry)
     if verdict == mcp_config.PRESENT:
         return PRESENT, f"already registered at {version}"
     if verdict == mcp_config.CONFLICT:

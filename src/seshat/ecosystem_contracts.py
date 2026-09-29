@@ -330,14 +330,12 @@ def _subschemas(schema: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     nested: list[object] = []
     for key in ("properties", "$defs"):
         mapping = schema.get(key)
-        if isinstance(mapping, Mapping):
-            nested.extend(mapping.values())
+        nested.extend(mapping.values() if isinstance(mapping, Mapping) else ())
     for key in ("items", "additionalProperties", "if", "then", "else"):
         nested.append(schema.get(key))
     for key in ("oneOf", "allOf"):
         branches = schema.get(key)
-        if isinstance(branches, list):
-            nested.extend(branches)
+        nested.extend(branches if isinstance(branches, list) else ())
     return [item for item in nested if isinstance(item, Mapping)]
 
 
