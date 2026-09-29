@@ -269,23 +269,53 @@ def test_missing_questions_not_no_questions(tmp_path):
 # --------------------------------------------------------------------------- #
 # no-write proof (V6) + generic (V8) + CLI
 # --------------------------------------------------------------------------- #
+_WRITE_TOKENS = (
+    "write_text",
+    "write_bytes",
+    ".write(",
+    "open(",  # the read uses Path.read_text, not open()
+    "safe_dump",
+    "yaml.dump",
+    "os.replace",
+    "os.rename",
+    "shutil",
+    ".touch(",
+    ".mkdir(",
+    ".unlink(",
+)
+
+
 def test_module_has_no_write_call():
-    src = Path("src/seshat/approver_view.py").read_text(encoding="utf-8")
-    assert "write_text" not in src
-    assert ".write(" not in src
-    assert "open(" not in src  # the read uses Path.read_text, not open()
+    import seshat.approver_view as module
+
+    src = Path(module.__file__).read_text(encoding="utf-8")
+    present = [token for token in _WRITE_TOKENS if token in src]
+    assert present == [], f"approver_view names write primitives: {present}"
+
+
+def _tree_snapshot(root: Path) -> dict[str, tuple[bytes, int]]:
+    """Every path under ``root`` -> (content digest, mtime_ns); dirs included."""
+    import hashlib
+
+    snapshot: dict[str, tuple[bytes, int]] = {}
+    for path in sorted(root.rglob("*")):
+        rel = path.relative_to(root).as_posix()
+        digest = hashlib.sha256(path.read_bytes()).digest() if path.is_file() else b""
+        snapshot[rel] = (digest, path.stat().st_mtime_ns)
+    return snapshot
 
 
 def test_cli_writes_nothing(tmp_path):
+    """Content + mtime of EVERY path, recursively: an in-place rewrite of the
+    readiness file (the approval source of truth) or a write anywhere else
+    under the workspace fails this, not only a new file name."""
     from seshat.cli.commands.approver_view import approver_view_main
 
     _write(tmp_path, "t", FULL_REFUSAL_STATUS, QUESTIONS_OPEN)
-    tdir = tmp_path / "mappings" / "t"
-    before = {p.name for p in tdir.iterdir()}
+    before = _tree_snapshot(tmp_path)
     args = argparse.Namespace(repo=str(tmp_path), table="t", output_format="text")
     assert approver_view_main(args) == 0
-    after = {p.name for p in tdir.iterdir()}
-    assert before == after, "approver-view must write nothing"
+    assert _tree_snapshot(tmp_path) == before, "approver-view must write nothing"
 
 
 def test_generic_two_tables(tmp_path):

@@ -42,6 +42,20 @@ def test_no_self_approval_and_no_silver_before_mapping_pass_against_real() -> No
     assert silver.verdict == "PASS"
 
 
+def test_scenario_checks_do_not_claim_a_behavioural_reproduction() -> None:
+    """F146: the scripted reference echoed the manifest's own expectation, so
+    'scripted reference reproduces it' was a tautology. The evidence must say
+    the pass is manifest-declared and that no behaviour was executed."""
+    for result in (
+        checks.no_self_approval_check(REPO),
+        checks.no_silver_before_mapping_check(REPO),
+        checks.pii_refusal_check(REPO),
+    ):
+        joined = " ".join(result.evidence)
+        assert "reproduces" not in joined
+        assert "no Seshat gate or target behaviour was executed" in joined
+
+
 def test_no_invented_metric_meaning_pass_and_expected_behavior_does_not_proceed() -> (
     None
 ):
