@@ -26,16 +26,19 @@ from typing import Any
 
 from fastapi import FastAPI, Response
 
+from seshat.studio import turn_wiring
 from seshat.studio.approval_delivery import (
     DeliveryFailed,
     DeliveryRefused,
     deliver_decision,
 )
 from seshat.studio.approvals import (
+    TECHNICAL,
     StaleApproval,
     forbidden_scope_for,
     normalize_approval,
 )
+from seshat.studio.codex_protocol import CWD_IN_WORKSPACE
 
 __all__ = [
     "ApprovalRequest",
@@ -49,6 +52,11 @@ __all__ = [
 #: worth guessing would be the one that grants permission.
 ALLOW_DECISION = "allow_once"
 DENY_DECISION = "deny"
+
+# These exact commands inspect the workspace without accepting paths, shell operators,
+# scripts, or extra flags. An arbitrary command cannot be safely scoped to a table by
+# looking for its name in a shell string: it may construct a path or invoke a script.
+_SCOPED_READ_COMMANDS = frozenset({"pwd", "rg --files", "git status --short"})
 
 #: The provider's JSON-RPC correlation id. Kept for the ledger, which must answer the
 #: request the provider blocks on, and stripped from the STREAMED payload: the analyst
@@ -101,10 +109,8 @@ def register_approval(
     the event log. Deriving the wire payload here fixes both at the single point that
     already knows the verdict, with no second readiness lookup.
     """
-    forbidden = forbidden_scope_for(
-        app.state.launch.workspace_root, selected_table(thread)
-    )
     payload = dict(produced.payload)
+    forbidden = _forbidden_for_request(app, selected_table(thread), payload)
     envelope = normalize_approval(
         payload,
         forbidden,
@@ -118,15 +124,66 @@ def register_approval(
     return _wire_payload(payload, envelope)
 
 
+def _forbidden_for_request(
+    app: FastAPI, table: str | None, payload: dict[str, Any]
+) -> tuple[str, ...]:
+    """Judge the requested command, not the browser's table label alone.
+
+    `forbidden_scope` contains standing prohibitions even for a fully ready table,
+    so treating every sentence as a ban on every technical command made Allow
+    unreachable. We exempt only exact, read-only inspections. Everything else keeps
+    the readiness reasons and is refused because shell text cannot prove its target.
+    """
+    root = app.state.launch.workspace_root
+    if table is None:
+        return forbidden_scope_for(root, None)
+    if table not in turn_wiring.known_table_ids(app):
+        return (
+            "The selected table is no longer in this workspace; reopen the thread.",
+        )
+    if _is_scoped_read(payload):
+        return ()
+    reasons = forbidden_scope_for(root, table)
+    if payload.get("required_authority") == TECHNICAL:
+        return (
+            "Studio cannot verify that this command is read-only or limited to the "
+            "selected table; a technical allow is refused.",
+            *reasons,
+        )
+    return reasons
+
+
+def _is_scoped_read(payload: dict[str, Any]) -> bool:
+    """An exact allowlisted read, run from inside the workspace.
+
+    `CWD_IN_WORKSPACE` must be literally `True`: normalization sets it only for a
+    `cwd` it resolved inside the pinned root, so an absent or malformed flag -- the
+    fake bridge, a hand-built payload -- refuses rather than trusts the command text.
+    """
+    target = payload.get("target")
+    return (
+        payload.get("required_authority") == TECHNICAL
+        and payload.get("action") == "run_command"
+        and isinstance(target, str)
+        and target in _SCOPED_READ_COMMANDS
+        and payload.get(CWD_IN_WORKSPACE) is True
+    )
+
+
 def _wire_payload(payload: dict[str, Any], envelope: Any) -> dict[str, Any]:
     """The approval as the browser receives it: verdict added, transport removed.
 
     A new dict rather than an edit: `produced.payload` belongs to the bridge, and
     mutating it would leak the verdict backwards into the object the provider owns.
 
-    `forbidden_reasons` becomes a list because a tuple is not JSON.
+    `forbidden_reasons` becomes a list because a tuple is not JSON. The cwd verdict is
+    an input to `forbidden_reasons`, already folded in, so it is not streamed.
     """
-    wire = {key: value for key, value in payload.items() if key != PROVIDER_REQUEST_ID}
+    wire = {
+        key: value
+        for key, value in payload.items()
+        if key not in (PROVIDER_REQUEST_ID, CWD_IN_WORKSPACE)
+    }
     wire["allow_permitted"] = envelope.allow_permitted
     wire["forbidden_reasons"] = list(envelope.forbidden_reasons)
     return wire

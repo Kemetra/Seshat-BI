@@ -119,6 +119,7 @@ export function App(): React.JSX.Element {
           available in every agent state, so a thread that cannot be created must not
           take the workspace down with it. */}
       <AgentPanel
+        tables={snapshot.tables}
         snapshotRevision={snapshot.identity.revision}
         onTurnSettled={reloadWorkspace}
       />
@@ -138,19 +139,22 @@ export function App(): React.JSX.Element {
  * must survive any agent state (FR-025).
  */
 function AgentPanel({
+  tables,
   snapshotRevision,
   onTurnSettled,
 }: {
+  tables: WorkspaceSnapshot["tables"];
   snapshotRevision: string;
   onTurnSettled: () => void;
 }) {
   const [threadId, setThreadId] = useState<string | null>(null);
+  const [selectedTableId, setSelectedTableId] = useState("");
   const [failure, setFailure] = useState<string | null>(null);
 
   const open = async () => {
     setFailure(null);
     try {
-      const thread = await createThread(null);
+      const thread = await createThread(selectedTableId || null);
       setThreadId(thread.thread_id);
     } catch (error) {
       setFailure(describeFailure(error).message);
@@ -160,6 +164,22 @@ function AgentPanel({
   if (threadId === null) {
     return (
       <section className="agent-panel" aria-label="Ask the agent">
+        {tables.length > 0 && (
+          <label>
+            Conversation scope
+            <select
+              value={selectedTableId}
+              onChange={(event) => setSelectedTableId(event.target.value)}
+            >
+              <option value="">Whole workspace</option>
+              {tables.map((table) => (
+                <option key={table.table_id} value={table.table_id}>
+                  {table.display_name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button type="button" onClick={open}>
           Ask about this workspace
         </button>

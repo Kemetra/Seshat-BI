@@ -27,6 +27,7 @@ fail-open dressed as resilience.
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
@@ -36,6 +37,7 @@ from typing import Any
 from seshat.studio.redaction import scrub_payload
 
 __all__ = [
+    "CWD_IN_WORKSPACE",
     "CodexFrameError",
     "CodexProtocolReader",
     "NormalizationContext",
@@ -50,6 +52,13 @@ __all__ = [
 
 class CodexFrameError(ValueError):
     """A provider frame violated the JSON-RPC envelope, or correlation failed."""
+
+
+#: Studio's own verdict on a command approval's working directory: `True` only when
+#: the provider named a `cwd` inside the pinned workspace. A computed fact, not the
+#: path itself -- the path is scrubbed, and the relay must not re-derive it from the
+#: redacted text.
+CWD_IN_WORKSPACE = "cwd_in_workspace"
 
 
 #: JSON-RPC version every frame must declare.
@@ -465,9 +474,32 @@ def normalize_approval_request(
     # render as "unknown" downstream, which is the honest label.
     if escalates:
         payload["risk"] = "high"
+    if technical:
+        # Computed HERE because this is the only point that holds both the raw `cwd`
+        # and the pinned root; scrubbing below rewrites paths. An exact read command
+        # run from outside the workspace is still a read beyond it.
+        payload[CWD_IN_WORKSPACE] = _cwd_in_workspace(
+            params.get("cwd"), context.workspace_root
+        )
     return "approval_required", _scrubbed(
         payload, context.workspace_root, context.secrets
     )
+
+
+def _cwd_in_workspace(cwd: object, workspace_root: Path | None) -> bool:
+    """Whether a command's working directory is the pinned root or inside it.
+
+    Fails closed: a missing root, a non-string or empty `cwd`, or one that cannot be
+    resolved is `False`, never an assumption that the provider stayed at home.
+    """
+    if workspace_root is None or not isinstance(cwd, str) or not cwd:
+        return False
+    try:
+        resolved = Path(cwd).resolve()
+        root = Path(workspace_root).resolve()
+    except (OSError, RuntimeError, ValueError):
+        return False
+    return Path(os.path.normcase(resolved)).is_relative_to(Path(os.path.normcase(root)))
 
 
 def _text_scrubber(context: NormalizationContext) -> Callable[[str], str]:
