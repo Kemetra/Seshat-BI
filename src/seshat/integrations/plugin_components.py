@@ -53,6 +53,10 @@ def read_manifest(root: Path) -> dict | None:
     path = root / PLUGIN_MANIFEST
     if not path.exists():
         return {}
+    return _manifest_json(path)
+
+
+def _manifest_json(path: Path) -> dict | None:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
@@ -74,9 +78,7 @@ def declarations(
         return {}, frozenset({UNREADABLE})
     unknown = {key for key in manifest if key not in METADATA_KEYS | COMPONENT_KEYS}
     declared = {key: manifest[key] for key in COMPONENT_KEYS if key in manifest}
-    additions = {
-        key: value for key, value in (extra or {}).items() if key in COMPONENT_KEYS
-    }
+    additions = _component_additions(extra)
     conflicts = {
         key
         for key, value in additions.items()
@@ -87,6 +89,10 @@ def declarations(
         {key: value for key, value in additions.items() if key not in conflicts}
     )
     return declared, frozenset(unknown)
+
+
+def _component_additions(extra: Mapping[str, object] | None) -> dict[str, object]:
+    return {key: value for key, value in (extra or {}).items() if key in COMPONENT_KEYS}
 
 
 def declared_paths(root: Path, value: object) -> tuple[Path, ...]:
@@ -118,9 +124,7 @@ def markdown_names(path: Path) -> frozenset[str]:
     subdirectories); any non-markdown file makes it unenumerable.
     """
     if path.is_file():
-        if path.suffix.lower() != ".md":
-            raise InvalidDeclaration
-        return frozenset({path.stem})
+        return frozenset({_single_markdown_name(path)})
     try:
         children = sorted(path.rglob("*"))
     except OSError as exc:
@@ -128,6 +132,12 @@ def markdown_names(path: Path) -> frozenset[str]:
     return frozenset(
         _markdown_name(path, child) for child in children if not child.is_dir()
     )
+
+
+def _single_markdown_name(path: Path) -> str:
+    if path.suffix.lower() != ".md":
+        raise InvalidDeclaration
+    return path.stem
 
 
 def _markdown_name(root: Path, child: Path) -> str:
@@ -142,12 +152,13 @@ def skill_names(path: Path) -> frozenset[str]:
         return frozenset({path.name})
     if not path.is_dir():
         raise InvalidDeclaration
-    names: set[str] = set()
-    for child in path.iterdir():
-        if not child.is_dir() or not (child / "SKILL.md").is_file():
-            raise InvalidDeclaration
-        names.add(child.name)
-    return frozenset(names)
+    return frozenset(_skill_child_name(child) for child in path.iterdir())
+
+
+def _skill_child_name(child: Path) -> str:
+    if not child.is_dir() or not (child / "SKILL.md").is_file():
+        raise InvalidDeclaration
+    return child.name
 
 
 def inline_hook_events(value: dict) -> dict:
