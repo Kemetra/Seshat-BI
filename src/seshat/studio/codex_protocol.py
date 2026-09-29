@@ -467,23 +467,42 @@ def normalize_approval_request(
         "target": str(params.get("command") or params.get("grantRoot") or "unknown"),
         "reason": str(params.get("reason") or "unknown"),
         "provider_request_id": frame.get("id"),
+        **_derived_labels(
+            params,
+            escalates=escalates,
+            technical=technical,
+            workspace_root=context.workspace_root,
+        ),
     }
-    # Scope and risk are stated only when the PROVIDER stated something that implies
-    # them. A hardcoded `read_only` / `low` beside an Allow button was a governance
-    # claim nobody made -- `git push --force` read as low-risk read-only. Absent keys
-    # render as "unknown" downstream, which is the honest label.
-    if escalates:
-        payload["risk"] = "high"
-    if technical:
-        # Computed HERE because this is the only point that holds both the raw `cwd`
-        # and the pinned root; scrubbing below rewrites paths. An exact read command
-        # run from outside the workspace is still a read beyond it.
-        payload[CWD_IN_WORKSPACE] = _cwd_in_workspace(
-            params.get("cwd"), context.workspace_root
-        )
     return "approval_required", _scrubbed(
         payload, context.workspace_root, context.secrets
     )
+
+
+def _derived_labels(
+    params: dict[str, Any],
+    *,
+    escalates: bool,
+    technical: bool,
+    workspace_root: Path | None,
+) -> dict[str, Any]:
+    """The labels an approval carries only when the provider's frame implies them.
+
+    Scope and risk are stated only when the PROVIDER stated something that implies
+    them. A hardcoded `read_only` / `low` beside an Allow button was a governance
+    claim nobody made -- `git push --force` read as low-risk read-only. Absent keys
+    render as "unknown" downstream, which is the honest label.
+
+    The cwd verdict is computed HERE because normalization is the only point that
+    holds both the raw `cwd` and the pinned root; scrubbing rewrites paths after it.
+    An exact read command run from outside the workspace is still a read beyond it.
+    """
+    labels: dict[str, Any] = {}
+    if escalates:
+        labels["risk"] = "high"
+    if technical:
+        labels[CWD_IN_WORKSPACE] = _cwd_in_workspace(params.get("cwd"), workspace_root)
+    return labels
 
 
 def _cwd_in_workspace(cwd: object, workspace_root: Path | None) -> bool:
@@ -492,7 +511,9 @@ def _cwd_in_workspace(cwd: object, workspace_root: Path | None) -> bool:
     Fails closed: a missing root, a non-string or empty `cwd`, or one that cannot be
     resolved is `False`, never an assumption that the provider stayed at home.
     """
-    if workspace_root is None or not isinstance(cwd, str) or not cwd:
+    if workspace_root is None or not isinstance(cwd, str):
+        return False
+    if not cwd:  # `Path("")` resolves to the process cwd, not to "no directory"
         return False
     try:
         resolved = Path(cwd).resolve()
