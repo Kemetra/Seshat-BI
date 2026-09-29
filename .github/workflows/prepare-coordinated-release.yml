@@ -45,6 +45,11 @@ jobs:
         with:
           python-version: "3.13"
 
+      # Same pin as release.yml: the frontend build below needs Node.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
       - name: Install release preparation dependencies
         # Installs the PACKAGE, not just pyyaml. export_agent_bundles.py imports
         # seshat.allowlist_derivation and seshat.portability_audit (spec 138,
@@ -264,6 +269,14 @@ jobs:
 
       - name: Regenerate Claude and Codex bundles from the version projection
         run: python scripts/export_agent_bundles.py
+
+      - name: Build the Studio frontend
+        # Mirrors release.yml (issue #623). `src/seshat/studio/static/` is
+        # gitignored build output, and since f71776e9 the artifact inspector below
+        # requires it in the wheel. Without this step the v3.0.0 dispatch blocked on
+        # "wheel is missing required package data". Writes only gitignored paths
+        # (static/ and studio-ui/node_modules/), so the diff guards stay clean.
+        run: python scripts/build_studio_frontend.py
 
       - name: Build and inspect the real artifacts before any tag exists
         shell: bash
