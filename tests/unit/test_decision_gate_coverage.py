@@ -73,8 +73,14 @@ def _approved(root: Path, fixture: ApprovalFixture, evidence: str = "") -> str:
     )
 
 
+def _approved_repo(
+    tmp_path: Path, fixture: ApprovalFixture
+) -> tuple[Path, tuple[str, ...]]:
+    return _repo(tmp_path, "decisions:\n" + _approved(tmp_path, fixture))
+
+
 def _kpi_only(tmp_path: Path) -> tuple[Path, tuple[str, ...]]:
-    body = _approved(
+    return _approved_repo(
         tmp_path,
         ApprovalFixture(
             "kpi_definition",
@@ -83,7 +89,6 @@ def _kpi_only(tmp_path: Path) -> tuple[Path, tuple[str, ...]]:
             "{kpis: [net_sales]}",
         ),
     )
-    return _repo(tmp_path, "decisions:\n" + body)
 
 
 @pytest.mark.parametrize(
@@ -120,7 +125,7 @@ def test_pii_alone_does_not_pass_silver_gold(tmp_path: Path) -> None:
 
 
 def _report_intent(tmp_path: Path, artifact: str) -> tuple[Path, tuple[str, ...]]:
-    body = _approved(
+    return _approved_repo(
         tmp_path,
         ApprovalFixture(
             "report_intent_approval",
@@ -129,7 +134,6 @@ def _report_intent(tmp_path: Path, artifact: str) -> tuple[Path, tuple[str, ...]
             f"{{artifacts: [{artifact}]}}",
         ),
     )
-    return _repo(tmp_path, "decisions:\n" + body)
 
 
 def test_scoped_approval_passes_its_own_scope(tmp_path: Path) -> None:
