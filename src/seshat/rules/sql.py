@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from itertools import takewhile
 from pathlib import PurePosixPath
 
 from ..core import Finding, RuleContext, Severity, is_test_path, read_tracked_text
@@ -227,12 +228,10 @@ def _statement_keyword_window(toks: list[SqlToken], idx: int) -> str:
     # window of the next few keyword tokens, upper-cased, bounded by the
     # statement terminator so a guard in the NEXT statement cannot vouch for
     # this one (`DROP SCHEMA bronze; DROP TABLE IF EXISTS ...`).
-    tail: list[str] = []
-    for t in toks[idx : idx + 8]:
-        if t.text in _STATEMENT_TERMINATORS:
-            break
-        tail.append(t.text.upper())
-    return " ".join(tail)
+    window = takewhile(
+        lambda token: token.text not in _STATEMENT_TERMINATORS, toks[idx : idx + 8]
+    )
+    return " ".join(token.text.upper() for token in window)
 
 
 def _is_guarded(toks: list[SqlToken], idx: int) -> bool:
