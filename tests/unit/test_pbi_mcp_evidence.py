@@ -291,22 +291,23 @@ SECRET_LITERALS: tuple[tuple[str, str], ...] = (
 def test_no_sensitive_token_survives_into_a_record(
     tmp_path: Path, label: str, literal: str
 ) -> None:
-    """Every class is either scrubbed or REFUSED -- never emitted.
+    """Every class is SCRUBBED -- never emitted, and never refused by accident.
 
-    The refusing posture is deliberate: a half-scrubbed record is worse than a
-    failed run, because it looks clean.
+    All four classes are scrubbable by the layered redaction, so each must be
+    written with the literal removed. An earlier ``or True`` let a refusal for
+    ANY reason satisfy this test; a refusal is now a failure that names itself,
+    so a regression that refuses every record (an over-broad pattern) cannot
+    hide here. The surviving ``sales_model`` context proves the redactor did not
+    simply blank the field.
     """
     record = _record(target_id=f"sales_model {literal}")
     try:
         path = evidence.finalize(tmp_path, record)
-    except GeneratedSecretError as refused:
-        assert label.split()[0].lower() in str(refused).lower() or True
-        assert not evidence.evidence_path(tmp_path).is_file(), (
-            "a refused record must not be left on disk"
-        )
-        return
+    except GeneratedSecretError as refused:  # pragma: no cover -- the defect
+        pytest.fail(f"{label} was refused instead of scrubbed: {refused}")
     written = path.read_text(encoding="utf-8")
     assert literal not in written, f"{label} survived into the record"
+    assert "sales_model" in written, f"{label}: the record context was wiped"
 
 
 def test_derive_then_replace_scrubs_a_whole_dsn_span() -> None:
