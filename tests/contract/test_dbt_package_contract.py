@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import tomllib
 from pathlib import Path
 
@@ -16,9 +17,28 @@ def test_dbt_extra_is_an_exact_tested_pair() -> None:
     payload = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     assert payload["project"]["optional-dependencies"]["dbt"] == [
-        "dbt-core==1.12.0",
+        "dbt-core==1.12.5",
         "dbt-postgres==1.10.2",
     ]
+
+
+def test_dbt_runtime_and_project_require_the_installed_core_pin() -> None:
+    from seshat.dbt import DBT_CORE_VERSION
+
+    payload = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    core_spec = payload["project"]["optional-dependencies"]["dbt"][0]
+    core_version = core_spec.removeprefix("dbt-core==")
+    project = (ROOT / "dbt" / "dbt_project.yml").read_text(encoding="utf-8")
+    schema = json.loads(
+        (ROOT / "schemas" / "dbt-run-evidence.schema.json").read_text(encoding="utf-8")
+    )
+
+    assert DBT_CORE_VERSION == core_version
+    assert f'require-dbt-version: ["={core_version}"]' in project
+    assert (
+        schema["properties"]["runtime"]["properties"]["dbt_core"]["const"]
+        == core_version
+    )
 
 
 def test_dbt_local_outputs_are_ignored() -> None:

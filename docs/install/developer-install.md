@@ -35,7 +35,7 @@ seshat dbt validate --table retail_store_sales --format json
 seshat dbt plan --table retail_store_sales --format json
 ```
 
-The `dbt` extra pins `dbt-core==1.12.0` and `dbt-postgres==1.10.2`. Put real
+The `dbt` extra pins `dbt-core==1.12.5` and `dbt-postgres==1.10.2`. Put real
 `SESHAT_DBT_*` values only in the gitignored `.env`; committed
 `profiles.example.yml` uses `env_var()` references. Execute only after reviewing
 the immutable plan digest:

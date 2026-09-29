@@ -25,7 +25,7 @@ STALE = (
     "this slice creates NO dbt files",
     "Until the dbt project exists",
 )
-EXACT_DBT_VERSIONS = ("dbt-core==1.12.0", "dbt-postgres==1.10.2")
+EXACT_DBT_VERSIONS = ("dbt-core==1.12.5", "dbt-postgres==1.10.2")
 
 
 def _text(relative: str) -> str:
@@ -96,6 +96,7 @@ def test_dbt_feeder_requires_every_activation_signal(tmp_path: Path) -> None:
     status = yaml.safe_load(status_path.read_text(encoding="utf-8"))
     status["status"] = "pass"
     status["owner"] = "compatibility-owner"
+    status["evidence"]["parse"] = "pass"
     status["evidence"]["compile"] = "pass"
     status["evidence"]["live_parity"] = "pass"
     status["blockers"] = []

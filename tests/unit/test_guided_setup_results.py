@@ -260,7 +260,7 @@ def test_a_derived_apply_keeps_out_of_scope_lock_entries(
                 "schema": SCHEMA,
                 "profile": "analytics-full",
                 "resolved_at": "2026-08-19T00:00:00Z",
-                "components": {"dbt-core": {"version": "1.12.0"}},
+                "components": {"dbt-core": {"version": "1.12.5"}},
             }
         ),
         encoding="utf-8",

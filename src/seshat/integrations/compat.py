@@ -32,7 +32,7 @@ from seshat.integrations.versions import parse_version
 # `orchestration/dagster/pyproject.toml`. A resolved version below its baseline
 # is a downgrade and is refused.
 BASELINE_PINS: dict[str, str] = {
-    "dbt-core": "1.12.0",
+    "dbt-core": "1.12.5",
     "dbt-postgres": "1.10.2",
     "dagster": "1.13.15",
 }

@@ -315,7 +315,7 @@ def test_readiness_artifacts_remain_unchanged(tmp_path: Path) -> None:
         resolvers=Resolvers(
             pypi=FakePypi(
                 {
-                    "dbt-core": {"releases": {"1.12.0": _release("1.12.0")}},
+                    "dbt-core": {"releases": {"1.12.5": _release("1.12.5")}},
                     "dbt-postgres": {"releases": {"1.10.2": _release("1.10.2")}},
                     "dbt-mcp": {"releases": {"1.9.0": _release("1.9.0")}},
                 }

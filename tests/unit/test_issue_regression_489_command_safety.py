@@ -430,7 +430,7 @@ def test_the_pipx_form_matches_the_repos_own_install_doc() -> None:
     # documents verbatim beside its first-install example (#513). Matching the doc
     # exactly is the point: the emitted guidance must never be an invented variant.
     assert emitted == (
-        'pipx inject seshat-bi --force "dbt-core==1.12.0" "dbt-postgres==1.10.2"'
+        'pipx inject seshat-bi --force "dbt-core==1.12.5" "dbt-postgres==1.10.2"'
     )
     assert emitted in doc, "emitted install step is not the documented command"
     # The doc still teaches the first-install form too.
@@ -464,7 +464,7 @@ def test_pip_extra_is_double_quoted_for_cmd_exe(tmp_path: Path) -> None:
     steps = _opt_in_step_lines({"opt_in_command": _DBT_OPT_IN})
 
     assert steps[0].endswith(
-        'pipx inject seshat-bi --force "dbt-core==1.12.0" "dbt-postgres==1.10.2"'
+        'pipx inject seshat-bi --force "dbt-core==1.12.5" "dbt-postgres==1.10.2"'
     )
     for line in steps:
         assert "'" not in line, f"single quote survived into {line!r}"
@@ -477,7 +477,7 @@ def test_portable_quoting_is_surgical_and_idempotent() -> None:
     # Both quote styles of the wrong-environment form are rewritten; a KNOWN extra
     # becomes the version-preserving inject form (#513)...
     assert _portable_quoting("pip install 'seshat-bi[dbt]'") == (
-        'pipx inject seshat-bi --force "dbt-core==1.12.0" "dbt-postgres==1.10.2"'
+        'pipx inject seshat-bi --force "dbt-core==1.12.5" "dbt-postgres==1.10.2"'
     )
     # The Gold statistical CLI now uses the generic hint boundary for `db`, so its
     # concrete driver is also injected without re-resolving the Seshat build.
@@ -490,7 +490,7 @@ def test_portable_quoting_is_surgical_and_idempotent() -> None:
     # ...a step with no install head passes through...
     assert _portable_quoting("seshat dbt init") == "seshat dbt init"
     # ...and an already-correct step is unchanged (idempotent).
-    already = 'pipx inject seshat-bi --force "dbt-core==1.12.0"'
+    already = 'pipx inject seshat-bi --force "dbt-core==1.12.5"'
     assert _portable_quoting(already) == already
 
 
@@ -525,7 +525,7 @@ def test_opt_in_sequence_renders_as_individually_runnable_steps() -> None:
     # Double-quoted: portable across cmd.exe / PowerShell / POSIX sh -- see
     # test_pip_extra_is_double_quoted_for_cmd_exe.
     assert dbt_steps[0].endswith(
-        'pipx inject seshat-bi --force "dbt-core==1.12.0" "dbt-postgres==1.10.2"'
+        'pipx inject seshat-bi --force "dbt-core==1.12.5" "dbt-postgres==1.10.2"'
     )
     assert dbt_steps[1].endswith("seshat dbt init")
     assert dbt_steps[2].endswith("seshat dbt doctor")

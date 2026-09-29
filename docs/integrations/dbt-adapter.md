@@ -175,7 +175,7 @@ references and no real host/DSN/credential/token, is committed. Both `profiles.y
 ## Governed command sequence
 
 Install the exact tested pair with `pip install -e ".[dbt]"`:
-`dbt-core==1.12.0` and `dbt-postgres==1.10.2`.
+`dbt-core==1.12.5` and `dbt-postgres==1.10.2`.
 
 ```text
 seshat dbt doctor --format json
@@ -194,7 +194,7 @@ never become fabricated compile, build, test, or parity success.
 
 ## Auto-update policy
 
-`dbt-core==1.12.0` + `dbt-postgres==1.10.2` are pinned TOGETHER. Any version change opens a PR; a major
+`dbt-core==1.12.5` + `dbt-postgres==1.10.2` are pinned TOGETHER. Any version change opens a PR; a major
 version requires named-human review. NO automerge for a dbt minor or major bump until
 compatibility tests exist. (Recorded in `templates/dbt-adapter-contract.md` and ADR 0009.)
 
