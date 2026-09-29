@@ -158,7 +158,11 @@ def _verify_required_paths(root: Path) -> None:
 
 
 def _verify_ignore_rules(root: Path) -> None:
-    ignore_lines = set((root / ".gitignore").read_text(encoding="utf-8").splitlines())
+    try:
+        ignore_text = (root / ".gitignore").read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise _pending("dbt local-output ignore rules are incomplete") from exc
+    ignore_lines = set(ignore_text.splitlines())
     required_ignores = {
         "/profiles.yml",
         "/.user.yml",
@@ -197,16 +201,24 @@ def _profile_git_result(root: Path, *args: str) -> int:
     # subcommands that trigger git's config-driven execution. Sourced from the
     # single shared tuple: this site previously carried `core.fsmonitor` alone
     # and left `core.hooksPath` / `protocol.ext` open.
-    from seshat.gitutil import GIT_HARDENING
+    #
+    # Routed through `run_subprocess` (stdin=DEVNULL + a bounded timeout): these
+    # are short read-only probes, not the long-running dbt build the gitutil
+    # exemption covers (audit F152). A git that cannot launch or stalls is a
+    # named blocker, never a traceback.
+    from seshat.gitutil import GIT_HARDENING, run_subprocess
 
-    completed = subprocess.run(
-        ["git", *GIT_HARDENING, *args, "--", "profiles.yml"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-        shell=False,
-    )
+    try:
+        completed = run_subprocess(
+            ["git", *GIT_HARDENING, *args, "--", "profiles.yml"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+            shell=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise _pending("git could not verify the profiles.yml boundary") from exc
     return completed.returncode
 
 

@@ -41,7 +41,17 @@ psql "host=$ANALYTICS_DB_HOST port=$ANALYTICS_DB_PORT dbname=$ANALYTICS_DB_NAME 
   -f warehouse/migrations/0003_create_silver_retail_store_sales.sql
 \`\`\`
 
-> The committed migration set builds the `retail_store_sales` worked example:
-> `0003_create_silver_retail_store_sales.sql` (silver) and
-> `0004_create_gold_retail_store_sales_star.sql` (gold Kimball star). Apply them
-> in numeric order against a database that already holds the bronze source.
+> The committed migration set, applied in numeric order against a database that
+> already holds the bronze sources:
+>
+> - `0003`/`0004` -- `retail_store_sales` worked example (silver, gold Kimball star);
+>   `0010` removes the blank padding from `gold.dim_date_rss` month/day labels.
+> - `0005` -- `demo_sample_orders` silver (local demo harness); `0011` enforces its
+>   declared primary key.
+> - `0006`/`0007`/`0008` -- finance GL actuals + budget silver and their gold star;
+>   `0009` hardens that star (natural-key-unique conformed dimensions, unpadded date
+>   labels plus `iso_year`, and an `amount` that survives a blank zero side).
+>
+> An applied migration is never edited in place: a fix ships as a new numbered
+> follow-up. Because `0004`-`0008` are full DROP+CREATE rebuilds, re-applying one
+> means re-applying its follow-up afterwards.

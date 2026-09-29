@@ -22,6 +22,8 @@ import textwrap
 from pathlib import Path
 from typing import Any
 
+from tests.unit._gitfix import commit_readiness_status
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 SPINE: tuple[str, ...] = (
@@ -76,6 +78,8 @@ def write_status(root: Path, table: str, stage: str) -> None:
         + f"\napprovals:\n{approvals}\n",
         encoding="utf-8",
     )
+    # Approvals count only once committed at HEAD (audit F045).
+    commit_readiness_status(directory / "readiness-status.yaml")
 
 
 def document(root: Path, table: str | None = None) -> dict[str, Any]:

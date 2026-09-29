@@ -26,6 +26,7 @@ from seshat.pbi_mcp.detect import (
     READINESS_PASS,
     BypassFlagRefused,
     classify_mcp_config,
+    classify_project_mcp_configs,
     detect_facts,
     read_semantic_readiness,
     read_stage_readiness,
@@ -378,3 +379,47 @@ def test_an_absent_config_still_does_not_refuse(tmp_path: Path) -> None:
     assert classify_mcp_config(tmp_path / "nope.json") == CONFIG_ABSENT
     assert refuse_if_bypass_flag((), config_state=CONFIG_ABSENT, context="x") is None
     assert refuse_if_bypass_flag((), config_state=CONFIG_READ_ONLY, context="x") is None
+
+
+# --------------------------------------------------------------------------- #
+# Every project-scoped MCP config, not only .mcp.json
+# --------------------------------------------------------------------------- #
+
+
+def _write_vscode_mcp_json(root: Path, args: list[str]) -> None:
+    """VS Code's workspace config keys its servers under ``servers``."""
+    (root / ".vscode").mkdir(exist_ok=True)
+    (root / ".vscode" / "mcp.json").write_text(
+        json.dumps({"servers": {"powerbi-modeling": {"command": "x", "args": args}}}),
+        encoding="utf-8",
+    )
+
+
+def test_a_bypass_flag_in_the_vscode_config_is_seen(tmp_path: Path) -> None:
+    """The flag in a second project-scoped config was invisible: doctor said
+    ``config=absent`` and a write proceeded."""
+    _write_vscode_mcp_json(tmp_path, ["--readonly", "--skipconfirmation"])
+    assert classify_project_mcp_configs(tmp_path) == CONFIG_FORBIDDEN_FLAG
+    assert detect_facts(tmp_path, which=_NO_NODE).mcp_config == CONFIG_FORBIDDEN_FLAG
+
+
+def test_the_most_restrictive_project_config_wins(tmp_path: Path) -> None:
+    _write_mcp_json(tmp_path, ["--readonly"])
+    _write_vscode_mcp_json(tmp_path, ["--readwrite"])
+    assert classify_project_mcp_configs(tmp_path) == CONFIG_WRITE_MODE
+
+
+def test_an_unparseable_vscode_config_fails_closed(tmp_path: Path) -> None:
+    _write_mcp_json(tmp_path, ["--readonly"])
+    (tmp_path / ".vscode").mkdir()
+    (tmp_path / ".vscode" / "mcp.json").write_text("{not json", encoding="utf-8")
+    assert classify_project_mcp_configs(tmp_path) == CONFIG_UNPARSEABLE
+
+
+def test_project_configs_absent_everywhere_reads_absent(tmp_path: Path) -> None:
+    assert classify_project_mcp_configs(tmp_path) == CONFIG_ABSENT
+
+
+def test_a_single_clean_project_config_keeps_its_verdict(tmp_path: Path) -> None:
+    _write_vscode_mcp_json(tmp_path, ["--readonly"])
+    assert classify_project_mcp_configs(tmp_path) == CONFIG_READ_ONLY

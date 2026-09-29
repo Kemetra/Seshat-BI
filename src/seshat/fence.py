@@ -15,7 +15,11 @@ Contract: ``specs/070-retail-init-bootstrap/contracts/fence.contract.md``.
   -- never rewrite the file.
 - F5: the ``SESHAT-KIT`` markers never collide with the existing ``SPECKIT`` fence.
 
-All writes are UTF-8 without BOM, ``\\n`` line endings (Windows-stable, Principle IX).
+A NEW fence in a file with no line-ending history is written UTF-8 without BOM
+with ``\\n`` line endings (Principle IX). An existing file keeps its own BOM and
+its dominant line ending: the fenced block is spliced into the original text
+with that newline, so F1/F2 hold for CRLF and BOM-prefixed files too (a
+``core.autocrlf`` checkout of AGENTS.md/CLAUDE.md is CRLF on Windows).
 """
 
 from __future__ import annotations
@@ -46,9 +50,28 @@ class FenceResult:
         return self.stopped_reason is None
 
 
-def _render_block(body: str) -> str:
+_BOM = "﻿"
+
+
+def _render_block(body: str, newline: str = "\n") -> str:
     """The full fenced block for ``body`` (markers on their own lines)."""
-    return f"{START}\n{body}\n{END}"
+    lines = body.replace("\r\n", "\n").replace("\n", newline)
+    return f"{START}{newline}{lines}{newline}{END}"
+
+
+def _read_exact(path: Path) -> tuple[str, str, str]:
+    """``(bom, text, newline)`` of ``path`` with every character preserved.
+
+    Decoded from bytes, NOT ``read_text``: universal-newline reading silently
+    turns CRLF into LF, so writing the text back rewrote every line outside the
+    fence. ``newline`` is the file's dominant line ending (LF when it has none).
+    """
+    text = path.read_bytes().decode("utf-8")
+    bom = _BOM if text.startswith(_BOM) else ""
+    text = text[len(bom) :]
+    crlf = text.count("\r\n")
+    newline = "\r\n" if crlf and crlf >= text.count("\n") - crlf else "\n"
+    return bom, text, newline
 
 
 def _locate(text: str) -> tuple[int, int] | None | str:
@@ -81,18 +104,18 @@ def write_fence(path: Path | str, body: str) -> FenceResult:
     STOPS (no write) on a malformed fence. Idempotent when the body is unchanged.
     """
     path = Path(path)
-    text = path.read_text(encoding="utf-8-sig")  # tolerate a pre-existing BOM on read
+    bom, text, newline = _read_exact(path)
 
     located = _locate(text)
     if isinstance(located, str):
         return FenceResult(path=path, stopped_reason=located)
 
-    block = _render_block(body)
+    block = _render_block(body, newline)
 
     if located is None:
         # F4: no markers -> append one fresh fenced block at end of file.
-        sep = "" if text == "" or text.endswith("\n") else "\n"
-        new_text = f"{text}{sep}{block}\n"
+        sep = "" if text == "" or text.endswith("\n") else newline
+        new_text = f"{text}{sep}{block}{newline}"
         inserted = True
     else:
         start, end = located
@@ -103,7 +126,7 @@ def write_fence(path: Path | str, body: str) -> FenceResult:
         new_text = text[:start] + block + text[end:]
         inserted = False
 
-    _write_text(path, new_text)
+    _write_exact(path, bom + new_text)
     return FenceResult(path=path, changed=True, inserted=inserted)
 
 
@@ -127,7 +150,11 @@ def read_fence_body(path: Path | str) -> str | None:
     return inner.strip("\n")
 
 
-def _write_text(path: Path, text: str) -> None:
-    """Write UTF-8 without BOM and ``\\n`` line endings (Windows-stable)."""
+def _write_exact(path: Path, text: str) -> None:
+    """Write ``text`` as UTF-8 with NO newline translation.
+
+    ``text`` already carries the file's own BOM and line endings; translating
+    here would undo the preservation :func:`_read_exact` exists for.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8", newline="\n")
+    path.write_bytes(text.encode("utf-8"))

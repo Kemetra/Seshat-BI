@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -408,6 +409,41 @@ def _eligibility_valid(
     return True, None
 
 
+class ApprovalFailure(str, Enum):
+    """WHICH check rejected an approval -- a typed stage, not message wording.
+
+    Lets a consumer (DS2) branch on the stage that failed without matching the
+    English reason text, so rewording a message cannot desync lint and gate.
+    ``INELIGIBLE`` covers every authority-class eligibility failure (contract
+    absent, no eligibility declared, class not eligible).
+    """
+
+    NO_APPROVAL_BLOCK = "no_approval_block"
+    MISSING_FIELDS = "missing_fields"
+    INVALID_OWNER = "invalid_owner"
+    INELIGIBLE = "ineligible"
+
+
+def approval_verdict(
+    decision: dict[str, Any], authority: dict[str, frozenset[str]] | None
+) -> tuple[ApprovalFailure | None, str | None]:
+    """``(failure_stage, reason)`` for an approval; ``(None, None)`` when valid.
+
+    The single implementation behind :func:`approval_is_valid`."""
+    approval = decision.get("approval")
+    did = decision.get("id", "<no-id>")
+    if not isinstance(approval, dict):
+        return ApprovalFailure.NO_APPROVAL_BLOCK, f"{did}: no approval block"
+    missing = [k for k in APPROVAL_REQUIRED_FIELDS if not approval.get(k)]
+    if missing:
+        return ApprovalFailure.MISSING_FIELDS, f"{did}: approval missing {missing}"
+    owner = approval.get("approved_by")
+    if not owner_shape_ok(owner):
+        return ApprovalFailure.INVALID_OWNER, f"{did}: invalid approved_by {owner!r}"
+    valid, reason = _eligibility_valid(decision, owner, authority)
+    return (None, None) if valid else (ApprovalFailure.INELIGIBLE, reason)
+
+
 def approval_is_valid(
     decision: dict[str, Any], authority: dict[str, frozenset[str]] | None
 ) -> tuple[bool, str | None]:
@@ -417,14 +453,5 @@ def approval_is_valid(
     named-human-plus-class shape, and (for a critical decision) the class is
     eligible per the authority contract. ``authority is None`` => eligibility
     cannot be validated => invalid (fail closed)."""
-    approval = decision.get("approval")
-    did = decision.get("id", "<no-id>")
-    if not isinstance(approval, dict):
-        return False, f"{did}: no approval block"
-    missing = [k for k in APPROVAL_REQUIRED_FIELDS if not approval.get(k)]
-    if missing:
-        return False, f"{did}: approval missing {missing}"
-    owner = approval.get("approved_by")
-    if not owner_shape_ok(owner):
-        return False, f"{did}: invalid approved_by {owner!r}"
-    return _eligibility_valid(decision, owner, authority)
+    failure, reason = approval_verdict(decision, authority)
+    return failure is None, reason

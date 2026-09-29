@@ -37,7 +37,7 @@ from pathlib import Path
 
 from seshat.pbi_mcp.detect import VENDOR_PACKAGE, refuse_if_bypass_flag
 from seshat.pbi_mcp.scan import SECRET_PATTERNS
-from seshat.pbi_mcp_adapter import protocol, session, vendor_ops
+from seshat.pbi_mcp_adapter import drift, protocol, session, vendor_ops
 from seshat.pbi_mcp_adapter.evidence import redact
 from seshat.pbi_mcp_adapter.gate import GateVerdict
 
@@ -45,20 +45,31 @@ from seshat.pbi_mcp_adapter.gate import GateVerdict
 #: pyproject: it is a preview binary, not shippable payload.
 #: Re-exported from :mod:`seshat.pbi_mcp.detect`, which owns the single
 #: definition -- two copies could drift and one of them gates a refusal.
-__all__ = ["VENDOR_PACKAGE", "VENDOR_PACKAGE_SPEC"]
+__all__ = ["VENDOR_PACKAGE", "VENDOR_PACKAGE_SPEC", "VENDOR_VERSION"]
 
-#: What ``npx`` is asked to resolve: the identity PLUS a version floor.
+#: The ONE vendor build this adapter is characterized against: the build the
+#: committed capability capture (``tests/fixtures/pbi_mcp/vendor_tools_*.json``)
+#: and :data:`vendor_ops.VENDOR_TOOLS` were probed from.
 #:
-#: A floor, deliberately not a pin. Measured 2026-09-17: the package publishes
-#: only prereleases (``0.5.0-beta.2`` .. ``0.5.0-beta.13``), so there is nothing
-#: to pin to, and pinning a beta would freeze the adapter onto a build the
-#: publisher may unpublish. The floor still refuses a jump to a future major.
+#: An exact pin, deliberately not a range. ``npx --yes`` installs whatever a
+#: range resolves to on the day and runs it in write mode against the model
+#: folder, so a floor (the earlier ``^0.5.0-beta``) handed write access to any
+#: later beta nobody had characterized. The package publishes only prereleases
+#: (measured 2026-09-17: ``0.5.0-beta.2`` .. ``0.5.0-beta.13``); beta.13 has
+#: not been captured or live-smoke-tested here, so it carries no claim. Moving
+#: the pin means re-capturing the tool set, which the pin test enforces.
 #:
-#: The range lives HERE, never on :data:`VENDOR_PACKAGE`: that constant is
+#: If the publisher unpublishes this build the launch fails and the run is
+#: refused (``BLOCKER_RUNTIME_MISSING``) -- the fail-closed direction.
+VENDOR_VERSION = "0.5.0-beta.12"
+
+#: What ``npx`` is asked to resolve: the identity PLUS the exact pin.
+#:
+#: The version lives HERE, never on :data:`VENDOR_PACKAGE`: that constant is
 #: matched as a SUBSTRING by ``pbi_mcp.detect`` to gate the bypass prohibition
 #: and labels every evidence record, so a suffix there would change what a
 #: refusal recognises. Substring matching means this spec still matches (#658).
-VENDOR_PACKAGE_SPEC = f"{VENDOR_PACKAGE}@^0.5.0-beta"
+VENDOR_PACKAGE_SPEC = f"{VENDOR_PACKAGE}@{VENDOR_VERSION}"
 
 #: Sized for a model operation on a real semantic model, not for a git command.
 RUN_TIMEOUT_SECONDS = 900
@@ -544,6 +555,32 @@ def _aborted(
     )
 
 
+def _capability_drift(
+    live: session.McpSession,
+) -> tuple[tuple[str, ...], str] | None:
+    """Drift blockers and a detail line, or None when the runtime matches.
+
+    Runs after the handshake and BEFORE ``ConnectFolder``: the handshake's
+    ``serverInfo.name`` is only a string the peer asserts about itself, so the
+    identity that counts is what it EXPOSES. A missing or an extra tool both
+    mean this is not the runtime ``vendor_ops`` was characterized against, and
+    its operation or flag names may have moved (FR-019). Tool names are vendor
+    constants, so the detail carries no environment data.
+    """
+    profile = drift.RuntimeCapabilityProfile(
+        observed_tools=live.list_tools(),
+        recorded_tools=tuple(sorted(vendor_ops.VENDOR_TOOLS)),
+    )
+    if not profile.blocking:
+        return None
+    detail = (
+        "refused: the runtime's tool set differs from the characterized "
+        f"{VENDOR_VERSION} set (missing={list(profile.missing_tools)}, "
+        f"extra={list(profile.extra_tools)}); nothing was bound"
+    )
+    return profile.blockers, detail
+
+
 def _converse(
     live: session.McpSession,
     *,
@@ -570,6 +607,15 @@ def _converse(
     try:
         info = live.handshake()
         spec.runtime_version = _reported_version(info)
+        drifted = _capability_drift(live)
+        if drifted is not None:
+            return RunResult(
+                exit_code=1,
+                output=drifted[1],
+                mutation_attempted=False,
+                blockers=drifted[0],
+                runtime_version=spec.runtime_version,
+            )
         blockers, attempted = _exchange(live, spec, transcript)
         if blockers == [BLOCKER_VENDOR_REFUSED] and not attempted:
             # The bind itself failed, so the transcript is the whole story.

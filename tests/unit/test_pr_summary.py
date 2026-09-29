@@ -499,20 +499,66 @@ def test_compose_comment_masks_secrets() -> None:
     assert "abc123def456" not in comment.body
 
 
-def test_find_existing_targets_matching_marker_for_update() -> None:
-    prior = ["some other comment", f"{MARKER}\nold body"]
+def _comment(body: str, login: str = "github-actions[bot]", kind: str = "Bot"):
+    return {"id": 1, "body": body, "user": {"login": login, "type": kind}}
+
+
+def test_find_existing_targets_the_bots_own_sticky_for_update() -> None:
+    prior = [_comment("some other comment"), _comment(f"{MARKER}\nold body")]
     action, index = find_existing(prior)
     assert action == "update"
     assert index == 1
 
 
 def test_find_existing_creates_when_no_marker_present() -> None:
-    action, index = find_existing(["totally unrelated comment"])
+    action, index = find_existing([_comment("totally unrelated comment")])
     assert action == "create"
     assert index is None
 
 
-def test_find_existing_never_creates_second_when_marker_matches() -> None:
-    prior = [f"{MARKER}\nfirst"]
+def test_find_existing_never_creates_second_when_own_sticky_exists() -> None:
+    prior = [_comment(f"{MARKER}\nfirst")]
     action, _index = find_existing(prior)
     assert action == "update"
+
+
+@pytest.mark.parametrize(
+    "impostor",
+    [
+        _comment(f"{MARKER}\npasted by a human", login="contributor", kind="User"),
+        _comment(f"{MARKER}\nother bot", login="some-app[bot]"),
+        _comment(f"> quoting\n{MARKER}"),  # bot-authored but not the sticky
+        {"id": 3, "body": f"{MARKER}\nno user field"},
+    ],
+)
+def test_find_existing_ignores_a_marker_not_owned_by_the_bot(impostor) -> None:
+    action, index = find_existing([impostor])
+    assert action == "create"
+    assert index is None
+
+
+def test_find_existing_skips_an_impostor_and_updates_the_real_sticky() -> None:
+    prior = [
+        _comment(f"{MARKER}\nhuman", login="contributor", kind="User"),
+        _comment(f"{MARKER}\nreal"),
+    ]
+    assert find_existing(prior) == ("update", 1)
+
+
+@pytest.mark.parametrize(
+    "secret",
+    [
+        "postgresql://svc:Hunter2@db.internal:25060/ezaby",
+        "0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b",
+    ],
+)
+def test_compose_comment_scrubs_shared_secret_shapes(secret: str) -> None:
+    envelope = _blocked_envelope()
+    envelope["findings"] = [
+        _finding("S9", Severity.ERROR, f"leaked {secret} here", "x.sql:1")
+    ]
+    envelope["blocking_findings"] = envelope["findings"]
+    summary = render_summary(envelope, _readiness_fixture())
+    comment = compose_comment(summary)
+    assert secret not in comment.body
+    assert "Hunter2" not in comment.body

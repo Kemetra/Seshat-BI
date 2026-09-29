@@ -17,6 +17,7 @@ Two boundaries are inherited from the shipped verb and preserved verbatim:
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -25,6 +26,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
+from seshat.gitutil import run_subprocess
 from seshat.integrations import mcp_config
 from seshat.integrations.catalog import (
     DAGSTER_PROJECT,
@@ -684,10 +686,31 @@ def _install_one(req: _Install) -> tuple[ComponentPlan, Resolution | None]:
     return row, (req.resolved if status == INSTALLED else None)
 
 
+# Clones and environment builds are network-bound and legitimately slower than
+# gitutil's 120s read cap, but must still end: a hung clone is a failed install.
+_INSTALL_TIMEOUT = 900
+
+# Never prompt. A component repository that turned private or was renamed makes
+# GitHub ask for credentials; with stdin detached and these set, git fails fast
+# instead of waiting forever on a terminal or a credential-manager window.
+_NON_INTERACTIVE_ENV = {"GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never"}
+
+
 def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess:
-    return subprocess.run(  # noqa: S603 - fixed argv, no shell
-        command, cwd=cwd, text=True, capture_output=True, check=False
-    )
+    try:
+        return run_subprocess(
+            command,
+            cwd=cwd,
+            text=True,
+            capture_output=True,
+            check=False,
+            env={**os.environ, **_NON_INTERACTIVE_ENV},
+            timeout=_INSTALL_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            command, 124, "", f"timed out after {_INSTALL_TIMEOUT}s"
+        )
 
 
 def _detail(result: subprocess.CompletedProcess, fallback: str) -> str:
@@ -731,9 +754,32 @@ def _clone_at_ref(req: _Install, staging: Path, ref: str) -> str | None:
     full = req.run(["git", "clone", url, str(staging)])
     if full.returncode:
         return _detail(full, "git clone failed")
-    checkout = req.run(["git", "checkout", "--detach", ref], staging)
+    checkout = req.run(
+        ["git", "checkout", "--detach", "--end-of-options", ref], staging
+    )
     if checkout.returncode:
         return _detail(checkout, f"could not check out {ref}")
+    return None
+
+
+def _commit_mismatch(req: _Install, staging: Path) -> str | None:
+    """Refuse a clone whose HEAD is not the commit that was resolved (and verified).
+
+    A tag is mutable: moved after resolution, or after the lock was written, a
+    `--branch <tag>` clone installs different content while the plan and marker
+    still name the verified commit. When the resolution recorded a commit, the
+    cloned HEAD must be exactly it.
+    """
+    expected = req.resolved.commit
+    if not expected:
+        return None
+    head = req.run(["git", "rev-parse", "HEAD"], staging)
+    actual = (head.stdout or "").strip()
+    if head.returncode or actual.lower() != expected.lower():
+        return (
+            f"cloned HEAD {actual or '(unknown)'} is not the resolved commit "
+            f"{expected}; the ref moved since it was resolved"
+        )
     return None
 
 
@@ -757,7 +803,7 @@ def _install_github(req: _Install) -> tuple[str, str]:
     if staging.exists():
         shutil.rmtree(staging, ignore_errors=True)
     staging.parent.mkdir(parents=True, exist_ok=True)
-    failure = _clone_at_ref(req, staging, ref)
+    failure = _clone_at_ref(req, staging, ref) or _commit_mismatch(req, staging)
     if failure is not None:
         shutil.rmtree(staging, ignore_errors=True)
         return FAILED, failure

@@ -183,6 +183,37 @@ class TestReadGateState:
         assert state.approval_for("mapping_ready") is not None
         assert state.approval_for("semantic_model_ready") is None
 
+    def test_uncommitted_approval_row_is_never_read_as_committed(
+        self, tmp_path: Path
+    ) -> None:
+        """approval_for promises the COMMITTED approval; a worktree edit is not."""
+        repo = _committed_table(tmp_path, "demo_table", UNRESOLVED_CLEARED)
+        readiness = repo / "mappings" / "demo_table" / "readiness-status.yaml"
+        readiness.write_text(
+            readiness.read_text(encoding="utf-8")
+            + '  - stage: "publish_ready"\n    owner: "Agent"\n    at: "2026-09-23"\n',
+            encoding="utf-8",
+        )
+
+        state = gate.read_gate_state(repo, "demo_table")
+
+        assert state.approval_for("publish_ready") is None
+        assert state.approvals == ()
+        assert state.publish_ready == "uncommitted"
+
+    def test_malformed_committed_readiness_is_a_reason_not_a_crash(
+        self, tmp_path: Path
+    ) -> None:
+        repo = _committed_table(tmp_path, "demo_table", UNRESOLVED_CLEARED)
+        readiness = repo / "mappings" / "demo_table" / "readiness-status.yaml"
+        readiness.write_text("approvals: [unclosed\n", encoding="utf-8")
+        commit_all(repo, "malformed record")
+
+        state = gate.read_gate_state(repo, "demo_table")
+
+        assert state.approvals == ()
+        assert state.publish_ready == "unreadable"
+
 
 class TestListMappedTables:
     def test_lists_only_dirs_with_source_map(self, tmp_path: Path) -> None:

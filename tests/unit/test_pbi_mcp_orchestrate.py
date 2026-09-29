@@ -184,6 +184,11 @@ def test_stalled_runtime_is_exit_three_not_exit_one(ready_repo: Path) -> None:
             def handshake(self) -> dict:
                 return {"name": "powerbi-modeling-mcp", "version": "0.5.0.0"}
 
+            def list_tools(self) -> tuple[str, ...]:
+                from seshat.pbi_mcp_adapter import vendor_ops
+
+                return tuple(sorted(vendor_ops.VENDOR_TOOLS))
+
             def call(self, tool: str, request: dict):
                 # Stall on the OPERATION, not on the connect: a server that hangs
                 # before the write is attempted is a clean refusal, whereas one
@@ -435,7 +440,7 @@ def test_every_effect_blocker_has_readable_detail() -> None:
         for name, value in vars(orchestrate).items()
         if name.startswith("BLOCKER_") and isinstance(value, str)
     ]
-    assert len(ids) == 2
+    assert len(ids) == 3
     for blocker in ids:
         assert orchestrate.BLOCKER_DETAIL.get(blocker)
         assert blocker.startswith("PBIMCP-EFF-")
@@ -653,3 +658,45 @@ def test_an_apply_records_the_runtime_build_that_ran(ready_repo: Path) -> None:
     assert payload["runtime_version"] == "0.5.0.0", (
         f"the resolved runtime version never reached the record: {payload}"
     )
+
+
+def test_a_vendor_failure_carries_the_vendor_diagnosis(ready_repo: Path) -> None:
+    """The runner builds a redacted transcript precisely so a vendor refusal
+    has a diagnosis. It must reach the report and the record, not be dropped
+    between the runner and the operator."""
+    report = _apply(ready_repo, mcp_runner=_mcp_session(returncode=1))
+
+    assert report.vendor_detail, "the vendor diagnosis was discarded"
+    assert "isError" in report.vendor_detail
+    payload = json.loads(report.evidence_path.read_text(encoding="utf-8"))  # type: ignore[union-attr]
+    assert payload["vendor_detail"] == report.vendor_detail
+
+
+def test_an_unobservable_scope_refuses_before_the_runtime_launches(
+    ready_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If git cannot list every file, the write must not run at all. Refusing
+    only afterwards reported a possibly-correct write as a no-op with rollback
+    guidance."""
+    launched: list[object] = []
+
+    def factory(**kwargs: object):
+        launched.append(kwargs)
+        raise AssertionError("the runtime was launched")
+
+    monkeypatch.setattr(orchestrate, "_list_files", lambda *_a, **_k: None)
+    before = (ready_repo / TARGET_PATH).read_text(encoding="utf-8")
+
+    report = _apply(ready_repo, mcp_runner=factory)
+
+    assert report.exit_code == orchestrate.EXIT_REFUSED
+    assert report.blockers == (orchestrate.BLOCKER_SCOPE_UNOBSERVABLE,)
+    assert report.mutation_attempted is False
+    assert launched == []
+    assert (ready_repo / TARGET_PATH).read_text(encoding="utf-8") == before
+
+
+def test_a_successful_apply_carries_no_vendor_detail(ready_repo: Path) -> None:
+    report = _apply(ready_repo)
+    assert report.succeeded, report.blockers
+    assert report.vendor_detail is None
