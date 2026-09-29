@@ -223,9 +223,7 @@ def s4a_migration_numbering(ctx: RuleContext) -> list[Finding]:
     return findings
 
 
-def _is_guarded(toks: list[SqlToken], idx: int) -> bool:
-    """True if the CREATE/ALTER/DROP at toks[idx] is an accepted guarded form."""
-    verb = toks[idx].text.upper()
+def _statement_keyword_window(toks: list[SqlToken], idx: int) -> str:
     # window of the next few keyword tokens, upper-cased, bounded by the
     # statement terminator so a guard in the NEXT statement cannot vouch for
     # this one (`DROP SCHEMA bronze; DROP TABLE IF EXISTS ...`).
@@ -234,7 +232,13 @@ def _is_guarded(toks: list[SqlToken], idx: int) -> bool:
         if t.text in _STATEMENT_TERMINATORS:
             break
         tail.append(t.text.upper())
-    joined = " ".join(tail)
+    return " ".join(tail)
+
+
+def _is_guarded(toks: list[SqlToken], idx: int) -> bool:
+    """True if the CREATE/ALTER/DROP at toks[idx] is an accepted guarded form."""
+    verb = toks[idx].text.upper()
+    joined = _statement_keyword_window(toks, idx)
     if verb == "CREATE":
         # Any OR REPLACE form (VIEW / FUNCTION / PROCEDURE) is a guarded create,
         # not just VIEW -- a literal "OR REPLACE VIEW" check false-positived on

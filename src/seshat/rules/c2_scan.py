@@ -165,6 +165,12 @@ _SLUG_MESSAGE = (
 )
 
 
+def _secret_on_line(line: str, env_style: bool) -> bool:
+    if scan_line_for_secret(line):
+        return True
+    return env_style and env_line_has_secret(line)
+
+
 def scan_file_lines(path: str, text: str) -> list[Finding]:
     """Findings for one file's content, one entry per offending line.
 
@@ -175,7 +181,7 @@ def scan_file_lines(path: str, text: str) -> list[Finding]:
     env_style = is_env_style(path)
     findings: list[Finding] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
-        if scan_line_for_secret(line) or (env_style and env_line_has_secret(line)):
+        if _secret_on_line(line, env_style):
             findings.append(_finding(path, lineno, _SECRET_MESSAGE))
         elif DO_CLUSTER_SLUG_RE.search(line):
             findings.append(_finding(path, lineno, _SLUG_MESSAGE))
