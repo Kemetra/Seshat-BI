@@ -31,7 +31,7 @@ class _Options:
     """The knobs an association test varies on the governed specification."""
 
     coefficient: str = "pearson"
-    missing_policy: str = "pairwise"
+    missing_policy: str = "available_case"
     minimum: int = 3
 
 
@@ -96,9 +96,11 @@ def test_pairwise_missingness_records_exclusions() -> None:
     assert result.diagnostics[1].observed == "2"
 
 
-def test_fail_missing_policy_withholds() -> None:
+def test_explicit_status_missing_policy_withholds() -> None:
     with pytest.raises(AnalysisWithheld) as exc_info:
-        run_correlate(_context([1, None, 3], [1, 2, 4], missing_policy="fail"))
+        run_correlate(
+            _context([1, None, 3], [1, 2, 4], missing_policy="explicit_status")
+        )
     assert exc_info.value.blockers[0].code == "STAT_MISSING_DATA"
 
 

@@ -38,12 +38,16 @@ class MeasurePair:
     dax:        the measure's DAX expression (from TMDL).
     locator:    repo-relative POSIX `path:line` of the measure.
     definition: the contract's `definition` block, or None (-> skip).
+    binding:    the contract's `binds_to` block ({gold_table, columns}), or None;
+                it supplies a base measure's operand when `definition` has no
+                `source` (#734).
     """
 
     name: str
     dax: str
     locator: str
     definition: dict | None
+    binding: dict | None = None
 
 
 def binding_error(measure_name: str, locator: str, detail: str) -> Finding:
@@ -82,7 +86,7 @@ def run_semantic_pairs(pairs: Iterable[MeasurePair]) -> tuple[list[Finding], int
     """
     findings: list[Finding] = []
     for pair in pairs:
-        verdict = check_measure_drift(pair.dax, pair.definition)
+        verdict = check_measure_drift(pair.dax, pair.definition, pair.binding)
         finding = verdict_to_finding(pair.name, pair.locator, verdict)
         if finding is not None:
             findings.append(finding)

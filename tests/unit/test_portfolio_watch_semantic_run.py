@@ -149,6 +149,14 @@ def test_approved_bound_contract_and_current_live_run_are_verified(
     )
     init_git_repo(tmp_path)
     _finalize_live_run(tmp_path, commit_evidence=True)
+    # A clean semantic finding only counts when captured at the current HEAD.
+    head = pw._source_revision(tmp_path)
+    write_json_artifact(
+        tmp_path,
+        "scope_alpha",
+        "metric-drift-findings.json",
+        generic_artifact(class_="pass", captured_at_revision=head),
+    )
 
     scope = _scope(pw.build_portfolio_watch_summary(tmp_path))
 

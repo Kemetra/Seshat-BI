@@ -80,7 +80,19 @@ def _column_set_findings(base_cols: dict, obs_cols: dict) -> list[DriftFinding]:
     return findings
 
 
-def _surviving_column_findings(base_cols: dict, obs_cols: dict) -> list[DriftFinding]:
+def _row_unique_growth(b, o, rows: tuple[int, int]) -> bool:
+    """True when a column is distinct on every row in BOTH profiles.
+
+    Its distinct count then moves only because the table grew (append growth of
+    an identifier), which is measured by the row counts, not a shift in the
+    column's distribution. Measured, not a tolerance: nothing is guessed.
+    """
+    return (b.distinct_cardinality, o.distinct_cardinality) == rows
+
+
+def _surviving_column_findings(
+    base_cols: dict, obs_cols: dict, rows: tuple[int, int] = (-1, -1)
+) -> list[DriftFinding]:
     """Missingness / cardinality shifts on columns present in BOTH. Deterministic."""
     findings: list[DriftFinding] = []
     for name in sorted(base_cols.keys() & obs_cols.keys()):
@@ -99,7 +111,9 @@ def _surviving_column_findings(base_cols: dict, obs_cols: dict) -> list[DriftFin
                     principle_v=False,
                 )
             )
-        if b.distinct_cardinality != o.distinct_cardinality:
+        if b.distinct_cardinality != o.distinct_cardinality and not (
+            _row_unique_growth(b, o, rows)
+        ):
             findings.append(
                 DriftFinding(
                     drift_class="cardinality_shift",
@@ -266,7 +280,9 @@ def classify_drift(
     sem = semantics or DriftSemantics()
     return [
         *_column_set_findings(base_cols, obs_cols),
-        *_surviving_column_findings(base_cols, obs_cols),
+        *_surviving_column_findings(
+            base_cols, obs_cols, (baseline.row_count, observed.row_count)
+        ),
         *_column_retyped_findings(base_cols, obs_cols),
         *_grain_pk_findings(baseline, observed),
         *_returns_rule_findings(base_cols, obs_cols, sem.returns_column),
@@ -382,4 +398,47 @@ def to_findings_dict(
             }
             for h in _handoffs(findings)
         ],
+    }
+
+
+PORTFOLIO_ARTIFACT_SCHEMA_VERSION = "1.0"
+
+
+def _portfolio_item(finding: dict, owners: dict[str, str]) -> dict:
+    return {
+        "class": finding["drift_class"],
+        "subject_locator": finding["column"],
+        "measured": f"{finding['before']} -> {finding['after']}",
+        "principle_v": finding["principle_v"] is True,
+        "owner": owners.get(finding["drift_class"]),
+    }
+
+
+def to_portfolio_artifact(
+    findings_doc: dict, captured_at_revision: str | None = None
+) -> dict:
+    """Translate a ``to_findings_dict`` document into the Portfolio Watch artifact.
+
+    The ONE contract between the drift producer and the portfolio consumer
+    (``mappings/<scope>/drift-findings.json``): ``class`` is the drift status,
+    each finding becomes an item keyed by drift class + column, and Principle-V
+    owners come from the handoff list. ``captured_at_revision`` is the commit
+    the re-profile ran against; the native document cannot carry it (its schema
+    is closed), so an unstamped artifact is read as stale -- never as current.
+    Raises ``KeyError``/``TypeError`` on a document that is not this shape.
+    """
+    owners = {
+        handoff["drift_class"]: handoff["owner"]
+        for handoff in findings_doc["principle_v_handoff"]
+        if isinstance(handoff.get("owner"), str)
+    }
+    items = [_portfolio_item(f, owners) for f in findings_doc["findings"]]
+    return {
+        "schema_version": PORTFOLIO_ARTIFACT_SCHEMA_VERSION,
+        "captured_at_revision": captured_at_revision,
+        "live_leg_available": findings_doc["observed"]["available"] is True,
+        "class": findings_doc["status"],
+        "measured": f"{len(items)} finding(s)",
+        "owner": next(iter(owners.values()), None),
+        "items": items,
     }

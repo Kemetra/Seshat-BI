@@ -15,6 +15,7 @@ import pytest
 from seshat import portfolio_watch as pw
 from tests.fixtures.portfolio_watch.builders import (
     drift_artifact,
+    init_git_repo,
     write_json_artifact,
     write_readiness_status,
     write_source_profile,
@@ -28,13 +29,15 @@ def test_partial_portfolio_summarizes_evidenced_scopes_and_lists_empty_ones(
 ) -> None:
     write_readiness_status(tmp_path, "scope_evidenced", current_stage="source_ready")
     write_source_profile(tmp_path, "scope_evidenced")
+    write_readiness_status(tmp_path, "scope_empty", current_stage="source_ready")
+    # Covered requires an artifact captured at the current HEAD.
+    head = init_git_repo(tmp_path)
     write_json_artifact(
         tmp_path,
         "scope_evidenced",
         "drift-findings.json",
-        drift_artifact(class_="column_added"),
+        drift_artifact(class_="column_added", captured_at_revision=head),
     )
-    write_readiness_status(tmp_path, "scope_empty", current_stage="source_ready")
 
     summary = pw.build_portfolio_watch_summary(tmp_path)
 

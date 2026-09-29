@@ -155,7 +155,33 @@ def test_omnibus_tests_match_scipy(selected: str) -> None:
     observed = _test(result, selected)
     assert float(observed.statistic) == pytest.approx(expected.statistic)
     assert float(observed.p_value) == pytest.approx(expected.pvalue)
-    assert result.effect_sizes[0].name in {"omega_squared", "epsilon_squared"}
+    assert result.effect_sizes[0].name in {"omega_squared", "eta_squared_h"}
+
+
+def test_welch_omnibus_effect_is_classical_omega_squared() -> None:
+    """#735: the effect uses the classical (SS-based) omega^2, not Welch's F.
+
+    Reference from SS terms: SS_b=105.5, SS_w=28.5, SS_t=134, MS_w=19/6 ->
+    omega^2 = (105.5 - 2*19/6)/(134 + 19/6) = 0.722965.
+    """
+    groups = {
+        "A": [1.0, 2.0, 3.0, 4.0],
+        "B": [3.0, 5.0, 7.0, 8.0],
+        "C": [8.0, 9.0, 10.0, 12.0],
+    }
+    result = run_compare_groups(_context(groups, "welch_anova"))
+    assert _effect(result, "omega_squared") == pytest.approx(0.722965, abs=1e-6)
+
+
+def test_kruskal_effect_is_labelled_eta_squared_h() -> None:
+    groups = {
+        "A": [1.0, 2.0, 3.0, 4.0],
+        "B": [3.0, 5.0, 7.0, 8.0],
+        "C": [8.0, 9.0, 10.0, 12.0],
+    }
+    result = run_compare_groups(_context(groups, "kruskal_wallis"))
+    h = float(stats.kruskal(*groups.values()).statistic)
+    assert _effect(result, "eta_squared_h") == pytest.approx((h - 3 + 1) / (12 - 3))
 
 
 def test_reversing_declared_group_order_reverses_signed_effect_only() -> None:
