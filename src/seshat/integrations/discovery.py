@@ -31,6 +31,8 @@ from seshat.integrations.plugin_manifest import (
     locked_plugin_policy,
     observe_plugin,
 )
+from seshat.integrations.procs import run as _run
+from seshat.integrations.procs import scrub
 
 NOT_CHECKED = "not-checked"
 NOT_INSTALLED = "not-installed"
@@ -381,16 +383,6 @@ def _not_installed(item: Component, activation: SkillActivation) -> SkillDiscove
     )
 
 
-def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess:
-    return subprocess.run(  # noqa: S603 - fixed read-only argv, no shell
-        command,
-        cwd=cwd,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-
-
 def _claude_inventory(
     root: Path, runner: Runner, tool_lookup: ToolLookup
 ) -> tuple[dict[str, dict] | None, str | None]:
@@ -404,7 +396,7 @@ def _claude_inventory(
         return None, "Claude Code is not on PATH"
     result = runner(["claude", "plugin", "list", "--json"], root)
     if result.returncode:
-        detail = (result.stderr or result.stdout or "").strip()
+        detail = scrub((result.stderr or result.stdout or "").strip())
         return None, detail or "Claude Code plugin inventory failed"
     return _parse_plugin_inventory(result.stdout or "")
 

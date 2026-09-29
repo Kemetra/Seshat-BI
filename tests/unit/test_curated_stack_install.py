@@ -28,6 +28,7 @@ from tests.unit._curated_stack_fixtures import (
     FakeGitHub,
     FakeNpm,
     FakePypi,
+    _grant_provisioning,
     _install_mcp,
     _release,
     _tools_on_path,
@@ -35,6 +36,12 @@ from tests.unit._curated_stack_fixtures import (
 )
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.fixture(autouse=True)
+def _provisioning_granted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests exercise authorized installs; see `_grant_provisioning`."""
+    _grant_provisioning(monkeypatch)
 
 
 # --------------------------------------------------------------------------- #
@@ -459,6 +466,29 @@ def test_a_failed_clone_does_not_activate_the_staged_tree(tmp_path: Path) -> Non
     assert outcome.lock_written is None
 
 
+def test_bundled_components_resolve_from_the_installed_package(
+    tmp_path: Path,
+) -> None:
+    """A consumer workspace holds no Seshat source tree; bundled rows still count.
+
+    The workspace here is an empty tmp directory (and the suite runs from an
+    empty cwd), so a lookup joined onto the workspace would report UNAVAILABLE.
+    """
+    root = _workspace(tmp_path)
+
+    outcome = plan_profile(root, profile="orchestration")
+
+    bundled = {
+        row.component: row.status
+        for row in outcome.rows
+        if row.component.startswith("seshat-dagster-")
+    }
+    assert bundled == {
+        "seshat-dagster-adapter": "present",
+        "seshat-dagster-workflows": "present",
+    }
+
+
 def _payload_clone(sha: str):
     """A runner whose clone writes the full fabric payload; HEAD reads ``sha``."""
     import subprocess
@@ -522,7 +552,7 @@ def test_install_subprocesses_never_prompt_and_are_bounded(
 ) -> None:
     import subprocess
 
-    from seshat.integrations import installer
+    from seshat.integrations import installer, procs
 
     seen: dict = {}
 
@@ -530,7 +560,7 @@ def test_install_subprocesses_never_prompt_and_are_bounded(
         seen.update(kwargs)
         raise subprocess.TimeoutExpired(cmd=args, timeout=kwargs["timeout"])
 
-    monkeypatch.setattr(installer, "run_subprocess", fake)
+    monkeypatch.setattr(procs, "run_subprocess", fake)
     result = installer._run(["git", "clone", "x"], tmp_path)
 
     assert result.returncode != 0 and "timed out" in result.stderr
