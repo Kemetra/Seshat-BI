@@ -116,7 +116,7 @@ def test_incompatible_dbt_pairs_are_refused() -> None:
     core = component("dbt-core")
     adapter = component("dbt-postgres")
     resolved_core = resolvers.Resolution(
-        component_id="dbt-core", ok=True, channel=Channel.STABLE, version="1.12.0"
+        component_id="dbt-core", ok=True, channel=Channel.STABLE, version="1.12.5"
     )
     missing_adapter = resolvers.Resolution(
         component_id="dbt-postgres",
@@ -171,7 +171,7 @@ def test_a_baseline_regression_outranks_the_interpreter_refusal() -> None:
     assert [reason.split(";")[0] for reason in verdict.reasons] == [
         "Seshat requires Python >= 3.13",
         "dbt-core resolved to 1.0.0, which is older than the known compatible "
-        "baseline 1.12.0",
+        "baseline 1.12.5",
     ]
     assert "older than the known compatible baseline" in verdict.resolutions[0].reason
 

@@ -158,7 +158,7 @@ def test_compatibility_metadata_is_derived_from_canonical_truth() -> None:
     assert DBT_CORE_PIN == f"dbt-core=={BASELINE_PINS['dbt-core']}"
     assert "https://github.com/microsoft/skills-for-fabric.git" not in source
     assert "https://github.com/dbt-labs/dbt-agent-skills.git" not in source
-    assert 'DBT_CORE_PIN = "dbt-core==1.12.0"' not in source
+    assert 'DBT_CORE_PIN = "dbt-core==1.12.5"' not in source
 
 
 def test_compatibility_facade_contains_no_operational_installer() -> None:

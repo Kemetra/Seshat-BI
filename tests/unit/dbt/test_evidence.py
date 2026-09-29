@@ -52,7 +52,7 @@ def _sample_plan():
         ),
         project=ProjectBinding(path="dbt", sha256="f" * 64),
         runtime=RuntimeBinding(
-            dbt_core="1.12.0",
+            dbt_core="1.12.5",
             dbt_adapter="dbt-postgres",
             dbt_adapter_version="1.10.2",
             profile="seshat_bi_warehouse",
