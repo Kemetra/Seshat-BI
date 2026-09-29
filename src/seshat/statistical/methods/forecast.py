@@ -147,7 +147,14 @@ def candidate_from_id(candidate_id: str, period: int) -> ForecastCandidate:
         ) from None
 
 
-def _normal_interval(point, residuals, level: float):
+def _normal_interval(point, residuals, level: float, period: int = 1):
+    """Normal interval around a naive-family forecast.
+
+    The h-step variance of the naive random walk grows with h, but a
+    seasonal-naive forecast repeats the last observed season, so its variance
+    grows with the number of completed seasonal steps k = floor((h-1)/m) + 1
+    (Hyndman & Athanasopoulos, FPP3 5.5). `period` = 1 gives the naive case.
+    """
     import numpy as np
 
     residual_array = np.asarray(residuals, dtype=float)
@@ -157,7 +164,8 @@ def _normal_interval(point, residuals, level: float):
         return point_array.copy(), point_array.copy()
     critical = NormalDist().inv_cdf(0.5 + level / 2.0)
     point_array = np.asarray(point, dtype=float)
-    spread = critical * scale * np.sqrt(np.arange(1, len(point_array) + 1))
+    steps = np.floor(np.arange(len(point_array)) / period) + 1
+    spread = critical * scale * np.sqrt(steps)
     return point_array - spread, point_array + spread
 
 
@@ -180,7 +188,7 @@ def fit_candidate(
     if candidate.candidate_id == "seasonal_naive":
         point = seasonal_naive(values, candidate.period, horizon)
         residuals = values[candidate.period :] - values[: -candidate.period]
-        low, high = _normal_interval(point, residuals, level)
+        low, high = _normal_interval(point, residuals, level, candidate.period)
         return ForecastOutput(point, low, high, residuals, "normal-seasonal-residual")
 
     from statsmodels.tsa.statespace.exponential_smoothing import (

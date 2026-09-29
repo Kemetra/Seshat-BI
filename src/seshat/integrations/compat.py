@@ -5,13 +5,27 @@ Resolving each component to its own latest release is not enough: `dbt-core` and
 Python and with Seshat's own adapter. Those rules live HERE rather than inside
 each resolver, so there is one place to read when a bump is refused.
 
+What this policy ENFORCES, stated exactly (it is narrower than the posture
+below, and a reader must not assume more):
+
+* a resolved version below its :data:`BASELINE_PINS` entry is refused as a
+  downgrade -- a floor, not a ceiling: a newer release above the baseline IS
+  accepted, so a `--refresh` resolves the newest compatible release;
+* a coupled pair (the dbt core/adapter group) is refused when only one member
+  resolved -- presence of both, not mutual version compatibility;
+* the running Python must meet the kit's own floor.
+
+It does NOT co-resolve the pair: each distribution is installed by its own
+`uv pip install` into a shared environment, so a later install can move an
+earlier one. The installer re-reads every installed distribution after all
+installs and reports (and locks) the version actually on disk when that
+happened, rather than the one resolved.
+
 The posture, which the repo already ratified once:
 
 * The CURRENT exact pins are the known compatibility baseline.
-* Newer is not a reason. A component is not bumped merely because a newer
-  release exists.
-* When the absolute latest is incompatible, the newest KNOWN COMPATIBLE version
-  is retained and the rejection is explained.
+* When the absolute latest is incompatible with the running interpreter, the
+  newest KNOWN COMPATIBLE version is retained and the rejection is explained.
 * One component is never silently downgraded to satisfy another. When spec 135
   met exactly this case -- no released `dagster-dbt` accepted `dbt-core` 1.12 --
   the owner's ruling (Ahmed Shaaban, 2026-07-17) was to DROP the unused library,

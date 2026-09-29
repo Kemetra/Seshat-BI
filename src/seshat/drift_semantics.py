@@ -20,7 +20,20 @@ from .drift import DriftSemantics
 def _dropped_pii(columns: list[dict[str, Any]]) -> frozenset[str]:
     """Columns flagged PII AND dropped -- the only ones that can 'reappear'. A
     pii:true + decision:keep column never left the mapped output, so it is not a
-    reappearance candidate. Missing pii -> false; missing decision -> not drop."""
+    reappearance candidate. Missing pii -> false; missing decision -> not drop.
+
+    A PRESENT pii flag that is not a boolean (a quoted "true", a 1) raises
+    ValueError: an ``is True`` filter alone would silently drop that column
+    from the PII-reappearance watch."""
+    bad = [
+        c.get("source_name")
+        for c in columns
+        if "pii" in c and not isinstance(c.get("pii"), bool)
+    ]
+    if bad:
+        raise ValueError(
+            f"source-map.yaml: pii flag is not a boolean for column(s) {bad}"
+        )
     return frozenset(
         c["source_name"]
         for c in columns

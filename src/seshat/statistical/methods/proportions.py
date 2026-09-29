@@ -18,6 +18,7 @@ from ..contracts import (
     withheld,
 )
 from ..evidence import decimal_text
+from .common import enforce_missing_policy, privacy_floor
 
 _UNGROUPED = "__all__"
 
@@ -114,6 +115,7 @@ def _counts(context: MethodContext):
 
     numerator_index, denominator_index, group_index = _indexes(context)
     grouped: dict[str, list[int]] = {}
+    row_counts: dict[str, int] = {}
     missing = 0
     for row in context.data.rows:
         cells = (
@@ -128,13 +130,36 @@ def _counts(context: MethodContext):
         bucket = grouped.setdefault(str(cells[2]), [0, 0])
         bucket[0] += successes
         bucket[1] += trials
-    require(
-        not missing or context.spec.missing_policy != "fail",
-        "STAT_MISSING_DATA",
+        row_counts[str(cells[2])] = row_counts.get(str(cells[2]), 0) + 1
+    enforce_missing_policy(
+        context,
+        missing,
         "Proportion input contains missing numerator, denominator, or group values.",
-        "Resolve missing values or approve a non-failing missing-data policy.",
     )
-    return grouped, missing
+    return grouped, missing, row_counts
+
+
+def _validate_privacy(
+    grouped: Mapping[str, list[int]], row_counts: Mapping[str, int], floor: int
+) -> None:
+    """Hold the privacy floor on contributing rows AND released cells (#735).
+
+    Pre-aggregated rows let one row carry a large denominator, so the floor is
+    applied to the number of contributing rows per group (as describe/compare
+    groups do) and to each released success and failure count. A floor of 1
+    declares no small-cell protection.
+    """
+    if floor <= 1:
+        return
+    for label, (successes, trials) in grouped.items():
+        cells = (row_counts.get(label, 0), successes, trials - successes)
+        require(
+            min(cells) >= floor,
+            "STAT_PRIVACY_FLOOR",
+            "A proportion group has fewer contributing rows, successes, or "
+            f"failures than the approved privacy floor {floor}.",
+            "Aggregate to a coarser approved grain or revise the approved floor.",
+        )
 
 
 def _validate_denominator(successes: int, trials: int, rule: _Rule) -> None:
@@ -310,7 +335,7 @@ def _rule(context: MethodContext) -> _Rule:
         correction=str(parameters.get("zero_cell_correction", "none")),
         level=str(parameters["confidence_level"]),
         minimum_denominator=int(parameters.get("minimum_denominator", 1)),
-        privacy_floor=int(context.spec.pii["minimum_group_count"]),
+        privacy_floor=privacy_floor(context),
     )
 
 
@@ -349,7 +374,7 @@ def run_proportion(context: MethodContext) -> MethodResult:
     """Compute only the explicitly governed proportion analysis."""
 
     rule = _rule(context)
-    grouped, missing = _counts(context)
+    grouped, missing, row_counts = _counts(context)
     require(
         grouped,
         "STAT_MINIMUM_DATA",
@@ -358,6 +383,7 @@ def run_proportion(context: MethodContext) -> MethodResult:
     )
     for successes, trials in grouped.values():
         _validate_denominator(successes, trials, rule)
+    _validate_privacy(grouped, row_counts, rule.privacy_floor)
 
     diagnostics = ()
     if missing:

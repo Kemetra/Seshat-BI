@@ -102,6 +102,17 @@ def _approved_identifier(
     return _quoted_identifier(name, dialect, context)
 
 
+def _main_column(
+    name: str, approved: set[str], dialect: Dialect, context: str, table: str
+) -> str:
+    """An approved main-table column, qualified with the quoted main table.
+
+    Unqualified, a column the joined relation also carries (the join key itself)
+    is ambiguous -- or resolves against the wrong side -- once a JOIN is present.
+    """
+    return f"{table}.{_approved_identifier(name, approved, dialect, context)}"
+
+
 _SCALAR_OPS = {
     "eq": "=",
     "ne": "<>",
@@ -159,6 +170,7 @@ def _compile_filter(
     item: Filter,
     approved: set[str],
     dialect: Dialect,
+    table: str,
 ) -> tuple[str, tuple[object, ...]]:
     """Compile one closed predicate with every value parameter-bound."""
 
@@ -167,7 +179,7 @@ def _compile_filter(
             f"Filter operator {item.operator!r} is not allowed.",
             "Use one of the closed statistical filter operators.",
         )
-    column = _approved_identifier(item.column, approved, dialect, "filter column")
+    column = _main_column(item.column, approved, dialect, "filter column", table)
     null_suffix = _NULL_PREDICATES.get(item.operator)
     if null_suffix is not None:
         _assert_valueless(item, "null")
@@ -180,7 +192,9 @@ def _compile_filter(
     return _compile_scalar(item, column, dialect)
 
 
-def _aggregate_expression(item: Aggregate, approved: set[str], dialect: Dialect) -> str:
+def _aggregate_expression(
+    item: Aggregate, approved: set[str], dialect: Dialect, table: str
+) -> str:
     """Render one closed aggregation over an approved source column."""
 
     if item.function == "count_rows":
@@ -195,8 +209,8 @@ def _aggregate_expression(item: Aggregate, approved: set[str], dialect: Dialect)
             f"Aggregation {item.function!r} requires a source column.",
             "Use one policy-approved source column.",
         )
-    source = _approved_identifier(
-        item.source_column, approved, dialect, "aggregate source column"
+    source = _main_column(
+        item.source_column, approved, dialect, "aggregate source column", table
     )
     distinct = "DISTINCT " if item.function == "distinct_count" else ""
     return f"{_AGGREGATE_FUNCTIONS[item.function]}({distinct}{source})"
@@ -206,6 +220,7 @@ def _compile_aggregate(
     item: Aggregate,
     approved: set[str],
     dialect: Dialect,
+    table: str,
 ) -> tuple[str, str]:
     if item.function not in AGGREGATIONS:
         raise _refuse(
@@ -215,7 +230,7 @@ def _compile_aggregate(
     output = _approved_identifier(
         item.output_column, approved, dialect, "aggregate output column"
     )
-    expression = _aggregate_expression(item, approved, dialect)
+    expression = _aggregate_expression(item, approved, dialect, table)
     return f"{expression} AS {output}", item.output_column
 
 
@@ -274,7 +289,7 @@ def _projection(
     """Return the SELECT list, its output names, and the GROUP BY list."""
 
     group_sql = [
-        _approved_identifier(column, approved, dialect, "group-by column")
+        _main_column(column, approved, dialect, "group-by column", table)
         for column in request.group_by
     ]
     if not request.aggregates:
@@ -289,19 +304,19 @@ def _projection(
     selections = list(group_sql)
     output_columns = list(request.group_by)
     for aggregate in request.aggregates:
-        selection, output = _compile_aggregate(aggregate, approved, dialect)
+        selection, output = _compile_aggregate(aggregate, approved, dialect, table)
         selections.append(selection)
         output_columns.append(output)
     return selections, output_columns, group_sql
 
 
 def _predicates(
-    request: DataRequest, approved: set[str], dialect: Dialect
+    request: DataRequest, table: str, approved: set[str], dialect: Dialect
 ) -> tuple[list[str], list[object]]:
     predicates: list[str] = []
     params: list[object] = []
     for item in request.filters:
-        predicate, values = _compile_filter(item, approved, dialect)
+        predicate, values = _compile_filter(item, approved, dialect, table)
         predicates.append(predicate)
         params.extend(values)
     return predicates, params
@@ -326,7 +341,7 @@ def compile_select(request: DataRequest, dialect: Dialect) -> CompiledQuery:
             "Use distinct group and aggregate output names.",
         )
     joins = [_compile_join(item, table, approved, dialect) for item in request.joins]
-    predicates, params = _predicates(request, approved, dialect)
+    predicates, params = _predicates(request, table, approved, dialect)
     clauses = [f"SELECT {', '.join(selections)} FROM {table}", *joins]
     if predicates:
         clauses.append("WHERE " + " AND ".join(predicates))

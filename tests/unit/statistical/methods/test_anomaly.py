@@ -222,3 +222,24 @@ def test_seasonal_deviation_stays_relative_to_the_residual_center() -> None:
         "the uncentered comparison is what this test exists to rule out; if it "
         "stops disagreeing, the fixture no longer exercises the risk"
     )
+
+
+@pytest.mark.parametrize("model", ("trailing_mad", "seasonal_mad"))
+def test_period_below_two_is_an_actionable_withhold(model: str) -> None:
+    """A one-point window is always degenerate and STL rejects period 1; both
+    must surface as an actionable parameter blocker, not a generic failure."""
+    values = [9, 11, 10, 12, 8, 10, 9, 11, 10, 50, 9, 10]
+    with pytest.raises(AnalysisWithheld) as exc_info:
+        run_detect_anomalies(_anomaly_context(values, model=model, period=1))
+    assert exc_info.value.blockers[0].code == "STAT_PARAMETER_INVALID"
+
+
+def test_seasonal_refit_count_is_bounded(monkeypatch) -> None:
+    """Each seasonal point refits robust STL; the evaluation count is capped."""
+    import seshat.statistical.methods.anomaly as anomaly
+
+    monkeypatch.setattr(anomaly, "_MAX_SEASONAL_EVALUATIONS", 3)
+    values = [10 + (index % 6) * 2 + (index % 5) * 0.3 for index in range(30)]
+    with pytest.raises(AnalysisWithheld) as exc_info:
+        run_detect_anomalies(_anomaly_context(values, model="seasonal_mad"))
+    assert exc_info.value.blockers[0].code == "STAT_ANOMALY_COMPUTE_LIMIT"

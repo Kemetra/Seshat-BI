@@ -330,28 +330,28 @@ def test_db_extra_hint_output_is_byte_identical_to_the_reviewed_strings() -> Non
     for extras -- neither may change what the six already emit. Pinned byte-for-byte
     so a future edit to the sibling cannot silently drift the driver hint.
 
-    Note the deliberate asymmetry with `_extra_install_hint`: this one keeps SINGLE
-    quotes (`pip install 'seshat-bi[db]'`), a real `cmd.exe` inconsistency that is
-    nonetheless the reviewed status quo -- left for its own change and its own review.
+    Both hints now use DOUBLE quotes: the earlier single-quoted
+    `pip install 'seshat-bi[db]'` reached pip as an invalid requirement on
+    `cmd.exe`, which passes apostrophes through literally.
     """
     from seshat.cli import _db_extra_hint
 
     assert _db_extra_hint() == (
         "       pipx install:  pipx inject seshat-bi psycopg2-binary\n"
-        "       pip install:   pip install 'seshat-bi[db]'"
+        '       pip install:   pip install "seshat-bi[db]"'
     )
     assert _db_extra_hint("postgres") == _db_extra_hint()
     assert _db_extra_hint("sqlserver") == (
         "       pipx install:  pipx inject seshat-bi pyodbc\n"
-        "       pip install:   pip install 'seshat-bi[mssql]'"
+        '       pip install:   pip install "seshat-bi[mssql]"'
     )
     assert _db_extra_hint("mysql") == (
         "       pipx install:  pipx inject seshat-bi mysql-connector-python\n"
-        "       pip install:   pip install 'seshat-bi[mysql]'"
+        '       pip install:   pip install "seshat-bi[mysql]"'
     )
     assert _db_extra_hint("snowflake") == (
         "       pipx install:  pipx inject seshat-bi snowflake-connector-python\n"
-        "       pip install:   pip install 'seshat-bi[snowflake]'"
+        '       pip install:   pip install "seshat-bi[snowflake]"'
     )
     # An unknown engine still falls back to Postgres, unchanged.
     assert _db_extra_hint("nonesuch") == _db_extra_hint()

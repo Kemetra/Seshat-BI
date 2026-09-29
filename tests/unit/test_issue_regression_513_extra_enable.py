@@ -343,14 +343,15 @@ def test_every_extra_with_a_hint_call_site_has_a_dependency_table() -> None:
 
 
 def test_the_driver_hint_is_untouched() -> None:
-    """#513 changes the EXTRA hint; `_db_extra_hint`'s six callers must not move.
+    """#513 changes the EXTRA hint; `_db_extra_hint` keeps its `pipx inject` shape.
 
-    It was already `pipx inject`-shaped -- that is the shape #513 adopts -- so its
-    output is pinned byte-for-byte here to prove the sibling edit did not disturb it.
+    Pinned byte-for-byte. The pip line uses DOUBLE quotes, like the sibling extra
+    hint: `cmd.exe` passes apostrophes through literally, which made the old
+    single-quoted form an invalid requirement on Windows.
     """
     from seshat.cli import _db_extra_hint
 
     assert _db_extra_hint() == (
         "       pipx install:  pipx inject seshat-bi psycopg2-binary\n"
-        "       pip install:   pip install 'seshat-bi[db]'"
+        '       pip install:   pip install "seshat-bi[db]"'
     )

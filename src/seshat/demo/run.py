@@ -34,11 +34,11 @@ def _load_committed_status(repo: Path) -> dict:
 def compute_offline_status(committed: dict, *, live_reachable: bool) -> dict:
     """Compute the per-stage status snapshot from the committed fixture.
 
-    Offline (``live_reachable`` False): Source/Mapping/Silver pass through from the
-    committed fixture (they are static-gate-backed); Gold Ready onward stays as the
-    committed fixture records them (blocked/not_started) -- never promoted to pass.
-    The live leg (when reachable) is where Gold Ready may advance; this function
-    does not fabricate that.
+    Source/Mapping/Silver pass through from the committed fixture (they are
+    static-gate-backed). Gold Ready onward is NEVER read as pass here, whether or
+    not a database is reachable: this function runs no ``retail validate``, and a
+    reachable connection is not live validation, so a committed pass is capped
+    at blocked (honest ceiling). ``live_reachable`` is recorded, not trusted.
     """
     stages_in = committed.get("stages", {})
     out: dict[str, dict] = {}
@@ -46,8 +46,8 @@ def compute_offline_status(committed: dict, *, live_reachable: bool) -> dict:
         status = block.get("status", "not_started")
         if status not in _STATUSES:
             status = "not_started"
-        # Offline: never let gold_ready or later read as pass (honest ceiling).
-        if not live_reachable and name in (
+        # Never let gold_ready or later read as pass without validation.
+        if name in (
             "gold_ready",
             "semantic_model_ready",
             "dashboard_ready",
@@ -114,6 +114,11 @@ def run_run(args) -> int:
     )
     mode = "live" if live_reachable else "offline"
     print(f"demo run complete ({mode} mode).")
+    if live_reachable:
+        print(
+            "database reachable; Gold Ready onward is not live-validated by "
+            "'demo run' and stays capped below pass."
+        )
     if frontier is None:
         print("all stages pass. See 'retail demo report' for detail.")
     else:

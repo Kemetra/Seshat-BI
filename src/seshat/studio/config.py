@@ -9,9 +9,13 @@ Two properties this module exists to guarantee:
   pinned in a frozen dataclass. Browser requests never carry a workspace path, so
   there is no code path that can repoint a running process at another root.
 * **Containment** (filesystem boundary). Evidence references committed in a
-  workspace are UNTRUSTED workspace-relative values. Every optional file read
-  resolves the candidate and proves it is contained by the pinned root, rejecting
-  ``..`` traversal, absolute input, and symlink/junction escapes.
+  workspace are UNTRUSTED workspace-relative values. :func:`resolve_contained_path`
+  resolves such a candidate and proves it is contained by the pinned root, rejecting
+  ``..`` traversal, absolute input, and symlink/junction escapes. It is the helper a
+  read of an UNTRUSTED reference must use; today no route reads one -- Studio's
+  file reads use fixed, server-chosen paths (the decision store, readiness files
+  found by walking the root) -- so a new route that takes a reference from a
+  request or a committed file must route it through here.
 
 Standard library only, by contract: this module must import cleanly without the
 ``studio`` extra so the launcher can report a missing extra rather than crash.

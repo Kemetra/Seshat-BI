@@ -140,7 +140,8 @@ def forbidden_scope_for(repo_root: Path | str, table: str | None) -> tuple[str, 
         document = build_table_next_document(repo_root, table)
     except Exception as failure:  # noqa: BLE001 -- any failure must refuse, not permit
         return (
-            f"The readiness gate for {table!r} could not be read ({failure}); "
+            f"The readiness gate for {table!r} could not be read "
+            f"({type(failure).__name__}); "
             "a technical allow is refused until it can be.",
         )
     return tuple(document.get("forbidden_scope", ()))

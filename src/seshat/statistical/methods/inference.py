@@ -363,12 +363,17 @@ def rank_biserial(first: object, second: object, *, paired: bool = False) -> flo
 
 
 def omega_squared(f_statistic: float, *, group_count: int, total_count: int) -> float:
-    """Omega-squared estimate from a one-way F statistic."""
+    """Textbook omega-squared from a CLASSICAL (equal-variance) one-way F.
+
+    omega^2 = df_b * (F - 1) / (df_b * F + df_w + 1), algebraically equal to
+    (SS_b - df_b * MS_w) / (SS_t + MS_w). The derivation assumes the classical
+    ANOVA F; callers must not feed it a Welch-adjusted F (#735).
+    """
 
     between = group_count - 1
     within = total_count - group_count
     statistic = float(f_statistic)
-    denominator = statistic + within
+    denominator = between * statistic + within + 1
     defined = math.isfinite(statistic) and min(between, within) >= 1
     require(
         defined and denominator > 0,
@@ -376,11 +381,15 @@ def omega_squared(f_statistic: float, *, group_count: int, total_count: int) -> 
         "Omega squared is undefined for the supplied group degrees of freedom.",
         "Provide at least two groups with residual degrees of freedom.",
     )
-    return min(1.0, max(0.0, (statistic - between) / denominator))
+    return min(1.0, max(0.0, between * (statistic - 1) / denominator))
 
 
-def epsilon_squared(h_statistic: float, *, group_count: int, total_count: int) -> float:
-    """Epsilon-squared estimate from a Kruskal-Wallis H statistic."""
+def eta_squared_h(h_statistic: float, *, group_count: int, total_count: int) -> float:
+    """Eta-squared-H, (H - k + 1) / (n - k), from a Kruskal-Wallis H statistic.
+
+    This is the rank-based eta-squared (Cohen); it is NOT epsilon-squared,
+    which is H / (n - 1). Named for what it computes (#735).
+    """
 
     denominator = total_count - group_count
     statistic = float(h_statistic)
@@ -388,7 +397,7 @@ def epsilon_squared(h_statistic: float, *, group_count: int, total_count: int) -
     require(
         defined and denominator > 0,
         "STAT_EFFECT_SIZE_UNDEFINED",
-        "Epsilon squared is undefined for the supplied group sizes.",
+        "Eta squared H is undefined for the supplied group sizes.",
         "Provide at least two groups with residual observations.",
     )
     value = (statistic - group_count + 1) / denominator

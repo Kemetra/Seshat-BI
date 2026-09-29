@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from importlib.resources import files
 from pathlib import Path
 
@@ -29,6 +30,13 @@ SOURCE_REL = ".seshat/kit-source.yaml"
 COMPASS_REL = ".seshat/compass.yaml"
 MANIFEST_REL = ".seshat/manifest.yaml"
 INTEGRATIONS_DIR_REL = ".seshat/integrations"
+
+# A harness name becomes a receipt FILE name under INTEGRATIONS_DIR_REL, a
+# directory the integration installer shares. A closed lowercase token keeps the
+# name from escaping the directory, and the reserved stems are the installer's
+# own `mcp.json` / `lock.json`, which a receipt must never overwrite.
+_HARNESS_NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
+_RESERVED_HARNESS_NAMES = frozenset({"mcp", "lock"})
 
 # The keys copied verbatim from source into the compass router. `current_stage`
 # is deliberately NOT here (FR-005: no run-state).
@@ -181,13 +189,15 @@ def project_all(repo: Path | str) -> tuple[str, ...]:
     """
     repo = Path(repo)
     source = load_source(repo)
+    # Validated BEFORE the first write, so a bad name leaves nothing half-written.
+    harnesses = harness_names(source)
 
     written: list[str] = []
     _write(repo / COMPASS_REL, render_compass_yaml(source))
     written.append(COMPASS_REL)
 
     # Per-harness integration manifests (speckit's integrity-receipt part).
-    for harness in source.get("integrations", []):
+    for harness in harnesses:
         rel = f"{INTEGRATIONS_DIR_REL}/{harness}.json"
         payload = {
             "harness": harness,
@@ -199,12 +209,36 @@ def project_all(repo: Path | str) -> tuple[str, ...]:
 
     # Kit file inventory + checksums (covers the source + compass + integrations).
     inventory = [SOURCE_REL, COMPASS_REL] + [
-        f"{INTEGRATIONS_DIR_REL}/{h}.json" for h in source.get("integrations", [])
+        f"{INTEGRATIONS_DIR_REL}/{h}.json" for h in harnesses
     ]
     _write(repo / MANIFEST_REL, _manifest(repo, inventory))
     written.append(MANIFEST_REL)
 
     return tuple(written)
+
+
+def harness_names(source: dict) -> tuple[str, ...]:
+    """The declared ``integrations:`` harness names, or ``ValueError``.
+
+    Each name must be a lowercase token (letters, digits, hyphens) and must not
+    be one of the installer's reserved file stems. ``kit-source.yaml`` may come
+    from a cloned repository, so its names are validated rather than trusted.
+    """
+    declared = source.get("integrations") or []
+    if not isinstance(declared, list):
+        raise ValueError(f"{SOURCE_REL}: integrations must be a list of harness names")
+    for name in declared:
+        if not isinstance(name, str) or not _HARNESS_NAME.fullmatch(name):
+            raise ValueError(
+                f"{SOURCE_REL}: invalid harness name {name!r}; use lowercase "
+                "letters, digits and hyphens"
+            )
+        if name in _RESERVED_HARNESS_NAMES:
+            raise ValueError(
+                f"{SOURCE_REL}: harness name {name!r} is reserved for the "
+                f"integration installer's own {INTEGRATIONS_DIR_REL}/{name}.json"
+            )
+    return tuple(declared)
 
 
 def _write(path: Path, text: str) -> None:

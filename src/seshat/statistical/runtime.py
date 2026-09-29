@@ -44,11 +44,11 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _sha256_file(path: Path, missing_marker: str) -> str:
+def _read_bytes(path: Path) -> bytes | None:
     try:
-        return hashlib.sha256(path.read_bytes()).hexdigest()
+        return path.read_bytes()
     except OSError:
-        return hashlib.sha256(missing_marker.encode("utf-8")).hexdigest()
+        return None
 
 
 def _analysis_reference(spec: AnalysisSpec) -> Mapping[str, object]:
@@ -73,26 +73,54 @@ def _analysis_reference(spec: AnalysisSpec) -> Mapping[str, object]:
     return {"path": path.as_posix(), "revision": spec.revision, "sha256": digest}
 
 
-def _positive_revision(value: object, fallback: int) -> int:
+def _positive_revision(value: object) -> int | None:
+    """A declared positive revision, or None -- never a borrowed number."""
+    if isinstance(value, bool):
+        return None
     try:
         revision = int(str(value))
     except (TypeError, ValueError):
-        return fallback
-    return revision if revision >= 1 else fallback
+        return None
+    return revision if revision >= 1 else None
+
+
+def _declared_revision(content: bytes) -> int | None:
+    """The artifact's own top-level `revision`, if it declares one (#738)."""
+    import yaml
+
+    try:
+        document = yaml.safe_load(content.decode("utf-8-sig"))
+    except (UnicodeError, yaml.YAMLError):
+        return None
+    if not isinstance(document, Mapping):
+        return None
+    return _positive_revision(document.get("revision"))
 
 
 def _governance_reference(
     repo_root: Path,
     path: PurePosixPath,
-    revision: int,
+    revision: int | None,
     observed_state: str,
 ) -> Mapping[str, object]:
+    """One cited governance artifact, pinned by its content digest.
+
+    A missing file is reported `unavailable` with no digest and no revision,
+    rather than a digest of a marker string that looks like real content.
+    """
     relative = path.as_posix()
-    resolved = repo_root / Path(*path.parts)
+    content = _read_bytes(repo_root / Path(*path.parts))
+    if content is None:
+        return {
+            "path": relative,
+            "revision": None,
+            "sha256": None,
+            "observed_state": "unavailable",
+        }
     return {
         "path": relative,
-        "revision": revision,
-        "sha256": _sha256_file(resolved, f"unavailable:{relative}"),
+        "revision": revision if revision is not None else _declared_revision(content),
+        "sha256": hashlib.sha256(content).hexdigest(),
         "observed_state": observed_state,
     }
 
@@ -104,7 +132,7 @@ def _governance(
 ) -> Mapping[str, object]:
     approved = context is not None
     readiness_revision = _positive_revision(
-        context.readiness_revision if context else None, spec.revision
+        context.readiness_revision if context else None
     )
     return {
         "readiness": (
@@ -116,10 +144,12 @@ def _governance(
             ),
         ),
         "metric_contracts": tuple(
+            # Each contract's revision is its OWN (or None); the analysis
+            # spec's revision is not the contract's (#738).
             _governance_reference(
                 repo_root,
                 path,
-                spec.revision,
+                None,
                 "owner-approved" if approved else "cited",
             )
             for path in spec.metric_contracts

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import replace
 from pathlib import Path, PurePosixPath
@@ -331,3 +332,43 @@ def test_runtime_evidence_conforms_to_committed_schema(
         ).read_text(encoding="utf-8")
     )
     assert validate_json_contract(evidence_payload(evidence), schema) == []
+
+
+def _governed_evidence(tmp_path: Path, monkeypatch):
+    _allow(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        "seshat.statistical.runtime.load_runner",
+        lambda descriptor: lambda context: MethodResult(),
+    )
+    evidence = run_analysis(tmp_path, _spec(), Provider())
+    schema = json.loads(
+        (
+            Path(__file__).parents[3]
+            / "schemas/statistical-analysis-evidence.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert validate_json_contract(evidence_payload(evidence), schema) == []
+    return evidence.governance
+
+
+def test_contract_revision_is_never_borrowed_from_the_analysis_spec(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """#738: the spec's revision (2) is not the contract's; missing files are
+    reported unavailable, never with a synthetic digest."""
+    missing = _governed_evidence(tmp_path, monkeypatch)["metric_contracts"][0]
+    assert missing["revision"] is None
+    assert missing["sha256"] is None
+    assert missing["observed_state"] == "unavailable"
+
+    contract = tmp_path / "mappings/sample/metrics/ApprovedMetric.yaml"
+    contract.parent.mkdir(parents=True, exist_ok=True)
+    contract.write_text("name: ApprovedMetric\n", encoding="utf-8")
+    undeclared = _governed_evidence(tmp_path, monkeypatch)["metric_contracts"][0]
+    assert undeclared["revision"] is None
+    assert undeclared["sha256"] == hashlib.sha256(contract.read_bytes()).hexdigest()
+    assert undeclared["observed_state"] == "owner-approved"
+
+    contract.write_text("name: ApprovedMetric\nrevision: 7\n", encoding="utf-8")
+    declared = _governed_evidence(tmp_path, monkeypatch)["metric_contracts"][0]
+    assert declared["revision"] == 7

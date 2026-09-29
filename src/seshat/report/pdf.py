@@ -33,15 +33,11 @@ discovered by a customer.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from importlib import resources
 from typing import Protocol
 
 from jinja2 import TemplateError
 
 from seshat.report.html import (
-    STYLESHEET_NAME,
-    TEMPLATE_DIRECTORY,
-    TEMPLATE_PACKAGE,
     SurfaceRenderFailed,
     build_context,
     build_environment,
@@ -119,11 +115,6 @@ class PdfSurface:
     surface_version: str = PDF_SURFACE_VERSION
 
 
-def _stylesheet(name: str) -> str:
-    directory = resources.files(TEMPLATE_PACKAGE).joinpath(TEMPLATE_DIRECTORY)
-    return directory.joinpath(name).read_text(encoding="utf-8")
-
-
 def assert_publishable(pdf_bytes: bytes) -> None:
     """Refuse a PDF that a reader could not use, before it becomes a surface."""
     if not pdf_bytes.startswith(b"%PDF"):
@@ -144,8 +135,6 @@ class PdfReportRenderer:
         self, bundle: ReportBundle, layout: ReportLayout, vocabulary: Vocabulary
     ) -> PdfSurface:
         context = build_context(bundle, layout, vocabulary)
-        context["screen_stylesheet"] = _stylesheet(STYLESHEET_NAME)
-        context["print_stylesheet"] = _stylesheet(PRINT_STYLESHEET_NAME)
         context["surface_version"] = PDF_SURFACE_VERSION
         try:
             template = self._environment.get_template(PRINT_TEMPLATE_NAME)

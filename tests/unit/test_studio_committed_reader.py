@@ -34,7 +34,7 @@ def test_committed_arabic_answer_is_read_as_utf8(tmp_path: Path) -> None:
     _commit_store(repo, _ARABIC)
     commit_all(repo, "decision with an Arabic answer")
 
-    text = workbench_routes._CommittedReader(repo).file_at_head(_STORE)
+    text = workbench_routes.CommittedReader(repo).file_at_head(_STORE)
 
     assert text is not None and text.replace("\r\n", "\n") == _ARABIC
 
@@ -45,7 +45,7 @@ def test_subdirectory_workspace_reads_its_own_store(tmp_path: Path) -> None:
     _commit_store(repo / "proj", _ARABIC)
     commit_all(repo, "toplevel twin plus project store")
 
-    text = workbench_routes._CommittedReader(repo / "proj").file_at_head(_STORE)
+    text = workbench_routes.CommittedReader(repo / "proj").file_at_head(_STORE)
 
     assert text is not None and "في" in text
 
@@ -59,4 +59,4 @@ def test_undecodable_output_is_an_error_not_absence(
     monkeypatch.setattr(workbench_routes.gitutil, "run_subprocess", lost_stdout)
 
     with pytest.raises(RuntimeError, match="could not be decoded"):
-        workbench_routes._CommittedReader(tmp_path).file_at_head(_STORE)
+        workbench_routes.CommittedReader(tmp_path).file_at_head(_STORE)

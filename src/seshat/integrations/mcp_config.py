@@ -103,5 +103,8 @@ def merge(config: dict, name: str, entry: dict) -> dict:
 
 
 def write_config(path: Path, config: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    """Write the config atomically: it carries the operator's own servers, and a
+    truncated file would lose them (the lock already had this guarantee)."""
+    from seshat.integrations.lockfile import write_text_atomically
+
+    write_text_atomically(path, json.dumps(config, indent=2) + "\n", prefix=".mcp-")

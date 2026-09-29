@@ -272,3 +272,36 @@ def test_semantic_pass_without_metric_owner_approval_is_not_ready(
     )
     decision = evaluate_policy(root, _load(root))
     assert "STAT_SEMANTIC_NOT_READY" in {b.code for b in decision.blockers}
+
+
+@pytest.mark.parametrize(
+    "line",
+    (
+        "retail validate did not exit 0 (exit 1) -- rerun pending",
+        "seshat validate expected exit 0, got exit 2",
+        "TODO: run seshat validate until exit 0",
+        "seshat validate exit 0 was not reached",
+        "the job ran seshat validate and it failed, exit 0 never reported",
+        "seshat validate exit 1 then exit 0 on the stale cache",
+    ),
+)
+def test_live_proof_rejects_negated_or_expected_exit_narratives(line: str) -> None:
+    """Narrating an exit status is not a successful run."""
+    from seshat.statistical.policy import _is_live_proof
+
+    assert _is_live_proof(line) is False
+
+
+@pytest.mark.parametrize(
+    "line",
+    (
+        "seshat validate --source-map mappings/finance_gl_actuals/source-map.yaml "
+        "exit 0, 0 findings (2026-09-15)",
+        "retail validate exit 0 WITH banner: PK unique, date coverage complete, "
+        "0 orphan FKs (all 5), penny-exact reconcile",
+    ),
+)
+def test_live_proof_accepts_committed_success_lines(line: str) -> None:
+    from seshat.statistical.policy import _is_live_proof
+
+    assert _is_live_proof(line) is True

@@ -17,7 +17,7 @@ from seshat.statistical.methods.inference import (  # noqa: E402
     BootstrapRequest,
     adjust_pvalues,
     bootstrap_interval,
-    epsilon_squared,
+    eta_squared_h,
     hedges_g,
     omega_squared,
     paired_standardized_change,
@@ -94,12 +94,37 @@ def test_effect_sizes_match_exact_small_sample_formulas() -> None:
     )
     assert rank_biserial(first, second) == pytest.approx(-8 / 9)
     assert rank_biserial(before, after, paired=True) == pytest.approx(1.0)
-    assert omega_squared(5.0, group_count=3, total_count=15) == pytest.approx(
-        (5.0 - 2) / (5.0 + 12)
-    )
-    assert epsilon_squared(8.0, group_count=3, total_count=15) == pytest.approx(
-        (8.0 - 3 + 1) / (15 - 3)
-    )
+
+
+def _ss_omega_squared(groups: list[list[float]]) -> float:
+    """Independent reference: omega^2 = (SS_b - df_b * MS_w) / (SS_t + MS_w)."""
+    arrays = [np.asarray(group) for group in groups]
+    pooled = np.concatenate(arrays)
+    grand = pooled.mean()
+    ss_between = sum(len(a) * (a.mean() - grand) ** 2 for a in arrays)
+    ss_within = sum(((a - a.mean()) ** 2).sum() for a in arrays)
+    ms_within = ss_within / (len(pooled) - len(arrays))
+    ss_total = ((pooled - grand) ** 2).sum()
+    return (ss_between - (len(arrays) - 1) * ms_within) / (ss_total + ms_within)
+
+
+def test_omega_squared_matches_the_sum_of_squares_reference() -> None:
+    """#735: textbook omega^2 from the classical F, checked against SS terms.
+
+    Hand-computed for these groups: SS_b=105.5, SS_w=28.5, SS_t=134, MS_w=19/6,
+    so omega^2 = (105.5 - 2*19/6) / (134 + 19/6) = 0.72296 (the prior formula
+    (F - df_b)/(F + df_w) gave 0.5713).
+    """
+    groups = [[1.0, 2.0, 3.0, 4.0], [3.0, 5.0, 7.0, 8.0], [8.0, 9.0, 10.0, 12.0]]
+    classical_f = float(stats.f_oneway(*groups).statistic)
+    observed = omega_squared(classical_f, group_count=3, total_count=12)
+    assert observed == pytest.approx(_ss_omega_squared(groups))
+    assert observed == pytest.approx(0.722965, abs=1e-6)
+
+
+def test_eta_squared_h_is_the_named_kruskal_wallis_effect() -> None:
+    """(H - k + 1)/(n - k) is eta^2_H (Cohen); epsilon^2 would be H/(n-1)=0.571."""
+    assert eta_squared_h(8.0, group_count=3, total_count=15) == pytest.approx(0.5)
 
 
 @pytest.mark.parametrize(

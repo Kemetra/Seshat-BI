@@ -283,7 +283,8 @@ class TestWriteRunEvidence:
         summary = _finalized_green_run(tmp_path, "run-no-git")
 
         assert summary["commit_sha"] == "0000000"
-        assert summary["workspace_dirty"] is False
+        # Unknown git state is recorded as dirty, never as clean (fail closed).
+        assert summary["workspace_dirty"] is True
         assert summary["input_artifacts"] == {}
 
     def test_list_runs_reports_known_runs(self, tmp_path: Path) -> None:

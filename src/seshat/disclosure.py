@@ -6,34 +6,88 @@ import re
 from typing import Any
 
 _SECRET_KEYS = frozenset(
-    {"password", "passwd", "secret", "token", "api_key", "dsn", "connection_string"}
+    {
+        "password",
+        "passwd",
+        "secret",
+        "token",
+        "api_key",
+        "dsn",
+        "connection_string",
+        "database_url",
+        "db_url",
+        "connection_url",
+        "access_token",
+        "client_secret",
+    }
 )
+# A key is ALSO secret when one of its word tokens is one of these (so
+# `DB_PASSWORD`, `pg-pwd`, `client_secret_value` block) -- matched per token,
+# never by substring, so `token_count` or `connection_status` stay clean.
+_SECRET_KEY_TOKENS = frozenset({"password", "passwd", "pwd", "secret", "dsn"})
 _PII_KEYS = frozenset(
     {"email", "phone", "ssn", "national_id", "customer_name", "full_name"}
 )
 _RAW_ARRAY_KEYS = frozenset(
     {"raw_values", "sample_values", "distinct_values", "source_rows", "raw_rows"}
 )
+# `scheme(+driver)?://` -- SQLAlchemy spellings such as `postgresql+psycopg2://`.
 _CONNECTION_RE = re.compile(
-    r"\b(?:postgres(?:ql)?|mysql|mssql|sqlserver|snowflake)://", re.IGNORECASE
+    r"\b(?:postgres(?:ql)?|mysql|mssql|sqlserver|snowflake)(?:\+[a-z0-9_]+)?://",
+    re.IGNORECASE,
 )
-_WINDOWS_ABS_RE = re.compile(r"^[A-Za-z]:[\\/]")
-_UNIX_ABS_RE = re.compile(r"^/(?:home|Users|var|etc|opt|tmp)/")
+# Libpq keyword conninfo (`host=h password=p`): a host= plus a credential key.
+_CONNINFO_RE = re.compile(
+    r"(?i)\b(?:host|hostaddr|server)\s*=\s*\S+.*\b(?:user|password|dbname)\s*=\s*\S"
+)
+# Unanchored, so a path embedded in an error string is caught too. The drive
+# letter must not follow an alphanumeric (`http://` holds `p:/`).
+_WINDOWS_ABS_RE = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:[\\/]")
+_UNC_RE = re.compile(r"(?<![^\s\"'(=])\\\\[^\\\s]+\\")
+_UNIX_ABS_RE = re.compile(r"(?<![\w.:/-])/(?:home|Users|var|etc|opt|tmp|root|srv|mnt)/")
 
 
 def _finding(rule: str, locator: str, message: str) -> dict[str, str]:
     return {"rule": rule, "locator": locator, "message": message}
 
 
+def _is_secret_key(key: str | None) -> bool:
+    if not key:
+        return False
+    if key in _SECRET_KEYS:
+        return True
+    return bool(_SECRET_KEY_TOKENS & set(re.split(r"[^a-z0-9]+", key)))
+
+
+def _is_absolute_path(value: str) -> bool:
+    return any(
+        pattern.search(value) for pattern in (_WINDOWS_ABS_RE, _UNC_RE, _UNIX_ABS_RE)
+    )
+
+
+def _secret_shaped_findings(value: str, locator: str) -> list[dict[str, str]]:
+    """The shipped SECRET_PATTERNS chokepoint, so this gate is never weaker."""
+    from seshat.pbi_mcp.scan import scan_text
+
+    return [
+        _finding(
+            rule="secret_shaped",
+            locator=locator,
+            message=f"value matches a secret-shaped pattern ({label})",
+        )
+        for label in scan_text(value)
+    ]
+
+
 def _string_findings(key: str | None, value: str, locator: str) -> list[dict[str, str]]:
-    findings: list[dict[str, str]] = []
-    if key in _SECRET_KEYS and value:
+    findings: list[dict[str, str]] = _secret_shaped_findings(value, locator)
+    if _is_secret_key(key) and value:
         findings.append(
             _finding(
                 rule="secret_field", locator=locator, message="secret field is set"
             )
         )
-    if _CONNECTION_RE.search(value):
+    if _CONNECTION_RE.search(value) or _CONNINFO_RE.search(value):
         findings.append(
             _finding(
                 rule="connection_string",
@@ -41,7 +95,7 @@ def _string_findings(key: str | None, value: str, locator: str) -> list[dict[str
                 message="connection string is not safe for disclosure",
             )
         )
-    if _WINDOWS_ABS_RE.match(value) or _UNIX_ABS_RE.match(value):
+    if _is_absolute_path(value):
         findings.append(
             _finding(
                 rule="absolute_path",

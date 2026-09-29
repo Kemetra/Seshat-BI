@@ -240,3 +240,15 @@ def test_a_marked_flag_alone_is_not_enough() -> None:
 
     with pytest.raises(ReportError, match="no structure tree"):
         assert_publishable(b"%PDF-1.7\n/MarkInfo<</Marked true>>/FontFile2 2 0 R")
+
+
+def test_printed_stylesheets_are_not_html_escaped(tmp_path: Path) -> None:
+    from seshat.report.pdf import PdfReportRenderer
+
+    bundle, layout = _artifacts(tmp_path)
+    printer = FakePrinter()
+    PdfReportRenderer(printer).render(bundle, layout, _vocab("en"))
+    html = str(printer.pages[0])
+    head = html.split("</head>")[0]
+    assert '.report[dir="rtl"]' in head
+    assert "&#34;" not in head

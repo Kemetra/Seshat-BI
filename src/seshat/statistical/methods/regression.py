@@ -18,7 +18,7 @@ from ..contracts import (
     withheld,
 )
 from ..evidence import decimal_text
-from .common import finite_array, unit_for_role
+from .common import enforce_missing_policy, finite_array, unit_for_role
 
 _CAUSAL_LANGUAGE = re.compile(
     r"\b(?:causes?|caused|drives?|drove)\b|\bimpact\s+of\b",
@@ -73,11 +73,10 @@ def _complete_pairs(context: MethodContext, roles: tuple[int, ...]):
         if not _missing(row[left_index]) and not _missing(row[right_index])
     ]
     excluded = len(context.data.rows) - len(pairs)
-    require(
-        not excluded or context.spec.missing_policy != "fail",
-        "STAT_MISSING_DATA",
+    enforce_missing_policy(
+        context,
+        excluded,
         "Regression input contains incomplete response/predictor rows.",
-        "Resolve missing values or approve complete-case exclusion.",
     )
     return pairs, excluded
 

@@ -27,12 +27,19 @@ from seshat.integrations.resolvers import (
 )
 from tests.unit._curated_stack_fixtures import (
     FakePypi,
+    _grant_provisioning,
     _no_network,
     _release,
     _workspace,
 )
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.fixture(autouse=True)
+def _provisioning_granted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests exercise authorized installs; see `_grant_provisioning`."""
+    _grant_provisioning(monkeypatch)
 
 
 # --------------------------------------------------------------------------- #
