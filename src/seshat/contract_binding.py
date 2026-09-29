@@ -63,6 +63,29 @@ def _tmdl_measure_bindings(paths: tuple[Path, ...]) -> set[tuple[str, str]]:
     return bindings
 
 
+def _scope_bindings_match(contracts: dict, inputs: tuple[Path, ...]) -> bool:
+    contract_bindings = {contract.binding for contract in contracts.values()}
+    if not contract_bindings:
+        return False
+    bound_tables = {table for table, _measure in contract_bindings}
+    scoped_model_bindings = {
+        binding
+        for binding in _tmdl_measure_bindings(inputs)
+        if binding[0] in bound_tables
+    }
+    return contract_bindings == scoped_model_bindings
+
+
+def _semantic_finding_clean(semantic_finding: Any) -> bool:
+    if semantic_finding is None:
+        return True
+    if semantic_finding.state != _STATE_COVERED:
+        return False
+    if semantic_finding.class_ not in {"pass", "no_drift"}:
+        return False
+    return not semantic_finding.items
+
+
 def contract_binding_state(
     repo_root: Path | str,
     scope_dir: str,
@@ -93,19 +116,8 @@ def contract_binding_state(
     inventory = load_contract_inventory(contract_paths, root)
     if inventory.errors or not inventory.approved:
         return "blocked"
-    contracts = inventory.for_scope(scope_dir)
-    contract_bindings = {contract.binding for contract in contracts.values()}
-    model_bindings = _tmdl_measure_bindings(inputs)
-    bound_tables = {table for table, _measure in contract_bindings}
-    scoped_model_bindings = {
-        binding for binding in model_bindings if binding[0] in bound_tables
-    }
-    if not contract_bindings or contract_bindings != scoped_model_bindings:
+    if not _scope_bindings_match(inventory.for_scope(scope_dir), inputs):
         return "blocked"
-    if semantic_finding is not None and (
-        semantic_finding.state != _STATE_COVERED
-        or semantic_finding.class_ not in {"pass", "no_drift"}
-        or semantic_finding.items
-    ):
+    if not _semantic_finding_clean(semantic_finding):
         return "blocked"
     return "verified"
