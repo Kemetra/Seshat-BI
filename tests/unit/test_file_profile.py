@@ -455,3 +455,18 @@ def test_excel_interior_blank_row_is_not_counted(tmp_path) -> None:
     assert result.pk.is_unique is True  # unique key not flipped
     for c in result.columns:
         assert c.missing_count == 0
+
+
+@requires_openpyxl
+def test_excel_blank_last_column_is_not_ragged(tmp_path) -> None:
+    """F142: a rectangular sheet whose LAST column is blank on some rows is not a
+    delimiter mismatch -- only padding beyond the header width may be stripped."""
+    p = _write_xlsx(
+        tmp_path / "d.xlsx",
+        [("id", "name", "notes"), ("1", "a", "x"), ("2", "b", None), ("3", "c", None)],
+    )
+    reader = make_excel_reader(str(p), sheet="Sheet1")
+    result = profile_file(reader, str(p), ("id",))
+    assert result.ragged_row_count == 0
+    notes = next(c for c in result.columns if c.name == "notes")
+    assert notes.missing_count == 2

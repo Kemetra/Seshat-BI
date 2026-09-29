@@ -165,7 +165,8 @@ _LABELS = {
         "comparison": "Before / after",
         "comparison_omitted": "Before/after is omitted:",
         "footer_local": (
-            "Local offline snapshot generated from committed evidence only."
+            "Local offline snapshot of evidence files as on disk "
+            "(may include uncommitted changes)."
         ),
         "footer_publish": (
             "Publishing this bundle is a separate, explicit human action."
@@ -197,7 +198,10 @@ _LABELS = {
         "redacted": "مُنقَّح",
         "comparison": "قبل / بعد",
         "comparison_omitted": "تم حذف قسم قبل/بعد:",
-        "footer_local": "لقطة محلية غير متصلة تم إنشاؤها من الأدلة الموثقة فقط.",
+        "footer_local": (
+            "لقطة محلية غير متصلة من ملفات الأدلة كما هي على القرص "
+            "(قد تشمل تغييرات لم تُلتزم بعد)."
+        ),
         "footer_publish": "نشر هذه الحزمة إجراء بشري صريح ومنفصل.",
         "no_evidence": "لا توجد أدلة مسجلة",
         "no_blockers": "لا توجد عوائق مسجلة",

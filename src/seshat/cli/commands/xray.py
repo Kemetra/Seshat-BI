@@ -234,10 +234,8 @@ def xray_main(args: argparse.Namespace) -> int:
 def _base_model_files(root: Path, base: str) -> list[tuple[str, str]]:
     """Model files at ``base``, via git plumbing only (read-only).
 
-    Raises RuntimeError (from ``git_output``) on an unresolvable ref, and on an
-    option-shaped one before git sees it. The listing uses ``-z`` so a
-    non-ASCII table file is not C-quoted, and each read uses ``REV:./path`` so
-    it names the same cwd-relative path ``ls-tree`` listed.
+    Raises RuntimeError on an unresolvable or option-shaped ref. Path listing
+    preserves non-ASCII names, and blob reads use cwd-relative paths.
     """
     from seshat.gitutil import committed_ref, list_paths, validate_revision
 

@@ -34,18 +34,55 @@ def context(tmp_path: Path):
     )
 
 
+@pytest.mark.parametrize("name", ("dbt.exe", "dbt"))
 def test_resolve_dbt_executable_uses_only_supplied_scripts_dir(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    """Both names: bare ``dbt`` is the real file on Linux/macOS (the blocking
+    CI leg), so the Windows-only ``dbt.exe`` must not be the only case (F230)."""
+    from seshat.dbt.runner import resolve_dbt_executable
+
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    expected = scripts / name
+    expected.write_text("stub", encoding="utf-8")
+    monkeypatch.setenv("PATH", str(tmp_path / "global-bin"))
+
+    assert resolve_dbt_executable(scripts) == expected.resolve()
+
+
+def test_resolve_dbt_executable_prefers_dbt_exe_when_both_exist(
+    tmp_path: Path,
 ) -> None:
     from seshat.dbt.runner import resolve_dbt_executable
 
     scripts = tmp_path / "scripts"
     scripts.mkdir()
-    expected = scripts / "dbt.exe"
-    expected.write_text("stub", encoding="utf-8")
-    monkeypatch.setenv("PATH", str(tmp_path / "global-bin"))
+    for name in ("dbt", "dbt.exe"):
+        (scripts / name).write_text("stub", encoding="utf-8")
 
-    assert resolve_dbt_executable(scripts) == expected.resolve()
+    assert resolve_dbt_executable(scripts) == (scripts / "dbt.exe").resolve()
+
+
+def test_resolve_dbt_executable_refuses_a_bare_dbt_linked_outside(
+    tmp_path: Path,
+) -> None:
+    """Containment for the POSIX name: a ``dbt`` symlink escaping scripts/ is
+    not launched, and there is still no global fallback."""
+    from seshat.dbt.runner import DbtUnavailable, resolve_dbt_executable
+
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    outside = tmp_path / "elsewhere" / "dbt"
+    outside.parent.mkdir()
+    outside.write_text("stub", encoding="utf-8")
+    try:
+        (scripts / "dbt").symlink_to(outside)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation not permitted in this environment")
+
+    with pytest.raises(DbtUnavailable):
+        resolve_dbt_executable(scripts)
 
 
 def test_resolve_dbt_executable_has_no_global_path_fallback(tmp_path: Path) -> None:

@@ -29,12 +29,19 @@ class TestRedactText:
         assert "hunter2" not in out
         assert "10.1.2.3" not in out
         assert "svc" not in out
+        # Presence: the keys (the diagnostic context) survive, only values go --
+        # an absence-only test passed for a redactor returning "".
+        assert out.startswith("host=[REDACTED")
+        assert "password=" in out and "dbname=" in out
 
     def test_odbc_style_credentials_are_scrubbed(self) -> None:
         text = "Driver=x;Server=y;UID=svcuser;PWD=odbcsecret;Database=gold"
         out = redaction.redact_text(text)
         assert "odbcsecret" not in out
         assert "svcuser" not in out
+        assert "Driver=x;Server=y;" in out  # non-secret context survives
+        assert "Database=gold" in out
+        assert "[REDACTED" in out
 
     def test_env_secret_values_are_scrubbed(
         self, monkeypatch: pytest.MonkeyPatch
@@ -218,6 +225,8 @@ class TestRedactionRobustness357:
         assert "abc;" not in out
         assert ";xyz" not in out
         assert "bob" not in out
+        assert out.startswith("auth string ") and out.endswith(" rejected")
+        assert "[REDACTED" in out
 
     def test_none_and_empty_are_safe(self) -> None:
         assert redaction.redact_text("") == ""
