@@ -84,17 +84,27 @@ def test_release_workflows_install_build_tooling_only_from_the_lock(
         assert not tokens & {"build", "twine", "hatchling"}, (workflow.name, line)
 
 
-def _steps_before_the_build(workflow: Path) -> list[dict]:
-    """Every step that runs before the one invoking ``python -m build``, per job."""
+def _first_index(steps: list[dict], matches) -> int | None:
+    return next((i for i, step in enumerate(steps) if matches(step)), None)
+
+
+def _wheel_building_jobs(workflow: Path) -> list[tuple[str, list[dict], int]]:
+    """``(job, steps, build_index)`` for EVERY job step running ``python -m build``.
+
+    All of them, not the first: a second wheel-building job must be held to the same
+    frontend-first order, or it could ship the missing-assets wheel unguarded.
+    """
     import yaml
 
     document = yaml.safe_load(workflow.read_text(encoding="utf-8"))
-    for job in document["jobs"].values():
-        steps = job.get("steps", [])
-        for index, step in enumerate(steps):
-            if "python -m build" in str(step.get("run", "")):
-                return steps[:index] + [step]
-    raise AssertionError(f"{workflow.name} never runs `python -m build`")
+    found = [
+        (name, job.get("steps", []), index)
+        for name, job in document["jobs"].items()
+        for index, step in enumerate(job.get("steps", []))
+        if "python -m build" in str(step.get("run", ""))
+    ]
+    assert found, f"{workflow.name} never runs `python -m build`"
+    return found
 
 
 @pytest.mark.parametrize("workflow", RELEASE_WORKFLOWS, ids=lambda p: p.name)
@@ -107,13 +117,18 @@ def test_every_wheel_build_builds_the_studio_frontend_first(workflow: Path) -> N
     v3.0.0 dispatch (run 36621668968) blocked on "wheel is missing required package
     data" -- a latent break since the inspector began deriving its required files.
     """
-    prior = _steps_before_the_build(workflow)
-    runs = [str(step.get("run", "")) for step in prior]
-    uses = [str(step.get("uses", "")) for step in prior]
-
-    assert any("scripts/build_studio_frontend.py" in run for run in runs), (
-        f"{workflow.name} builds a wheel without building the Studio frontend first"
-    )
-    assert any(use.startswith("actions/setup-node@") for use in uses), (
-        f"{workflow.name} builds the Studio frontend without setting up Node"
-    )
+    for job, steps, build in _wheel_building_jobs(workflow):
+        frontend = _first_index(
+            steps, lambda s: "scripts/build_studio_frontend.py" in str(s.get("run", ""))
+        )
+        node = _first_index(
+            steps, lambda s: str(s.get("uses", "")).startswith("actions/setup-node@")
+        )
+        where = f"{workflow.name} job {job!r}"
+        assert frontend is not None and frontend < build, (
+            f"{where} builds a wheel without building the Studio frontend first"
+        )
+        # Node must precede the step that NEEDS it, not merely the wheel build.
+        assert node is not None and node < frontend, (
+            f"{where} builds the Studio frontend without setting up Node first"
+        )
