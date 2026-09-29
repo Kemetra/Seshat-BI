@@ -381,14 +381,13 @@ def _bronze_citation(inputs: _PlanInputs, silver_name: str, context: str) -> str
 
 def _staging_column(row: dict, source_table: str) -> ColumnSpec | None:
     """A staging column ALWAYS cites its bronze source; a row without a usable
-    ``source_name``/``rename_to`` is skipped (it cannot be a valid citation)."""
+    ``source_name`` is skipped, and a non-identifier name fails closed."""
     source = row.get("source_name")
     if not isinstance(source, str) or not source:
         return None
     rename = row.get("rename_to")
     name = rename if isinstance(rename, str) and rename else source
-    if not _IDENTIFIER.fullmatch(name):
-        return None
+    _require_identifier(name, f"kept column {name!r} (give it a rename_to)")
     silver_type = row.get("silver_type")
     return ColumnSpec(
         name=name,
@@ -585,6 +584,10 @@ def _bronze_cited_column(inputs: _PlanInputs, name: str, context: str) -> Column
     -- consistent with the staging model. Falls back to the ``text`` default
     otherwise.
     """
+    _require_identifier(name, f"{context} {name!r}")
+    renamed = [k for k, v in inputs.bronze_by_silver.items() if v == name != k]
+    if name not in inputs.bronze_by_silver and renamed:
+        raise ScaffoldError(f"{context} {name!r} is renamed; use {renamed[0]!r}")
     silver_type = inputs.silver_type_by_name.get(name)
     return ColumnSpec(
         name=name,

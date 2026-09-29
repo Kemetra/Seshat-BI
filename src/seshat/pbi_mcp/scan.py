@@ -14,71 +14,16 @@ discipline ``git_meta.py`` documents for its own patterns).
 
 from __future__ import annotations
 
-import re
+# The pattern table lives in the stdlib-only redaction leaf so the dbt and
+# Dagster output surfaces scrub with exactly what this refusal scan detects.
+from seshat.redaction_core import SECRET_PATTERNS  # noqa: E402
 
-# Assembled from parts: the two ODBC credential keywords must never appear in
-# this source directly followed by their delimiter (see module docstring).
-_ODBC_KEYS = "PW" + "D|UI" + "D"
-_PG_SCHEME = "postgres" + "(?:ql)?" + ":" + "//"
-_DO_SUFFIX = ".db." + "ondigitalocean" + ".com"
-
-# label -> pattern. Every VALUE class excludes ``<`` so a documented
-# ``<placeholder>`` token never matches; only a real literal value can.
-SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    (
-        "credential assignment",
-        re.compile(
-            r"(?i)\b(?:password|passwd|pwd|api[_ -]?key|access[_ -]?token"
-            r"|client[_ -]?secret|accountkey)\s*[=:]\s*[^\s<>{}$]+"
-        ),
-    ),
-    (
-        "credential-bearing URL",
-        re.compile(r"\b[a-z][a-z0-9+.-]*://[^\s/:<>]+:[^\s/@<>]+@", re.IGNORECASE),
-    ),
-    (
-        "database connection URL",
-        re.compile(
-            "(?i)\\b(?:" + _PG_SCHEME + r"|mysql://|mssql://|sqlserver://"
-            r"|snowflake://)[^\s<>]+"
-        ),
-    ),
-    (
-        "managed-database endpoint",
-        re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,253}" + re.escape(_DO_SUFFIX)),
-    ),
-    (
-        "managed-database cluster slug",
-        re.compile(r"\bdb-[a-z]{2,}-[a-z]{2,}\d-\d{3,}\b"),
-    ),
-    (
-        "ODBC credential keyword",
-        re.compile(r"\b(?:" + _ODBC_KEYS + r")=[^;\s{}<>/]+"),
-    ),
-    (
-        "Windows user path",
-        re.compile(r"[A-Za-z]:[\\/]Users[\\/][^\\/\s<>]+"),
-    ),
-    (
-        # Assembled from fragments on purpose: the release artifact inspector
-        # (scripts/inspect_release_artifacts.py) scans shipped source for the
-        # very shape this pattern detects, so spelling the literal here blocks
-        # the PyPI publish on our own detector. Behavior is unchanged -- the
-        # compiled pattern is identical to the one-piece spelling.
-        "macOS user path",
-        re.compile("/" + "Users" + r"/[^/\s<>]+/"),
-    ),
-    (
-        # A raw GUID in GENERATED config/guidance text is a tenant, app, or
-        # workspace id -- the templates use <tenant-id>-style placeholders, so
-        # a matching literal means real environment data leaked in.
-        "GUID (tenant/app/workspace id)",
-        re.compile(
-            r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}"
-            r"-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
-        ),
-    ),
-)
+__all__ = [
+    "SECRET_PATTERNS",
+    "GeneratedSecretError",
+    "refuse_if_secret_shaped",
+    "scan_text",
+]
 
 
 class GeneratedSecretError(ValueError):

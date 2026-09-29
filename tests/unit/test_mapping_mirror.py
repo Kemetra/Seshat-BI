@@ -226,9 +226,10 @@ def test_generated_stubs_satisfy_the_dagster_gate_parser(tmp_path: Path) -> None
     ensure_unresolved_questions(repo, "cleared_table")
     _mapping_dir(repo, "open_table")
     ensure_unresolved_questions(repo, "open_table")
+    commit_all(repo, "generated mirrors")
 
-    assert _read_unresolved(repo / "mappings" / "cleared_table") == ("CLEARED", 0)
-    assert _read_unresolved(repo / "mappings" / "open_table") == ("OPEN", 0)
+    assert _read_unresolved(repo, "cleared_table") == ("CLEARED", 0)
+    assert _read_unresolved(repo, "open_table") == ("OPEN", 0)
 
 
 def test_rejects_an_unsafe_table_id(tmp_path: Path) -> None:

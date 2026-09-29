@@ -13,6 +13,7 @@ defect adversarial review round 2 caught -- must never SOFTEN an existing stop
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,7 @@ from seshat.dbt_execution_state import (
     STATE_FAILED,
     STATE_UNREADABLE,
     dbt_execution_state,
+    read_dbt_execution_evidence,
 )
 
 pytestmark = pytest.mark.unit
@@ -63,7 +65,28 @@ def _write_evidence(tmp_path: Path, table_dir: str, record: dict) -> Path:
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(record), encoding="utf-8")
+    _commit(tmp_path, path)
     return path
+
+
+def _commit(root: Path, path: Path) -> None:
+    """Evidence counts only once committed -- commit the record."""
+    if not (root / ".git").exists():
+        for argv in (
+            ["git", "init", "-b", "main"],
+            ["git", "config", "user.email", "t@example.com"],
+            ["git", "config", "user.name", "Test"],
+            ["git", "config", "commit.gpgsign", "false"],
+        ):
+            subprocess.run(argv, cwd=root, check=True, capture_output=True)
+    rel = path.relative_to(root).as_posix()
+    subprocess.run(["git", "add", "--", rel], cwd=root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "--allow-empty", "-m", "evidence"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
 
 
 _BLOCKED_TABLE = """\
@@ -201,6 +224,39 @@ def test_corrupt_latest_does_not_fall_back_to_a_flattering_older_record(
     corrupt.write_text("{truncated", encoding="utf-8")
 
     assert dbt_execution_state(tmp_path, "orders") == STATE_UNREADABLE
+
+
+def test_uncommitted_passing_record_is_unreadable_not_built(tmp_path: Path) -> None:
+    """A hand-written, uncommitted 'pass' record must not mask a failed build."""
+    _write_status(tmp_path, "orders", _BLOCKED_TABLE)
+    _write_evidence(
+        tmp_path, "orders", _record("failed", invocation_id="20260101T090000Z-aaaaaaaa")
+    )
+    forged = (
+        tmp_path
+        / "mappings"
+        / "orders"
+        / "dbt-evidence"
+        / "20260808T141530Z-bbbbbbbb.json"
+    )
+    forged.write_text(
+        json.dumps(_record("pass", invocation_id="20260808T141530Z-bbbbbbbb")),
+        encoding="utf-8",
+    )
+    evidence = read_dbt_execution_evidence(tmp_path, "orders")
+    assert evidence.state == STATE_UNREADABLE
+    assert "not committed" in evidence.blocking_reasons[0]
+
+
+def test_record_with_a_non_invocation_filename_is_ignored(tmp_path: Path) -> None:
+    _write_status(tmp_path, "orders", _BLOCKED_TABLE)
+    _write_evidence(
+        tmp_path, "orders", _record("failed", invocation_id="20260101T090000Z-aaaaaaaa")
+    )
+    stray = tmp_path / "mappings" / "orders" / "dbt-evidence" / "zz.json"
+    stray.write_text(json.dumps(_record("pass")), encoding="utf-8")
+    _commit(tmp_path, stray)
+    assert dbt_execution_state(tmp_path, "orders") == STATE_FAILED
 
 
 # --------------------------------------------------------------------------

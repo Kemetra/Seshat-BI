@@ -308,8 +308,9 @@ def _write_mapping_working_set(
     """Write a table's mapping dir. complete=True writes the full 3-file working set
     (source-map + readiness-status + unresolved-questions) that resolve_working_set
     requires; complete=False omits unresolved-questions.md (a partial mapping).
-    committed=True git-adds + commits the source map so it is tracked and clean
-    (resolve_working_set also requires that); committed=False leaves it untracked.
+    committed=True git-adds + commits the working set so it is tracked and clean
+    (resolve_working_set and the gate require that); committed=False leaves it
+    untracked.
     gate_ok=True writes a readiness whose Mapping Ready gate is allowed; gate_ok=
     False writes one still blocked (evaluate_mapping_gate refuses it)."""
     mapping = root / "mappings" / table_id
@@ -326,7 +327,9 @@ def _write_mapping_working_set(
             "Gate status: CLEARED\n", encoding="utf-8"
         )
     if committed:
-        _git(root, "add", f"mappings/{table_id}/source-map.yaml")
+        # The gate reads readiness + mirror from COMMITTED state too, so a
+        # committed working set commits every governed file it wrote.
+        _git(root, "add", f"mappings/{table_id}")
         _git(root, "commit", "-q", "-m", f"add {table_id} map")
 
 

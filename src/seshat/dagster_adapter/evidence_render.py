@@ -60,9 +60,15 @@ def evidence_out_path(root: Path, run_id: str) -> Path:
     )
 
 
+# Score-LIKE key names, not only the literal "score": a confidence / health /
+# maturity / rating value is the same forbidden claim (hard rule #9), and the
+# rendered record attests that none appears.
+_SCORE_LIKE_KEY = re.compile(r"score|confidence|health|maturity|rating", re.IGNORECASE)
+
+
 def _score_keys(payload: object) -> list[str]:
     if isinstance(payload, dict):
-        found = [str(key) for key in payload if "score" in str(key).lower()]
+        found = [str(key) for key in payload if _SCORE_LIKE_KEY.search(str(key))]
         return found + [key for value in payload.values() for key in _score_keys(value)]
     if isinstance(payload, list):
         return [key for item in payload for key in _score_keys(item)]

@@ -7,7 +7,11 @@ import re
 from collections.abc import Mapping
 from pathlib import Path
 
-from seshat.redaction_core import replace_fragments, uri_components
+from seshat.redaction_core import (
+    replace_fragments,
+    scrub_secret_shaped,
+    uri_components,
+)
 
 DBT_ENVIRONMENT_KEYS = (
     "SESHAT_DBT_HOST",
@@ -39,6 +43,9 @@ _NON_SECRET_ENVIRONMENT_KEYS = frozenset(
 _SECRET_ENVIRONMENT_KEYS = tuple(
     key for key in DBT_ENVIRONMENT_KEYS if key not in _NON_SECRET_ENVIRONMENT_KEYS
 )
+# Public: the Dagster parent forwards every SESHAT_DBT_* key to its child, so
+# its redactor must know the same credential set (host/user/password/dbname).
+SECRET_DBT_ENVIRONMENT_KEYS = _SECRET_ENVIRONMENT_KEYS
 
 # Three governed dbt env vars carry a documented `env_var(NAME, DEFAULT)` default
 # in profiles.example.yml, so dbt runs fine without them set:
@@ -193,7 +200,9 @@ def _sanitize_text(text: str, secrets: tuple[str, ...], repo_root: Path) -> str:
     text = replace_fragments(text, ordered, "<redacted>")
     text = replace_fragments(text, uri_components(ordered), "<redacted>")
     text = _replace_path(text, repo_root, "<repo>")
-    return _replace_path(text, Path.home(), "<home>")
+    text = _replace_path(text, Path.home(), "<home>")
+    # Layer two: secret-SHAPED spans whose value was never known here.
+    return scrub_secret_shaped(text, "<redacted>")[0]
 
 
 def _sanitize_mapping(

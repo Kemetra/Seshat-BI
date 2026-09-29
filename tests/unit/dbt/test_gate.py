@@ -261,6 +261,7 @@ def test_mapping_gate_reports_malformed_readiness_yaml(approved_repo: Path) -> N
 
     readiness = approved_repo / "mappings/orders/readiness-status.yaml"
     readiness.write_text("stages: [not: valid", encoding="utf-8")
+    commit_all(approved_repo, "malformed readiness")
 
     decision = evaluate_mapping_gate(resolve_working_set(approved_repo, "orders"))
 
@@ -268,6 +269,81 @@ def test_mapping_gate_reports_malformed_readiness_yaml(approved_repo: Path) -> N
     assert {blocker.code for blocker in decision.blocking_reasons} == {
         "DBT_READINESS_INVALID"
     }
+
+
+def _blocked_then_worktree_cleared(tmp_path: Path) -> Path:
+    """Commit a blocked mapping, then edit ONLY the worktree into a passing one."""
+    repo = make_git_repo(tmp_path)
+    blocked = MappingFixture(
+        mapping_status="blocked",
+        approval={},
+        gate_status="OPEN",
+        question_status="open",
+    )
+    mapping = _write_mapping(repo, blocked)
+    commit_all(repo, "blocked mapping")
+    passing = MappingFixture()
+    (mapping / "readiness-status.yaml").write_text(
+        _readiness_yaml(passing), encoding="utf-8"
+    )
+    (mapping / "unresolved-questions.md").write_text(
+        _questions_markdown(passing), encoding="utf-8"
+    )
+    return repo
+
+
+def test_uncommitted_approval_and_clearance_do_not_unlock_the_gate(
+    tmp_path: Path,
+) -> None:
+    from seshat.dbt.gate import evaluate_mapping_gate, resolve_working_set
+
+    repo = _blocked_then_worktree_cleared(tmp_path)
+
+    decision = evaluate_mapping_gate(resolve_working_set(repo, "orders"))
+
+    assert decision.allowed is False
+    assert decision.approval is None
+    assert decision.mirror_cleared is False
+    assert "DBT_MAPPING_UNCOMMITTED" in {
+        blocker.code for blocker in decision.blocking_reasons
+    }
+
+
+@pytest.mark.parametrize(
+    "relative", ["readiness-status.yaml", "unresolved-questions.md"]
+)
+def test_one_dirty_governed_file_blocks_the_gate(
+    approved_repo: Path, relative: str
+) -> None:
+    from seshat.dbt.gate import evaluate_mapping_gate, resolve_working_set
+
+    path = approved_repo / "mappings/orders" / relative
+    path.write_text(path.read_text(encoding="utf-8") + "# edit\n", encoding="utf-8")
+
+    decision = evaluate_mapping_gate(resolve_working_set(approved_repo, "orders"))
+
+    assert decision.allowed is False
+    assert "DBT_MAPPING_UNCOMMITTED" in {
+        blocker.code for blocker in decision.blocking_reasons
+    }
+
+
+def test_gate_parses_the_committed_blob_not_the_worktree(
+    approved_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Prove the net: with the cleanliness probe disabled, the committed read
+    alone must still ignore a worktree-only edit."""
+    from seshat.dbt import gate
+
+    readiness = approved_repo / "mappings/orders/readiness-status.yaml"
+    readiness.write_text("stages: [not: valid", encoding="utf-8")
+    monkeypatch.setattr(gate, "is_tracked_and_clean", lambda root, rel: True)
+
+    decision = gate.evaluate_mapping_gate(
+        gate.resolve_working_set(approved_repo, "orders")
+    )
+
+    assert decision.allowed is True
 
 
 def test_real_worked_example_mapping_gate_is_allowed() -> None:

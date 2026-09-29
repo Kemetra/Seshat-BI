@@ -39,18 +39,35 @@ def _engine_path(root: Path, table: str) -> Path:
     return Path(root) / "mappings" / table / ENGINE_FILE
 
 
-def _layer_value(root: Path, table: str, layer: str) -> str | None:
-    """Return the raw layer value from the committed flag file, or None.
+def engine_flag_uncommitted(root: Path, table: str) -> bool:
+    """True when a flag file exists but is untracked or carries local edits.
 
+    Such a flag is IGNORED (the resolver falls back to ``migrations``); the
+    doctor reports it so the operator knows why dbt is not engaged."""
+    if not _SAFE_IDENTIFIER.fullmatch(table):
+        return False
+    if not _engine_path(root, table).is_file():
+        return False
+    from seshat.gitstate import is_tracked_and_clean
+
+    return not is_tracked_and_clean(Path(root), f"mappings/{table}/{ENGINE_FILE}")
+
+
+def _layer_value(root: Path, table: str, layer: str) -> str | None:
+    """Return the raw layer value from the COMMITTED flag file, or None.
+
+    The flag is the compensating control for the self-accepted plan digest, so
+    only a committed, clean flag counts: an untracked or locally edited file is
+    read as absent, and the parsed text is the HEAD blob, never the worktree.
     Never raises and never surfaces the path: any read/parse problem yields None
     so the caller falls through to the fail-closed ``migrations`` default.
     """
-    path = _engine_path(root, table)
-    if not path.is_file():
+    if not _engine_path(root, table).is_file():
         return None
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError):
+    from seshat.gitstate import committed_text
+
+    text = committed_text(Path(root), f"mappings/{table}/{ENGINE_FILE}")
+    if text is None:
         return None
     import yaml  # lazy: keeps the static core import path stdlib-only
 
@@ -68,8 +85,9 @@ def resolve_build_engine(root: Path, table: str, layer: str) -> str:
     """Resolve the build engine for one table+layer, fail-closed to migrations.
 
     Returns ``"dbt"`` ONLY when the committed flag names it exactly for this
-    layer; every other case (unsafe identifiers, absent/malformed/non-mapping
-    file, absent key, any non-``dbt`` value) returns ``"migrations"``.
+    layer; every other case (unsafe identifiers, absent/untracked/dirty/
+    malformed/non-mapping file, absent key, any non-``dbt`` value) returns
+    ``"migrations"``.
     """
     if not _SAFE_IDENTIFIER.fullmatch(table) or not _SAFE_IDENTIFIER.fullmatch(layer):
         return MIGRATIONS

@@ -26,6 +26,7 @@ by ``seshat.dbt.redaction.sanitize`` and are schema-closed).
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -54,6 +55,9 @@ _CAVEAT_STATES = (STATE_FAILED, STATE_BLOCKED, STATE_UNREADABLE)
 
 # Only these fields are read, and only these are ever echoed outward.
 _REQUIRED_FIELDS = ("invocation_id", "outcome", "readiness_effect")
+
+# Only files named like a real record (``<invocation_id>.json``) are candidates.
+_RECORD_NAME = re.compile(r"^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}\.json$")
 
 
 @dataclass(frozen=True)
@@ -87,7 +91,7 @@ def _latest_record(directory: Path) -> Path | None:
     """
     try:
         candidates = sorted(
-            path for path in directory.iterdir() if path.suffix == ".json"
+            path for path in directory.iterdir() if _RECORD_NAME.fullmatch(path.name)
         )
     except OSError:
         return None
@@ -125,9 +129,24 @@ def read_dbt_execution_evidence(
         return DbtExecutionEvidence(state=STATE_ABSENT)
 
     relative = record_path.relative_to(root).as_posix()
+    # Committed evidence only: an untracked or locally edited record is reported
+    # LOUDLY (never skipped for an older, more flattering committed one), and
+    # the parsed bytes are the committed blob, not the worktree file.
+    from seshat.gitstate import committed_text
+
+    text = committed_text(root, relative)
+    if text is None:
+        return DbtExecutionEvidence(
+            state=STATE_UNREADABLE,
+            evidence_path=relative,
+            blocking_reasons=(
+                f"dbt evidence record is not committed (untracked or edited): "
+                f"{relative}",
+            ),
+        )
     try:
-        payload = json.loads(record_path.read_text(encoding="utf-8-sig"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        payload = json.loads(text.lstrip("\ufeff"))
+    except json.JSONDecodeError:
         return DbtExecutionEvidence(
             state=STATE_UNREADABLE,
             evidence_path=relative,

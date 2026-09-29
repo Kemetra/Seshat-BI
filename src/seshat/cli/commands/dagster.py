@@ -92,6 +92,15 @@ def _run_run(args) -> int:
     from seshat.dagster_adapter.gate import list_mapped_tables
 
     root = Path(args.repo)
+    if args.table and args.table not in list_mapped_tables(root):
+        # The child's scoping seam silently narrows an unknown name to nothing,
+        # so refuse here rather than launch a run that executes no asset.
+        print(
+            f"refused: {args.table!r} is not a mapped table under mappings/ "
+            "(names are case-sensitive)",
+            file=sys.stderr,
+        )
+        return 2
     if _refused_by_doctor(root, args):
         return 2
     started = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")

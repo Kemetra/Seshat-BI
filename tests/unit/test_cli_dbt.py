@@ -206,6 +206,26 @@ def test_doctor_requires_runtime_profile_to_be_ignored_and_untracked(
         module._verify_profile_git_boundary(tmp_path)
 
 
+def test_doctor_reports_a_missing_gitignore_as_pending_not_a_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import seshat.cli.commands.dbt as module
+
+    with pytest.raises(module.DbtUnavailable, match="PENDING LIVE PROFILE"):
+        module._verify_ignore_rules(tmp_path)
+
+
+def test_ignore_rules_tolerate_a_bom_and_trailing_whitespace(tmp_path: Path) -> None:
+    import seshat.cli.commands.dbt as module
+
+    rules = ["/profiles.yml", "/.user.yml", "/dbt/target/", "/dbt/logs/"]
+    rules.append("/.seshat/dbt/")
+    tmp_path.joinpath(".gitignore").write_text(
+        "﻿" + "  \n".join(rules) + "\n", encoding="utf-8"
+    )
+    module._verify_ignore_rules(tmp_path)
+
+
 def _clear_dbt_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     from seshat.dbt.redaction import DBT_ENVIRONMENT_KEYS
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from conftest import TABLE, mappings_digest, stub_green_db
+from conftest import TABLE, commit_engine_flag, mappings_digest, stub_green_db
 from dagster import materialize
 from tower_bi_orchestration.assets import build_table_assets
 from tower_bi_orchestration.evidence_writer import (
@@ -30,9 +30,7 @@ _DBT_EVIDENCE_INTERNAL_KEYS = frozenset(
 
 
 def _set_all_dbt(root: Path) -> None:
-    (root / "mappings" / TABLE / "build-engine.yaml").write_text(
-        "silver: dbt\ngold: dbt\n", encoding="utf-8"
-    )
+    commit_engine_flag(root, "silver: dbt\ngold: dbt\n")
 
 
 def _stub_dbt_bridge(monkeypatch) -> None:

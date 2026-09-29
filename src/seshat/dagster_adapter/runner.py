@@ -10,6 +10,7 @@ closed discovery seam), never via argv.
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import time
 import uuid
@@ -122,32 +123,17 @@ def execute_run(
     run_id = new_run_id()
     env = _child_env(root, run_id, table, resolved_mode)
     try:
-        proc = subprocess.run(
-            argv,
-            cwd=root,
-            env=env,
-            capture_output=True,
-            text=True,
-            # Decode the child's stdout/stderr as UTF-8, NOT the platform default
-            # (cp1252 on Windows). The Dagster child ingests governed data whose
-            # values can be non-Latin-1 (e.g. Arabic `billing_type`); with
-            # `text=True` alone the reader thread decodes via
-            # locale.getpreferredencoding() and raises UnicodeDecodeError mid-run
-            # on Windows (#404). `errors="replace"` keeps a stray byte from
-            # crashing the capture. Same class as the #322 stdio fix, one layer
-            # down at the subprocess-read boundary.
-            encoding="utf-8",
-            errors="replace",
-            shell=False,
-            timeout=_RUN_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired:
+        proc = _run_child(argv, cwd=root, env=env)
+    except subprocess.TimeoutExpired as exc:
         # Fail closed: a hung child is a FAILED run, never an exception the
-        # caller might swallow into a green result (review finding).
+        # caller might swallow into a green result (review finding). The whole
+        # process tree was killed; keep a redacted tail of what it printed.
+        partial = exc.output if isinstance(exc.output, str) else ""
+        note = f"child run timed out after {_RUN_TIMEOUT_SECONDS}s (killed)"
         return RunResult(
             run_id=run_id,
             exit_code=124,
-            output=f"child run timed out after {_RUN_TIMEOUT_SECONDS}s (killed)",
+            output=redact_and_tail(f"{partial}\n{note}", _TAIL_CHARS),
         )
     combined = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
     # Redact BEFORE truncating (#362 leak #2): slicing first can cut a DSN's
@@ -159,3 +145,70 @@ def execute_run(
         exit_code=proc.returncode,
         output=redact_and_tail(combined, _TAIL_CHARS),
     )
+
+
+def _group_kwargs() -> dict[str, object]:
+    """Start the child as a process-group leader so the tree can be killed."""
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def _kill_tree(proc: subprocess.Popen[str]) -> None:
+    """Kill the child AND its descendants (Dagster step processes, dbt)."""
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                capture_output=True,
+                stdin=subprocess.DEVNULL,
+                check=False,
+                timeout=60,
+            )
+        else:
+            os.killpg(proc.pid, signal.SIGKILL)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    proc.kill()
+
+
+def _run_child(
+    argv: list[str], *, cwd: Path, env: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
+    """Run the child in its own process group with a bounded wait.
+
+    On timeout (or an interrupt) the WHOLE tree is killed -- killing only the
+    direct child orphans Dagster step subprocesses and their in-flight dbt
+    build, whose lock and records then outlive the run. A timeout re-raises
+    ``TimeoutExpired`` carrying the combined partial output.
+    """
+    # Decode as UTF-8, NOT the platform default (cp1252 on Windows): governed
+    # values can be non-Latin-1 (#404); errors="replace" keeps a stray byte
+    # from crashing the capture. stdin is closed so the child can never block
+    # on an inherited pipe.
+    with subprocess.Popen(
+        argv,
+        cwd=cwd,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        shell=False,
+        **_group_kwargs(),  # type: ignore[arg-type]
+    ) as proc:
+        try:
+            stdout, stderr = proc.communicate(timeout=_RUN_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired as exc:
+            _kill_tree(proc)
+            stdout, stderr = proc.communicate()
+            combined = (stdout or "") + ("\n" + stderr if stderr else "")
+            raise subprocess.TimeoutExpired(
+                exc.cmd, exc.timeout, output=combined
+            ) from exc
+        except BaseException:
+            _kill_tree(proc)
+            raise
+    return subprocess.CompletedProcess(argv, proc.returncode, stdout, stderr)

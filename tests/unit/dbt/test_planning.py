@@ -454,6 +454,12 @@ def _stub_planning_dependencies(
     monkeypatch.setattr(planning, "load_child_environment", lambda root: {})
     monkeypatch.setattr(
         planning,
+        "committed_sha256",
+        lambda working_set, path: ("1" if path.suffix == ".yaml" else "2") * 64,
+    )
+    monkeypatch.setattr(planning, "verify_runtime_profile", lambda root: None)
+    monkeypatch.setattr(
+        planning,
         "build_dbt_argv",
         lambda operation, context: ("dbt", operation.value),
     )
@@ -532,6 +538,66 @@ def test_create_plan_binds_gate_project_manifest_and_exact_selection(
         == planning.load_manifest(fixtures / "manifest-v12.json").semantic_sha256
     )
     assert b"2026-07-16" not in planning.canonical_plan_bytes(plan)
+    # Readiness and mirror are bound to their COMMITTED blobs, not worktree bytes.
+    assert plan.mapping.readiness_sha256 == "1" * 64
+    assert plan.mapping.unresolved_questions_sha256 == "2" * 64
+
+
+def test_create_plan_refuses_an_uncommitted_governance_input(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import seshat.dbt.planning as planning
+    from seshat.dbt.artifacts import ArtifactIntegrityError
+
+    _stub_planning_dependencies(
+        planning,
+        monkeypatch,
+        _PlanningStubs(
+            working_set=_planning_working_set(tmp_path),
+            gate=_planning_gate(),
+            project=_planning_project(),
+        ),
+    )
+    monkeypatch.setattr(planning, "committed_sha256", lambda working_set, path: None)
+    fixtures = Path(__file__).resolve().parents[2] / "fixtures" / "dbt_artifacts"
+    listed_ids = (
+        "model.seshat_bi.stg_retail_store_sales",
+        "model.seshat_bi.fact_retail_store_sales",
+    )
+
+    with pytest.raises(ArtifactIntegrityError, match="not committed"):
+        planning.create_plan(
+            tmp_path, "retail_store_sales", _planning_runner(fixtures, listed_ids)
+        )
+
+
+def test_create_plan_checks_the_runtime_profile_before_dbt_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """plan/build/test (and the Dagster bridge) all run dbt against the local
+    profiles.yml, so the template check must run inside create_plan too."""
+    import seshat.dbt.planning as planning
+    from seshat.dbt.runner import DbtUnavailable
+
+    _stub_planning_dependencies(
+        planning,
+        monkeypatch,
+        _PlanningStubs(
+            working_set=_planning_working_set(tmp_path),
+            gate=_planning_gate(),
+            project=_planning_project(),
+        ),
+    )
+
+    def drifted(root: Path) -> None:
+        raise DbtUnavailable("profiles.yml must match the exact governed template")
+
+    def must_not_run(context, argv):
+        raise AssertionError("dbt must not run on a drifted profile")
+
+    monkeypatch.setattr(planning, "verify_runtime_profile", drifted)
+    with pytest.raises(DbtUnavailable, match="governed template"):
+        planning.create_plan(tmp_path, "retail_store_sales", must_not_run)
 
 
 def _failed_result(stdout: str, stderr: str):
