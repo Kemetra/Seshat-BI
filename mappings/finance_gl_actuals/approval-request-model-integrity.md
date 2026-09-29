@@ -6,10 +6,8 @@
 below affects the shared gold star (`0008_create_gold_finance_gl_star.sql`), so they
 cannot be ruled per-table.
 
-**Status**: OPEN. No option below has been chosen. The agent raised these and may not
-resolve any of them (Principle V, `never_self_grant_approval`; and for sub-decision A,
-`docs/quality/conformed-dimension-map.yaml`'s own header, which states a cross-star
-dimension ruling "is a Principle-V human modelling judgment; HR1 never decides it").
+**Status**: ANSWERED 2026-09-15 by Ahmed Shaaban (data-owner): A1, B1, C1.
+See `approval-decision-model-integrity.md`. Gold Ready is not passed.
 
 ## Decision needed (one sentence)
 
@@ -128,12 +126,13 @@ Choose C1, C2 or C3. Note C1 and sub-decision B interact: routing a mismatched p
 
 ---
 
-## What the agent did NOT do
+## What the agent did NOT do (at raise time)
 
 - Did not choose any option above.
-- Did not edit `docs/quality/conformed-dimension-map.yaml`.
-- Did not change the gold-star `-1` convention or the shipped validator.
 - Did not mark any affected stage `pass`.
+
+Answered 2026-09-15: see `approval-decision-model-integrity.md`. Gold Ready is
+still not `pass`.
 
 The only changes made from these findings were **truthfulness corrections** to committed
 documents: the defect matrix's Observed column now reads `[NO CHECK EXISTS]` for D1/D2

@@ -3,7 +3,8 @@
 --
 -- Power BI reads gold. One fact (transaction grain) + 4 conformed dims + dim_date.
 -- Surrogate _sk keys (GENERATED ... IDENTITY), natural keys retained, an unknown
--- member (_sk = -1) in every ENTITY dim (fact FKs COALESCE missing lookups to -1);
+-- member (_sk = -1) in every ENTITY dim (B1: COALESCE to -1 only when the source
+-- natural key is null/blank; a present unmatched key is refused);
 -- the DATE dim carries NO -1 member (marked date table, rule S8) -- an unmatched
 -- fact date is rejected by date_sk NOT NULL, not absorbed by a sentinel.
 -- transaction_id + discount_applied are DEGENERATE dims: they live on the fact.
@@ -129,10 +130,22 @@ INSERT INTO gold.fct_sales_rss
    price_per_unit, quantity, total_spent)
 SELECT
   s.transaction_id, s.discount_applied,
-  COALESCE(dc.customer_sk, -1),
-  COALESCE(dp.product_sk, -1),
-  COALESCE(dpm.payment_method_sk, -1),
-  COALESCE(dl.location_sk, -1),
+  CASE
+    WHEN s.customer_id IS NULL OR btrim(s.customer_id::text) = '' THEN COALESCE(dc.customer_sk, -1)
+    ELSE dc.customer_sk
+  END,
+  CASE
+    WHEN s.item IS NULL OR btrim(s.item::text) = '' THEN COALESCE(dp.product_sk, -1)
+    ELSE dp.product_sk
+  END,
+  CASE
+    WHEN s.payment_method IS NULL OR btrim(s.payment_method::text) = '' THEN COALESCE(dpm.payment_method_sk, -1)
+    ELSE dpm.payment_method_sk
+  END,
+  CASE
+    WHEN s.location IS NULL OR btrim(s.location::text) = '' THEN COALESCE(dl.location_sk, -1)
+    ELSE dl.location_sk
+  END,
   dd.date_sk,   -- NO COALESCE to a -1 date member: an unmatched/NULL fact date
                 -- yields NULL and is rejected by date_sk NOT NULL (fail loud,
                 -- a real calendar-coverage bug), never silently bucketed (Codex #2)

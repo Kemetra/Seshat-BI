@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from seshat.pbi_mcp_adapter import gate, orchestrate, protocol
+from seshat.pbi_mcp_adapter import drift, gate, orchestrate, protocol
 
 TARGET = "sales_model"
 #: A (tool, operation) PAIR, per #660: the vendor dispatches on both, and the
@@ -189,6 +189,10 @@ def _apply(repo: Path, **kwargs: object) -> orchestrate.WriteReport:
         "tree_clean": True,
         "mcp_runner": _mcp(mutates=MUTATED_TMDL),
         "validator": _validator(0),
+        "capability_profile": drift.RuntimeCapabilityProfile(
+            observed_tools=("measure_operations",),
+            recorded_tools=("measure_operations",),
+        ),
     }
     params.update(kwargs)
     return orchestrate.apply_write(repo, **params)  # type: ignore[arg-type]

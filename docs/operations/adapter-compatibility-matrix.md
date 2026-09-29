@@ -15,7 +15,7 @@
 ## What this is
 
 The kit pins a set of external adapters -- a dbt transformation adapter (F029), a Dagster
-orchestration adapter (F030), and the parked Power BI execution adapter (F016) -- each of
+orchestration adapter (F030), and the partly shipped Power BI execution adapter (F016) -- each of
 which binds the kit to external tools (Python, Postgres, dbt-core, dbt-postgres, Dagster,
 dagster-dbt, the Power BI PBIP/TMDL assumptions) whose versions move independently of the
 kit. This matrix is the single, committed, reviewable answer to: "which version of each of
@@ -88,7 +88,7 @@ fills them from attested evidence via `templates/adapter-version-record.md`.
 | Dagster version/range | `>=<X>,<<Y>` | `<dagster-smoke>` | `<status>` | `<YYYY-MM-DD \| unknown>` | `<named owner \| UNASSIGNED>` |
 | dagster-dbt version/range (row retired: removed from the orchestration environment by the spec-135 owner decision, 2026-07-17 -- excluded dbt-core 1.12, sat on no execution path) | `removed` | `n/a` | `removed` | `2026-07-17` | `Ahmed Shaaban` |
 | Power BI PBIP/TMDL assumptions | `<assumed PBIP/TMDL shape; floor tested, ceiling unknown>` | `<pbip-tmdl-smoke>` | `<status>` | `<YYYY-MM-DD \| unknown>` | `<named owner \| UNASSIGNED>` |
-| Power BI MCP adapter status (F016, parked) | `<unknown -- not yet exercised>` | `<pbi-mcp-smoke>` | `unknown` | `unknown` | `UNASSIGNED` |
+| Power BI MCP adapter status (F016; local slice 5 shipped, remote slice 6 owner-gated) | `unknown` | `<pbi-mcp-smoke>` | `unknown` | `unknown` | `UNASSIGNED` |
 
 ### Feature 133 dbt candidate verification (derived evidence only)
 
@@ -140,16 +140,17 @@ Each row's `evidence[]` (for a `pass`) and `blocking_reasons[]` (for `blocked` /
 live in its `templates/adapter-version-record.md` copy. The load-bearing fixed entries:
 
 - **Power BI MCP adapter status (F016):** status `unknown`; `blocking_reasons[]` records
-  the note "adapter parked, not yet exercised -> unknown (parked is a note, not a status)".
-  It is NOT marked supported and is NOT omitted. `pbi-cli` is no longer the preferred path
-  -- the official Power BI MCP / connection is the preferred future adapter, and this matrix
-  tracks its STATUS, not its implementation (record/build boundary). The preferred adapter
-  is specifically Microsoft's official Power BI MCP offering -- both the local
+  "no named-owner live compatibility attestation -> unknown". It is NOT marked supported
+  and is NOT omitted. ADR 0018 is ratified and local slice 5 ships, but build status does
+  not create a compatibility claim; the remote slice 6 remains owner-gated. `pbi-cli` is
+  no longer the preferred path -- the official Power BI MCP / connection is the preferred
+  adapter, and this matrix tracks its STATUS, not its implementation (record/build
+  boundary). The preferred adapter is specifically Microsoft's official Power BI MCP
+  offering -- both the local
   `@microsoft/powerbi-modeling-mcp` server and the remote
   `https://api.fabric.microsoft.com/v1/mcp/powerbi` server are public preview with no
   published release, so the supported range stays `unknown` for both until a release
-  ships and is smoke-tested; this does not affect the park (un-parking F016 still needs
-  a separate owner-ratified ADR). The named smoke test `<pbi-mcp-smoke>` now has a
+  ships and is smoke-tested. The named smoke test `<pbi-mcp-smoke>` has a
   defined EVIDENCE SHAPE (#450 slice 4): the read-only preflight artifact
   `.seshat/powerbi-mcp-preflight.json` written by `seshat pbi-mcp preflight
   --write-artifact` (derived evidence only -- capability discovery, protocol-version

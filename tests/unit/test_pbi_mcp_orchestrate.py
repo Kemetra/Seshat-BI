@@ -261,6 +261,18 @@ def test_dry_run_reports_the_same_blockers_as_apply(ready_repo: Path) -> None:
 # --------------------------------------------------------------------------
 
 
+def test_missing_runtime_profile_refuses_the_write(ready_repo: Path) -> None:
+    """A caller cannot bypass drift protection by omitting the profile."""
+    from seshat.pbi_mcp_adapter import drift
+
+    before = (ready_repo / TARGET_PATH).read_text(encoding="utf-8")
+    report = _apply(ready_repo, capability_profile=None)
+
+    assert report.exit_code == orchestrate.EXIT_REFUSED
+    assert drift.BLOCKER_NO_RECORDED_BASELINE in report.blockers
+    assert (ready_repo / TARGET_PATH).read_text(encoding="utf-8") == before
+
+
 def test_a_drifted_runtime_refuses_the_write(ready_repo: Path) -> None:
     """Drift blocks the pipeline (FR-019).
 

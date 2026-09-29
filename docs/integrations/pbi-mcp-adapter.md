@@ -11,6 +11,12 @@ ratified, spec 149 was ratified, and slice 5 ships as `seshat pbi-mcp plan-write
 decision 7. This document describes the shape and the gates; the authority to apply a
 change comes from a committed named-human approval, never from this doc.
 
+**Runtime hardening status (2026-09-17):** both write verbs now fail closed when no
+runtime capability profile is available. The shipped CLI does not yet have the live,
+discovery-only transport needed to produce that profile, so it cannot execute a write
+until that bounded discovery seam is implemented and tested. This preserves ADR 0018's
+capability-drift guard; it does not authorize slice 6 or advance readiness.
+
 ## Why it exists
 
 "MCP" gets used for at least three different things in and around this repo, and
@@ -232,10 +238,13 @@ was skipped, not that nothing was checked.**
 
 `npx` resolves a floating tag, so the argv carries a version **floor** --
 `@microsoft/powerbi-modeling-mcp@^0.5.0-beta` -- rather than a pin. Measured
-2026-08-20: the package publishes only prereleases (`0.5.0-beta.2` through
-`0.5.0-beta.12`), so there is nothing stable to pin to, and pinning a beta would
+2026-09-17: the package publishes only prereleases (`0.5.0-beta.2` through
+`0.5.0-beta.13`), so there is nothing stable to pin to, and pinning a beta would
 freeze the adapter onto a build the publisher may unpublish. The floor still refuses
 a surprise jump to an incompatible future major.
+
+The committed capability capture remains beta.12. Beta.13 has not been live-smoke-tested
+or attested in this repository, so it carries no compatibility claim.
 
 The range lives in the argv only. `VENDOR_PACKAGE` stays the bare identity because
 `pbi_mcp.detect` matches it as a **substring** to gate the bypass prohibition, and it

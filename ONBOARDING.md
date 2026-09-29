@@ -20,8 +20,8 @@ who it is for. Read this page once, then leave it.
 
 If none of those fit, do not keep routing -- **ask one clarifying question, or
 state a blocked verdict naming what is missing.** That is the terminating action
-both `COMPASS.md` and knowledge-map route 22 call for; each currently names the
-other as the next hop, so a reader who follows them literally will circle.
+named directly in `COMPASS.md` and reached by knowledge-map route 22; do not
+route back to the knowledge map after reaching it.
 
 ## The four ideas worth knowing before you start
 

@@ -441,9 +441,7 @@ class _WriteRequest:
     capability_profile: drift.RuntimeCapabilityProfile | None
 
 
-def _preflight(
-    root: Path, request: _WriteRequest, *, dry_run: bool
-) -> tuple[object, tuple[str, ...]]:
+def _preflight(root: Path, request: _WriteRequest) -> tuple[object, tuple[str, ...]]:
     """Steps 1-3: the standing prohibition, the gate, then vendor drift.
 
     Extracted as a unit because the three run in a fixed order and none may be
@@ -466,9 +464,15 @@ def _preflight(
 
     # 3. Vendor preview drift. Gated on DRIFT rather than version compatibility:
     # the supported range is permanently `unknown` while both servers are
-    # unreleased previews, so a compatibility gate would block forever.
+    # unreleased previews, so a compatibility gate would block forever. A
+    # missing profile is a missing baseline and therefore blocks; omission must
+    # never be a way around the drift gate.
     profile = request.capability_profile
-    drift_blockers = profile.blockers if not dry_run and profile is not None else ()
+    drift_blockers = (
+        profile.blockers
+        if profile is not None
+        else (drift.BLOCKER_NO_RECORDED_BASELINE,)
+    )
     return verdict, drift_blockers
 
 
@@ -497,7 +501,7 @@ def _run_pipeline(root: Path, request: _WriteRequest, *, dry_run: bool) -> Write
         return _terminate(root, identity.with_tool(tool), _Ending(**kwargs))  # type: ignore[arg-type]
 
     # 1-3. Bypass guard, gate, drift -- in that order, none skippable.
-    verdict, drift_blockers = _preflight(root, request, dry_run=dry_run)
+    verdict, drift_blockers = _preflight(root, request)
 
     if not verdict.cleared or drift_blockers:
         return terminal(

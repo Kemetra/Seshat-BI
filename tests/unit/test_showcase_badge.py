@@ -76,6 +76,14 @@ def test_badge_ignores_input_defect_entries_as_real_tables() -> None:
     assert "onboarding" in badge["label"].lower()
 
 
+def test_badge_input_defect_pulls_the_portfolio_down() -> None:
+    """A malformed readiness file is unknown state -- never celebratory (F144)."""
+    defect = {"table_id": "bad", "source_path": "x", "input_defect": "unreadable"}
+    badge = build_badge([_table("good", 7), defect])
+    assert badge["passed_stage_count"] == 0
+    assert "all stages passed" not in badge["label"]
+
+
 def test_badge_is_worst_first_across_tables() -> None:
     badge = build_badge([_table("ahead", 5), _table("behind", 1)])
     assert badge["passed_stage_count"] == 1

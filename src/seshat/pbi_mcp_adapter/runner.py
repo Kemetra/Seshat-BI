@@ -49,8 +49,8 @@ __all__ = ["VENDOR_PACKAGE", "VENDOR_PACKAGE_SPEC"]
 
 #: What ``npx`` is asked to resolve: the identity PLUS a version floor.
 #:
-#: A floor, deliberately not a pin. Measured 2026-08-20: the package publishes
-#: only prereleases (``0.5.0-beta.2`` .. ``0.5.0-beta.12``), so there is nothing
+#: A floor, deliberately not a pin. Measured 2026-09-17: the package publishes
+#: only prereleases (``0.5.0-beta.2`` .. ``0.5.0-beta.13``), so there is nothing
 #: to pin to, and pinning a beta would freeze the adapter onto a build the
 #: publisher may unpublish. The floor still refuses a jump to a future major.
 #:

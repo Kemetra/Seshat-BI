@@ -235,15 +235,21 @@ def _base_model_files(root: Path, base: str) -> list[tuple[str, str]]:
     """Model files at ``base``, via git plumbing only (read-only).
 
     Raises RuntimeError (from ``git_output``) on an unresolvable ref.
+
+    ``-z`` keeps non-ASCII names verbatim (git C-quotes them otherwise, so a
+    quoted name ending in ``"`` would fail the ``.tmdl`` filter and vanish).
+    ``ls-tree`` lists paths relative to ``root`` while ``REV:path`` is
+    toplevel-relative, so blobs are read as ``REV:./path`` -- which also works
+    for a project below the git toplevel.
     """
-    listing = git_output(root, "ls-tree", "-r", "--name-only", base)
+    listing = git_output(root, "ls-tree", "-r", "-z", "--name-only", base)
     out: list[tuple[str, str]] = []
-    for rel in listing.splitlines():
-        if is_test_path(rel) or ".SemanticModel/definition/" not in rel:
+    for rel in listing.split("\0"):
+        if not rel or is_test_path(rel) or ".SemanticModel/definition/" not in rel:
             continue
         if not rel.endswith(".tmdl"):
             continue
-        out.append((rel, git_output(root, "show", f"{base}:{rel}")))
+        out.append((rel, git_output(root, "show", f"{base}:./{rel}")))
     return out
 
 

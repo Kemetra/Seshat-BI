@@ -231,6 +231,21 @@ def test_tracked_but_deleted_on_disk_still_fails_loud(tmp_path: Path) -> None:
     assert _MANIFEST in findings[0].message
 
 
+def test_live_compass_ambiguous_route_terminates_without_a_router_cycle() -> None:
+    """Issue #705: the fallback must name an action, not another router."""
+    repo_root = Path(__file__).resolve().parents[2]
+    row = next(
+        line
+        for line in (repo_root / "COMPASS.md").read_text(encoding="utf-8").splitlines()
+        if line.startswith("| Unknown or ambiguous task |")
+    )
+
+    assert "docs/knowledge-map.md" not in row
+    assert "clarifying question" in row
+    assert "missing input" in row
+    assert "blocked verdict" in row
+
+
 @pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
 def test_live_manifest_resolves_against_real_repo() -> None:
     """The shipped routes.yaml must resolve end-to-end against the real repo.

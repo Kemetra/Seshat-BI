@@ -80,6 +80,15 @@ check would catch it. The `-1` convention is kit-wide (identical in
 defect in this example's SQL. See ledger L21 for the three candidate resolutions, all of
 which need an owner ruling.
 
+**UPDATED 2026-09-15.** Ahmed Shaaban (data-owner) ruled A1, B1, C1
+(`mappings/finance_gl_actuals/approval-decision-model-integrity.md`). B1 changes
+the gold fact insert so a present unmatched natural key is refused (NULL into
+NOT NULL) instead of coalesced to `-1`. C1 joins `dim_cost_center_fgl` on
+`cost_center_code` AND `department_code`. Those are authored-SQL changes; live
+`retail validate` has still not run (`[PENDING LIVE PROFILE]`). This matrix's
+historical `[NO CHECK EXISTS]` rows for D1/D2 record the pre-ruling convention
+and are not rewritten.
+
 ## Business-judgment cases (D8-D13)
 
 Declared in `benchmark/scenarios/finance-gl-judgment.yaml`, validated by the shipped

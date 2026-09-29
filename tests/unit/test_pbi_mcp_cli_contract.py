@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from seshat.pbi_mcp_adapter import gate
+from seshat.pbi_mcp_adapter import drift, gate
 
 pytestmark = pytest.mark.unit
 
@@ -213,14 +213,17 @@ def test_target_and_operation_are_both_required(leg: str) -> None:
 # --------------------------------------------------------------------------
 
 
-def test_plan_write_runs_and_reports_a_verdict(ready_repo: Path) -> None:
+def test_plan_write_without_runtime_profile_reports_a_blocked_verdict(
+    ready_repo: Path,
+) -> None:
     result = _run_cli(
         ready_repo, "plan-write", "--target", TARGET, "--operation", OPERATION, "--json"
     )
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 1, result.stderr
     payload = json.loads(result.stdout)
-    assert payload["outcome"] == "deferred"
+    assert payload["outcome"] == "blocked"
     assert payload["mutation_attempted"] is False
+    assert payload["blockers"] == [drift.BLOCKER_NO_RECORDED_BASELINE]
 
 
 def test_plan_write_mutates_nothing(ready_repo: Path) -> None:
@@ -347,8 +350,8 @@ def test_a_config_carrying_the_bypass_flag_refuses_apply(ready_repo: Path) -> No
     assert "skipconfirmation" in (result.stdout + result.stderr).lower()
 
 
-def test_a_clean_config_does_not_block_apply(ready_repo: Path) -> None:
-    """The positive control -- a read-only config must not be refused."""
+def test_a_clean_config_adds_no_config_blocker(ready_repo: Path) -> None:
+    """The read-only config passes; the absent runtime profile still blocks."""
     _write(
         ready_repo,
         ".mcp.json",
@@ -368,7 +371,9 @@ def test_a_clean_config_does_not_block_apply(ready_repo: Path) -> None:
     result = _run_cli(
         ready_repo, "plan-write", "--target", TARGET, "--operation", OPERATION, "--json"
     )
-    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.returncode == 1, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["blockers"] == [drift.BLOCKER_NO_RECORDED_BASELINE]
 
 
 def test_plan_write_twice_still_sees_a_clean_tree(ready_repo: Path) -> None:
@@ -381,13 +386,15 @@ def test_plan_write_twice_still_sees_a_clean_tree(ready_repo: Path) -> None:
     first = _run_cli(
         ready_repo, "plan-write", "--target", TARGET, "--operation", OPERATION, "--json"
     )
-    assert first.returncode == 0, first.stderr
+    assert first.returncode == 1, first.stderr
     second = _run_cli(
         ready_repo, "plan-write", "--target", TARGET, "--operation", OPERATION, "--json"
     )
-    assert second.returncode == 0, second.stdout + second.stderr
-    payload = json.loads(second.stdout)
-    assert payload["blockers"] == []
+    assert second.returncode == 1, second.stdout + second.stderr
+    first_payload = json.loads(first.stdout)
+    second_payload = json.loads(second.stdout)
+    assert first_payload["blockers"] == [drift.BLOCKER_NO_RECORDED_BASELINE]
+    assert second_payload["blockers"] == first_payload["blockers"]
 
 
 def test_neither_output_form_emits_an_absolute_evidence_path(tmp_path: Path) -> None:
