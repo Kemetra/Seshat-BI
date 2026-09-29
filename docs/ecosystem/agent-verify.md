@@ -64,8 +64,9 @@ benchmark scenarios and the read-only governor are identical regardless of
 
 Verify inspects the **installed bundle and its static governance contract**:
 the generated plugin files, the provenance manifest, the version/
-compatibility declarations, and the committed benchmark scenarios matched
-against the deterministic scripted reference. It never launches Claude or
+compatibility declarations, and the committed benchmark scenarios (the four
+hard-stop checks pass on the scenario manifest's DECLARED stop; they execute no
+gate or agent behaviour and are labeled shared baseline). It never launches Claude or
 Codex, sends a live prompt, or observes a stochastic model's behavior. It
 requires no database, no credentials, no external service, and no running
 IDE (every required check either runs fully offline or reports UNAVAILABLE).
