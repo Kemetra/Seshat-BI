@@ -51,7 +51,7 @@ _NEEDS_COLUMN = frozenset({"sum", "count", "distinct_count", "average"})
 # Anything else refuses; there is no "unrecognized means no filter" path.
 _FILTER_SQL: dict[str, str] = {
     "is_not_null": "{col} IS NOT NULL",
-    "is_true": "{col} IS TRUE",
+    "is_true": "{col} = TRUE",  # rendered via dialect.true_predicate
 }
 
 _RATIO_UNIT = "ratio"
@@ -348,6 +348,10 @@ def _one_predicate(
     if not column:
         raise ReportError(f"contract {_name(contract)!r} filter names no column")
     quoted = dialect.quote_ident(str(column), context="report filter column")
+    if op == "is_true":
+        from seshat.dialect import true_predicate
+
+        return true_predicate(dialect, quoted)  # portable: no `IS TRUE`
     return template.format(col=quoted)
 
 
