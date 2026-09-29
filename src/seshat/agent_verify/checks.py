@@ -12,15 +12,15 @@ update integrity, uninstall integrity, IDE surface, and the governance
 contract-presence check that reads the selected target's own exported
 ``portable-operating-contract.md``). Five are ``shared_baseline`` (readiness
 routing via the read-only governor, and the four hard-stop scenarios via the
-benchmark's scenario loader + deterministic scripted reference) -- these are
+benchmark's scenario loader, reported as MANIFEST-DECLARED stops -- no gate or
+agent behaviour is executed for them) -- these are
 repo-level and target-invariant, so their evidence is labeled a shared
 baseline rather than implied per-target (FR-012 through FR-017).
 
 No check re-implements hashing, version parsing, or scenario execution: it
 reuses ``scripts.export_agent_bundles`` provenance shape, ``scripts.
 check_release_versions`` over the shared ``seshat.release_versions`` authority,
-``seshat.benchmark`` (loader +
-scripted reference), and ``seshat.governor.service.GovernorService``.
+``seshat.benchmark`` (scenario loader), and ``seshat.governor.service.GovernorService``.
 """
 
 from __future__ import annotations
@@ -549,8 +549,7 @@ _SCENARIO_MANIFESTS = (
 def _scenario_baseline_check(
     check_id: str, scenario_id: str, repo_root: Path | str
 ) -> PerCheckResult:
-    from ..benchmark.model import BenchmarkError, Observation
-    from ..benchmark.reference import reference_participant
+    from ..benchmark.model import BenchmarkError
     from ..benchmark.runner import load_scenarios
 
     try:
@@ -577,31 +576,17 @@ def _scenario_baseline_check(
             ],
         )
 
-    behavior, evidence = reference_participant().respond(scenario)
-    observation = Observation(
-        scenario_id=scenario.scenario_id,
-        expected_behavior=scenario.expected_behavior,
-        observed_behavior=behavior,
-        evidence=evidence,
-    )
-    if observation.comparison != "match":
-        return _blocked(
-            check_id,
-            "shared_baseline",
-            [
-                f"{scenario_id}: scripted reference baseline is a "
-                f"{observation.comparison} (expected {scenario.expected_behavior!r}, "
-                f"observed {behavior!r})"
-            ],
-        )
-
+    # Honest scope (F146): this pass is MANIFEST-DECLARED. The former scripted
+    # "reference" echoed scenario.expected_behavior back, so its match could
+    # never fail; it exercised no gate, rule or agent and is not repeated here.
     return _pass(
         check_id,
         "shared_baseline",
         [
             f"{scenario_id}: declared expected_behavior={scenario.expected_behavior!r}",
-            f"scripted reference reproduces it (observed={behavior!r})",
-            *evidence,
+            "manifest-declared stop only: no Seshat gate or target behaviour was "
+            "executed (shared baseline, not per-target certification)",
+            *scenario.observable_evidence,
         ],
     )
 
