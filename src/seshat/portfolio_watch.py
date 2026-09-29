@@ -78,7 +78,7 @@ from typing import Any
 
 from .approval_inbox import build_approval_inbox
 from .disclosure import scan_disclosure
-from .gitutil import run_subprocess
+from .gitutil import committed_ref, run_subprocess
 from .portfolio_watch_baseline import (
     CHANGE_LABELS,
     LABEL_NEW,
@@ -376,24 +376,18 @@ def _scope_dir(root: Path, scope: GovernedScope) -> Path:
 def _semantic_inputs(root: Path, scope_dir: str) -> tuple[tuple[Path, ...], bool]:
     """Return committed semantic paths and whether their worktree is dirty."""
     from .cli.commands.semantic import _semantic_files
-    from .gitutil import git_output
+    from .git_worktree import worktree_status
 
     inputs = _semantic_files(root, include_untracked=False)
-    try:
-        dirty = bool(
-            git_output(
-                root,
-                "status",
-                "--porcelain",
-                "--untracked-files=all",
-                "--",
-                f"mappings/{scope_dir}/metrics",
-                f"mappings/{scope_dir}/readiness-status.yaml",
-                "powerbi",
-            )
-        )
-    except RuntimeError:
-        dirty = False
+    # Filter-free (`git_worktree`), not `git status`: `watch --repo` may name an
+    # externally-authored tree, and `status` runs that tree's content filters.
+    status = worktree_status(
+        root,
+        f"mappings/{scope_dir}/metrics",
+        f"mappings/{scope_dir}/readiness-status.yaml",
+        "powerbi",
+    )
+    dirty = status is not None and not status.clean
     return inputs, dirty
 
 
@@ -568,7 +562,9 @@ def _committed_evidence_agrees(
         run_id = validate_run_id(summary["run_id"])
     except (KeyError, ValueError):
         return False
-    recorded = _git_try(root, "show", f"HEAD:{_EVIDENCE_DIR_POSIX}{run_id}.md")
+    recorded = _git_try(
+        root, "show", committed_ref("HEAD", f"{_EVIDENCE_DIR_POSIX}{run_id}.md")
+    )
     if recorded is None:
         return False
     try:

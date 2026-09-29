@@ -12,7 +12,9 @@ from typing import Any
 
 import yaml
 
+from seshat.git_worktree import worktree_matches_revision
 from seshat.gitstate import is_tracked_and_clean, run_git
+from seshat.gitutil import committed_ref
 from seshat.unresolved_mirror import parse_mirror
 
 from .contracts import (
@@ -83,8 +85,9 @@ def _require_tracked_source_map(root: Path, relative_map: str) -> None:
 
 
 def _require_clean_source_map(root: Path, relative_map: str) -> None:
-    clean = _git(root, "diff", "--quiet", "HEAD", "--", relative_map)
-    if clean.returncode != 0:
+    # Filter-free comparison: `git diff HEAD -- <path>` would run the tree's own
+    # attribute-selected content filters on a user-supplied `--repo` tree.
+    if not worktree_matches_revision(root, "HEAD", relative_map):
         raise GovernanceError(
             "DBT_SOURCE_MAP_DIRTY",
             "approved source map differs from its committed approval revision",
@@ -92,7 +95,7 @@ def _require_clean_source_map(root: Path, relative_map: str) -> None:
 
 
 def _committed_revision(root: Path, relative_map: str) -> str:
-    revision_result = _git(root, "rev-parse", f"HEAD:{relative_map}")
+    revision_result = _git(root, "rev-parse", committed_ref("HEAD", relative_map))
     revision = revision_result.stdout.strip()
     if revision_result.returncode != 0 or not re.fullmatch(
         r"[0-9a-f]{40,64}", revision
@@ -235,7 +238,7 @@ def _committed_blob(working_set: WorkingSet, path: Path) -> str | None:
     relative = _relative(working_set, path)
     if not is_tracked_and_clean(working_set.repo_root, relative):
         return None
-    shown = _git(working_set.repo_root, "show", f"HEAD:{relative}")
+    shown = _git(working_set.repo_root, "show", committed_ref("HEAD", relative))
     return shown.stdout if shown.returncode == 0 else None
 
 

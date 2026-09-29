@@ -889,6 +889,14 @@ def _add_kit_lint_parser(sub: argparse._SubParsersAction) -> None:
         ),
     )
     kit_lint_p.add_argument("--repo", default=".", help="repo root to lint")
+    kit_lint_p.add_argument(
+        "--require-bootstrapped",
+        action="store_true",
+        help=(
+            "exit 1 when the repo has no .seshat/kit-source.yaml instead of "
+            "treating it as nothing to lint (use in CI on a bootstrapped repo)"
+        ),
+    )
 
 
 def _add_doctor_parser(sub: argparse._SubParsersAction) -> None:

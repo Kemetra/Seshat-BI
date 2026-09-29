@@ -179,6 +179,12 @@ def _verify_local_profile(root: Path) -> None:
     verify_local_profile(root)
 
 
+def _profile_git_result(root: Path, *args: str) -> int:
+    from seshat.dbt.profile_guard import _profile_git_result as probe
+
+    return probe(root, *args)
+
+
 def _verify_profile_git_boundary(root: Path) -> None:
     from seshat.dbt.profile_guard import verify_profile_git_boundary
 

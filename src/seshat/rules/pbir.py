@@ -57,7 +57,23 @@ def check_pbir_relative_reference(ctx: RuleContext) -> Iterable[Finding]:
         raw = read_tracked_text(ctx.repo_root / rel, encoding="utf-8-sig")
         if raw is None:
             continue
-        doc: Any = json.loads(raw)
+        try:
+            doc: Any = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            # Same posture as R2: an unparseable definition is a finding naming
+            # the file, never an exception that aborts the whole check.
+            findings.append(
+                Finding(
+                    rule_id="R1",
+                    severity=Severity.ERROR,
+                    message=(
+                        f"definition.pbir could not be parsed as JSON "
+                        f"({exc.__class__.__name__}); it must be valid JSON"
+                    ),
+                    locator=f"{rel}#/",
+                )
+            )
+            continue
         ref = doc.get("datasetReference", {}) if isinstance(doc, dict) else {}
         if "byConnection" in ref:
             findings.append(

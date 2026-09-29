@@ -47,7 +47,9 @@ class GateState:
     gate_status: str
     open_rows: int
     approvals: tuple[Approval, ...]
-    publish_ready: str  # verbatim stage status, or "missing"
+    # Verbatim COMMITTED stage status, or "missing" / "uncommitted" /
+    # "unreadable" (never "pass" unless HEAD records it).
+    publish_ready: str
 
     @property
     def silver_permitted(self) -> bool:
@@ -110,9 +112,9 @@ def _read_readiness(repo_root: Path, table: str) -> tuple[tuple[Approval, ...], 
     try:
         data = yaml.safe_load(text) or {}
     except yaml.YAMLError:
-        return (), "invalid"
+        return (), "unreadable"
     if not isinstance(data, dict):
-        return (), "invalid"
+        return (), "unreadable"
     rows = data.get("approvals")
     candidates = rows if isinstance(rows, list) else []
     approvals = tuple(

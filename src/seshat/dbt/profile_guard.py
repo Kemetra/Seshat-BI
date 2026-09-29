@@ -11,6 +11,7 @@ always ran these checks; :func:`verify_runtime_profile` lets ``create_plan``
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -50,7 +51,10 @@ def _profile_git_result(root: Path, *args: str) -> int:
     # `root` is a user-supplied `--repo`: the shared hardened wrapper carries
     # the full untrusted-tree set plus safe.directory, stdin=DEVNULL and a
     # timeout.
-    return run_git(root, *args, "--", "profiles.yml").returncode
+    try:
+        return run_git(root, *args, "--", "profiles.yml").returncode
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise pending("git could not verify the profiles.yml boundary") from exc
 
 
 def verify_profile_git_boundary(root: Path) -> None:

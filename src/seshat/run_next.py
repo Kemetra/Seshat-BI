@@ -133,6 +133,27 @@ def _approved_stages(approvals: object) -> set[str]:
     return {item.get("stage") for item in approvals if approval_is_shape_valid(item)}
 
 
+def _trusted_approved_stages(
+    data: dict[str, Any], repo_root: Path | None, status_path: Path | None
+) -> tuple[set[str], list[dict[str, str]]]:
+    """Stages approved in BOTH the worktree and the committed file (audit F045).
+
+    A worktree-only approval is not an audit record, so it never advances a stage;
+    it is reported as a caveat instead. See ``seshat.committed_approvals``.
+    """
+    from seshat.committed_approvals import (
+        committed_approvals,
+        uncommitted_approval_caveat,
+    )
+
+    worktree = _approved_stages(data.get("approvals"))
+    committed = _approved_stages(committed_approvals(repo_root, status_path))
+    trusted = worktree & committed
+    untrusted = worktree - committed
+    caveats = [uncommitted_approval_caveat(untrusted)] if untrusted else []
+    return trusted, caveats
+
+
 def _table_candidate_names(table: str) -> list[str]:
     normalized = table.strip().replace("\\", "/").strip("/")
     names = [normalized, normalized.rsplit(".", 1)[-1]]
@@ -609,6 +630,7 @@ def _build_from_data(
     data: dict[str, Any],
     repo_root: Path | None = None,
     table_dir: str | None = None,
+    status_path: Path | None = None,
 ) -> dict[str, Any]:
     """Decide the next action from one parsed readiness document.
 
@@ -617,6 +639,9 @@ def _build_from_data(
     ``None``, which yields the ``absent`` verdict -- i.e. exactly the behavior
     before A2 -- so a caller that has no directory context still gets a correct
     answer rather than an error.
+
+    ``status_path`` locates the file whose ``HEAD`` copy vouches for approvals;
+    without it no approval is trusted (fail closed, audit F045).
     """
     stages = data.get("stages")
     if not isinstance(stages, dict):
@@ -625,11 +650,12 @@ def _build_from_data(
         )
 
     response_table = _response_table(table, data)
+    approved, approval_caveats = _trusted_approved_stages(data, repo_root, status_path)
     context = {
         "table": response_table,
         "stages": stages,
-        "approved": _approved_stages(data.get("approvals")),
-        "caveats": [],
+        "approved": approved,
+        "caveats": approval_caveats,
         "stored_next_action": data.get("next_action"),
         "repo_root": repo_root,
         "table_dir": table_dir,
@@ -718,4 +744,4 @@ def build_run_next_response(repo_root: Path | str, table: str) -> dict[str, Any]
     # is the one actually found -- never re-derived from `table`, which may be a
     # schema-qualified name or an alias that resolved via `_matching_status_data`.
     table_dir = status_path.parent.name if status_path is not None else None
-    return _build_from_data(table, data, root, table_dir)
+    return _build_from_data(table, data, root, table_dir, status_path)

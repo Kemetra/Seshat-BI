@@ -56,6 +56,31 @@ updates:
       prefix: build
     labels: []
 
+  # Studio frontend (npm). studio-ui/package-lock.json drives `npm ci` in CI and
+  # release, and its runtime dependencies are bundled into every published
+  # wheel (src/seshat/studio/static/), so an advisory there must surface as a
+  # PR. The root package.json declares no dependencies (content-only npm
+  # package), so it needs no entry. Same scope-free `build` prefix as above.
+  - package-ecosystem: npm
+    directory: "/studio-ui"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: build
+    labels: []
+
+  # Hash-locked release build tooling (build, twine and their closure), used
+  # by release.yml and prepare-coordinated-release.yml with --require-hashes.
+  - package-ecosystem: pip
+    directory: "/.github/release-tooling"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: build
+    labels: []
+
   # GitHub Actions. The workflows pin actions by commit SHA (see the security
   # scan finding `actions-tag-pinned-not-sha`); Dependabot keeps those SHAs
   # current and surfaces a re-pointed / compromised action as a reviewable PR.

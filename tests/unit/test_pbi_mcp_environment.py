@@ -103,6 +103,11 @@ class FakeSession:
         self.handshaken = True
         return {"name": "powerbi-modeling-mcp", "version": "0.5.0.0"}
 
+    def list_tools(self) -> tuple[str, ...]:
+        from seshat.pbi_mcp_adapter import vendor_ops
+
+        return tuple(sorted(vendor_ops.VENDOR_TOOLS))
+
     def call(self, tool: str, request: dict) -> protocol.ToolOutcome:
         self.calls.append((tool, request))
         if self._outcomes:

@@ -500,6 +500,10 @@ def validate_action_authorization(
             "approval was already consumed and cannot authorize another action"
         )
     checked_at = request.at or datetime.now(timezone.utc)
+    # The window is [approved_at, expires_at): a post-dated approval (one that
+    # has not been granted yet at check time) authorizes nothing.
+    if _require_timestamp(item, "approved_at") > checked_at:
+        raise EvidenceValidationError("approval is not yet valid")
     expires_at = _require_timestamp(item, "expires_at")
     if expires_at <= checked_at:
         raise EvidenceValidationError("approval has expired")
