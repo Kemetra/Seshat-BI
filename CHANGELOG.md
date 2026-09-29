@@ -90,10 +90,10 @@ renamed: extracting every `@register(...)` id under `src/seshat/rules/` gives th
 
 ### Fixed
 
-- **Git hardening** (#753): git calls that read a workspace spread the shared
-  `GIT_HARDENING` flags against repo-local config, paths are listed NUL-safely, and
-  `check --format review` validates `--commit-range`. The integration installer's
-  clone, checkout and rev-parse run in a tree it just cloned and do not spread them.
+- **Git hardening** (#753, #762): git calls spread the shared `GIT_HARDENING` flags
+  against repo-local config, including the integration installer's clone, checkout
+  and rev-parse (through the shared `integrations.procs` runner). Paths are listed
+  NUL-safely, and `check --format review` validates `--commit-range`.
 - **Secrets and provenance** (#757, #758): one redaction chain on live-DB surfaces,
   committed provenance reads, and C2/SQL-tokenizer quoted-identifier fixes.
 - **Studio** (#755, #776): DS1-valid decision records, per-turn Codex session state,
