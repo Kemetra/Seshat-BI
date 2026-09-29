@@ -232,6 +232,22 @@ def test_ds2_ineligible_authority_class_errors(tmp_path: Path) -> None:
     assert any("ineligible" in f.message for f in fs)
 
 
+def test_ds2_eligibility_report_does_not_depend_on_message_wording(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # DS2 must report an eligibility rejection by its typed stage, not by
+    # substring-matching the gate's English reason: a reworded reason still
+    # reaches the lint, so lint and gate cannot silently diverge.
+    import seshat.decision_store as ds
+
+    monkeypatch.setattr(
+        ds, "_eligibility_valid", lambda *a: (False, "x: class not permitted")
+    )
+    body = _approved("kpi_definition", "kpi_definition.net", "A. Owner (metric_owner)")
+    fs = _ids(check_ds2(_repo_ctx(tmp_path, {_KPI: body})), "DS2")
+    assert [f.message for f in fs] == ["x: class not permitted"]
+
+
 def test_ds2_bare_role_owner_errors(tmp_path: Path) -> None:
     body = _approved("kpi_definition", "kpi_definition.net", "metric_owner")
     fs = _ids(check_ds2(_repo_ctx(tmp_path, {_KPI: body})), "DS2")

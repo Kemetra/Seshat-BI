@@ -372,7 +372,9 @@ def _scan_outer_text(text: str) -> Iterable[tuple[str, str]]:
     Catches schema-qualifying positions (``FROM bronze.x``, ``bronze.obj``,
     ``CREATE SCHEMA bronze``) via ``stale_schema_tokens``.
     """
-    for token, _line in stale_schema_tokens(text):
+    # Raw M text: every "..." here is an M string, not a SQL identifier, so the
+    # literal-blind stream is kept; string bodies are scanned separately below.
+    for token, _line in stale_schema_tokens(text, identifiers=False):
         yield (
             token,
             (
@@ -561,9 +563,18 @@ def d11_measures_documented(ctx: RuleContext) -> Iterable[Finding]:
 # C1 — parameterized connection (no string literals for server/db)
 # ---------------------------------------------------------------------------
 
-# Match PostgreSQL.Database(…) or Sql.Database(…) — captures the argument list.
+# Match a database connector call -- a known connector namespace followed by one
+# of the navigator functions that take the server/account/DSN as a leading
+# argument (``Sql.Database``, the plural ``Sql.Databases``, ``Snowflake.Databases``,
+# ``Odbc.DataSource``, ``Databricks.Catalogs``, ...). Captures the argument list.
+# Restricted to connector namespaces so e.g. ``Web.Contents("https://...")`` (a
+# file/URL source, not a database host) is not in scope.
+_DB_NAMESPACES = (
+    "PostgreSQL|Sql|Oracle|MySQL|AzureSQL|Snowflake|Odbc|OleDb|AmazonRedshift"
+    "|Databricks|GoogleBigQuery|Teradata|Db2|Sybase|Informix|SapHana"
+)
 _DB_CALL = re.compile(
-    r"(?:PostgreSQL|Sql|Oracle|MySQL|AzureSQL)\.Database\s*\(([^)]*)\)",
+    r"\b(?:" + _DB_NAMESPACES + r")\.(?:Databases?|DataSource|Catalogs)\s*\(([^)]*)\)",
     re.IGNORECASE,
 )
 
