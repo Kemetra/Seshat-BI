@@ -23,7 +23,7 @@ import pytest
 
 from seshat.approval_inbox import build_approval_inbox
 from seshat.cli import main as cli_main
-from tests.unit._gitfix import make_git_repo
+from tests.unit._gitfix import commit_readiness_status, make_git_repo
 
 pytestmark = pytest.mark.unit
 
@@ -36,6 +36,7 @@ def _write_status(root: Path, table_dir: str, body: str) -> Path:
     path = root / "mappings" / table_dir / "readiness-status.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(body, encoding="utf-8")
+    commit_readiness_status(path)  # approvals count only once committed (F045)
     return path
 
 
