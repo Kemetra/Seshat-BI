@@ -60,9 +60,9 @@ DENY_DECISION = "deny"
 # string: it may construct a path or invoke a script.
 #
 # `git status` is deliberately absent. It honours the workspace's own git config, so a
-# committed `core.fsmonitor` runs an arbitrary program, and it rewrites the index
-# (firing `post-index-change`). `gitutil` treats that config as attacker-supplied; a
-# provider-run command gets none of that hardening, so it is not a read.
+# committed filesystem-monitor setting runs an arbitrary program, and it rewrites the
+# index (firing `post-index-change`). `gitutil` treats that config as attacker-supplied;
+# a provider-run command gets none of that hardening, so it is not a read.
 _SCOPED_READ_COMMANDS = frozenset({"pwd", "rg --files"})
 
 #: The provider's JSON-RPC correlation id. Kept for the ledger, which must answer the
@@ -139,9 +139,11 @@ def _forbidden_for_request(
     `forbidden_scope` contains standing prohibitions even for a fully ready table,
     so treating every sentence as a ban on every technical command made Allow
     unreachable. We exempt only exact, workspace-scoped reads (`_is_scoped_read`):
-    a bound, still-present table is REQUIRED for them, but its readiness is not
-    consulted, because they write nothing. Everything else keeps the readiness
-    reasons and is refused because shell text cannot prove its target.
+    a bound table, present when the approval is REGISTERED, is required for them, but
+    its readiness is not consulted, because they write nothing. That is also why the
+    table is not re-checked at decision time: its removal changes nothing these reads
+    touch, and every other command was already refused here. Everything else keeps the
+    readiness reasons and is refused because shell text cannot prove its target.
     """
     root = app.state.launch.workspace_root
     if table is None:

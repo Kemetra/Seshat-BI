@@ -582,3 +582,47 @@ def test_an_active_session_is_renewed_on_use():
 
     now[0] += 101
     assert not store.is_valid_session(cookie)
+
+
+# --- the Codex child cannot inherit a ripgrep config ---
+
+
+def test_the_codex_child_is_spawned_without_a_ripgrep_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """An inherited `--follow` config would let an allowed `rg --files` leave the root.
+
+    Pinned at the spawn call itself, the chokepoint, not only at the helper.
+    """
+    from seshat.studio.codex_bridge import CodexSession
+    from seshat.studio.codex_process import CodexLaunchPlan
+
+    monkeypatch.setenv("RIPGREP_CONFIG_PATH", str(tmp_path / "rgrc"))
+    captured: dict[str, Any] = {}
+
+    class _Captured(Exception):
+        pass
+
+    def spawn(argv: list[str], **kwargs: Any) -> Any:
+        captured.update(kwargs)
+        raise _Captured
+
+    session = CodexSession(
+        CodexLaunchPlan(argv=(sys.executable, "-c", "pass"), cwd=tmp_path),
+        spawn=spawn,
+    )
+    with pytest.raises(_Captured):
+        session.start()
+
+    env = captured["env"]
+    assert all(name.upper() != "RIPGREP_CONFIG_PATH" for name in env)
+    assert env.get("PATH") == os.environ.get("PATH")  # everything else still flows
+
+
+@pytest.mark.parametrize(
+    "name", ["RIPGREP_CONFIG_PATH", "ripgrep_config_path", "Ripgrep_Config_Path"]
+)
+def test_the_withheld_variable_is_matched_case_insensitively(name: str):
+    from seshat.studio.codex_bridge import child_environment
+
+    assert child_environment({name: "x", "KEEP": "y"}) == {"KEEP": "y"}
