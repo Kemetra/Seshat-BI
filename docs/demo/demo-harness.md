@@ -48,7 +48,8 @@ real `silver`/`gold` table, and it inserts no sample rows), and `demo run` recor
 that the database is reachable. Neither runs `seshat validate`, so **Gold Ready
 stays blocked even on the live leg** -- a reachable connection is not live
 validation. To take a real table past Gold, start a workspace with
-`seshat init-project` and pass `seshat validate` against a live database.
+`seshat init-project`, follow `seshat next` through source mapping and silver, then
+pass `seshat validate --source-map <path>` against a live database.
 
 ## What it is NOT
 

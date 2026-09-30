@@ -95,6 +95,6 @@ blocking_reasons:
   - "Gold Ready's gate is a LIVE seshat validate pass against real gold data. The demo never runs one -- not even with a reachable database -- so Gold Ready stays blocked here by design."
 
 # --- next action ------------------------------------------------------------
-next_action: "Stop here: the demo is honestly blocked at Gold Ready. To take a real table past Gold, start a workspace with seshat init-project and pass seshat validate against a live database."
+next_action: "Stop here: the demo is honestly blocked at Gold Ready. To take a real table past Gold, start a workspace with seshat init-project, follow seshat next through source mapping and silver, then pass seshat validate --source-map against a live database."
 last_checked_at: "2026-07-03"
 checked_by: "demo fixture (authored, not a demo run)"
