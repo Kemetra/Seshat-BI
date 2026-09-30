@@ -88,9 +88,12 @@ changed; if Code Health drops, fix the code and confirm with `code_health_score`
 Before a push, run `analyze_change_set` against `origin/main`. It applies the PR
 gate's rules and `.codescene/code-health-rules.json`, but it judges only the diff
 and can miss whole-module averages, so a local pass is necessary, not sufficient.
-Without the MCP, use the CLI from `.codescene/README.md` (`cs review <file>`,
-`cs delta origin/main <branch>`). The gate fails at a value equal to a threshold;
-prefer a real fix over a threshold override (see `.codescene/README.md`).
+Without the MCP, use the CodeScene CLI from `.codescene/README.md`: `cs review
+<file>` runs locally, while `cs delta origin/main <branch>` needs a CodeScene
+access token (`CS_ACCESS_TOKEN`). If neither path is available, say so in the PR
+and let the CodeScene PR gate be the check. The gate fails at a value equal to a
+threshold; prefer a real fix over a threshold override (see
+`.codescene/README.md`).
 
 ## See also
 
