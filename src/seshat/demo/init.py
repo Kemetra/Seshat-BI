@@ -24,7 +24,9 @@ def run_init(args) -> int:
         print(f"demo already initialized at {wd} (use --force to refresh)")
     else:
         print(f"demo initialized at {wd}")
+    prog = getattr(args, "prog", "seshat")
     print(
-        "next: retail demo run   (offline)   or   retail demo load --dsn ... (live leg)"
+        f"next: {prog} demo run   (offline)   or   "
+        f"{prog} demo load --dsn ... (live leg)"
     )
     return 0

@@ -1,7 +1,7 @@
-# Demo Harness -- `retail demo` (spec 083)
+# Demo Harness -- `seshat demo` (spec 083)
 
 - **On-disk spec:** `specs/083-demo-harness/`  **Roadmap feature:** F083.
-- **Skill/surface:** the `retail demo` CLI verb group (`src/seshat/demo/`).
+- **Skill/surface:** the `seshat demo` CLI verb group (`src/seshat/demo/`).
 - **Sample data:** `tests/fixtures/demo/demo_sample_orders.csv` (GENERIC, invented;
   not client data, not C086). Mapping-gate + readiness fixtures:
   `mappings/demo_sample_orders/`.
@@ -13,13 +13,13 @@ generic sample dataset -- so an evaluator can see the kit work from an installed
 wheel or a fresh clone without a database, secrets, or cloud. Four verbs:
 
 ```bash
-retail demo init      # materialize the committed fixtures into .demo-work/ (git-ignored)
-retail demo load      # offline: skip with a reason; live: write demo-scoped tables
-retail demo run       # recompute per-stage readiness status (offline, or live if a DSN resolves)
-retail demo report    # render status + evidence + blockers (text | json | html)
+seshat demo init      # materialize the committed fixtures into .demo-work/ (git-ignored)
+seshat demo load      # offline: skip with a reason; live: write demo-scoped tables
+seshat demo run       # recompute per-stage readiness status (records whether a DSN is reachable)
+seshat demo report    # render status + evidence + blockers (text | json | html)
 ```
 
-The product-brand alias is equivalent. The shortest visual proof is:
+The deprecated `retail` alias is equivalent. The shortest visual proof is:
 
 ```bash
 seshat demo init
@@ -39,13 +39,16 @@ Offline (the default, zero network / zero DB):
 - **Source Ready / Mapping Ready / Silver Ready reach `pass`** -- backed by the
   committed mapping-gate artifacts + static `seshat check`.
 - **Gold Ready onward is `blocked` (deferred)** -- because Gold Ready's gate is the
-  LIVE `retail validate`, which needs a reachable database. The demo draws this
-  line honestly; it never fakes a live pass offline.
+  LIVE `seshat validate`, which needs a reachable database. The demo draws this
+  line honestly; it never fakes a live pass.
 
 Optional live leg (only when a local Postgres DSN already resolves): `demo load`
-writes the sample into DEMO-SCOPED objects (a safety guard -- it refuses to write
-into a real `silver`/`gold` table), and `demo run` lets Gold Ready advance with
-real live evidence.
+creates the DEMO-SCOPED table shape (a safety guard -- it refuses to write into a
+real `silver`/`gold` table, and it inserts no sample rows), and `demo run` records
+that the database is reachable. Neither runs `seshat validate`, so **Gold Ready
+stays blocked even on the live leg** -- a reachable connection is not live
+validation. To take a real table past Gold, start a workspace with
+`seshat init-project` and pass `seshat validate` against a live database.
 
 ## What it is NOT
 
