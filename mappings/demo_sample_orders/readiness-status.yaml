@@ -5,7 +5,7 @@
 # fixture -- not client data, not C086. Four statuses + evidence + blockers,
 # never a numeric score. ASCII only, UTF-8 no BOM.
 #
-# This is the COMMITTED, TRACKED fixture. `retail demo` verbs NEVER write to it
+# This is the COMMITTED, TRACKED fixture. `seshat demo` verbs NEVER write to it
 # (they operate on a throwaway copy in .demo-work/). The approvals[] below are
 # ILLUSTRATIVE, pre-committed fixtures with fictional named owners -- clearly
 # labeled, never presented by a `demo run` as something the run produced (FR-016).
@@ -17,9 +17,10 @@ source_id: "demo_sample_orders"
 source_family: "demo_generic_orders"
 
 # --- where we are -----------------------------------------------------------
-# Offline ceiling: Source/Mapping/Silver reach pass from committed artifacts +
-# static retail check; Gold Ready onward is blocked-deferred because its gate is
-# the LIVE retail validate (needs a reachable DB). The demo's honest stopping point.
+# Demo ceiling: Source/Mapping/Silver reach pass from committed artifacts +
+# static seshat check; Gold Ready onward is blocked because its gate is a LIVE
+# seshat validate pass, which the demo never runs -- even with a reachable DB.
+# The demo's honest stopping point.
 current_stage: "gold_ready"
 mapping_version: "1"
 
@@ -89,7 +90,7 @@ approvals:
 
 # --- top-level blockers -----------------------------------------------------
 # RS1 requires the top-level blocking_reasons[] to mirror the current (blocked)
-# stage's blockers. current_stage is gold_ready = blocked (offline ceiling).
+# stage's blockers. current_stage is gold_ready = blocked (demo ceiling).
 blocking_reasons:
   - "Gold Ready's gate is a LIVE seshat validate pass against real gold data. The demo never runs one -- not even with a reachable database -- so Gold Ready stays blocked here by design."
 

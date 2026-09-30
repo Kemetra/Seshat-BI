@@ -14,7 +14,7 @@ wheel or a fresh clone without a database, secrets, or cloud. Four verbs:
 
 ```bash
 seshat demo init      # materialize the committed fixtures into .demo-work/ (git-ignored)
-seshat demo load      # offline: skip with a reason; live: write demo-scoped tables
+seshat demo load      # offline: skip with a reason; live: create the demo-scoped table shape (no rows)
 seshat demo run       # recompute per-stage readiness status (records whether a DSN is reachable)
 seshat demo report    # render status + evidence + blockers (text | json | html)
 ```

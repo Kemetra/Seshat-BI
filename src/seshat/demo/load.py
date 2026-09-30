@@ -37,11 +37,12 @@ def run_load(args) -> int:
     dsn = _resolve_dsn(args)
 
     if dsn is None:
+        prog = getattr(args, "prog", "seshat")
         print(
             "demo load: no DSN configured -- offline mode. "
             "Nothing to load; the offline legs (Source/Mapping/Silver) still reach "
             "pass. To exercise the live leg, set a local Postgres DSN "
-            "(--dsn postgresql://... or the same env vars retail validate uses)."
+            f"(--dsn postgresql://... or the same env vars {prog} validate uses)."
         )
         return 0
 

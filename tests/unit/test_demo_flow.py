@@ -283,7 +283,7 @@ def test_demo_never_writes_tracked_readiness_fixture(tmp_path):
     assert committed.read_bytes() == before
 
 
-@pytest.mark.parametrize("subcommand", ["init", "run"])
+@pytest.mark.parametrize("subcommand", ["init", "load", "run"])
 @pytest.mark.parametrize("prog", ["seshat", "retail"])
 def test_demo_next_hints_echo_the_invoked_brand(tmp_path, capsys, subcommand, prog):
     """The follow-up hints name the command the client typed (#402), so a
@@ -294,8 +294,8 @@ def test_demo_next_hints_echo_the_invoked_brand(tmp_path, capsys, subcommand, pr
     assert main(["demo", subcommand, "--repo", str(tmp_path)], prog=prog) == 0
     out = capsys.readouterr().out
     other = "retail" if prog == "seshat" else "seshat"
-    assert f"{prog} demo " in out
-    assert f"{other} demo " not in out
+    assert f"{prog} " in out
+    assert f"{other} " not in out
 
 
 def test_demo_never_claims_the_live_leg_advances_gold(tmp_path, monkeypatch):
@@ -316,11 +316,13 @@ def test_demo_never_claims_the_live_leg_advances_gold(tmp_path, monkeypatch):
     snap = json.loads(
         (tmp_path / ".demo-work" / "computed-status.json").read_text(encoding="utf-8")
     )
+    assert snap["live_reachable"] is True  # the live path really ran
     gold = snap["stages"]["gold_ready"]
     assert gold["status"] == "blocked"
     for claim in [*gold["blocking_reasons"], snap["next_action"]]:
-        assert "to advance" not in claim.lower()
+        assert "advance" not in claim.lower()
         assert "demo load" not in claim.lower()
+        assert "live leg" not in claim.lower()
 
 
 def _seed_repo(tmp_path: Path) -> None:
