@@ -283,6 +283,48 @@ def test_demo_never_writes_tracked_readiness_fixture(tmp_path):
     assert committed.read_bytes() == before
 
 
+@pytest.mark.parametrize("subcommand", ["init", "load", "run"])
+@pytest.mark.parametrize("prog", ["seshat", "retail"])
+def test_demo_next_hints_echo_the_invoked_brand(tmp_path, capsys, subcommand, prog):
+    """The follow-up hints name the command the client typed (#402), so a
+    `seshat demo init` user is never told to run the deprecated `retail` alias."""
+    from seshat.cli import main
+
+    _seed_repo(tmp_path)
+    assert main(["demo", subcommand, "--repo", str(tmp_path)], prog=prog) == 0
+    out = capsys.readouterr().out
+    other = "retail" if prog == "seshat" else "seshat"
+    assert f"{prog} " in out
+    assert f"{other} " not in out
+
+
+def test_demo_never_claims_the_live_leg_advances_gold(tmp_path, monkeypatch):
+    """`demo run` caps Gold Ready at blocked even when a database is reachable
+    (it never runs `seshat validate`, and `demo load` writes no rows), so the
+    blocker and next action must not promise that the live leg advances Gold."""
+    from seshat.demo import run as demo_run
+
+    _seed_repo(tmp_path)
+    monkeypatch.setattr(demo_run, "resolve_dsn", lambda args: "postgresql://demo")
+    monkeypatch.setattr(demo_run, "probe_reachable", lambda dsn: True)
+
+    class _Args:
+        repo = str(tmp_path)
+        dsn = None
+
+    assert demo_run.run_run(_Args()) == 0
+    snap = json.loads(
+        (tmp_path / ".demo-work" / "computed-status.json").read_text(encoding="utf-8")
+    )
+    assert snap["live_reachable"] is True  # the live path really ran
+    gold = snap["stages"]["gold_ready"]
+    assert gold["status"] == "blocked"
+    for claim in [*gold["blocking_reasons"], snap["next_action"]]:
+        assert "advance" not in claim.lower()
+        assert "demo load" not in claim.lower()
+        assert "live leg" not in claim.lower()
+
+
 def _seed_repo(tmp_path: Path) -> None:
     """Copy the committed demo fixtures into a tmp repo root for isolated testing."""
     import shutil

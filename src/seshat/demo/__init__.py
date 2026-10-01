@@ -18,11 +18,13 @@ Pinned naming choices (decided once here, per tasks T001):
 
 The four verbs (each a thin handler, dispatched from ``cli.py``):
 - ``init``   -- materialize the committed fixtures into ``.demo-work/`` (idempotent).
-- ``load``   -- offline: report the no-DSN skip reason (exit 0); live: write the
-                demo-scoped sample into a reachable Postgres (idempotent).
-- ``run``    -- recompute per-stage status from committed artifacts + ``retail
-                check`` + (if loaded + reachable) ``retail validate``. No separate
-                run-state engine; every value is re-derivable.
+- ``load``   -- offline: report the no-DSN skip reason (exit 0); live: create the
+                demo-scoped table shape in a reachable Postgres (idempotent; no
+                sample rows are inserted).
+- ``run``    -- recompute per-stage status from committed artifacts and record
+                whether a DSN is reachable. It never runs ``retail validate``, so
+                Gold Ready onward stays below pass. No separate run-state engine;
+                every value is re-derivable.
 - ``report`` -- render status + evidence + blockers per stage (text | json).
                 NEVER a numeric score, NEVER a chart/dashboard/PBIP artifact.
 

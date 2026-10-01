@@ -1,13 +1,14 @@
 """``retail demo run`` -- recompute the sample's per-stage readiness status.
 
-Recomputes from committed mapping-gate artifacts + ``retail check``'s exit + (only
-if a DB was loaded and is reachable) ``retail validate``. Writes a snapshot to the
+Recomputes from the committed mapping-gate artifacts and records whether a DSN is
+reachable; it never runs ``retail validate``. Writes a snapshot to the
 working directory for ``report`` to render. NO separate run-state engine -- every
 value is re-derivable from the same committed artifacts + gate outputs.
 
 Offline honest ceiling: Source/Mapping/Silver reach ``pass`` (committed artifacts +
 static ``retail check``); Gold Ready onward is ``blocked``/``not_started`` -- never
-``pass`` offline, because Gold Ready's gate is the LIVE ``retail validate``.
+``pass`` here, because Gold Ready's gate is the LIVE ``retail validate`` and this
+verb never runs it -- not even when a database is reachable.
 """
 
 from __future__ import annotations
@@ -113,6 +114,7 @@ def run_run(args) -> int:
         None,
     )
     mode = "live" if live_reachable else "offline"
+    prog = getattr(args, "prog", "seshat")
     print(f"demo run complete ({mode} mode).")
     if live_reachable:
         print(
@@ -120,11 +122,11 @@ def run_run(args) -> int:
             "'demo run' and stays capped below pass."
         )
     if frontier is None:
-        print("all stages pass. See 'retail demo report' for detail.")
+        print(f"all stages pass. See '{prog} demo report' for detail.")
     else:
         state = snapshot["stages"][frontier]["status"]
         print(
             f"current frontier: {frontier} = {state}. "
-            "See 'retail demo report' for status + evidence + blockers."
+            f"See '{prog} demo report' for status + evidence + blockers."
         )
     return 0

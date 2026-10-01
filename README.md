@@ -76,7 +76,7 @@ in the terminal.
   pretending the stage passed.
 - **The approvals are labelled.** The demo's approvals are marked *illustrative
   fixture, not produced by this run*. Seshat never fabricates a sign-off.
-- **One next action.** The report ends with the single step that is allowed next.
+- **One next action.** The report names the single step that is allowed next.
   There is no score to game.
 
 That honest "blocked" is the product. A tool that turns every stage green without a
