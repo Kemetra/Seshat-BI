@@ -10,6 +10,7 @@
 them approve it.** Seshat profiles sources, governs mappings, validates the medallion
 warehouse, binds metrics to contracts, and gates Power BI delivery. Every step is
 backed by committed evidence, and every judgment call by a named human approval.
+
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Kemetra/Seshat-BI)
 [![PyPI](https://img.shields.io/pypi/v/seshat-bi?style=flat-square&color=0B9A9A&labelColor=001E35)](https://pypi.org/project/seshat-bi/)
 [![CI](https://img.shields.io/github/actions/workflow/status/Kemetra/Seshat-BI/ci.yml?branch=main&style=flat-square&label=CI&labelColor=001E35&color=0B9A9A)](https://github.com/Kemetra/Seshat-BI/actions/workflows/ci.yml)
