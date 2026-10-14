@@ -38,7 +38,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
       - name: Install build validators
@@ -206,7 +206,7 @@ jobs:
             *) echo "Publication requires an immutable refs/tags/v* candidate"; exit 1 ;;
           esac
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
@@ -256,7 +256,7 @@ jobs:
             refs/tags/v*) ;;
             *) echo "Publication requires an immutable refs/tags/v* candidate"; exit 1 ;;
           esac
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
